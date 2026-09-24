@@ -1,7 +1,8 @@
 **/bin/
 **/obj/
 **/node_modules/
-**/data/
+**/data/*
+!backend/data/benchmark.json
 work/
 runtime/
 *.db

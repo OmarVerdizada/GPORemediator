@@ -1,4 +1,6 @@
 function Find-Dotnet {
+    $portable = Join-Path $PSScriptRoot '..\.tools\dotnet\dotnet.exe'
+    if (Test-Path -LiteralPath $portable) { return (Resolve-Path -LiteralPath $portable).Path }
     $candidate = Get-Command dotnet.exe,dotnet -ErrorAction SilentlyContinue | Select-Object -First 1
     if ($candidate) {
         try { if ((& $candidate.Source --list-sdks 2>$null) -match '^8\.') { return $candidate.Source } } catch { }

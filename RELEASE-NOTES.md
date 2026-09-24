@@ -1,3 +1,12 @@
+## Password pilot — 2026-09-24
+
+- Automatic, cached setup metadata detection with manual overrides; password pilot no longer requires GPO GUID/OU/host allowlists.
+- Six password-policy settings for one selected non-privileged test user through a dedicated PSO. No inventory/compliance scans or unrelated policy writes.
+- Before/after plan, 15-minute freshness, explicit Apply, durable backup, exact assignment and resultant-policy verification.
+- Conflict-aware rollback and a standalone backup-based recovery helper. Other settings are copied from the existing effective user policy.
+- Fixed embedded benchmark source exclusion from Git and portable SDK discovery for source tests.
+- Tests: .NET invariants, isolated HTTP flow, PowerShell dispatcher with AD doubles, browser demo flow. Real AD acceptance remains a test-domain step.
+
 # Operator interfeysi yenilənməsi — 2026-09-23
 
 - `GpoRemediator.cmd` vizual idarəetmə panelini açır: başlatma, status, brauzer, restart, dayandırma və loglar.

@@ -138,7 +138,7 @@ function Start-Application([string]$RunMode) {
     if ($RunMode -eq 'Windows') {
         $cfg = Read-LocalConfig
         if (!$cfg -or !$cfg.Urls -or [string]$cfg.Urls -notmatch '^https://') { throw 'Windows configuration is missing or invalid. Start Demo mode and use Setup & settings.' }
-        foreach ($field in @('Domain','DomainController','BackupPath','ApprovedGpoIds','AuthorizedOus','AllowedHosts','AllowedOperators')) {
+        foreach ($field in @('Domain','DomainController','BackupPath','AllowedOperators')) {
             if (!$cfg.Windows.$field) { throw "Windows configuration needs $field. Complete Setup & settings." }
         }
         Ensure-Rsat

@@ -1,75 +1,56 @@
-# GPO Remediator
+# GPO Remediator — password-policy pilot
 
-GPO Remediator Windows Group Policy təhlükəsizlik parametrlərinin **benchmark seçimi → hədəf → plan → backup → apply → verification → rollback** axınını idarə edən ASP.NET Core 8 tətbiqidir. İlkin vəziyyət skanı tələb olunmur. Brauzerdən sərbəst PowerShell qəbul etmir; yalnız serverdə implementasiya edilmiş əməliyyatlar mövcuddur.
+SecHard-da uğursuz görünən **parol parametrini seçin → test istifadəçisini yazın → planı yoxlayın → APPLY → nəticə / rollback**.
 
-## Operator üçün yalnız 1 launcher
+Bu mərhələ yalnız seçilmiş **bir domen istifadəçisi** üçün fine-grained password policy (PSO) yaradır. Domenin default siyasətini, GPO-ları və əvvəlki PSO-ları dəyişmir. Bir neçə test istifadəçisi üçün əməliyyatı ayrıca təkrarlayın. Digər modullar növbəti mərhələlərdə əlavə ediləcək.
 
-Adi istifadə zamanı ayrıca build, frontend package-manager və start script-ləri işlətməyin.
+## Başlamaq
 
-**Sadəcə `GpoRemediator.cmd` faylına iki dəfə klik edin.**
+`GpoRemediator.cmd` faylını açın və **Başlat** düyməsini basın. Launcher portable .NET SDK/runtime və statik interfeysi hazırlayır. Node.js və npm tələb olunmur.
 
-Vizual idarəetmə panelində **Başlat**, **Brauzerdə aç**, **Yenidən başlat**, **Dayandır** və **Log qovluğu** düymələri var. Konfiqurasiya olmayan ilk açılışda Demo seçilir. Paneli bağlamaq xidməti dayandırmır; bunun üçün **Dayandır** düyməsini istifadə edin.
+1. **Sazlamalar** bölməsini açın. Domen, writable DC/PDC, management HTTPS ünvanı və operator avtomatik aşkarlanır. Aşkarlama yalnız mühit metadatasını oxuyur; kompüter, istifadəçi və compliance siyahısını skan etmir. Nəticə xidmət işlədiyi müddətdə yaddaşda saxlanır.
+2. Lazım olsa dəyərləri əl ilə düzəldin. Mövcud sazlamalar avtomatik əvəz edilmir. HTTPS üçün management host adına uyğun etibarlı sertifikat lazımdır. **GPO GUID / OU / kompüter allowlist-i bu pilot üçün tələb olunmur.**
+3. **Saxla və yenidən başlat** seçin. Windows rejimində **Hazırlığı yoxla**, sonra `ENABLE WRITES` ilə yazmanı ayrıca aktivləşdirin. Saxlama hər dəfə yazmanı bağlayır.
+4. **Parol siyasətləri** səhifəsində SecHard-da uğursuz olan elementi seçin. Test istifadəçisinin sAMAccountName, UPN və ya object GUID dəyərini və SecHard-ın tələb etdiyi dəyəri daxil edin. İstifadəçi parolu istənilmir.
+5. Plan seçilən istifadəçinin effektiv siyasətini oxuyur, digər dəyərləri saxlayır və yalnız seçilən dəyəri dəyişir. `APPLY` təsdiqindən sonra backup, PSO yaradılması, birbaşa user assignment və resultant-policy yoxlaması edilir.
+6. Tarixçədə `ROLLBACK` ilə həmin pilot assignment-i silib əvvəlki effektiv siyasətə qayıdın. Bir neçə dəyişiklik varsa ən yenidən başlayın.
 
-Brauzerdə **Modullar** səhifəsində operatorun təqdim etdiyi CIS v4.0.0 mətnindən 397 parametr var. Modul, ad/kod və dəstək üzrə filtr edin, hədəfin DNS adını yazın və **Seç və planı aç** düyməsini basın. **Planı hazırla və yoxla**, sonra ayrıca **APPLY** təsdiqi ilə davam edin. Seçim `NOT_SCANNED` kimi qeyd olunur; PASS/FAIL nəticəsi uydurulmur.
+## Altı parametr
 
-Hazırda bu siyahıda 2.2.3, 2.3.1.3 və 2.3.17.6 mövcud adapterlərlə işləyir (Member Server). Qalan 394 parametr kataloq üçündür və tətbiqi bağlıdır. Mətnin `Automated` etiketi toolun adapter dəstəyi demək deyil. Mənbədə `18.10.8.1` iki fərqli parametr üçün yazılıb; hər ikisi ayrıca saxlanır və qeyd ilə göstərilir. Bu, tam/certified benchmark paketi deyil.
+| Parametr | Dəyər |
+|---|---|
+| Enforce password history | 0–1024 parol |
+| Maximum password age | 0–999 gün; 0 = müddətsiz |
+| Minimum password age | 0–998 gün; maksimumdan kiçik olmalıdır |
+| Minimum password length | 0–255 simvol |
+| Password must meet complexity requirements | 0 / 1 |
+| Store passwords using reversible encryption | 0 / 1 |
 
-Aktiv remediation işi varsa dayandırma və restart API səviyyəsində bloklanır. Stop utiliti yalnız bu layihənin qeydə alınmış prosesini idarə edir; digər `.NET` proseslərini dayandırmır.
+İnterfeysdəki ilkin dəyərlər nümunədir. SecHard nəticənizdəki tələbə uyğunlaşdırın. Lockout dəyərləri mövcud siyasətdən olduğu kimi köçürülür; bu mərhələdə ayrıca dəyişdirilmir.
 
-Windows başlanğıcında konfiqurasiya, sertifikat və ya prerequisite xətası olarsa launcher dayanmaq əvəzinə localhost-da **yerli sazlama rejimi** açır. Panel səbəbi göstərir, **Brauzerdə aç** sazlamalara aparır. Korlanmış konfiqurasiya faylı silinmir və bərpa ekranının açılmasına mane olmur. Bu rejim real AD-yə yazmır. RSAT quraşdırılması zamanı hər 15 saniyədə gözləmə mesajı göstərilir.
+## Sərhədlər və ilkin şərtlər
 
-Launcher avtomatik olaraq:
+- **Avtomatik scan yoxdur.** Köhnə scan endpoint-i və qeyri-parol write endpoint-ləri bu release-də bloklanır. SecHard üçün canlı connector yoxdur; failed item və tələb olunan dəyər operator tərəfindən seçilir.
+- Domain functional level Windows Server 2008 və ya daha yüksək, writable DC, ActiveDirectory RSAT, HTTPS + Windows Integrated Authentication tələb olunur. Xidmət identity-si PSO yaratmaq və test istifadəçisinə təyin etmək səlahiyyətinə malik olmalıdır.
+- Readiness bağlantını yoxlayır; AD-yə test yazısı etmir və write icazəsini sübut etmir. İcazə çatmırsa Apply nəticəni uğurlu göstərmir.
+- Privileged/protected hesablar test üçün qəbul edilmir. Mövcud PSO precedence 1-dirsə və ya password age tam günlə ifadə edilmirsə, avtomatik dəyişiklik bloklanır.
+- PSO testi domain-wide GPO tapıntısını düzəltmir. `VERIFIED` seçilən DC-də həmin istifadəçinin resultant policy nəticəsidir; AD replication və SecHard retest ayrıca aparılmalıdır. Mövcud parollar dəyişdirilmir və reset edilmir.
+- `MOCK` yalnız lokal simulyasiyadır. Demo PASS real AD hazırlığı demək deyil. Real və demo məlumat bazaları ayrıdır.
+- Plan 15 dəqiqə keçdikdə, operator/mühit və ya effektiv siyasət dəyişdikdə yenidən hazırlanmalıdır. Apply təkrarı ikinci PSO yaratmır.
 
-1. source/runtime fingerprint-lərini yoxlayır;
-2. backend rebuild lazımdırsa portable `.NET 8 SDK`-nı layihənin `.tools\dotnet` qovluğuna provision edir;
-3. dependency-free static Web UI-ni `frontend\source`-dan `frontend\dist`-ə paketləyir;
-4. ASP.NET backend-i Windows x64 self-contained runtime kimi publish edir;
-5. konfiqurasiya varsa Windows mode, yoxdursa təhlükəsiz MOCK mode seçir;
-6. Windows mode üçün `ActiveDirectory` və `GroupPolicy` RSAT komponentlərini yoxlayır və lazım olsa yalnız prerequisite mərhələsi üçün UAC istəyir;
-7. backend-i başladır; paneldə **Brauzerdə aç** düyməsi Web UI-yə keçir;
-8. UI-dan gələn validated setup/write-mode restart marker-lərini idarə edir.
+## Backup və bərpa
 
-**Node.js, npm, pnpm, Corepack və `registry.npmjs.org` production bootstrap üçün tələb olunmur.**
+Real Apply-dən əvvəl tam preview `${BackupPath}\PasswordPilot\<plan-id>.json` faylına yazılır. Qovluq service identity, SYSTEM və lokal administratorlara məhdudlaşdırılır. Lokal SQLite tarixçəsi və audit də saxlanır.
 
-## Built-in Automation Center
+Rollback yalnız tətbiqin həmin əməliyyatda yaratdığı, dəyişdirilməmiş və başqa istifadəçilərə verilməmiş PSO-nu silir. Əvvəlki PSO-ya toxunmur. Crash/timeout zamanı əməliyyat avtomatik təkrarlanmır; tarixçəni və backup-ı yoxlayın. UI açılmırsa `scripts\Recover-PasswordPilot.ps1` backup ilə interaktiv bərpa üçündür. Ətraflı: [Password pilot](docs/PASSWORD-PILOT.md).
 
-Base operator UI-yə əlavə olaraq hər səhifədə **Automation Center** mövcuddur:
+## Yoxlama
 
-- **Readiness** – runtime/provider, RSAT, domain/DC, identity və backup hazırlığını yoxlayır.
-- **Setup** – HTTPS URL, domain, writable DC, approved GPO GUID-lər, authorized OU-lar, allowed hosts/operators və backup path-i UI-dan saxlayır.
-- **Benchmark seçimi** – scan etmədən seçilmiş parametr və hədəf üzrə remediation qeydi yaradır. Köhnə scan API-si uyğunluq üçün saxlanılıb, əsas UI axınında çağırılmır.
-- **Safe plan** – source analysis → safe GPO selection → impact preview → preflight → zero-write dry run əməliyyatlarını bir düymə ilə hazırlayır.
-- **Explicit Apply** – safe-plan nəticəsindən ayrıca `APPLY` typed confirmation, gpupdate/restart seçimləri və broad-impact acknowledgement ilə job yarada bilir; execution record base UI-də izlənir.
-- **Controlled write mode** – yalnız Windows mode + readiness PASS + exact typed confirmation ilə açılır.
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\Test.ps1
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\tests\PasswordPilot.ps1
+```
 
-Apply ayrıca operator authorization tələb edir. Automation Center heç vaxt səssiz policy write başlamır.
+`Test.ps1` .NET invariant testləri və ayrı demo database üzərində HTTP smoke testləri işlədir. `PasswordPilot.ps1` real dispatcher-i saxta AD cmdlet-ləri ilə yoxlayır; domenə qoşulmur. Real AD test domenində acceptance addımları [docs/PASSWORD-PILOT.md](docs/PASSWORD-PILOT.md) faylındadır.
 
-## Təhlükəsizlik sərhədləri
-
-- Default Domain Policy və Default Domain Controllers Policy GUID-ləri bloklanır.
-- Host, OU, operator və remediation GPO-ları exact allowlist olmalıdır.
-- Real mode HTTPS + Windows Integrated Authentication istifadə edir.
-- Browser credential/password qəbul etmir.
-- RSoP qeyri-müəyyəndirsə source `AMBIGUOUS`/`NOT_DEFINED` qalır; başqa GPO səssiz seçilmir.
-- Target scan endpoint dəyərini oxuya bilmirsə `PASS` vermir.
-- Apply-dən əvvəl stale-preview/fingerprint, permission, scope və backup yoxlamaları yenidən edilir.
-- PASS yalnız layered verification-dan sonra verilir.
-- Rollback explicit acknowledgement və post-write conflict/version yoxlaması tələb edir.
-
-## Layihə strukturu
-
-| Yol | Funksiya |
-| --- | --- |
-| `GpoRemediator.cmd` | Operator üçün əsas və yeganə normal giriş nöqtəsi |
-| `Control-Panel.ps1` | Status, rejim seçimi, başlat/dayandır/restart və loglara vizual giriş |
-| `scripts/ServiceControl.ps1` | Layihəyə aid proses yoxlaması və qorunan lifecycle API çağırışları |
-| `GpoRemediator.ps1` | Bootstrap, .NET provision, build, RSAT, mode/restart orchestration |
-| `backend/` | ASP.NET Core API, domain model, mock/Windows provider-lər |
-| `frontend/source/` | Canonical static Web UI + Automation Center; package registry tələb etmir |
-| `frontend/dist/` | Build zamanı `source/`-dan yaranan runtime UI |
-| `runtime/` | Windows x64 self-contained backend output |
-| `scripts/` | Build fingerprint/helper funksiyaları |
-| `tests/` | .NET invariant tests və PowerShell HTTP smoke tests |
-| `docs/` | Arxitektura və Windows provider detalları |
-
-Detallı istifadə üçün [ISTIFADE.md](ISTIFADE.md), Windows provider üçün [docs/WINDOWS-PROVIDER.md](docs/WINDOWS-PROVIDER.md) faylına baxın.
+`backend/appsettings.Local.json`, runtime, SDK, database və iş faylları Git-ə göndərilmir. Tarixi GPO adapterləri kodda saxlanılıb, lakin cari UI və write API yalnız password pilot-u aktivləşdirir.

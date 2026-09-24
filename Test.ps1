@@ -9,14 +9,19 @@ $backend = Join-Path $PSScriptRoot 'backend'
 Assert-Exit
 & $dotnet run --project (Join-Path $PSScriptRoot 'tests\InvariantTests\InvariantTests.csproj') -c Release
 Assert-Exit
+& powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot 'tests\PasswordPilot.ps1')
+Assert-Exit
 
 $testDirectory = Join-Path $PSScriptRoot ('work\test-' + [Guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Path $testDirectory -Force | Out-Null
+$testContentRoot=Join-Path $testDirectory 'backend'
+New-Item -ItemType Directory -Path $testContentRoot -Force | Out-Null
+Copy-Item -LiteralPath (Join-Path $backend 'appsettings.json') -Destination $testContentRoot
 $oldMode = $env:Mode; $oldDatabase = $env:DatabasePath
 $env:Mode = 'Mock'; $env:DatabasePath = Join-Path $testDirectory 'isolated.db'
 $env:TEST_ISOLATED = '1'; $env:TEST_BASE_URL = "http://localhost:$Port"
 $dll = Join-Path $backend 'bin\Release\net8.0\GpoRemediator.dll'
-$process = Start-Process -FilePath $dotnet -ArgumentList @(('"' + $dll + '"'), '--contentRoot', ('"' + $backend + '"'), '--urls', $env:TEST_BASE_URL) -WorkingDirectory $backend -WindowStyle Hidden -PassThru -RedirectStandardOutput (Join-Path $testDirectory 'server.log') -RedirectStandardError (Join-Path $testDirectory 'server-error.log')
+$process = Start-Process -FilePath $dotnet -ArgumentList @(('"' + $dll + '"'), '--contentRoot', ('"' + $testContentRoot + '"'), '--urls', $env:TEST_BASE_URL) -WorkingDirectory $testContentRoot -WindowStyle Hidden -PassThru -RedirectStandardOutput (Join-Path $testDirectory 'server.log') -RedirectStandardError (Join-Path $testDirectory 'server-error.log')
 try {
     $ready = $false
     for ($attempt = 0; $attempt -lt 60; $attempt++) {
@@ -61,13 +66,34 @@ try {
     if ($service.stopping) { throw 'Rejected stop still changed service state.' }
     $readiness = Get-Api '/api/automation/readiness'
     if (!$readiness.ready) { throw 'Mock readiness smoke test did not report ready.' }
-    $scan = Post-Api '/api/automation/scan' @{ hostname='SRV-AUTO.prosol.az'; profile='MemberServer' }
-    $finding = @($scan.results | Where-Object { $_.findingId } | Select-Object -First 1)
-    if ($finding.Count -ne 1) { throw 'Target scan did not create a finding.' }
-    $plan = Post-Api ('/api/findings/' + $finding[0].findingId + '/safe-plan') @{}
-    if (!$plan.dryRun -or [int]$plan.writes -ne 0) { throw 'Safe-plan smoke test was not zero-write.' }
+    foreach ($blockedPath in @('/api/automation/scan',('/api/findings/' + $selection.id + '/apply'))) {
+        try { Post-Api $blockedPath @{} | Out-Null; throw 'Password-only pilot accepted a scan or legacy policy write.' }
+        catch { if (!$_.Exception.Response -or [int]$_.Exception.Response.StatusCode -ne 409) { throw } }
+    }
+    $passwordSettings=Get-Api '/api/password/settings'
+    if (@($passwordSettings).Count -ne 6) { throw 'Password pilot catalog must contain six supported settings.' }
+    $passwordPlan=Post-Api '/api/password/plan' @{user='test.user';setting='MinPasswordLength';value=14}
+    if ($passwordPlan.before.values.MinPasswordLength -ne 8 -or $passwordPlan.after.MinPasswordLength -ne 14) { throw 'Password preview did not retain before/after values.' }
+    $passwordJob=Post-Api ('/api/password/' + $passwordPlan.id + '/apply') @{confirmation='APPLY'}
+    if ($passwordJob.state -ne 'VERIFIED') { throw ('Password apply failed: ' + $passwordJob.message) }
+    $replay=Post-Api ('/api/password/' + $passwordPlan.id + '/apply') @{confirmation='APPLY'}
+    if ($replay.updatedAt -ne $passwordJob.updatedAt) { throw 'Repeated Apply was not idempotent.' }
+    $rollback=Post-Api ('/api/password/' + $passwordPlan.id + '/rollback') @{confirmation='ROLLBACK'}
+    if ($rollback.state -ne 'ROLLED_BACK') { throw 'Password rollback was not verified.' }
+    $audit=Get-Api '/api/audit'
+    if (@($audit.events | Where-Object { $_.event -eq 'TARGET_SCANNED' }).Count -or !$audit.integrityValid) { throw 'Unexpected scan or invalid audit chain.' }
     $jobs = Get-Api '/api/jobs'
     if (@($jobs).Count -ne 0) { throw 'Safe-plan smoke test unexpectedly queued a write job.' }
+    # Regression for the original setup failure: password pilot needs no GPO/OU/computer allowlists.
+    $setup=@{urls='https://management.example.com:5443';domain='example.com';domainController='dc01.example.com';approvedGpoIds=@();authorizedOus=@();allowedHosts=@();allowedOperators=@('EXAMPLE\operator');backupPath='C:\ProgramData\GpoRemediator\Backups';autoRestart=$false}
+    $saved=Post-Api '/api/setup/config' $setup
+    if (!$saved.saved -or $saved.writesEnabled) { throw 'Pilot setup without GPO GUIDs did not save safely.' }
+    # Old Default Domain Policy entries must not carry over to the user-scoped pilot.
+    $setup.approvedGpoIds=@('31b2f340-016d-11d2-945f-00c04fb984f9')
+    Post-Api '/api/setup/config' $setup | Out-Null
+    $stored=Get-Api '/api/setup/config'
+    if (@($stored.approvedGpoIds).Count -or @($stored.authorizedOus).Count -or @($stored.allowedHosts).Count -or $stored.enableWrites) { throw 'Legacy setup values leaked into the password pilot.' }
+    if (!(Test-Path -LiteralPath (Join-Path $testContentRoot 'appsettings.Local.json'))) { throw 'Setup was not persisted in isolated content root.' }
 } finally {
     if ($process -and !$process.HasExited) { Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue }
     $env:Mode = $oldMode; $env:DatabasePath = $oldDatabase

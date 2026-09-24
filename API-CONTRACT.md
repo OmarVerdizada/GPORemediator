@@ -1,3 +1,16 @@
+## Current release: selected-user password pilot
+
+The current UI and write API support only the six password settings via a new PSO for one selected test user. GPO remediation below is historical architecture retained for future phases; scan and legacy write endpoints are disabled. See [PASSWORD-PILOT.md](docs/PASSWORD-PILOT.md) and README.md for the current workflow.
+
+New endpoints (same origin + CSRF required for POST):
+
+- GET /api/setup/discover — cached read-only management environment detection.
+- GET /api/password/settings — six supported settings, ranges and editable suggestions.
+- POST /api/password/plan — {user, setting, value}; exact selected-user preview, zero AD writes.
+- POST /api/password/{planId}/apply — {confirmation: "APPLY"}; backup, create/assign PSO, resultant verification.
+- GET /api/password/history — durable execution records, including before/after snapshots and recovery state.
+- POST /api/password/{planId}/rollback — {confirmation: "ROLLBACK"}; remove only that unchanged pilot PSO and verify previous effective policy.
+
 # Internal API contract
 
 Same-origin ASP.NET Core 8 + React API. JSON camelCase, enums UPPER_SNAKE_CASE. Mutation endpoints require the session CSRF token and exact same `Origin`. Windows mode additionally requires HTTPS + Windows Integrated Authentication + operator allowlist.

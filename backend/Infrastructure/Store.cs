@@ -10,7 +10,7 @@ public sealed class Store : IDisposable
 {
     private readonly SqliteConnection db;
     private readonly object gate = new();
-    private static readonly HashSet<string> Tables = ["controls", "targets", "findings", "analyses", "previews", "jobs", "backups", "mock_gpos", "mock_endpoints"];
+    private static readonly HashSet<string> Tables = ["controls", "targets", "findings", "analyses", "previews", "jobs", "backups", "mock_gpos", "mock_endpoints", "password_plans", "password_jobs", "password_mock"];
     public Store(string path)
     {
         if (path != ":memory:") Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(path))!);

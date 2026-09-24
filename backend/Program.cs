@@ -33,6 +33,7 @@ builder.Services.AddSingleton(new Store(dbPath)); builder.Services.AddSingleton<
 if(real) builder.Services.AddSingleton<IWindowsPolicyProvider,WindowsPolicyProvider>();
 else builder.Services.AddSingleton<IWindowsPolicyProvider,MockWindowsPolicyProvider>();
 builder.Services.AddSingleton<RemediationEngine>(); builder.Services.AddHostedService(sp=>sp.GetRequiredService<RemediationEngine>());
+builder.Services.AddSingleton<PasswordPilotService>();
 var app=builder.Build();
 var store=app.Services.GetRequiredService<Store>();
 store.BindExecutionMode(mode);
@@ -84,6 +85,10 @@ app.Use(async(context,next)=>
         var expected=$"{context.Request.Scheme}://{context.Request.Host}";
         if(!string.Equals(origin,expected,StringComparison.OrdinalIgnoreCase)) throw new PolicyException("ORIGIN_DENIED","Mutation requests must come from this application's exact origin.");
         await context.RequestServices.GetRequiredService<IAntiforgery>().ValidateRequestAsync(context);
+        var path=context.Request.Path.Value!;
+        if(path=="/api/automation/scan" || ((path.StartsWith("/api/findings/")||path.StartsWith("/api/jobs/")) &&
+            (path.EndsWith("/apply")||path.EndsWith("/rollback")||path.EndsWith("/verify"))))
+            throw new PolicyException("PASSWORD_PILOT_ONLY","This release enables selected-user password remediation only. Scanning and other policy writes are disabled.");
         if(real&&!builder.Configuration.GetValue<bool>("Windows:EnableWrites") && (context.Request.Path.Value!.EndsWith("/apply")||context.Request.Path.Value!.EndsWith("/rollback")||context.Request.Path.Value!.EndsWith("/verify")))
             throw new PolicyException("WRITES_DISABLED","EnableWrites is false in the Windows service configuration. Discovery and dry-run remain available.");
     }
@@ -179,7 +184,13 @@ app.MapPost("/api/findings/{id}/dry-run",async(string id,JsonElement body,HttpCo
 { if(!body.TryGetProperty("previewId",out var p)||p.ValueKind!=JsonValueKind.String) throw new PolicyException("PREVIEW_REQUIRED","Preview ID is required."); return await engine.DryRunAsync(id,p.GetString()!,Operator(context),ct); });
 app.MapPost("/api/findings/{id}/apply",(string id,ApplyRequest request,HttpContext context,RemediationEngine engine)=>
 { if(request.Options is null||string.IsNullOrEmpty(request.PreviewId)) throw new PolicyException("INVALID_REQUEST","Preview and job options are required."); var job=engine.Submit(id,request,Operator(context)); return Results.Accepted($"/api/jobs/{job.Id}",job); });
-app.MapGet("/api/automation/readiness",async(RemediationEngine engine,CancellationToken ct)=>await engine.ReadinessAsync(ct));
+app.MapGet("/api/automation/readiness",async(PasswordPilotService pilot,CancellationToken ct)=>await pilot.ReadinessAsync(ct));
+app.MapGet("/api/setup/discover",async(PasswordPilotService pilot,CancellationToken ct)=>await pilot.DiscoverAsync(ct));
+app.MapGet("/api/password/settings",()=>PasswordPilotRules.Settings);
+app.MapGet("/api/password/history",(PasswordPilotService pilot)=>pilot.History());
+app.MapPost("/api/password/plan",async(PasswordPlanRequest request,HttpContext context,PasswordPilotService pilot,CancellationToken ct)=>await pilot.PlanAsync(request,Operator(context),ct));
+app.MapPost("/api/password/{id}/apply",async(string id,PasswordConfirmRequest request,HttpContext context,PasswordPilotService pilot)=>await pilot.ApplyAsync(id,request.Confirmation,Operator(context)));
+app.MapPost("/api/password/{id}/rollback",async(string id,PasswordConfirmRequest request,HttpContext context,PasswordPilotService pilot)=>await pilot.RollbackAsync(id,request.Confirmation,Operator(context)));
 app.MapPost("/api/automation/scan",async(TargetScanRequest request,HttpContext context,RemediationEngine engine,CancellationToken ct)=>
 {
     if(!ValidHostname(request.Hostname)) throw new PolicyException("INVALID_HOSTNAME","Enter an exact DNS hostname without wildcards, paths, or command characters.");
@@ -193,14 +204,13 @@ app.MapPost("/api/findings/{id}/safe-plan",async(string id,HttpContext context,R
 app.MapGet("/api/setup/config",()=>CurrentSetupConfig());
 app.MapPost("/api/setup/config",(SetupConfigRequest request,HttpContext context,IHostApplicationLifetime lifetime)=>
 {
-    if(!Uri.TryCreate(request.Urls,UriKind.Absolute,out var uri)||uri.Scheme!="https"||!ValidHostname(uri.Host)) throw new PolicyException("INVALID_HTTPS_URL","Use an HTTPS URL with a DNS hostname, for example https://management.example.com:5443.");
+    if(!Uri.TryCreate(request.Urls,UriKind.Absolute,out var uri)||uri.Scheme!="https"||!ValidHostname(uri.Host)||!uri.Host.Contains('.')||uri.AbsolutePath!="/"||uri.Query!=""||uri.Fragment!=""||uri.UserInfo!="") throw new PolicyException("INVALID_HTTPS_URL","Use the management computer's full DNS name and HTTPS port, for example https://management.example.com:5443. Localhost is only for demo mode.");
     var domain=request.Domain.Trim().ToLowerInvariant(); var dc=request.DomainController.Trim().ToLowerInvariant();
     if(!ValidHostname(domain)||!domain.Contains('.')||!ValidHostname(dc)||!dc.EndsWith("."+domain,StringComparison.OrdinalIgnoreCase)) throw new PolicyException("INVALID_DOMAIN","Domain and writable DC must be exact DNS names in the same domain.");
     var gpos=CleanList(request.ApprovedGpoIds); var ous=CleanList(request.AuthorizedOus); var hosts=CleanList(request.AllowedHosts); var operators=CleanList(request.AllowedOperators);
-    var protectedIds=new HashSet<string>(["31b2f340-016d-11d2-945f-00c04fb984f9","6ac1786c-016f-11d2-945f-00c04fb984f9"],StringComparer.OrdinalIgnoreCase);
-    if(gpos.Length==0||gpos.Any(x=>!Guid.TryParse(x,out var id)||protectedIds.Contains(id.ToString()))) throw new PolicyException("INVALID_GPO_ALLOWLIST","Provide one or more approved remediation GPO GUIDs; default domain policies are prohibited.");
-    if(ous.Length==0||ous.Any(x=>!x.StartsWith("OU=",StringComparison.OrdinalIgnoreCase)||x.IndexOfAny(['\r','\n','\0'])>=0)) throw new PolicyException("INVALID_OU_ALLOWLIST","Provide exact OU distinguished names beginning with OU=.");
-    if(hosts.Length==0||hosts.Any(x=>!ValidHostname(x)||!x.EndsWith("."+domain,StringComparison.OrdinalIgnoreCase))) throw new PolicyException("INVALID_HOST_ALLOWLIST","Provide exact target FQDNs inside the configured domain.");
+    // Password pilot operates on one confirmed user via PSO, not a computer GPO/OU allowlist.
+    // Legacy values are deliberately discarded so an old Default Domain Policy GUID cannot block pilot setup.
+    gpos=[]; ous=[]; hosts=[];
     if(operators.Length==0||operators.Any(x=>!Regex.IsMatch(x,@"^[^\\/\s]+\\[^\\/\s]+$"))) throw new PolicyException("INVALID_OPERATOR_ALLOWLIST","Use exact Windows identities such as PROSOL\\omar.verdizada.");
     if(real&&!operators.Contains(Operator(context),StringComparer.OrdinalIgnoreCase)) throw new PolicyException("OPERATOR_SELF_LOCKOUT","The active Windows operator must remain in AllowedOperators when saving a live configuration.");
     var backup=request.BackupPath.Trim(); if(!Regex.IsMatch(backup,@"^[A-Za-z]:\\")||backup.IndexOfAny(['\r','\n','\0'])>=0) throw new PolicyException("INVALID_BACKUP_PATH","Use a local absolute Windows path such as C:\\ProgramData\\GpoRemediator\\Backups.");
@@ -208,7 +218,7 @@ app.MapPost("/api/setup/config",(SetupConfigRequest request,HttpContext context,
     {
         Mode="Windows", Urls=request.Urls.Trim(),
         Kestrel=new{Certificates=new{Default=new{Subject=uri.Host,Store="My",Location="LocalMachine",AllowInvalid=false}}},
-        Windows=new{EnableWrites=false,Domain=domain,DomainController=dc,ApprovedGpoIds=gpos,AuthorizedOus=ous,AllowedHosts=hosts,AllowedOperators=operators,AllowCreateGpo=false,BackupPath=backup}
+        Windows=new{Workflow="PasswordPilot",EnableWrites=false,Domain=domain,DomainController=dc,ApprovedGpoIds=gpos,AuthorizedOus=ous,AllowedHosts=hosts,AllowedOperators=operators,AllowCreateGpo=false,BackupPath=backup}
     };
     var path=Path.Combine(builder.Environment.ContentRootPath,"appsettings.Local.json"); var temp=path+".tmp";
     ConfigureService(request.AutoRestart,()=> { File.WriteAllText(temp,JsonSerializer.Serialize(output,new JsonSerializerOptions(JsonDefaults.Options){WriteIndented=true})); File.Move(temp,path,true);
@@ -216,14 +226,14 @@ app.MapPost("/api/setup/config",(SetupConfigRequest request,HttpContext context,
     },lifetime);
     return new{saved=true,restartRequired=true,restartScheduled=request.AutoRestart,writesEnabled=false,path="backend/appsettings.Local.json"};
 });
-app.MapPost("/api/setup/write-mode",async(WriteModeRequest request,HttpContext context,RemediationEngine engine,IHostApplicationLifetime lifetime,CancellationToken ct)=>
+app.MapPost("/api/setup/write-mode",async(WriteModeRequest request,HttpContext context,PasswordPilotService pilot,IHostApplicationLifetime lifetime,CancellationToken ct)=>
 {
     if(!real) throw new PolicyException("WINDOWS_MODE_REQUIRED","Write mode can only be changed after the service has started in Windows mode.");
     var expected=request.Enable?"ENABLE WRITES":"DISABLE WRITES";
     if(!string.Equals(request.Confirmation?.Trim(),expected,StringComparison.Ordinal)) throw new PolicyException("CONFIRMATION_REQUIRED",$"Type {expected} exactly to continue.");
     if(request.Enable)
     {
-        var readiness=await engine.ReadinessAsync(ct);
+        var readiness=await pilot.ReadinessAsync(ct);
         if(!readiness.Ready) throw new PolicyException("ENVIRONMENT_NOT_READY","All required Windows/AD readiness checks must pass before writes can be enabled.");
     }
     var path=Path.Combine(builder.Environment.ContentRootPath,"appsettings.Local.json");
@@ -249,9 +259,9 @@ app.MapGet("/api/audit",()=>new{events=store.AuditEvents().Reverse(),integrityVa
 app.MapGet("/api/settings",(HttpContext context,AdapterRegistry registry)=>new
 {
     mode,identityStrategy=real?"Windows Integrated Authentication; process service identity executes":"Simulated local identity",@operator=Operator(context),
-    productionRequirements=new[]{"Domain-joined Windows host; Windows PowerShell 5.1; RSAT ActiveDirectory and GroupPolicy modules","HTTPS with Windows Integrated Authentication and an explicit operator allowlist","Delegated read/edit rights to approved GPO GUIDs, target/OU allowlists, endpoint RSoP and WinRM access","Provision and approve dedicated remediation GPOs before production use; backup folder restricted to service administrators"},
-    supportedTypes=registry.SupportedTypes,
-    limitations=new[]{"MOCK changes only local SQLite. Setup can request a controlled launcher restart into WINDOWS; live policy writes still require explicit write-mode authorization.","Domain account policy and PSO changes require a separate manual workflow.","Production creation/linking of new GPOs is not automated; select an administrator-provisioned approved dedicated GPO.","No SecHard or Nessus integration. Original demonstration policy pack only; validate your licensed benchmark.","Real AD replication, ACLs, security CSE, and endpoint verification require a staging domain validation.","Audit hash chain detects ordinary alterations; a database administrator can rewrite the chain. Export to an external audit sink for production assurance."}
+    productionRequirements=new[]{"Domain-connected Windows host with ActiveDirectory RSAT and a writable DC","HTTPS and Windows Integrated Authentication","Delegated permissions to create PSOs and assign them to the selected non-privileged test user","Local backup directory writable by the service identity"},
+    supportedTypes=new[]{"PASSWORD_POLICY_TEST_USER"},
+    limitations=new[]{"Only the six password settings are enabled in this pilot; no automatic scans.","Select the failed SecHard item and desired value manually. There is no live SecHard connector.","A new PSO is assigned only to the confirmed test user. Domain defaults and existing PSOs are never edited.","Resultant policy verification is on the configured DC; AD replication and SecHard retesting must be checked in the test domain."}
 });
 var frontendPath=Path.GetFullPath(Path.Combine(builder.Environment.ContentRootPath,"..","frontend","dist"));
 if(Directory.Exists(frontendPath))

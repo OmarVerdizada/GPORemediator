@@ -13,8 +13,9 @@ internal sealed class WindowsPowerShellExecutor(ILogger logger)
     public async Task<T> RunAsync<T>(string operation, object configuration, object payload, CancellationToken ct)
     {
         if (!OperatingSystem.IsWindows()) throw new PolicyException("WINDOWS_REQUIRED", "Real execution requires a domain-connected Windows management host.");
-        if (!Operations.Contains(operation)) throw new PolicyException("OPERATION_DENIED", "The requested Windows operation is not supported.");
-        var script = Path.Combine(AppContext.BaseDirectory, "PowerShell", "Invoke-PolicyOperation.ps1");
+        var pilot = new[] { "discover", "passwordRead", "passwordApply", "passwordRollback", "passwordReadiness" }.Contains(operation);
+        if (!pilot && !Operations.Contains(operation)) throw new PolicyException("OPERATION_DENIED", "The requested Windows operation is not supported.");
+        var script = Path.Combine(AppContext.BaseDirectory, "PowerShell", pilot ? "Invoke-PasswordPilot.ps1" : "Invoke-PolicyOperation.ps1");
         if (!File.Exists(script)) throw new PolicyException("SCRIPT_MISSING", "Publish the bundled PowerShell directory with the backend.");
         var executable = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Windows), "System32", "WindowsPowerShell", "v1.0", "powershell.exe");
         var start = new ProcessStartInfo(executable)
@@ -24,7 +25,7 @@ internal sealed class WindowsPowerShellExecutor(ILogger logger)
             StandardInputEncoding = new UTF8Encoding(false), StandardOutputEncoding = Encoding.UTF8,
             StandardErrorEncoding = Encoding.UTF8
         };
-        foreach (var argument in new[] { "-NoLogo", "-NoProfile", "-NonInteractive", "-File", script }) start.ArgumentList.Add(argument);
+        foreach (var argument in new[] { "-NoLogo", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", script }) start.ArgumentList.Add(argument);
         using var process = new Process { StartInfo = start };
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
         timeout.CancelAfter(TimeSpan.FromMinutes(4));

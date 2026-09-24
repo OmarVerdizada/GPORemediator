@@ -3,6 +3,7 @@ using GpoRemediator.Domain;
 using GpoRemediator.Infrastructure;
 using GpoRemediator.Services;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Configuration;
 
 var passed = 0;
 var failed = 0;
@@ -252,6 +253,61 @@ Test("Failed lifecycle scheduling restores service availability", () =>
     Check(!engine.Maintenance, "Failed scheduling left the service locked");
     engine.BeginMaintenance(() => { });
     Check(engine.Maintenance, "A retry could not be accepted");
+});
+
+Test("Password pilot rejects unknown settings and invalid values", () =>
+{
+    Reject("PASSWORD_SETTING_UNSUPPORTED", () => PasswordPilotRules.Validate("LockoutThreshold", 5));
+    Reject("PASSWORD_VALUE_INVALID", () => PasswordPilotRules.Validate("ComplexityEnabled", 2));
+    Reject("PASSWORD_VALUE_INVALID", () => PasswordPilotRules.Validate("MinPasswordLength", -1));
+    PasswordPilotRules.Validate("MinPasswordLength", 14);
+    Reject("PASSWORD_AGE_CONFLICT", () => PasswordPilotRules.ValidateAges(new Dictionary<string,int>{{"MinPasswordAge",30},{"MaxPasswordAge",30}}));
+    PasswordPilotRules.ValidateAges(new Dictionary<string,int>{{"MinPasswordAge",30},{"MaxPasswordAge",0}});
+});
+Test("Password fingerprint ignores dictionary insertion order but detects policy and scope changes", () =>
+{
+    var a=new PasswordSnapshot("user-id","test","CN=test",null,0,new(){{"A",1},{"B",2}},[]);
+    var b=a with {Values=new(){{"B",2},{"A",1}}};
+    Check(PasswordPilotRules.Fingerprint(a)==PasswordPilotRules.Fingerprint(b),"Dictionary ordering made plan stale");
+    Check(PasswordPilotRules.Fingerprint(a)!=PasswordPilotRules.Fingerprint(a with {SourceId="new-pso"}),"Changed policy source was missed");
+});
+Test("Password pilot changes one value, persists backup/history, rejects replay and restores original values", () =>
+{
+    using var db=new Store(":memory:");
+    var provider=new MockWindowsPolicyProvider(db);
+    using var engine=new RemediationEngine(db,provider,new AdapterRegistry(),NullLogger<RemediationEngine>.Instance);
+    var cfg=new Microsoft.Extensions.Configuration.ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string,string?>{{"Mode","Mock"}}).Build();
+    var pilot=new PasswordPilotService(cfg,db,engine,NullLogger<PasswordPilotService>.Instance);
+    var plan=pilot.PlanAsync(new("pilot.user","MinPasswordLength",14),"DEMO\\operator",default).GetAwaiter().GetResult();
+    Check(plan.Before.Values["MinPasswordLength"]==8 && plan.After["MinPasswordLength"]==14,"Wrong old/new values");
+    Check(plan.After.All(k=>k.Key==plan.Setting||plan.Before.Values[k.Key]==k.Value),"Unselected policy changed");
+    Check(pilot.History().Length==0,"Planning created a job");
+    Reject("CONFIRMATION_REQUIRED",()=>pilot.ApplyAsync(plan.Id,"yes","DEMO\\operator").GetAwaiter().GetResult());
+    Reject("PLAN_CONTEXT_CHANGED",()=>pilot.ApplyAsync(plan.Id,"APPLY","DEMO\\other").GetAwaiter().GetResult());
+    var applied=pilot.ApplyAsync(plan.Id,"APPLY","DEMO\\operator").GetAwaiter().GetResult();
+    Check(applied.State=="VERIFIED","Demo apply failed: "+applied.Message);
+    Check(JsonDefaults.Serialize(pilot.ApplyAsync(plan.Id,"APPLY","DEMO\\operator").GetAwaiter().GetResult())==JsonDefaults.Serialize(applied),"Replay changed operation");
+    var second=pilot.PlanAsync(new("pilot.user","ComplexityEnabled",1),"DEMO\\operator",default).GetAwaiter().GetResult();
+    Check(pilot.ApplyAsync(second.Id,"APPLY","DEMO\\operator").GetAwaiter().GetResult().State=="VERIFIED","Second setting failed");
+    Check(pilot.RollbackAsync(plan.Id,"ROLLBACK","DEMO\\operator").GetAwaiter().GetResult().State=="ROLLBACK_REVIEW_REQUIRED","Older policy rollback bypassed conflict");
+    Check(pilot.RollbackAsync(second.Id,"ROLLBACK","DEMO\\operator").GetAwaiter().GetResult().State=="ROLLED_BACK","Latest rollback failed");
+    Check(pilot.RollbackAsync(plan.Id,"ROLLBACK","DEMO\\operator").GetAwaiter().GetResult().State=="ROLLED_BACK","Original rollback failed");
+    Check(!engine.Maintenance,"Operation left lifecycle locked");
+    Check(db.AuditIntegrity(),"Pilot audit chain failed");
+});
+Test("Password pilot blocks stale and expired plans", () =>
+{
+    using var db=new Store(":memory:");
+    using var engine=new RemediationEngine(db,new MockWindowsPolicyProvider(db),new AdapterRegistry(),NullLogger<RemediationEngine>.Instance);
+    var cfg=new Microsoft.Extensions.Configuration.ConfigurationBuilder().Build();
+    var pilot=new PasswordPilotService(cfg,db,engine,NullLogger<PasswordPilotService>.Instance);
+    var a=pilot.PlanAsync(new("test","MinPasswordLength",14),"actor",default).GetAwaiter().GetResult();
+    var b=pilot.PlanAsync(new("test","ComplexityEnabled",1),"actor",default).GetAwaiter().GetResult();
+    pilot.ApplyAsync(a.Id,"APPLY","actor").GetAwaiter().GetResult();
+    Check(pilot.ApplyAsync(b.Id,"APPLY","actor").GetAwaiter().GetResult().Message.StartsWith("STALE_PASSWORD_PLAN"),"Stale plan executed");
+    var expired=pilot.PlanAsync(new("other","MinPasswordLength",14),"actor",default).GetAwaiter().GetResult();
+    db.Put("password_plans",expired.Id,expired with {CreatedAt=DateTimeOffset.UtcNow.AddHours(-1).ToString("O")});
+    Reject("PLAN_EXPIRED",()=>pilot.ApplyAsync(expired.Id,"APPLY","actor").GetAwaiter().GetResult());
 });
 
 Console.WriteLine($"Invariant tests: {passed} passed; {failed} failed.");
