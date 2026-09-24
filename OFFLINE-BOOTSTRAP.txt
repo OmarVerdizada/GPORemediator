@@ -1,0 +1,20 @@
+GPO Remediator bootstrap dependency model
+=========================================
+
+1. Frontend
+   - Fully packaged under frontend\source and frontend\dist.
+   - No Node.js, npm, pnpm, Corepack, Vite install, or registry.npmjs.org access.
+
+2. Backend
+   - Requires a .NET 8 SDK only when the current backend source has to be rebuilt.
+   - GpoRemediator.ps1 downloads a project-local .NET 8 SDK into .tools\dotnet when one is not already available.
+   - Build-Portable.ps1 restores the project's .NET/NuGet packages into .tools\nuget and reuses that cache on later builds.
+   - If your corporate network blocks NuGet, allow the approved NuGet source or pre-populate .tools\nuget. This is separate from npm.
+
+3. Runtime
+   - After a successful self-contained win-x64 publish, normal runs use runtime\GpoRemediator.exe.
+   - No SDK, Node.js, npm, or pnpm is needed when source fingerprints still match the packaged runtime.
+
+4. Windows / AD prerequisites
+   - Windows mode additionally needs the ActiveDirectory and GroupPolicy RSAT modules and an appropriate HTTPS server certificate.
+   - The launcher can invoke an elevated one-time RSAT prerequisite helper; the application itself is not kept elevated for ordinary operation.

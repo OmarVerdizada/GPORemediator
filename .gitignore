@@ -1,0 +1,13 @@
+**/bin/
+**/obj/
+**/node_modules/
+**/data/
+work/
+runtime/
+*.db
+*.db-shm
+*.db-wal
+backend/appsettings.Local.json
+.tools/
+work/
+backend/appsettings.Local.json
