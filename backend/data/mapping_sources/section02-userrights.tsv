@@ -1,0 +1,37 @@
+2.2.1	SeTrustedCredManAccessPrivilege	
+2.2.3	SeNetworkLogonRight	Administrators|Authenticated Users
+2.2.4	SeTcbPrivilege	
+2.2.6	SeIncreaseQuotaPrivilege	Administrators|LOCAL SERVICE|NETWORK SERVICE
+2.2.8	SeInteractiveLogonRight	Administrators
+2.2.10	SeRemoteInteractiveLogonRight	Administrators|Remote Desktop Users
+2.2.11	SeBackupPrivilege	Administrators
+2.2.12	SeSystemTimePrivilege	Administrators|LOCAL SERVICE
+2.2.13	SeTimeZonePrivilege	Administrators|LOCAL SERVICE
+2.2.14	SeCreatePagefilePrivilege	Administrators
+2.2.15	SeCreateTokenPrivilege	
+2.2.16	SeCreateGlobalPrivilege	Administrators|LOCAL SERVICE|NETWORK SERVICE|SERVICE
+2.2.17	SeCreatePermanentPrivilege	
+2.2.19	SeCreateSymbolicLinkPrivilege	Administrators|NT VIRTUAL MACHINE\Virtual Machines
+2.2.20	SeDebugPrivilege	Administrators
+2.2.22	SeDenyNetworkLogonRight	Guests|Local account and member of Administrators group
+2.2.23	SeDenyBatchLogonRight	Guests
+2.2.24	SeDenyServiceLogonRight	Guests
+2.2.25	SeDenyInteractiveLogonRight	Guests
+2.2.27	SeDenyRemoteInteractiveLogonRight	Guests|Local account
+2.2.29	SeEnableDelegationPrivilege	
+2.2.30	SeRemoteShutdownPrivilege	Administrators
+2.2.31	SeAuditPrivilege	LOCAL SERVICE|NETWORK SERVICE
+2.2.33	SeImpersonatePrivilege	Administrators|LOCAL SERVICE|NETWORK SERVICE|SERVICE
+2.2.34	SeIncreaseBasePriorityPrivilege	Administrators|Window Manager\Window Manager Group
+2.2.35	SeLoadDriverPrivilege	Administrators
+2.2.36	SeLockMemoryPrivilege	
+2.2.39	SeSecurityPrivilege	Administrators
+2.2.40	SeReLabelPrivilege	
+2.2.41	SeSystemEnvironmentPrivilege	Administrators
+2.2.42	SeManageVolumePrivilege	Administrators
+2.2.43	SeProfileSingleProcessPrivilege	Administrators
+2.2.44	SeSystemProfilePrivilege	Administrators|NT SERVICE\WdiServiceHost
+2.2.45	SeAssignPrimaryTokenPrivilege	LOCAL SERVICE|NETWORK SERVICE
+2.2.46	SeRestorePrivilege	Administrators
+2.2.47	SeShutdownPrivilege	Administrators
+2.2.49	SeTakeOwnershipPrivilege	Administrators

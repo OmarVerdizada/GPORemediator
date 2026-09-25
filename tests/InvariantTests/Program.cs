@@ -255,60 +255,75 @@ Test("Failed lifecycle scheduling restores service availability", () =>
     Check(engine.Maintenance, "A retry could not be accepted");
 });
 
-Test("Password pilot rejects unknown settings and invalid values", () =>
+Test("Production GPO mapping registry covers the imported CIS v4 catalog", () =>
 {
-    Reject("PASSWORD_SETTING_UNSUPPORTED", () => PasswordPilotRules.Validate("LockoutThreshold", 5));
-    Reject("PASSWORD_VALUE_INVALID", () => PasswordPilotRules.Validate("ComplexityEnabled", 2));
-    Reject("PASSWORD_VALUE_INVALID", () => PasswordPilotRules.Validate("MinPasswordLength", -1));
-    PasswordPilotRules.Validate("MinPasswordLength", 14);
-    Reject("PASSWORD_AGE_CONFLICT", () => PasswordPilotRules.ValidateAges(new Dictionary<string,int>{{"MinPasswordAge",30},{"MaxPasswordAge",30}}));
-    PasswordPilotRules.ValidateAges(new Dictionary<string,int>{{"MinPasswordAge",30},{"MaxPasswordAge",0}});
+    var settings=ProductionGpoMappings.Settings;
+    Check(settings.Length==405,"Expected 405 unique CIS IDs in the production mapping registry");
+    Check(settings.Select(x=>x.Id).Distinct(StringComparer.OrdinalIgnoreCase).Count()==405,"Duplicate production mapping IDs");
+    Check(settings.All(x=>x.Handler is "SecurityTemplate" or "Registry" or "RegistrySet" or "AdvancedAudit"),"Unapproved handler exists");
+    Check(settings.Count(x=>x.Handler=="Registry")==325,"Registry mapping count changed unexpectedly");
+    Check(settings.Count(x=>x.Handler=="SecurityTemplate")==48,"Security-template mapping count changed unexpectedly");
+    Check(settings.Count(x=>x.Handler=="AdvancedAudit")==27,"Advanced-audit mapping count changed unexpectedly");
+    Check(settings.Count(x=>x.Handler=="RegistrySet")==5,"Registry-set mapping count changed unexpectedly");
+    Check(settings.Count(x=>x.RequiresInput)==4,"Organization-value mapping count changed unexpectedly");
 });
-Test("Password fingerprint ignores dictionary insertion order but detects policy and scope changes", () =>
+Test("Advanced Audit mappings expose the actual requested state", () =>
 {
-    var a=new PasswordSnapshot("user-id","test","CN=test",null,0,new(){{"A",1},{"B",2}},[]);
-    var b=a with {Values=new(){{"B",2},{"A",1}}};
-    Check(PasswordPilotRules.Fingerprint(a)==PasswordPilotRules.Fingerprint(b),"Dictionary ordering made plan stale");
-    Check(PasswordPilotRules.Fingerprint(a)!=PasswordPilotRules.Fingerprint(a with {SourceId="new-pso"}),"Changed policy source was missed");
+    var audit=ProductionGpoMappings.Settings.First(x=>x.Handler=="AdvancedAudit");
+    var selection=new GpoSelection(Guid.NewGuid().ToString(),"OU=Servers,DC=example,DC=com",audit.Id,0);
+    var display=audit.DesiredDisplay(selection);
+    Check(!string.IsNullOrWhiteSpace(display) && display!="<blank>","Advanced Audit desired display regressed to blank");
 });
-Test("Password pilot changes one value, persists backup/history, rejects replay and restores original values", () =>
+Test("Production mapping validation blocks untrusted or invalid operator values", () =>
 {
-    using var db=new Store(":memory:");
-    var provider=new MockWindowsPolicyProvider(db);
-    using var engine=new RemediationEngine(db,provider,new AdapterRegistry(),NullLogger<RemediationEngine>.Instance);
-    var cfg=new Microsoft.Extensions.Configuration.ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string,string?>{{"Mode","Mock"}}).Build();
-    var pilot=new PasswordPilotService(cfg,db,engine,NullLogger<PasswordPilotService>.Instance);
-    var plan=pilot.PlanAsync(new("pilot.user","MinPasswordLength",14),"DEMO\\operator",default).GetAwaiter().GetResult();
-    Check(plan.Before.Values["MinPasswordLength"]==8 && plan.After["MinPasswordLength"]==14,"Wrong old/new values");
-    Check(plan.After.All(k=>k.Key==plan.Setting||plan.Before.Values[k.Key]==k.Value),"Unselected policy changed");
-    Check(pilot.History().Length==0,"Planning created a job");
-    Reject("CONFIRMATION_REQUIRED",()=>pilot.ApplyAsync(plan.Id,"yes","DEMO\\operator").GetAwaiter().GetResult());
-    Reject("PLAN_CONTEXT_CHANGED",()=>pilot.ApplyAsync(plan.Id,"APPLY","DEMO\\other").GetAwaiter().GetResult());
-    var applied=pilot.ApplyAsync(plan.Id,"APPLY","DEMO\\operator").GetAwaiter().GetResult();
-    Check(applied.State=="VERIFIED","Demo apply failed: "+applied.Message);
-    Check(JsonDefaults.Serialize(pilot.ApplyAsync(plan.Id,"APPLY","DEMO\\operator").GetAwaiter().GetResult())==JsonDefaults.Serialize(applied),"Replay changed operation");
-    var second=pilot.PlanAsync(new("pilot.user","ComplexityEnabled",1),"DEMO\\operator",default).GetAwaiter().GetResult();
-    Check(pilot.ApplyAsync(second.Id,"APPLY","DEMO\\operator").GetAwaiter().GetResult().State=="VERIFIED","Second setting failed");
-    Check(pilot.RollbackAsync(plan.Id,"ROLLBACK","DEMO\\operator").GetAwaiter().GetResult().State=="ROLLBACK_REVIEW_REQUIRED","Older policy rollback bypassed conflict");
-    Check(pilot.RollbackAsync(second.Id,"ROLLBACK","DEMO\\operator").GetAwaiter().GetResult().State=="ROLLED_BACK","Latest rollback failed");
-    Check(pilot.RollbackAsync(plan.Id,"ROLLBACK","DEMO\\operator").GetAwaiter().GetResult().State=="ROLLED_BACK","Original rollback failed");
-    Check(!engine.Maintenance,"Operation left lifecycle locked");
-    Check(db.AuditIntegrity(),"Pilot audit chain failed");
+    var baseSelection=new GpoSelection(Guid.NewGuid().ToString(),"OU=Servers,DC=example,DC=com","18.10.4.1",14);
+    ProductionGpoMappings.Validate(baseSelection);
+    Reject("GPO_CUSTOM_VALUE_NOT_ALLOWED",()=>ProductionGpoMappings.Validate(baseSelection with{CustomValue="browser supplied registry value"}));
+    var rename=baseSelection with{Setting="2.3.1.4",CustomValue=""};
+    Reject("GPO_CUSTOM_VALUE_REQUIRED",()=>ProductionGpoMappings.Validate(rename));
+    Reject("ACCOUNT_NAME_INVALID",()=>ProductionGpoMappings.Validate(rename with{CustomValue="bad\\name"}));
+    ProductionGpoMappings.Validate(rename with{CustomValue="SrvLocalOps"});
+    var account=baseSelection with{Setting="1.1.4",ScopeDn="DC=example,DC=com",AccountScope="Domain",Value=21};
+    Reject("GPO_VALUE_INVALID",()=>ProductionGpoMappings.Validate(account));
+    ProductionGpoMappings.Validate(account with{Value=14});
 });
-Test("Password pilot blocks stale and expired plans", () =>
+Test("Account Policy override ranges cannot weaken the CIS state", () =>
 {
-    using var db=new Store(":memory:");
-    using var engine=new RemediationEngine(db,new MockWindowsPolicyProvider(db),new AdapterRegistry(),NullLogger<RemediationEngine>.Instance);
-    var cfg=new Microsoft.Extensions.Configuration.ConfigurationBuilder().Build();
-    var pilot=new PasswordPilotService(cfg,db,engine,NullLogger<PasswordPilotService>.Instance);
-    var a=pilot.PlanAsync(new("test","MinPasswordLength",14),"actor",default).GetAwaiter().GetResult();
-    var b=pilot.PlanAsync(new("test","ComplexityEnabled",1),"actor",default).GetAwaiter().GetResult();
-    pilot.ApplyAsync(a.Id,"APPLY","actor").GetAwaiter().GetResult();
-    Check(pilot.ApplyAsync(b.Id,"APPLY","actor").GetAwaiter().GetResult().Message.StartsWith("STALE_PASSWORD_PLAN"),"Stale plan executed");
-    var expired=pilot.PlanAsync(new("other","MinPasswordLength",14),"actor",default).GetAwaiter().GetResult();
-    db.Put("password_plans",expired.Id,expired with {CreatedAt=DateTimeOffset.UtcNow.AddHours(-1).ToString("O")});
-    Reject("PLAN_EXPIRED",()=>pilot.ApplyAsync(expired.Id,"APPLY","actor").GetAwaiter().GetResult());
+    var gpo=Guid.NewGuid().ToString();
+    var domain="DC=example,DC=com";
+    Reject("GPO_VALUE_INVALID",()=>ProductionGpoMappings.Validate(new GpoSelection(gpo,domain,"1.1.1",23,AccountScope:"Domain")));
+    Reject("GPO_VALUE_INVALID",()=>ProductionGpoMappings.Validate(new GpoSelection(gpo,domain,"1.1.4",13,AccountScope:"Domain")));
+    Reject("GPO_VALUE_INVALID",()=>ProductionGpoMappings.Validate(new GpoSelection(gpo,domain,"1.1.5",0,AccountScope:"Domain")));
+    Reject("GPO_VALUE_INVALID",()=>ProductionGpoMappings.Validate(new GpoSelection(gpo,domain,"1.1.6",1,AccountScope:"Domain")));
+    Reject("GPO_VALUE_INVALID",()=>ProductionGpoMappings.Validate(new GpoSelection(gpo,domain,"1.2.2",0,AccountScope:"Domain")));
+    Reject("GPO_VALUE_INVALID",()=>ProductionGpoMappings.Validate(new GpoSelection(gpo,domain,"1.2.2",6,AccountScope:"Domain")));
+    ProductionGpoMappings.Validate(new GpoSelection(gpo,domain,"1.1.1",24,AccountScope:"Domain"));
+    ProductionGpoMappings.Validate(new GpoSelection(gpo,domain,"1.1.4",20,AccountScope:"Domain"));
+    ProductionGpoMappings.Validate(new GpoSelection(gpo,domain,"1.2.2",1,AccountScope:"Domain"));
 });
-
+Test("Production mappings keep server-side desired values authoritative", () =>
+{
+    var fixedRule=ProductionGpoMappings.Require("18.10.8.3");
+    var selection=new GpoSelection(Guid.NewGuid().ToString(),"OU=Servers,DC=example,DC=com",fixedRule.Id,999);
+    Check(fixedRule.DesiredDisplay(selection)=="255","Fixed benchmark mapping trusted the browser numeric field");
+    var account=ProductionGpoMappings.Require("1.1.4");
+    Check(account.DesiredDisplay(selection with{Setting=account.Id,Value=16})=="16","Approved Account Policy override was not honored");
+});
+Test("Only CIS controls classified Automated are writable", () =>
+{
+    var settings=ProductionGpoMappings.Settings;
+    Check(settings.Count(x=>x.Writable)==401,"Expected 401 server-writable mappings");
+    foreach(var id in new[]{"1.2.3","2.3.11.6","18.10.43.10.1","18.10.43.10.2"})
+    {
+        Check(!ProductionGpoMappings.Require(id).Writable,$"{id} unexpectedly writable");
+        Reject("GPO_MANUAL_ONLY",()=>ProductionGpoMappings.Validate(new GpoSelection(Guid.NewGuid().ToString(),"DC=example,DC=com",id,1)));
+    }
+});
+Test("All domain-sensitive Account Policy controls are constrained to the domain scope", () =>
+{
+    var ids=ProductionGpoMappings.Settings.Where(x=>x.DomainPolicySensitive).Select(x=>x.Id).OrderBy(x=>x).ToArray();
+    Check(ids.SequenceEqual(new[]{"1.1.1","1.1.3","1.1.4","1.1.5","1.1.6","1.2.1","1.2.2","1.2.3","1.2.4"}),"Domain-sensitive mapping set changed");
+    Check(ProductionGpoMappings.Settings.Where(x=>x.DomainPolicySensitive).All(x=>x.Scope=="Domain"),"Domain-sensitive mapping is not Domain scoped");
+});
 Console.WriteLine($"Invariant tests: {passed} passed; {failed} failed.");
 return failed == 0 ? 0 : 1;

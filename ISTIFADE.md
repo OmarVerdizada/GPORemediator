@@ -1,20 +1,16 @@
-# İstifadə — password-policy pilot
+# İstifadə qaydası
 
-1. `GpoRemediator.cmd` → **Başlat** → **Brauzerdə aç**.
-2. **Sazlamalar** bölməsində aşkarlanan domen, DC, HTTPS ünvanı və operatoru nəzərdən keçirin. İstəsəniz əl ilə dəyişdirin. GPO GUID tələb olunmur.
-3. **Saxla və yenidən başlat**. Windows rejimi üçün düzgün HTTPS sertifikatı və AD bağlantısı olmalıdır. Xəta varsa launcher localhost-da sazlama rejimi açır; real AD-yə yazmır.
-4. **Hazırlığı yoxla**, sonra `ENABLE WRITES` ilə yazma rejimini aktivləşdirin. Bu yalnız test user PSO əməliyyatları üçündür.
-5. **Parol siyasətləri** səhifəsində SecHard-da uğursuz olan altı password item-dən birini seçin.
-6. Ayrı, privileged olmayan test istifadəçisinin adını və SecHard-da tələb olunan dəyəri yazın. Account parolunu heç yerə daxil etməyin.
-7. **Seçilmiş parametr üçün plan hazırla**. Plan yalnız bu istifadəçinin effektiv siyasətini oxuyur. Başqa parametrlər skan edilmir.
-8. İstifadəçi, əvvəl/sonra dəyərləri və təsir dairəsini yoxlayın. `APPLY` yazıb **Backup et və tətbiq et** düyməsini basın.
-9. Tarixçədə nəticəyə baxın. `VERIFIED` seçilən DC-də istifadəçinin resultant policy-si ilə təsdiqlənir. Sonra AD replication və SecHard nəticəsini test domenində yoxlayın.
-10. Bərpa üçün həmin əməliyyatın altında `ROLLBACK` yazın. Bir neçə əməliyyat varsa ən yenidən başlayın.
+1. ZIP-i yeni qovluğa çıxarın və `GpoRemediator.cmd` açın.
+2. İlk açılışda Setup gəlirsə, `AD domain`, writable DC, `Backup path` və `AllowedOperators` məlumatlarını yoxlayıb saxlayın. HTTPS sertifikatı tələb olunmur; UI yalnız `127.0.0.1`-də açılır.
+3. Windows rejimində əsas səhifədə icra hesabı ilə qoşulun. Hazırkı mərhələdə DC/domain admin hesabı istifadə edilə bilər; parol diskə və loga yazılmır.
+4. `Environment Health / Readiness` yoxlamasını işlədin. Required check `FAIL` olarsa Apply aktivləşdirilməməlidir.
+5. Benchmark bölməsində domain → subsection → control seçin.
+6. Control workspace-də GPO və domain/OU scope seçin. Account Policy qaydaları server tərəfindən domain root + Default Domain Policy ilə məhdudlaşdırılır.
+7. `Preview` edin. Current/desired value, existing links, inheritance/conflict warnings, affected objects və refresh target-lərini yoxlayın. Preview heç nə yazmır.
+8. Settings-də `ENABLE WRITES` ilə write mode-u aktivləşdirin. Readiness yenidən yoxlanır.
+9. Apply üçün Change/Ticket ID, Approver, impact acknowledgment və `APPLY` təsdiqi daxil edin. Protected GPO üçün əlavə təsdiq tələb olunur.
+10. Backend əvvəlcə tam `Backup-GPO` yaradır, sonra yalnız seçilmiş mapping-i dəyişir/link edir və read-back edir. İstəsəniz bounded `gpupdate` seçə bilərsiniz.
+11. `Verify` ilə AD/SYSVOL version, replication və mümkün olduqda endpoint effective value yoxlanılır. `PENDING` nəticəni `PASS` kimi qəbul etməyin.
+12. Geri qaytarmaq lazım olarsa Operation Center-dən `ROLLBACK` istifadə edin. GPO başqa administrator tərəfindən sonradan dəyişibsə avtomatik rollback təhlükəsizlik üçün bloklanır.
 
-**Demo** rejimində bu axını real AD olmadan məşq edə bilərsiniz. Demo nəticəsi real AD-də dəyişiklik edildiyini göstərmir.
-
-Default Domain Policy GUID-ni daxil etmək lazım deyil: PSO konkret istifadəçiyə təyin edilir. Domain-wide GPO tapıntısı üçün ayrıca gələcək mərhələ lazımdır. Mövcud parollar dəyişmir/reset edilmir.
-
-Sazlama zamanı aşkarlama mühit metadatasını oxuyur. Avtomatik inventar/compliance scan, istifadəçi siyahısı yığılması və fonda remediation yoxdur. Mövcud sazlamalar və əl ilə düzəlişlər qorunur.
-
-Əlavə texniki məlumat, bərpa və test addımları: [Password pilot](docs/PASSWORD-PILOT.md).
+Real production-a keçməzdən əvvəl `PRODUCTION-TEST-CHECKLIST.md` tam icra olunmalıdır.

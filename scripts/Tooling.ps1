@@ -26,7 +26,7 @@ function Get-FileSetFingerprint([System.IO.FileInfo[]]$Files, [string]$BasePath)
 function Get-BackendSourceFingerprint {
     $backend = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\backend'))
     $files = @(Get-ChildItem -LiteralPath $backend -Recurse -File | Where-Object {
-          ($_.Name -eq 'benchmark.json') -or ($_.FullName -notmatch '[\\/](bin|obj|data)[\\/]' -and
+          ($_.Name -in @('benchmark.json','gpo-production-mappings.json')) -or ($_.FullName -notmatch '[\\/](bin|obj|data)[\\/]' -and
           ($_.Extension -in @('.cs','.csproj','.ps1','.psm1') -or $_.Name -eq 'appsettings.json'))
     })
     return (Get-FileSetFingerprint $files $backend)

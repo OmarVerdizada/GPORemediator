@@ -1,0 +1,215 @@
+18.1.1.1	HKLM\SOFTWARE\Policies\Microsoft\Windows\Personalization	NoLockScreenCamera	DWORD	1
+18.1.1.2	HKLM\SOFTWARE\Policies\Microsoft\Windows\Personalization	NoLockScreenSlideshow	DWORD	1
+18.1.2.2	HKLM\SOFTWARE\Policies\Microsoft\InputPersonalization	AllowInputPersonalization	DWORD	0
+18.1.3	HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\Explorer	AllowOnlineTips	DWORD	0
+18.4.1	HKLM\SOFTWARE\Microsoft\Windows\Currentversion\Policies\System	LocalAccountTokenFilterPolicy	DWORD	0
+18.4.2	HKLM\SYSTEM\CurrentControlSet\Services\mrxsmb10	Start	DWORD	4
+18.4.3	HKLM\SYSTEM\CurrentControlSet\Services\LanmanServer\Parameters	SMB1	DWORD	0
+18.4.4	HKLM\SOFTWARE\Microsoft\Cryptography\Wintrust\Config	EnableCertPaddingCheck	DWORD	1
+18.4.5	HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\kernel	DisableExceptionChainValidation	DWORD	0
+18.4.6	HKLM\SYSTEM\CurrentControlSet\Control\Lsa	RunAsPPL	DWORD	1
+18.4.7	HKLM\SYSTEM\CurrentControlSet\Services\NetBT\Parameters	NodeType	DWORD	2
+18.4.8	HKLM\SYSTEM\CurrentControlSet\Control\SecurityProviders\Wdigest	UseLogonCredential	DWORD	0
+18.5.1	HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon	AutoAdminLogon	String	0
+18.5.2	HKLM\SYSTEM\CurrentControlSet\Services\Tcpip6\Parameters	DisableIPSourceRouting	DWORD	2
+18.5.3	HKLM\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters	DisableIPSourceRouting	DWORD	2
+18.5.4	HKLM\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters	EnableICMPRedirect	DWORD	0
+18.5.5	HKLM\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters	KeepAliveTime	DWORD	300000
+18.5.6	HKLM\SYSTEM\Currentcontrolset\Services\Netbt\Parameters	NoNameReleaseOnDemand	DWORD	1
+18.5.7	HKLM\SYSTEM\Currentcontrolset\Services\Tcpip\Parameters	PerformRouterDiscovery	DWORD	0
+18.5.8	HKLM\SYSTEM\Currentcontrolset\Control\Session Manager	SafeDllSearchMode	DWORD	1
+18.5.9	HKLM\SOFTWARE\Microsoft\Windows Nt\Currentversion\Winlogon	ScreenSaverGracePeriod	String	5
+18.5.10	HKLM\SYSTEM\CurrentControlSet\Services\Tcpip6\Parameters	TcpMaxDataRetransmissions	DWORD	3
+18.5.11	HKLM\SYSTEM\Currentcontrolset\Services\Tcpip\Parameters	TcpMaxDataRetransmissions	DWORD	3
+18.5.12	HKLM\SYSTEM\Currentcontrolset\Services\Eventlog\Security	WarningLevel	DWORD	90
+18.6.4.1	HKLM\SOFTWARE\Policies\Microsoft\Windows NT\DNSClient	EnableMDNS	DWORD	0
+18.6.4.2	HKLM\SOFTWARE\Policies\Microsoft\Windows NT\DNSClient	EnableNetbios	DWORD	2
+18.6.4.3	HKLM\SOFTWARE\Policies\Microsoft\Windows NT\DNSClient	DisableIPv6DefaultDnsServers	DWORD	1
+18.6.4.4	HKLM\SOFTWARE\Policies\Microsoft\Windows NT\DNSClient	EnableMulticast	DWORD	0
+18.6.5.1	HKLM\SOFTWARE\Policies\Microsoft\Windows\System	EnableFontProviders	DWORD	0
+18.6.8.1	HKLM\SOFTWARE\Policies\Microsoft\Windows\LanmanWorkstation	AllowInsecureGuestAuth	DWORD	0
+18.6.9.1	HKLM\SOFTWARE\Policies\Microsoft\Windows\Lltd	AllowLLTDIOOnDomain	DWORD	0
+18.6.9.2	HKLM\SOFTWARE\Policies\Microsoft\Windows\Lltd	AllowRspndrOnDomain	DWORD	0
+18.6.10.2	HKLM\SOFTWARE\Policies\Microsoft\Peernet	Disabled	DWORD	1
+18.6.11.2	HKLM\SOFTWARE\Policies\Microsoft\Windows\Network Connections	NC_AllowNetBridge_NLA	DWORD	0
+18.6.11.3	HKLM\SOFTWARE\Policies\Microsoft\Windows\Network Connections	NC_ShowSharedAccessUI	DWORD	0
+18.6.11.4	HKLM\SOFTWARE\Policies\Microsoft\Windows\Network Connections	NC_StdDomainUserSetLocation	DWORD	1
+18.6.14.1	HKLM\SOFTWARE\Policies\Microsoft\Windows\NetworkProvider\HardenedPaths	\\*\NETLOGON	String	RequireMutualAuthentication=1, RequireIntegrity=1, RequirePrivacy=1
+18.6.19.2.1	HKLM\SOFTWARE\Policies\Microsoft\Windows\Wcn\Registrars	DisabledComponents	DWORD	255
+18.6.20.2	HKLM\SOFTWARE\Policies\Microsoft\Windows\Wcn\Ui	DisableWcnUi	DWORD	1
+18.6.21.1	HKLM\SOFTWARE\Policies\Microsoft\Windows\WcmSvc\GroupPolicy	fMinimizeConnections	DWORD	3
+18.6.21.2	HKLM\SOFTWARE\Policies\Microsoft\Windows\Wcmsvc\Grouppolicy	fBlockNonDomain	DWORD	0
+18.7.1	HKLM\SOFTWARE\Policies\Microsoft\Windows NT\Printers	RegisterSpoolerRemoteRpcEndPoint	DWORD	2
+18.7.2	HKLM\SOFTWARE\Policies\Microsoft\Windows NT\Printers	RedirectionGuardPolicy	DWORD	1
+18.7.3	HKLM\SOFTWARE\Policies\Microsoft\Windows NT\Printers\RPC	RpcUseNamedPipeProtocol	DWORD	0
+18.7.4	HKLM\SOFTWARE\Policies\Microsoft\Windows NT\Printers\RPC	RpcAuthentication	DWORD	0
+18.7.5	HKLM\SOFTWARE\Policies\Microsoft\Windows NT\Printers\RPC	RpcProtocols	DWORD	5
+18.7.6	HKLM\SOFTWARE\Policies\Microsoft\Windows NT\Printers\RPC	ForceKerberosForRpc	DWORD	0
+18.7.7	HKLM\SOFTWARE\Policies\Microsoft\Windows NT\Printers\RPC	RpcTcpPort	DWORD	0
+18.7.8	HKLM\SYSTEM\CurrentControlSet\Control\Print	RpcAuthnLevelPrivacyEnabled	DWORD	1
+18.7.9	HKLM\SOFTWARE\Policies\Microsoft\Windows NT\Printers\PointAndPrint	RestrictDriverInstallationToAdministrators	DWORD	1
+18.7.10	HKLM\SOFTWARE\Policies\Microsoft\Windows NT\Printers	CopyFilesPolicy	DWORD	1
+18.7.11	HKLM\SOFTWARE\Policies\Microsoft\Windows NT\Printers\PointAndPrint	NoWarningNoElevationOnInstall	DWORD	0
+18.7.12	HKLM\SOFTWARE\Policies\Microsoft\Windows NT\Printers\PointAndPrint	UpdatePromptSettings	DWORD	0
+18.8.1.1	HKLM\SOFTWARE\Policies\Microsoft\Windows\CurrentVersion\PushNotifications	NoCloudApplicationNotification	DWORD	1
+18.9.3.1	HKLM\SOFTWARE\Microsoft\Windows\Currentversion\Policies\System\Audit	ProcessCreationIncludeCmdLine_Enabled	DWORD	1
+18.9.4.1	HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System\CredSSP\Parameters	AllowEncryptionOracle	DWORD	0
+18.9.4.2	HKLM\SOFTWARE\Policies\Microsoft\Windows\CredentialsDelegation	AllowProtectedCreds	DWORD	1
+18.9.5.1	HKLM\SOFTWARE\Policies\Microsoft\Windows\DeviceGuard	EnableVirtualizationBasedSecurity	DWORD	1
+18.9.5.3	HKLM\SOFTWARE\Policies\Microsoft\Windows\DeviceGuard	HypervisorEnforcedCodeIntegrity	DWORD	1
+18.9.5.4	HKLM\SOFTWARE\Policies\Microsoft\Windows\DeviceGuard	HVCIMATRequired	DWORD	1
+18.9.5.5	HKLM\SOFTWARE\Policies\Microsoft\Windows\DeviceGuard	LsaCfgFlags	DWORD	1
+18.9.5.7	HKLM\SOFTWARE\Policies\Microsoft\Windows\DeviceGuard	ConfigureSystemGuardLaunch	DWORD	1
+18.9.7.2	HKLM\SOFTWARE\Policies\Microsoft\Windows\Device Metadata	PreventDeviceMetadataFromNetwork	DWORD	1
+18.9.13.1	HKLM\System\CurrentControlSet\Policies\EarlyLaunch	DriverLoadPolicy	DWORD	3
+18.9.19.2	HKLM\SOFTWARE\Policies\Microsoft\Windows\Group Policy\{35378EAC-683F-11D2-A89A-00C04FBBCFA2}	NoBackgroundPolicy	DWORD	0
+18.9.19.3	HKLM\SOFTWARE\Policies\Microsoft\Windows\Group Policy\{35378EAC-683F-11D2-A89A-00C04FBBCFA2}	NoGPOListChanges	DWORD	0
+18.9.19.4	HKLM\SOFTWARE\Policies\Microsoft\Windows\Group Policy\{827D319E-6EAC-11D2-A4EA-00C04F79F83A}	NoBackgroundPolicy	DWORD	0
+18.9.19.5	HKLM\SOFTWARE\Policies\Microsoft\Windows\Group Policy\{827D319E-6EAC-11D2-A4EA-00C04F79F83A}	NoGPOListChanges	DWORD	0
+18.9.19.6	HKLM\SOFTWARE\Policies\Microsoft\Windows\System	EnableCdp	DWORD	0
+18.9.19.7	HKLM\SOFTWARE\Microsoft\Windows\Currentversion\Policies\System	DisableBkGndGroupPolicy	DWORD	0
+18.9.20.1.1	HKLM\SOFTWARE\Policies\Microsoft\Windows NT\Printers	DisableWebPnPDownload	DWORD	1
+18.9.20.1.2	HKLM\SOFTWARE\Policies\Microsoft\Windows\TabletPC	PreventHandwritingDataSharing	DWORD	1
+18.9.20.1.3	HKLM\SOFTWARE\Policies\Microsoft\Windows\HandwritingErrorReports	PreventHandwritingErrorReports	DWORD	1
+18.9.20.1.6	HKLM\SOFTWARE\Policies\Microsoft\Windows NT\Printers	DisableHTTPPrinting	DWORD	1
+18.9.20.1.8	HKLM\SOFTWARE\Policies\Microsoft\SearchCompanion	DisableContentFileUpdates	DWORD	1
+18.9.20.1.9	HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\Explorer	NoOnlinePrintsWizard	DWORD	1
+18.9.20.1.11	HKLM\SOFTWARE\Policies\Microsoft\Messenger\Client	CEIP	DWORD	2
+18.9.20.1.12	HKLM\SOFTWARE\Policies\Microsoft\SqmClient\Windows	CEIPEnable	DWORD	0
+18.9.20.1.13	HKLM\SOFTWARE\Policies\Microsoft\Windows\Windows Error Reporting	Disabled	DWORD	1
+18.9.23.1	HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System\Kerberos\Parameters	DevicePKInitBehavior	DWORD	0
+18.9.24.1	HKLM\SOFTWARE\Policies\Microsoft\Windows\Kernel DMA Protection	DeviceEnumerationPolicy	DWORD	0
+18.9.25.2	HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\LAPS	PwdExpirationProtectionEnabled	DWORD	1
+18.9.25.3	HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\LAPS	ADPasswordEncryptionEnabled	DWORD	1
+18.9.25.4	HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\LAPS	PasswordComplexity	DWORD	4
+18.9.25.5	HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\LAPS	PasswordLength	DWORD	15
+18.9.25.6	HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\LAPS	PasswordAgeDays	DWORD	30
+18.9.25.7	HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\LAPS	PostAuthenticationResetDelay	DWORD	8
+18.9.25.8	HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\LAPS	PostAuthenticationActions	DWORD	3
+18.9.27.1	HKLM\SOFTWARE\Policies\Microsoft\Control Panel\International	BlockUserInputMethodsForSignIn	DWORD	1
+18.9.28.1	HKLM\SOFTWARE\Policies\Microsoft\Windows\System	BlockUserFromShowingAccountDetailsOnSignin	DWORD	1
+18.9.28.2	HKLM\SOFTWARE\Policies\Microsoft\Windows\System	DontDisplayNetworkSelectionUI	DWORD	1
+18.9.28.3	HKLM\SOFTWARE\Policies\Microsoft\Windows\System	DontEnumerateConnectedUsers	DWORD	1
+18.9.28.4	HKLM\SOFTWARE\Policies\Microsoft\Windows\System	EnumerateLocalUsers	DWORD	0
+18.9.28.5	HKLM\SOFTWARE\Policies\Microsoft\Windows\System	DisableLockScreenAppNotifications	DWORD	1
+18.9.28.6	HKLM\SOFTWARE\Policies\Microsoft\Windows\System	BlockDomainPicturePassword	DWORD	1
+18.9.28.7	HKLM\SOFTWARE\Policies\Microsoft\Windows\System	AllowDomainPINLogon	DWORD	0
+18.9.31.1	HKLM\SOFTWARE\Policies\Microsoft\Windows\System	AllowCrossDeviceClipboard	DWORD	0
+18.9.31.2	HKLM\SOFTWARE\Policies\Microsoft\Windows\System	UploadUserActivities	DWORD	0
+18.9.33.6.1	HKLM\SOFTWARE\Policies\Microsoft\Power\PowerSettings\f15576e8-98b7-4186-b944-eafa664402d9	DCSettingIndex	DWORD	0
+18.9.33.6.2	HKLM\SOFTWARE\Policies\Microsoft\Power\PowerSettings\f15576e8-98b7-4186-b944-eafa664402d9	ACSettingIndex	DWORD	0
+18.9.33.6.3	HKLM\SOFTWARE\Policies\Microsoft\Power\PowerSettings\0e796bdb-100d-47d6-a2d5-f7d2daa51f51	DCSettingIndex	DWORD	1
+18.9.33.6.4	HKLM\SOFTWARE\Policies\Microsoft\Power\PowerSettings\0e796bdb-100d-47d6-a2d5-f7d2daa51f51	ACSettingIndex	DWORD	1
+18.9.35.1	HKLM\SOFTWARE\Policies\Microsoft\Windows NT\Terminal Services	fAllowUnsolicited	DWORD	0
+18.9.35.2	HKLM\SOFTWARE\Policies\Microsoft\Windows NT\Terminal Services	fAllowToGetHelp	DWORD	0
+18.9.36.1	HKLM\SOFTWARE\Policies\Microsoft\Windows NT\Rpc	EnableAuthEpResolution	DWORD	1
+18.9.36.2	HKLM\SOFTWARE\Policies\Microsoft\Windows NT\Rpc	RestrictRemoteClients	DWORD	1
+18.9.47.5.1	HKLM\SOFTWARE\Policies\Microsoft\Windows\ScriptedDiagnosticsProvider\Policy	DisableQueryRemoteServer	DWORD	0
+18.9.47.11.1	HKLM\SOFTWARE\Policies\Microsoft\Windows\Wdi\{9C5A40DA-B965-4FC3-8781-88DD50A6299D}	ScenarioExecutionEnabled	DWORD	0
+18.9.49.1	HKLM\SOFTWARE\Policies\Microsoft\Windows\AdvertisingInfo	DisabledByGroupPolicy	DWORD	1
+18.9.51.1.1	HKLM\SOFTWARE\Policies\Microsoft\W32Time\TimeProviders\NtpClient	Enabled	DWORD	1
+18.9.51.1.2	HKLM\SOFTWARE\Policies\Microsoft\W32Time\TimeProviders\NtpServer	Enabled	DWORD	0
+18.10.11.1	HKLM\SOFTWARE\Policies\Microsoft\Camera	AllowCamera	DWORD	0
+18.10.13.1	HKLM\SOFTWARE\Policies\Microsoft\Windows\CloudContent	DisableConsumerAccountStateContent	DWORD	1
+18.10.13.2	HKLM\SOFTWARE\Policies\Microsoft\Windows\CloudContent	DisableWindowsConsumerFeatures	DWORD	1
+18.10.14.1	HKLM\SOFTWARE\Policies\Microsoft\Windows\Connect	RequirePinForPairing	DWORD	1
+18.10.15.1	HKLM\SOFTWARE\Policies\Microsoft\Windows\CredUI	DisablePasswordReveal	DWORD	1
+18.10.15.2	HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\CredUI	EnumerateAdministrators	DWORD	0
+18.10.16.1	HKLM\SOFTWARE\Policies\Microsoft\Windows\DataCollection	AllowTelemetry	DWORD	1
+18.10.16.2	HKLM\SOFTWARE\Policies\Microsoft\Windows\DataCollection	DisableEnterpriseAuthProxy	DWORD	1
+18.10.16.3	HKLM\SOFTWARE\Policies\Microsoft\Windows\DataCollection	DisableOneSettingsDownloads	DWORD	1
+18.10.16.4	HKLM\SOFTWARE\Policies\Microsoft\Windows\DataCollection	DoNotShowFeedbackNotifications	DWORD	1
+18.10.16.5	HKLM\SOFTWARE\Policies\Microsoft\Windows\DataCollection	EnableOneSettingsAuditing	DWORD	1
+18.10.16.6	HKLM\SOFTWARE\Policies\Microsoft\Windows\DataCollection	LimitDiagnosticLogCollection	DWORD	1
+18.10.16.7	HKLM\SOFTWARE\Policies\Microsoft\Windows\DataCollection	LimitDumpCollection	DWORD	1
+18.10.18.1	HKLM\SOFTWARE\Policies\Microsoft\Windows\AppInstaller	EnableAppInstaller	DWORD	0
+18.10.18.2	HKLM\SOFTWARE\Policies\Microsoft\Windows\AppInstaller	EnableExperimentalFeatures	DWORD	0
+18.10.18.3	HKLM\SOFTWARE\Policies\Microsoft\Windows\AppInstaller	EnableHashOverride	DWORD	0
+18.10.18.4	HKLM\SOFTWARE\Policies\Microsoft\Windows\AppInstaller	EnableLocalArchiveMalwareScanOverride	DWORD	0
+18.10.18.5	HKLM\SOFTWARE\Policies\Microsoft\Windows\AppInstaller	EnableMSAppInstallerProtocol	DWORD	0
+18.10.18.6	HKLM\SOFTWARE\Policies\Microsoft\Windows\AppInstaller	EnableBypassCertificatePinningForMicrosoftStore	DWORD	0
+18.10.18.7	HKLM\SOFTWARE\Policies\Microsoft\Windows\AppInstaller	EnableWindowsPackageManagerCommandLineInterfaces	DWORD	0
+18.10.26.1.1	HKLM\SOFTWARE\Policies\Microsoft\Windows\EventLog\Application	Retention	String	0
+18.10.26.1.2	HKLM\SOFTWARE\Policies\Microsoft\Windows\EventLog\Application	MaxSize	DWORD	32768
+18.10.26.2.1	HKLM\SOFTWARE\Policies\Microsoft\Windows\EventLog\Security	Retention	String	0
+18.10.26.2.2	HKLM\SOFTWARE\Policies\Microsoft\Windows\EventLog\Security	MaxSize	DWORD	196608
+18.10.26.3.1	HKLM\SOFTWARE\Policies\Microsoft\Windows\EventLog\Setup	Retention	String	0
+18.10.26.3.2	HKLM\SOFTWARE\Policies\Microsoft\Windows\EventLog\Setup	MaxSize	DWORD	32768
+18.10.26.4.1	HKLM\SOFTWARE\Policies\Microsoft\Windows\EventLog\System	Retention	String	0
+18.10.26.4.2	HKLM\SOFTWARE\Policies\Microsoft\Windows\EventLog\System	MaxSize	DWORD	32768
+18.10.29.2	HKLM\SOFTWARE\Policies\Microsoft\Windows\Explorer	DisableMotWOnInsecurePathCopy	DWORD	0
+18.10.29.3	HKLM\SOFTWARE\Policies\Microsoft\Windows\Explorer	NoDataExecutionPrevention	DWORD	0
+18.10.29.4	HKLM\SOFTWARE\Policies\Microsoft\Windows\Explorer	NoHeapTerminationOnCorruption	DWORD	0
+18.10.29.5	HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\Explorer	PreXPSP2ShellProtocolBehavior	DWORD	0
+18.10.37.1	HKLM\SOFTWARE\Policies\Microsoft\Windows\LocationAndSensors	DisableLocation	DWORD	1
+18.10.41.1	HKLM\SOFTWARE\Policies\Microsoft\Windows\Messaging	AllowMessageSync	DWORD	0
+18.10.42.1	HKLM\SOFTWARE\Policies\Microsoft\MicrosoftAccount	DisableUserAuth	DWORD	1
+18.10.43.4.1	HKLM\SOFTWARE\Policies\Microsoft\Windows Defender\Features	PassiveRemediation	DWORD	1
+18.10.43.5.1	HKLM\SOFTWARE\Policies\Microsoft\Windows Defender\Spynet	LocalSettingOverrideSpynetReporting	DWORD	0
+18.10.43.5.2	HKLM\SOFTWARE\Policies\Microsoft\Windows Defender\Spynet	SpynetReporting	DWORD	0
+18.10.43.6.1.1	HKLM\SOFTWARE\Policies\Microsoft\Windows Defender\Windows Defender Exploit Guard\ASR	ExploitGuard_ASR_Rules	DWORD	1
+18.10.43.6.3.1	HKLM\SOFTWARE\Policies\Microsoft\Windows Defender\Windows Defender Exploit Guard\Network Protection	EnableNetworkProtection	DWORD	1
+18.10.43.7.1	HKLM\SOFTWARE\Policies\Microsoft\Windows Defender\MpEngine	EnableFileHashComputation	DWORD	1
+18.10.43.8.1	HKLM\SOFTWARE\Policies\Microsoft\Windows Defender\NIS	EnableConvertWarnToBlock	DWORD	1
+18.10.43.10.1	HKLM\SOFTWARE\Policies\Microsoft\Windows Defender\Real-Time Protection	OobeEnableRtpAndSigUpdate	DWORD	1
+18.10.43.10.2	HKLM\SOFTWARE\Policies\Microsoft\Windows Defender\Real-Time Protection	DisableIOAVProtection	DWORD	0
+18.10.43.10.3	HKLM\SOFTWARE\Policies\Microsoft\Windows Defender\Real-Time Protection	DisableRealtimeMonitoring	DWORD	0
+18.10.43.10.4	HKLM\SOFTWARE\Policies\Microsoft\Windows Defender\Real-Time Protection	DisableBehaviorMonitoring	DWORD	0
+18.10.43.10.5	HKLM\SOFTWARE\Policies\Microsoft\Windows Defender\Real-Time Protection	DisableScriptScanning	DWORD	0
+18.10.43.11.1.1.1	HKLM\SOFTWARE\Policies\Microsoft\Windows Defender\Remediation\Behavioral Network Blocks\Brute Force Protection	BruteForceProtectionAggressiveness	DWORD	1
+18.10.43.11.1.1.2	HKLM\SOFTWARE\Policies\Microsoft\Windows Defender\Remediation\Behavioral Network Blocks\Brute Force Protection	BruteForceProtectionConfiguredState	DWORD	1
+18.10.43.11.1.2.1	HKLM\SOFTWARE\Policies\Microsoft\Windows Defender\Remediation\Behavioral Network Blocks\Remote Encryption Protection	RemoteEncryptionProtectionAggressiveness	DWORD	1
+18.10.43.12.1	HKLM\SOFTWARE\Policies\Microsoft\Windows Defender\Reporting	DisableGenericReports	DWORD	1
+18.10.43.13.1	HKLM\SOFTWARE\Policies\Microsoft\Windows Defender\Scan	QuickScanIncludeExclusions	DWORD	1
+18.10.43.13.2	HKLM\SOFTWARE\Policies\Microsoft\Windows Defender\Scan	DisablePackedExeScanning	DWORD	0
+18.10.43.13.3	HKLM\SOFTWARE\Policies\Microsoft\Windows Defender\Scan	DisableRemovableDriveScanning	DWORD	0
+18.10.43.13.4	HKLM\SOFTWARE\Policies\Microsoft\Windows Defender\Scan	DaysUntilAggressiveCatchupQuickScan	DWORD	7
+18.10.43.13.5	HKLM\SOFTWARE\Policies\Microsoft\Windows Defender\Scan	DisableEmailScanning	DWORD	0
+18.10.43.16	HKLM\SOFTWARE\Policies\Microsoft\Windows Defender	PUAProtection	DWORD	1
+18.10.43.17	HKLM\SOFTWARE\Policies\Microsoft\Windows Defender	HideExclusionsFromLocalUsers	DWORD	1
+18.10.51.1	HKLM\SOFTWARE\Policies\Microsoft\Windows\OneDrive	DisableFileSyncNGSC	DWORD	1
+18.10.56.1	HKLM\SOFTWARE\Policies\Microsoft\PushToInstall	DisablePushToInstall	DWORD	1
+18.10.57.2.2	HKLM\SOFTWARE\Policies\Microsoft\Windows NT\Terminal Services	DisablePasswordSaving	DWORD	1
+18.10.57.3.2.1	HKLM\SOFTWARE\Policies\Microsoft\Windows NT\Terminal Services	fSingleSessionPerUser	DWORD	1
+18.10.57.3.3.1	HKLM\SOFTWARE\Policies\Microsoft\Windows NT\Terminal Services	fDisableCcm	DWORD	1
+18.10.57.3.3.2	HKLM\SOFTWARE\Policies\Microsoft\Windows NT\Terminal Services	fDisableCdm	DWORD	1
+18.10.57.3.3.3	HKLM\SOFTWARE\Policies\Microsoft\Windows NT\Terminal Services	fDisableLPT	DWORD	1
+18.10.57.3.3.4	HKLM\SOFTWARE\Policies\Microsoft\Windows NT\Terminal Services	fDisablePNPRedir	DWORD	1
+18.10.57.3.9.1	HKLM\SOFTWARE\Policies\Microsoft\Windows NT\Terminal Services	fPromptForPassword	DWORD	1
+18.10.57.3.9.2	HKLM\SOFTWARE\Policies\Microsoft\Windows NT\Terminal Services	fEncryptRPCTraffic	DWORD	1
+18.10.57.3.9.3	HKLM\SOFTWARE\Policies\Microsoft\Windows NT\Terminal Services	SecurityLayer	DWORD	2
+18.10.57.3.9.4	HKLM\SOFTWARE\Policies\Microsoft\Windows NT\Terminal Services	UserAuthentication	DWORD	1
+18.10.57.3.9.5	HKLM\SOFTWARE\Policies\Microsoft\Windows NT\Terminal Services	MinEncryptionLevel	DWORD	3
+18.10.57.3.10.1	HKLM\SOFTWARE\Policies\Microsoft\Windows NT\Terminal Services	MaxIdleTime	DWORD	900000
+18.10.57.3.10.2	HKLM\SOFTWARE\Policies\Microsoft\Windows NT\Terminal Services	MaxDisconnectionTime	DWORD	60000
+18.10.57.3.11.1	HKLM\SOFTWARE\Policies\Microsoft\Windows NT\Terminal Services	DeleteTempDirsOnExit	DWORD	1
+18.10.57.3.11.2	HKLM\SOFTWARE\Policies\Microsoft\Windows NT\Terminal Services	PerSessionTempDir	DWORD	1
+18.10.58.1	HKLM\SOFTWARE\Policies\Microsoft\Internet Explorer\Feeds	DisableEnclosureDownload	DWORD	1
+18.10.58.2	HKLM\Software\Policies\Microsoft\Internet Explorer\Feeds	AllowBasicAuthInClear	DWORD	0
+18.10.59.2	HKLM\SOFTWARE\Policies\Microsoft\Windows\Windows Search	AllowCloudSearch	DWORD	0
+18.10.59.3	HKLM\SOFTWARE\Policies\Microsoft\Windows\Windows Search	AllowIndexingEncryptedStoresOrItems	DWORD	0
+18.10.59.4	HKLM\SOFTWARE\Policies\Microsoft\Windows\Windows Search	EnableDynamicContentInWSB	DWORD	0
+18.10.63.1	HKLM\SOFTWARE\Policies\Microsoft\Windows NT\Currentversion\Software Protection Platform	NoGenTicket	DWORD	1
+18.10.76.2.1	HKLM\SOFTWARE\Policies\Microsoft\Windows\System	EnableSmartScreen	DWORD	1
+18.10.80.1	HKLM\SOFTWARE\Policies\Microsoft\WindowsInkWorkspace	AllowSuggestedAppsInWindowsInkWorkspace	DWORD	0
+18.10.80.2	HKLM\SOFTWARE\Policies\Microsoft\WindowsInkWorkspace	AllowWindowsInkWorkspace	DWORD	1
+18.10.81.1	HKLM\SOFTWARE\Policies\Microsoft\Windows\Installer	EnableUserControl	DWORD	0
+18.10.81.2	HKLM\SOFTWARE\Policies\Microsoft\Windows\Installer	AlwaysInstallElevated	DWORD	0
+18.10.81.3	HKLM\SOFTWARE\Policies\Microsoft\Windows\Installer	SafeForScripting	DWORD	0
+18.10.82.1	HKLM\SOFTWARE\Microsoft\Windows\Currentversion\Policies\System	DisableAutomaticRestartSignOn	DWORD	1
+18.10.87.1	HKLM\SOFTWARE\Policies\Microsoft\Windows\PowerShell\ScriptBlockLogging	EnableScriptBlockLogging	DWORD	1
+18.10.87.2	HKLM\SOFTWARE\Policies\Microsoft\Windows\PowerShell\Transcription	EnableTranscripting	DWORD	1
+18.10.89.1.1	HKLM\SOFTWARE\Policies\Microsoft\Windows\WinRM\Client	AllowBasic	DWORD	0
+18.10.89.1.2	HKLM\SOFTWARE\Policies\Microsoft\Windows\WinRM\Client	AllowUnencryptedTraffic	DWORD	0
+18.10.89.1.3	HKLM\SOFTWARE\Policies\Microsoft\Windows\WinRM\Client	AllowDigest	DWORD	0
+18.10.89.2.1	HKLM\SOFTWARE\Policies\Microsoft\Windows\WinRM\Service	AllowBasic	DWORD	0
+18.10.89.2.2	HKLM\SOFTWARE\Policies\Microsoft\Windows\WinRM\Service	AllowAutoConfig	DWORD	0
+18.10.89.2.3	HKLM\SOFTWARE\Policies\Microsoft\Windows\WinRM\Service	AllowUnencryptedTraffic	DWORD	0
+18.10.89.2.4	HKLM\SOFTWARE\Policies\Microsoft\Windows\WinRM\Service	DisableRunAs	DWORD	1
+18.10.90.1	HKLM\SOFTWARE\Policies\Microsoft\Windows\WinRM\Service\WinRS	AllowRemoteShellAccess	DWORD	0
+18.10.92.2.1	HKLM\SOFTWARE\Policies\Microsoft\Windows Defender Security Center\App and Browser protection	DisallowExploitProtectionOverride	DWORD	1
+18.10.93.1.1	HKLM\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate\AU	NoAutoRebootWithLoggedOnUsers	DWORD	0
+18.10.93.2.1	HKLM\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate\AU	NoAutoUpdate	DWORD	0
+18.10.93.2.2	HKLM\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate\AU	ScheduledInstallDay	DWORD	0
+18.10.93.4.1	HKLM\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate	ManagePreviewBuilds	DWORD	1
+18.10.93.4.2	HKLM\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate	DeferFeatureUpdates	DWORD	1

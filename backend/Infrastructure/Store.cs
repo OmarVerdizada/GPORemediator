@@ -10,12 +10,12 @@ public sealed class Store : IDisposable
 {
     private readonly SqliteConnection db;
     private readonly object gate = new();
-    private static readonly HashSet<string> Tables = ["controls", "targets", "findings", "analyses", "previews", "jobs", "backups", "mock_gpos", "mock_endpoints", "password_plans", "password_jobs", "password_mock"];
+    private static readonly HashSet<string> Tables = ["controls", "targets", "findings", "analyses", "previews", "jobs", "backups", "password_plans", "password_jobs", "gpo_plans", "gpo_runs"];
     public Store(string path)
     {
         if (path != ":memory:") Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(path))!);
         db = new SqliteConnection(new SqliteConnectionStringBuilder { DataSource=path, ForeignKeys=true, Pooling=false }.ToString()); db.Open();
-        Execute("PRAGMA journal_mode=WAL; PRAGMA busy_timeout=5000;");
+        Execute("PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL; PRAGMA foreign_keys=ON; PRAGMA busy_timeout=5000; PRAGMA wal_autocheckpoint=1000;");
         Execute("CREATE TABLE IF NOT EXISTS schema_version(version INTEGER NOT NULL); INSERT INTO schema_version SELECT 1 WHERE NOT EXISTS(SELECT 1 FROM schema_version);");
         Execute("CREATE TABLE IF NOT EXISTS deployment(key TEXT PRIMARY KEY,value TEXT NOT NULL);");
         foreach (var table in Tables)
@@ -42,11 +42,32 @@ public sealed class Store : IDisposable
     {
         lock(gate)
         {
-            if(List<RemediationJob>("jobs").Any(j=>j.Mode!=mode) || (mode=="WINDOWS"&&List<MockGpo>("mock_gpos").Length>0))
-                throw new InvalidOperationException("This database contains another execution mode. Configure separate mock and Windows databases.");
+            // The production workflow is isolated by database file (windows.db/setup.db).
+            // Legacy demo/job tables may exist after an in-place upgrade and must not
+            // prevent the real GPO workflow from opening its own durable store.
             Execute("INSERT OR IGNORE INTO deployment(key,value) VALUES('execution_mode',$mode)",("$mode",mode));
             using var command=Command("SELECT value FROM deployment WHERE key='execution_mode'");
             if((string?)command.ExecuteScalar()!=mode) throw new InvalidOperationException("Execution mode does not match the database. Use a separate database for each provider.");
+        }
+    }
+
+    public int RecoverInterruptedGpoRuns()
+    {
+        lock(gate)
+        {
+            var recovered=0;
+            foreach(var run in List<GpoWorkflowRun>("gpo_runs").Where(r=>r.Result.State.EndsWith("ING",StringComparison.OrdinalIgnoreCase)))
+            {
+                var result=run.Result with
+                {
+                    State="REVIEW_REQUIRED",
+                    Message="The previous service process ended while this operation was active. Do not replay Apply. Run read-only Verify and inspect the recorded DC manifest/backup before recovery."
+                };
+                Put("gpo_runs",run.Id,run with{Result=result,UpdatedAt=PolicyValues.Now()},result.State);
+                Audit("GPO_INTERRUPTED_RECOVERED",run.Plan.Actor,jobId:run.Id,controlId:run.Plan.Selection.Setting,gpoId:run.Plan.Selection.GpoId,details:new{previousState=run.Result.State,recoveredState=result.State});
+                recovered++;
+            }
+            return recovered;
         }
     }
     private static string Table(string table) => Tables.Contains(table) ? table : throw new ArgumentException("Invalid table");

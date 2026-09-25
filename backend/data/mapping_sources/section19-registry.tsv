@@ -1,0 +1,12 @@
+19.5.1.1	HKCU\SOFTWARE\Policies\Microsoft\Windows\CurrentVersion\PushNotifications	NoToastApplicationNotificationOnLockScreen	DWORD	1
+19.6.6.1.1	HKCU\SOFTWARE\Policies\Microsoft\Assistance\Client\1.0	NoImplicitFeedback	DWORD	1
+19.7.5.1	HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\Attachments	SaveZoneInformation	DWORD	2
+19.7.5.2	HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\Attachments	ScanWithAntiVirus	DWORD	3
+19.7.8.1	HKCU\SOFTWARE\Policies\Microsoft\Windows\CloudContent	ConfigureWindowsSpotlight	DWORD	2
+19.7.8.2	HKCU\SOFTWARE\Policies\Microsoft\Windows\CloudContent	DisableThirdPartySuggestions	DWORD	1
+19.7.8.3	HKCU\SOFTWARE\Policies\Microsoft\Windows\CloudContent	DisableTailoredExperiencesWithDiagnosticData	DWORD	1
+19.7.8.4	HKCU\SOFTWARE\Policies\Microsoft\Windows\CloudContent	DisableWindowsSpotlightFeatures	DWORD	1
+19.7.8.5	HKCU\SOFTWARE\Policies\Microsoft\Windows\CloudContent	DisableSpotlightCollectionOnDesktop	DWORD	1
+19.7.26.1	HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\Explorer	NoInplaceSharing	DWORD	1
+19.7.44.1	HKCU\SOFTWARE\Policies\Microsoft\Windows\Installer	AlwaysInstallElevated	DWORD	0
+19.7.46.2.1	HKCU\SOFTWARE\Policies\Microsoft\WindowsMediaPlayer	PreventCodecDownload	DWORD	1

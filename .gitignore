@@ -12,3 +12,7 @@ backend/appsettings.Local.json
 .tools/
 work/
 backend/appsettings.Local.json
+
+!backend/data/gpo-production-mappings.json
+!backend/data/mapping_sources/
+!backend/data/mapping_sources/**

@@ -1,4 +1,4 @@
-# Windows PowerShell 5.1. Fixed operations and typed JSON only; never execute browser command text.
+﻿# Windows PowerShell 5.1. Fixed operations and typed JSON only; never execute browser command text.
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
 $WarningPreference = 'SilentlyContinue'
@@ -129,15 +129,7 @@ try {
             } catch { $warnings.Add('Domain detected; DC discovery failed. Enter its FQDN manually or check domain connectivity.') }
         } else { $warnings.Add('This computer is not domain-joined. Enter the test-domain settings manually and run the service on a domain-connected Windows host.') }
         if (-not (Get-Module -ListAvailable ActiveDirectory)) { $warnings.Add('ActiveDirectory RSAT is missing. The Windows launcher installs prerequisites when you save and restart.') }
-        # Use the read-only .NET store: the Cert: provider may not be loaded in a noninteractive child process.
-        $certStore=[Security.Cryptography.X509Certificates.X509Store]::new('My','LocalMachine')
-        try {
-            $certStore.Open([Security.Cryptography.X509Certificates.OpenFlags]::ReadOnly)
-            $cert=@($certStore.Certificates | Where-Object { $_.HasPrivateKey -and $_.NotAfter -gt (Get-Date) -and $_.GetNameInfo([Security.Cryptography.X509Certificates.X509NameType]::DnsName,$false) -ieq $dns })
-            if ($cert.Count -eq 0) { $warnings.Add('No matching HTTPS certificate detected. Install a trusted server certificate for the management hostname before Windows mode can start.') }
-        } catch { $warnings.Add('Certificate lookup was unavailable. Check the management HTTPS certificate before starting Windows mode.') }
-        finally { $certStore.Close() }
-        $data=@{ domain=$domain; domainController=$dc; urls=('https://' + $dns.ToLowerInvariant() + ':5443'); operator=[Security.Principal.WindowsIdentity]::GetCurrent().Name; backupPath='C:\ProgramData\GpoRemediator\Backups'; warnings=$warnings.ToArray() }
+        $data=@{ domain=$domain; domainController=$dc; urls='http://127.0.0.1:5080'; operator=[Security.Principal.WindowsIdentity]::GetCurrent().Name; backupPath='C:\ProgramData\GpoRemediator\Backups'; warnings=$warnings.ToArray() }
     } else {
         Connect-Domain
         switch ($operation) {

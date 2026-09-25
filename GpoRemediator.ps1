@@ -1,11 +1,10 @@
 ﻿param(
-    [ValidateSet('Auto','Demo','Windows','Build','Test')]
+    [ValidateSet('Auto','Setup','Windows','Build','Test')]
     [string]$Mode = 'Auto',
     [ValidateRange(1024,65535)]
     [int]$Port = 5080,
     [switch]$NoBrowser,
-    [switch]$Repair,
-    [switch]$PrereqHelper
+    [switch]$Repair
 )
 
 $ErrorActionPreference = 'Stop'
@@ -23,6 +22,7 @@ $restartMarker = Join-Path $workRoot 'restart.request.json'
 $backend = Join-Path $PSScriptRoot 'backend'
 $runtime = Join-Path $PSScriptRoot 'runtime\GpoRemediator.exe'
 $localConfig = Join-Path $backend 'appsettings.Local.json'
+$runtimeGeneration = Join-Path $PSScriptRoot 'runtime\production-backend-v3.ready'
 New-Item -ItemType Directory -Force -Path $toolsRoot,$workRoot | Out-Null
 $logFile = Join-Path $workRoot 'bootstrap.log'
 $stateFile = Join-Path $workRoot 'service.json'
@@ -61,52 +61,32 @@ function Ensure-BuildToolchain {
     # The shipped UI is static and dependency-free. Only .NET is required to rebuild the backend.
     Ensure-Dotnet8Sdk
 }
-function Test-Administrator {
-    $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
-    $principal = New-Object Security.Principal.WindowsPrincipal($identity)
-    return $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
-}
-function Install-RsatComponents {
-    $ad = Get-Module -ListAvailable ActiveDirectory | Select-Object -First 1
-    $gp = Get-Module -ListAvailable GroupPolicy | Select-Object -First 1
-    if ($ad -and $gp) { return }
-    if (!(Test-Administrator)) { throw 'RSAT installation helper must run elevated.' }
-    Write-Log 'Installing missing RSAT ActiveDirectory / GroupPolicy components...' Yellow
-    $serverInstaller = Get-Command Install-WindowsFeature -ErrorAction SilentlyContinue
-    if ($serverInstaller) {
-        Import-Module ServerManager -ErrorAction Stop
-        $features = @()
-        if (!$ad) { $features += 'RSAT-AD-PowerShell' }
-        if (!$gp) { $features += 'GPMC' }
-        if ($features.Count) { Install-WindowsFeature -Name $features -IncludeManagementTools -ErrorAction Stop | Out-Null }
-    } else {
-        $capability = Get-Command Add-WindowsCapability -ErrorAction SilentlyContinue
-        if (!$capability) { throw 'RSAT is missing and this Windows edition does not expose Install-WindowsFeature or Add-WindowsCapability.' }
-        if (!$ad) { Add-WindowsCapability -Online -Name 'Rsat.ActiveDirectory.DS-LDS.Tools~~~~0.0.1.0' -ErrorAction Stop | Out-Null }
-        if (!$gp) { Add-WindowsCapability -Online -Name 'Rsat.GroupPolicy.Management.Tools~~~~0.0.1.0' -ErrorAction Stop | Out-Null }
-    }
-}
-function Ensure-Rsat {
-    $ad = Get-Module -ListAvailable ActiveDirectory | Select-Object -First 1
-    $gp = Get-Module -ListAvailable GroupPolicy | Select-Object -First 1
-    if ($ad -and $gp) { Write-Log 'RSAT ActiveDirectory + GroupPolicy: OK'; return }
-    if (!(Test-Administrator)) {
-        Write-Log 'RSAT requires a one-time UAC-approved installation. The application itself will remain in this non-elevated launcher process.' Yellow
-        $arguments = '-NoLogo -NoProfile -ExecutionPolicy Bypass -File "{0}" -Mode Windows -Port {1} -PrereqHelper' -f $PSCommandPath,$Port
-        $helper = Start-Process -FilePath 'powershell.exe' -Verb RunAs -ArgumentList $arguments -WindowStyle Hidden -PassThru
-        while (!$helper.WaitForExit(15000)) {
-            Write-Log 'RSAT installation is still running. Windows is preparing optional components; do not start another installation.' Yellow
-        }
-        if ($helper.ExitCode -ne 0) { throw 'Elevated RSAT prerequisite installation failed or was cancelled.' }
-    } else { Install-RsatComponents }
-    if (!(Get-Module -ListAvailable ActiveDirectory) -or !(Get-Module -ListAvailable GroupPolicy)) { throw 'RSAT was installed but the required PowerShell modules are still unavailable. Restart Windows once, then run GpoRemediator.cmd again.' }
-    Write-Log 'RSAT installed.' Green
+function Test-PackagedRelease {
+    $required = @(
+        $runtime,
+        (Join-Path $PSScriptRoot 'frontend\dist\index.html'),
+        (Join-Path $PSScriptRoot 'frontend\dist\workspace.js'),
+        (Join-Path $PSScriptRoot 'frontend\dist\workspace.css'),
+        (Join-Path $PSScriptRoot 'frontend\dist\benchmark-v4.json')
+    )
+    return @($required | Where-Object { !(Test-Path -LiteralPath $_) }).Count -eq 0
 }
 function Ensure-CurrentBuild {
-    $backendMatch = Test-PortableBackendMatchesSource
-    $frontendMatch = Test-FrontendDistMatchesSource
-    if (!$Repair -and $backendMatch -and $frontendMatch -and (Test-Path -LiteralPath $runtime)) { Write-Log 'Application build: current'; return }
-    Write-Log 'Source is newer than the packaged runtime (or repair was requested). Building the current product without Node.js/pnpm...' Yellow
+    # Normal operators run the signed/packaged self-contained runtime directly.
+    # Source fingerprint checks belong to Build/Test/Repair workflows and must not
+    # turn every ordinary startup into a development build or an SDK download.
+    if (!$Repair -and $Mode -notin @('Build','Test') -and (Test-PackagedRelease) -and (Test-Path -LiteralPath $runtimeGeneration)) {
+        Write-Log 'Packaged local-only runtime: ready (no SDK download required).'
+        return
+    }
+    if (!$Repair -and $Mode -notin @('Build','Test') -and (Test-PackagedRelease) -and !(Test-Path -LiteralPath $runtimeGeneration)) {
+        Write-Log 'This package contains a newer production remediation backend. Performing the one-time runtime upgrade...' Yellow
+    }
+    if (!$Repair -and $Mode -notin @('Build','Test')) {
+        Write-Log 'A one-time runtime build is required. After it completes, normal starts do not download the SDK.' Yellow
+    } else {
+        Write-Log 'Developer/repair build requested. Checking source fingerprints...' Yellow
+    }
     Ensure-BuildToolchain
     & (Join-Path $PSScriptRoot 'Build-Portable.ps1')
     if ($LASTEXITCODE -ne 0) { throw 'Application build failed.' }
@@ -120,9 +100,9 @@ function Read-LocalConfig {
 function Resolve-RunMode([string]$Requested) {
     if ($Requested -ne 'Auto') { return $Requested }
     $cfg = Read-LocalConfig
-    if ($cfg -and [string]$cfg.Mode -eq 'Windows' -and [string]$cfg.Urls -match '^https://') { return 'Windows' }
+    if ($cfg -and [string]$cfg.Mode -eq 'Windows') { return 'Windows' }
     if (Test-Path -LiteralPath $localConfig) { $script:startupIssue = 'Saved Windows configuration is incomplete or invalid. Complete Setup & settings.' }
-    return 'Demo'
+    return 'Setup'
 }
 function Wait-ApplicationReady([System.Diagnostics.Process]$Process,[string]$Url) {
     for ($i=0; $i -lt 40; $i++) {
@@ -137,27 +117,20 @@ function Start-Application([string]$RunMode) {
     Remove-Item -LiteralPath $serverLog,$serverError -Force -ErrorAction SilentlyContinue
     if ($RunMode -eq 'Windows') {
         $cfg = Read-LocalConfig
-        if (!$cfg -or !$cfg.Urls -or [string]$cfg.Urls -notmatch '^https://') { throw 'Windows configuration is missing or invalid. Start Demo mode and use Setup & settings.' }
+        if (!$cfg) { throw 'Windows configuration is missing. Complete the first-run Setup screen.' }
         foreach ($field in @('Domain','DomainController','BackupPath','AllowedOperators')) {
             if (!$cfg.Windows.$field) { throw "Windows configuration needs $field. Complete Setup & settings." }
         }
-        Ensure-Rsat
-        $url = [string]$cfg.Urls
-        $uri = [Uri]$url
-        $certHost = $uri.DnsSafeHost
-        $cert = Get-ChildItem -Path Cert:\LocalMachine\My -ErrorAction SilentlyContinue |
-            Where-Object { $_.HasPrivateKey -and $_.NotAfter -gt (Get-Date) -and $_.Subject -match [regex]::Escape($certHost) } |
-            Sort-Object NotAfter -Descending | Select-Object -First 1
-        if (!$cert) { throw ("HTTPS certificate not found in LocalMachine\My for host '{0}'. Install an enterprise/server certificate for this DNS name, then the same launcher can start Windows mode." -f $certHost) }
-        Write-Log ('HTTPS certificate: ' + $cert.Thumbprint)
-        $arguments = @('--contentRoot',('"'+$backend+'"'),'--Mode','Windows','--urls',('"'+$url+'"'))
-        Write-Log ('Starting WINDOWS mode at ' + $url) Cyan
-    } else {
+        # GPO/AD modules execute on the pinned writable DC over Kerberos PowerShell remoting.
+        # The local management host therefore does not need RSAT/GPMC installed.
+        $url = "http://127.0.0.1:$Port"
+        $arguments = @('--contentRoot',('"'+$backend+'"'),'--Mode','Windows','--urls',$url)
+        Write-Log ('Starting local-only WINDOWS / AD mode at ' + $url) Cyan
+    } elseif ($RunMode -eq 'Setup') {
         $url = "http://localhost:$Port"
-        $arguments = @('--contentRoot',('"'+$backend+'"'),'--Mode','Mock','--urls',$url)
-        if ($script:startupIssue) { $arguments += @('--LocalSetup','true') }
-        Write-Log ('Starting safe MOCK mode at ' + $url) Cyan
-    }
+        $arguments = @('--contentRoot',('"'+$backend+'"'),'--Mode','Setup','--LocalSetup','true','--urls',$url)
+        Write-Log ('Starting configuration-only SETUP mode at ' + $url) Cyan
+    } else { throw ('Unsupported runtime mode: ' + $RunMode) }
     Remove-Item -LiteralPath $restartMarker -Force -ErrorAction SilentlyContinue
     $arguments += @('--LauncherManaged','true')
     $process = Start-Process -FilePath $runtime -ArgumentList $arguments -WorkingDirectory $backend -PassThru -WindowStyle Hidden -RedirectStandardOutput $serverLog -RedirectStandardError $serverError
@@ -190,7 +163,6 @@ function Start-Application([string]$RunMode) {
 }
 
 try {
-    if ($PrereqHelper) { Install-RsatComponents; Write-Log 'Elevated prerequisite helper completed.' Green; exit 0 }
     $sha = [Security.Cryptography.SHA256]::Create()
     try { $rootHash = [BitConverter]::ToString($sha.ComputeHash([Text.Encoding]::UTF8.GetBytes($PSScriptRoot.ToLowerInvariant()))).Replace('-','').Substring(0,24) } finally { $sha.Dispose() }
     $launcherMutex = New-Object Threading.Mutex($false, ('Local\GpoRemediatorLauncher-' + $rootHash))
@@ -215,6 +187,7 @@ try {
     }
 
     $nextMode = Resolve-RunMode $Mode
+    $recoverySetupUsed = $false
     while ($true) {
         try { $result = Start-Application $nextMode }
         catch {
@@ -229,18 +202,26 @@ try {
                 $requested = [string]$marker.mode
             } catch { $requested = 'Windows' }
             Remove-Item -LiteralPath $restartMarker -Force -ErrorAction SilentlyContinue
-            if ($requested -notin @('Windows','Demo')) { $requested = 'Windows' }
+            if ($requested -notin @('Windows','Setup')) { $requested = 'Windows' }
             Write-Log ('UI requested a controlled restart into ' + $requested + ' mode.') Yellow
             $nextMode = $requested
-            $script:startupIssue = ''
+            if ($requested -eq 'Windows') { $recoverySetupUsed = $false }
             Start-Sleep -Milliseconds 700
             continue
         }
         if ($result.FailedEarly -and $nextMode -eq 'Windows') {
-            if (!$script:startupIssue) { $script:startupIssue = 'Windows service could not start. Check server logs, HTTPS certificate and operator permissions.' }
-            Write-Log 'Windows mode could not start (often certificate/config/permission related). Falling back to safe Demo UI so Setup remains accessible.' Yellow
-            $nextMode = 'Demo'
-            continue
+            if (!$script:startupIssue) { $script:startupIssue = 'Windows service could not start. Check the saved domain/DC configuration, Kerberos/WinRM connectivity and operator settings.' }
+            if (!$recoverySetupUsed) {
+                # Recovery is configuration-only, loopback-only and cannot perform GPO writes.
+                # This keeps the product usable without ever falling back to a simulation mode.
+                Write-Log ('Opening safe Setup mode so the Windows / AD issue can be corrected: ' + $script:startupIssue) Yellow
+                $recoverySetupUsed = $true
+                $nextMode = 'Setup'
+                Start-Sleep -Milliseconds 500
+                continue
+            }
+            Write-Log ('Windows mode could not be recovered. ' + $script:startupIssue) Red
+            exit 1
         }
         exit ([int]$result.ExitCode)
     }

@@ -1,0 +1,58 @@
+2.3.1.1	HKLM\SYSTEM\CurrentControlSet\Control\Lsa	EnableGuestAccount	DWORD	0
+2.3.1.2	HKLM\SYSTEM\CurrentControlSet\Control\Lsa	LimitBlankPasswordUse	DWORD	1
+2.3.2.1	HKLM\SYSTEM\CurrentControlSet\Control\Lsa	SCENoApplyLegacyAuditPolicy	DWORD	1
+2.3.2.2	HKLM\SYSTEM\CurrentControlSet\Control\Lsa	CrashOnAuditFail	DWORD	0
+2.3.4.1	HKLM\SYSTEM\Currentcontrolset\Control\Print\Providers\Lanman Print Services\Servers	AddPrinterDrivers	DWORD	1
+2.3.6.1	HKLM\SYSTEM\Currentcontrolset\Services\Netlogon\Parameters	RequireSignOrSeal	DWORD	1
+2.3.6.2	HKLM\SYSTEM\Currentcontrolset\Services\Netlogon\Parameters	SealSecureChannel	DWORD	1
+2.3.6.3	HKLM\SYSTEM\Currentcontrolset\Services\Netlogon\Parameters	SignSecureChannel	DWORD	1
+2.3.6.4	HKLM\SYSTEM\Currentcontrolset\Services\Netlogon\Parameters	DisablePasswordChange	DWORD	0
+2.3.6.5	HKLM\System\CurrentControlSet\Services\Netlogon\Parameters	MaximumPasswordAge	DWORD	30
+2.3.6.6	HKLM\SYSTEM\Currentcontrolset\Services\Netlogon\Parameters	RequireStrongKey	DWORD	1
+2.3.7.1	HKLM\SOFTWARE\Microsoft\Windows\Currentversion\Policies\System	DisableCAD	DWORD	0
+2.3.7.2	HKLM\SOFTWARE\Microsoft\Windows\Currentversion\Policies\System	DontDisplayLastUserName	DWORD	1
+2.3.7.3	HKLM\SOFTWARE\Microsoft\Windows\Currentversion\Policies\System	InactivityTimeoutSecs	DWORD	900
+2.3.7.6	HKLM\SOFTWARE\Microsoft\Windows Nt\Currentversion\Winlogon	CachedLogonsCount	String	1
+2.3.7.7	HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon	PasswordExpiryWarning	DWORD	14
+2.3.7.8	HKLM\SOFTWARE\Microsoft\Windows Nt\Currentversion\Winlogon	ForceUnlockLogon	DWORD	1
+2.3.7.9	HKLM\SOFTWARE\Microsoft\Windows Nt\Currentversion\Winlogon	ScRemoveOption	String	1
+2.3.8.1	HKLM\SYSTEM\Currentcontrolset\Services\LanmanWorkstation\Parameters	RequireSecuritySignature	DWORD	1
+2.3.8.2	HKLM\SYSTEM\Currentcontrolset\Services\LanmanWorkstation\Parameters	EnableSecuritySignature	DWORD	1
+2.3.8.3	HKLM\SYSTEM\Currentcontrolset\Services\LanmanWorkstation\Parameters	EnablePlainTextPassword	DWORD	0
+2.3.9.1	HKLM\SYSTEM\Currentcontrolset\Services\LanManServer\Parameters	AutoDisconnect	DWORD	15
+2.3.9.2	HKLM\SYSTEM\Currentcontrolset\Services\LanManServer\Parameters	RequireSecuritySignature	DWORD	1
+2.3.9.3	HKLM\SYSTEM\Currentcontrolset\Services\LanManServer\Parameters	EnableSecuritySignature	DWORD	1
+2.3.9.4	HKLM\SYSTEM\Currentcontrolset\Services\LanManServer\Parameters	EnableForcedLogoff	DWORD	1
+2.3.9.5	HKLM\SYSTEM\Currentcontrolset\Services\LanManServer\Parameters	SMBServerNameHardeningLevel	DWORD	1
+2.3.10.1	HKLM\SYSTEM\CurrentControlSet\Control\Lsa	LSAAnonymousNameLookup	DWORD	0
+2.3.10.2	HKLM\SYSTEM\Currentcontrolset\Control\Lsa	RestrictAnonymousSAM	DWORD	1
+2.3.10.3	HKLM\SYSTEM\Currentcontrolset\Control\Lsa	RestrictAnonymous	DWORD	1
+2.3.10.4	HKLM\SYSTEM\Currentcontrolset\Control\Lsa	DisableDomainCreds	DWORD	1
+2.3.10.5	HKLM\SYSTEM\Currentcontrolset\Control\Lsa	EveryoneIncludesAnonymous	DWORD	0
+2.3.10.10	HKLM\SYSTEM\Currentcontrolset\Services\LanManServer\Parameters	RestrictNullSessAccess	DWORD	1
+2.3.10.11	HKLM\SYSTEM\CurrentControlSet\Control\Lsa	RestrictRemoteSAM	String	O:BAG:BAD:(A;;RC;;;BA)
+2.3.10.12	HKLM\SYSTEM\Currentcontrolset\Services\LanManServer\Parameters	NullSessionShares	MultiString	
+2.3.10.13	HKLM\SYSTEM\Currentcontrolset\Control\Lsa	ForceGuest	DWORD	0
+2.3.11.1	HKLM\SYSTEM\Currentcontrolset\Control\Lsa	UseMachineId	DWORD	1
+2.3.11.2	HKLM\SYSTEM\CurrentControlSet\Control\Lsa\Msv1_0	AllowNullSessionFallback	DWORD	0
+2.3.11.3	HKLM\SYSTEM\Currentcontrolset\Control\Lsa\Pku2U	AllowOnlineID	DWORD	0
+2.3.11.4	HKLM\SOFTWARE\Microsoft\Windows\Currentversion\Policies\SYSTEM\Kerberos\Parameters	SupportedEncryptionTypes	DWORD	2147483640
+2.3.11.5	HKLM\SYSTEM\Currentcontrolset\Control\Lsa	NoLMHash	DWORD	1
+2.3.11.6	HKLM\SYSTEM\CurrentControlSet\Services\LanManServer\Parameters	EnableForcedLogOff	DWORD	1
+2.3.11.7	HKLM\SYSTEM\Currentcontrolset\Control\Lsa	LMCompatibilityLevel	DWORD	5
+2.3.11.8	HKLM\SYSTEM\Currentcontrolset\Services\Ldap	LDAPClientIntegrity	DWORD	1
+2.3.11.9	HKLM\SYSTEM\Currentcontrolset\Control\Lsa\Msv1_0	NTLMMinClientSec	DWORD	537395200
+2.3.11.10	HKLM\SYSTEM\Currentcontrolset\Control\Lsa\Msv1_0	NTLMMinServerSec	DWORD	537395200
+2.3.11.11	HKLM\SYSTEM\CurrentControlSet\Control\Lsa\MSV1_0	AuditReceivingNTLMTraffic	DWORD	2
+2.3.11.13	HKLM\SYSTEM\CurrentControlSet\Control\Lsa\MSV1_0	RestrictSendingNTLMTraffic	DWORD	1
+2.3.13.1	HKLM\SOFTWARE\Microsoft\Windows\Currentversion\Policies\System	ShutdownWithoutLogon	DWORD	0
+2.3.15.1	HKLM\SYSTEM\Currentcontrolset\Control\Session Manager\Kernel	ObCaseInsensitive	DWORD	1
+2.3.15.2	HKLM\SYSTEM\Currentcontrolset\Control\Session Manager	ProtectionMode	DWORD	1
+2.3.17.1	HKLM\SOFTWARE\Microsoft\Windows\Currentversion\Policies\System	FilterAdministratorToken	DWORD	1
+2.3.17.2	HKLM\SOFTWARE\Microsoft\Windows\Currentversion\Policies\System	ConsentPromptBehaviorAdmin	DWORD	2
+2.3.17.3	HKLM\SOFTWARE\Microsoft\Windows\Currentversion\Policies\System	ConsentPromptBehaviorUser	DWORD	0
+2.3.17.4	HKLM\SOFTWARE\Microsoft\Windows\Currentversion\Policies\System	EnableInstallerDetection	DWORD	1
+2.3.17.5	HKLM\SOFTWARE\Microsoft\Windows\Currentversion\Policies\System	EnableSecureUIAPaths	DWORD	1
+2.3.17.6	HKLM\SOFTWARE\Microsoft\Windows\Currentversion\Policies\System	EnableLUA	DWORD	1
+2.3.17.7	HKLM\SOFTWARE\Microsoft\Windows\Currentversion\Policies\System	PromptOnSecureDesktop	DWORD	1
+2.3.17.8	HKLM\SOFTWARE\Microsoft\Windows\Currentversion\Policies\System	EnableVirtualization	DWORD	0

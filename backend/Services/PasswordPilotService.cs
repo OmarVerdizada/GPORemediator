@@ -9,7 +9,7 @@ public sealed class PasswordPilotService(IConfiguration config, Store store, Rem
     private readonly SemaphoreSlim discoveryGate = new(1, 1);
     private PilotDiscovery? discovery;
     private bool Real => !config.GetValue<bool>("LocalSetup") && string.Equals(config["Mode"], "Windows", StringComparison.OrdinalIgnoreCase);
-    private string Mode => Real ? "WINDOWS" : "MOCK";
+    private string Mode => Real ? "WINDOWS" : "SETUP";
     private string Domain => config["Windows:Domain"] ?? "";
     private string Dc => config["Windows:DomainController"] ?? "";
     private object Configuration => new { domain = Domain, domainController = Dc, backupPath = config["Windows:BackupPath"] };
@@ -27,8 +27,8 @@ public sealed class PasswordPilotService(IConfiguration config, Store store, Rem
     }
     public async Task<EnvironmentReadiness> ReadinessAsync(CancellationToken ct)
     {
-        if (!Real) return new(Mode, true, "Demo identity", null,
-            [new("simulation", "Password pilot simulation", "PASS", "Demo changes affect only local state. This does not establish AD readiness.")], PolicyValues.Now());
+        if (!Real) return new(Mode, false, "SETUP\\local-configuration", null,
+            [new("setup", "Configuration mode", "BLOCKED", "No password or GPO remediation runs in Setup mode. Save Windows / AD settings and restart into Windows mode.")], PolicyValues.Now());
         try { return await executor.RunAsync<EnvironmentReadiness>("passwordReadiness", Configuration, new { }, ct); }
         catch (PolicyException ex) { return new(Mode, false, "Windows service identity", Dc, [new("pilot", "Password pilot readiness", "FAIL", ex.Message)], PolicyValues.Now()); }
     }
@@ -52,13 +52,8 @@ public sealed class PasswordPilotService(IConfiguration config, Store store, Rem
     }
     private async Task<PasswordSnapshot> ReadAsync(string user, CancellationToken ct)
     {
-        if (Real) return await executor.RunAsync<PasswordSnapshot>("passwordRead", Configuration, new { user }, ct);
-        var key = PolicyValues.Hash(user.ToUpperInvariant());
-        return store.Get<PasswordSnapshot>("password_mock", key) ?? new(key, user, $"CN={user},OU=Demo", null, 0,
-            new() { ["PasswordHistoryCount"]=12, ["MaxPasswordAge"]=90, ["MinPasswordAge"]=0, ["MinPasswordLength"]=8,
-                ["ComplexityEnabled"]=0, ["ReversibleEncryptionEnabled"]=0, ["LockoutThreshold"]=5,
-                ["LockoutDuration"]=1800, ["LockoutObservationWindow"]=1800 },
-            ["Simulation only. In Windows mode, only the exact selected user and their effective password policy are read."]);
+        if (!Real) throw new PolicyException("WINDOWS_MODE_REQUIRED", "Password operations require Windows / AD mode; Setup mode cannot simulate them.");
+        return await executor.RunAsync<PasswordSnapshot>("passwordRead", Configuration, new { user }, ct);
     }
     public PasswordExecution[] History() => store.List<PasswordExecution>("password_jobs");
     public async Task<PasswordExecution> ApplyAsync(string id, string confirmation, string actor)
@@ -82,14 +77,7 @@ public sealed class PasswordPilotService(IConfiguration config, Store store, Rem
                 throw new PolicyException("STALE_PASSWORD_PLAN", "The user's effective policy changed. Prepare a new plan.");
             store.Put("password_jobs", id, record, record.State);
             store.Audit("PASSWORD_APPLY_STARTED", actor, details: new { id, plan.Before.User, plan.Setting, mode = Mode });
-            PasswordResult result;
-            if (Real) result = await executor.RunAsync<PasswordResult>("passwordApply", Configuration, new { plan }, CancellationToken.None);
-            else
-            {
-                var current = plan.Before with { SourceId = "demo-" + id, Precedence = plan.Before.SourceId is null ? 1000 : plan.Before.Precedence - 1, Values = plan.After };
-                store.Put("password_mock", plan.Before.UserId, current);
-                result = new(current.SourceId, true, "Simulation verified. No AD policy was written.");
-            }
+            var result = await executor.RunAsync<PasswordResult>("passwordApply", Configuration, new { plan }, CancellationToken.None);
             record = record with { State = result.Verified ? "VERIFIED" : "VERIFICATION_FAILED", PolicyId = result.PolicyId, Message = result.Message, UpdatedAt = PolicyValues.Now() };
         }
         catch (Exception ex)
@@ -111,15 +99,7 @@ public sealed class PasswordPilotService(IConfiguration config, Store store, Rem
         try
         {
             store.Put("password_jobs", id, record with { State = "ROLLING_BACK" }, "ROLLING_BACK");
-            PasswordResult result;
-            if (Real) result = await executor.RunAsync<PasswordResult>("passwordRollback", Configuration, new { plan = record.Plan }, CancellationToken.None);
-            else
-            {
-                var current = await ReadAsync(record.Plan.Before.User, CancellationToken.None);
-                if (current.SourceId != "demo-" + id) throw new PolicyException("ROLLBACK_CONFLICT", "A later policy is active. Roll back the latest change first.");
-                store.Put("password_mock", record.Plan.Before.UserId, record.Plan.Before);
-                result = new("demo-" + id, true, "Simulation rollback verified.");
-            }
+            var result = await executor.RunAsync<PasswordResult>("passwordRollback", Configuration, new { plan = record.Plan }, CancellationToken.None);
             record = record with { State = result.Verified ? "ROLLED_BACK" : "ROLLBACK_REVIEW_REQUIRED", Message = result.Message, UpdatedAt = PolicyValues.Now() };
         }
         catch (Exception ex) { record = record with { State = "ROLLBACK_REVIEW_REQUIRED", Message = ex is PolicyException p ? p.Code + ": " + p.Message : "Recovery needs administrator review.", UpdatedAt = PolicyValues.Now() }; }
@@ -129,7 +109,8 @@ public sealed class PasswordPilotService(IConfiguration config, Store store, Rem
     }
     private void AssertWrites()
     {
-        if (Real && !config.GetValue<bool>("Windows:EnableWrites")) throw new PolicyException("WRITES_DISABLED", "Enable writes in Settings after checking readiness.");
+        if (!Real) throw new PolicyException("WINDOWS_MODE_REQUIRED", "Setup mode cannot execute remediation.");
+        if (!config.GetValue<bool>("Windows:EnableWrites")) throw new PolicyException("WRITES_DISABLED", "Enable writes in Settings after checking readiness.");
     }
     private void AssertContext(PasswordPlan plan, string actor)
     {

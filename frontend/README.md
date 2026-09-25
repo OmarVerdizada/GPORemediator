@@ -1,7 +1,7 @@
-# Password pilot UI
+# GPO Remediator frontend
 
-Dependency-free editable UI: `source/workspace.js` provides the six-setting selection, exact test-user plan, Apply and history/rollback. `source/automation.js` provides automatic setup detection with manual overrides and Windows write-mode controls.
+`frontend/source` is the authoritative dependency-free UI. `Build-Portable.ps1` copies it byte-for-byte to `frontend/dist` and records a source fingerprint; Node.js/npm/pnpm are not required.
 
-The existing bundled shell assets supply navigation/layout. Legacy navigation is hidden and legacy scan/write routes are blocked server-side in this release. No background inventory or compliance requests are issued. Environment detection runs on first Settings open and is cached by the server.
+The UI exposes the production CIS Benchmark v4.0.0 workflow: Dashboard, domain/subsection benchmark navigation, control workspace, real GPO discovery, preview/impact/preflight, approval, Apply, verification, Operations/Recovery and evidence. The browser does not execute arbitrary PowerShell.
 
-`frontend/source` is authoritative. The launcher copies it to `dist` and fingerprints the result; no Node/npm build is needed. See the main README and docs/PASSWORD-PILOT.md.
+The application is local-only in this release (`http://127.0.0.1:5080`). See the root README, `docs/ARCHITECTURE.md`, and `PRODUCTION-TEST-CHECKLIST.md`.

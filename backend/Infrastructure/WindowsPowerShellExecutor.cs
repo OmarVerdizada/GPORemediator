@@ -5,17 +5,15 @@ using GpoRemediator.Domain;
 
 namespace GpoRemediator.Infrastructure;
 
-// No command text, credentials, or executable path can be supplied by the browser.
+// Fixed bundled scripts only. Optional GPO credentials travel over redirected stdin, never argv or logs.
 internal sealed class WindowsPowerShellExecutor(ILogger logger)
 {
-    private static readonly HashSet<string> Operations = ["environment", "resolveTarget", "preflight", "analyze", "inspect", "backup", "apply", "verifyGpo", "verifyScope", "refresh", "verifyRsop", "verifyEndpoint", "restart", "restore", "verifyRollback"];
-
     public async Task<T> RunAsync<T>(string operation, object configuration, object payload, CancellationToken ct)
     {
         if (!OperatingSystem.IsWindows()) throw new PolicyException("WINDOWS_REQUIRED", "Real execution requires a domain-connected Windows management host.");
-        var pilot = new[] { "discover", "passwordRead", "passwordApply", "passwordRollback", "passwordReadiness" }.Contains(operation);
-        if (!pilot && !Operations.Contains(operation)) throw new PolicyException("OPERATION_DENIED", "The requested Windows operation is not supported.");
-        var script = Path.Combine(AppContext.BaseDirectory, "PowerShell", pilot ? "Invoke-PasswordPilot.ps1" : "Invoke-PolicyOperation.ps1");
+        var gpo = new[] {"gpoInventory","gpoReadiness","gpoPreview","gpoApply","gpoRollback","gpoVerify"}.Contains(operation);
+        if (!gpo) throw new PolicyException("OPERATION_DENIED", "Only the production GPO workflow is exposed by the Windows executor.");
+        var script = Path.Combine(AppContext.BaseDirectory, "PowerShell", "Invoke-GpoWorkflow.ps1");
         if (!File.Exists(script)) throw new PolicyException("SCRIPT_MISSING", "Publish the bundled PowerShell directory with the backend.");
         var executable = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Windows), "System32", "WindowsPowerShell", "v1.0", "powershell.exe");
         var start = new ProcessStartInfo(executable)
@@ -28,7 +26,14 @@ internal sealed class WindowsPowerShellExecutor(ILogger logger)
         foreach (var argument in new[] { "-NoLogo", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", script }) start.ArgumentList.Add(argument);
         using var process = new Process { StartInfo = start };
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        timeout.CancelAfter(TimeSpan.FromMinutes(4));
+        var operationTimeout = operation switch
+        {
+            "gpoApply" or "gpoRollback" => TimeSpan.FromMinutes(16),
+            "gpoPreview" or "gpoVerify" => TimeSpan.FromMinutes(10),
+            _ when gpo => TimeSpan.FromMinutes(6),
+            _ => TimeSpan.FromMinutes(4)
+        };
+        timeout.CancelAfter(operationTimeout);
         try
         {
             process.Start();
@@ -61,7 +66,7 @@ internal sealed class WindowsPowerShellExecutor(ILogger logger)
         {
             if (!process.HasExited) process.Kill(entireProcessTree: true);
             if (ct.IsCancellationRequested) throw;
-            throw new PolicyException("WINDOWS_TIMEOUT", "Windows operation exceeded four minutes. A remote operation may still finish; inspect current policy before retrying a write.");
+            throw new PolicyException("WINDOWS_TIMEOUT", $"Windows operation exceeded its {operationTimeout.TotalMinutes:0}-minute safety timeout. A remote operation may have partially completed; inspect the recorded state before retrying a write.");
         }
         catch (PolicyException ex)
         {

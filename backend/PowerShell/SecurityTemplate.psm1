@@ -1,4 +1,4 @@
-Set-StrictMode -Version Latest
+﻿Set-StrictMode -Version Latest
 
 function Get-TemplateEntry {
     param([AllowEmptyString()][string]$Text, [string]$Section, [string]$Key)
@@ -48,22 +48,32 @@ function Set-SecurityTemplateValue {
     return $result
 }
 
-function Add-SecurityExtension {
-    param([AllowEmptyString()][string]$Current)
-    $cse = '{827D319E-6EAC-11D2-A4EA-00C04F79F83A}'; $tool = '{803E14A0-B4FB-11D0-A0D0-00A0C90F574B}'
+function Add-ExtensionPair {
+    param([AllowEmptyString()][string]$Current,[string]$Cse,[string]$Tool)
     $groups = [regex]::Matches($Current, '\[(?:\{[A-Fa-f0-9-]{36}\})+\]')
     if ((@($groups | ForEach-Object { $_.Value }) -join '') -cne $Current) { throw 'CSE_METADATA_INVALID|Unknown Group Policy extension metadata format; review the GPO manually.' }
     $updated = @(); $present = $false
     foreach ($group in $groups) {
         $ids = @([regex]::Matches($group.Value, '\{[A-Fa-f0-9-]{36}\}').Value)
-        if ($ids[0] -ieq $cse) {
+        if ($ids[0] -ieq $Cse) {
             $present = $true
-            if ($ids -inotcontains $tool) { $ids += $tool }
+            if ($ids -inotcontains $Tool) { $ids += $Tool }
         }
         $updated += '[' + ($ids -join '') + ']'
     }
-    if (-not $present) { $updated += '[' + $cse + $tool + ']' }
+    if (-not $present) { $updated += '[' + $Cse + $Tool + ']' }
     return (($updated | Sort-Object) -join '')
+}
+
+function Add-SecurityExtension {
+    param([AllowEmptyString()][string]$Current)
+    return Add-ExtensionPair $Current '{827D319E-6EAC-11D2-A4EA-00C04F79F83A}' '{803E14A0-B4FB-11D0-A0D0-00A0C90F574B}'
+}
+
+function Add-AuditExtension {
+    param([AllowEmptyString()][string]$Current)
+    # MS-GPAC assigns this pair to the Advanced Audit Configuration extension.
+    return Add-ExtensionPair $Current '{F3CCC681-B74C-4060-9F26-CD84525DCA2A}' '{0F3F3735-573D-9804-99E4-AB2A69BA5FD4}'
 }
 
 function Get-NextComputerVersion {
@@ -99,4 +109,4 @@ function Get-AdWindowsProfile {
     throw 'TARGET_OS_UNKNOWN|AD does not identify a supported Windows operating system. Correct AD inventory before proceeding.'
 }
 
-Export-ModuleMember -Function Get-TemplateEntry, Set-TemplateEntry, Set-SecurityTemplateValue, Add-SecurityExtension, Get-NextComputerVersion, Get-NormalizedGpoContentFingerprint, Get-AdWindowsProfile
+Export-ModuleMember -Function Get-TemplateEntry, Set-TemplateEntry, Set-SecurityTemplateValue, Add-SecurityExtension, Add-AuditExtension, Get-NextComputerVersion, Get-NormalizedGpoContentFingerprint, Get-AdWindowsProfile

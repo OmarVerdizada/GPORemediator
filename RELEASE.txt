@@ -1,0 +1,10 @@
+GPO Remediator — CIS v4 Production Backend Candidate
+Build source: 2026-09-25
+Transport: local-only HTTP (127.0.0.1:5080)
+Benchmark catalog: CIS Benchmark v4.0.0 — 405 controls
+Server-authoritative automated mappings: 401
+Catalog Manual/Unspecified controls kept read-only: 4
+Backend handlers: SecurityTemplate, Registry, RegistrySet, AdvancedAudit
+Safety: preview/preflight, Backup-GPO, stale-plan/fingerprint checks, process + per-GPO locks, transaction manifest, bounded gpupdate, verification, conflict-aware rollback, append-only audit/evidence
+Acceptance: run PRODUCTION-TEST-CHECKLIST.md in the target Windows/AD lab before production rollout.
+Runtime generation: production-backend-v3; stale pre-production runtime binaries intentionally excluded from this source release.

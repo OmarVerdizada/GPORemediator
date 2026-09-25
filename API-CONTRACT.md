@@ -1,57 +1,38 @@
-## Current release: selected-user password pilot
+# GPO Remediator API contract — production backend
 
-The current UI and write API support only the six password settings via a new PSO for one selected test user. GPO remediation below is historical architecture retained for future phases; scan and legacy write endpoints are disabled. See [PASSWORD-PILOT.md](docs/PASSWORD-PILOT.md) and README.md for the current workflow.
+All endpoints are local-only and served from the same origin. In Windows mode the request must also pass Windows Integrated Authentication and the configured operator allowlist. Non-GET API requests require the exact Origin and `X-CSRF-Token` returned by `/api/session`.
 
-New endpoints (same origin + CSRF required for POST):
+## Session / setup
 
-- GET /api/setup/discover — cached read-only management environment detection.
-- GET /api/password/settings — six supported settings, ranges and editable suggestions.
-- POST /api/password/plan — {user, setting, value}; exact selected-user preview, zero AD writes.
-- POST /api/password/{planId}/apply — {confirmation: "APPLY"}; backup, create/assign PSO, resultant verification.
-- GET /api/password/history — durable execution records, including before/after snapshots and recovery state.
-- POST /api/password/{planId}/rollback — {confirmation: "ROLLBACK"}; remove only that unchanged pilot PSO and verify previous effective policy.
+- `GET /api/session` — mode, CSRF token, service/setup state.
+- `GET /api/setup/discover` — read-only local Windows hints for AD DNS suffix, logon DC, operator and default backup path. No AD write.
+- `GET /api/setup/config` — masked/non-secret saved setup values.
+- `POST /api/setup/config` — save domain/DC/backup/operator config, force writes disabled, optionally request controlled restart.
+- `POST /api/setup/write-mode` — enable/disable privileged writes. Enabling requires real GPO readiness.
 
-# Internal API contract
+## Execution connection
 
-Same-origin ASP.NET Core 8 + React API. JSON camelCase, enums UPPER_SNAKE_CASE. Mutation endpoints require the session CSRF token and exact same `Origin`. Windows mode additionally requires HTTPS + Windows Integrated Authentication + operator allowlist.
+- `POST /api/gpo/connect` — authenticate a short-lived execution credential and discover real GPO/scope inventory. Password is transport-only and never persisted.
+- `POST /api/gpo/disconnect` — zero/remove execution session.
+- `GET /api/gpo/inventory` — cached discovered GPO/domain/OU inventory for the connected execution account.
+- `POST /api/gpo/discover` — refresh inventory read-only.
+- `GET /api/gpo/readiness` — real environment readiness using the connected execution account.
 
-## Session / inventory
+## Catalog / workflow
 
-- `GET /api/session` → `{mode,operator,csrfToken,identityStrategy,realModeEnabled}`
-- `GET /api/dashboard` → `{findings,jobs,mode}`
-- `GET /api/controls` → `BenchmarkControl[]`
-- `GET /api/findings/{id}` → finding + control + target + latest source analysis
-- `POST /api/findings` → manual finding (manual asserted values never establish verified PASS)
+- `GET /api/gpo/settings` — server-authoritative CIS mapping metadata. The client must not invent registry keys/desired values.
+- `POST /api/gpo/preview` — validated read-only plan. Request uses discovered GPO/scope IDs plus control ID and approved option fields.
+- `POST /api/gpo/{planId}/apply` — requires `APPLY`, impact acknowledgment, Change/Ticket ID and Approver; protected default GPO additionally requires protected acknowledgment. Write mode must be enabled.
+- `POST /api/gpo/{planId}/verify` — read-only verification of an existing/no-change operation.
+- `POST /api/gpo/{planId}/rollback` — requires `ROLLBACK` and write mode; restores only when backup/post-write fingerprint safety checks pass.
+- `GET /api/gpo/history` — current operator's workflow runs.
+- `GET /api/gpo/{planId}/evidence` — evidence object with integrity hash, approval, backup and verification metadata.
 
-## Service lifecycle
+## Audit / product metadata
 
-- `GET /api/service` → `{mode,processId,stopping,managed,writesEnabled,activeJobs}`. `writesEnabled` is the effective running configuration, not a pending saved file.
-- `POST /api/service/stop {}` and `POST /api/service/restart {}` → `202 {action,accepted:true}`. Available only when started with the product launcher. Same-origin, CSRF, and Windows operator authentication rules apply.
-- Lifecycle and automatic setup restarts refuse active jobs with `JOB_BUSY`; after acceptance, new apply/verify/rollback jobs receive `SERVICE_STOPPING`. The launcher restarts only when a validated restart marker exists.
-- Stopping leaves the web page disconnected. Starting again requires the desktop panel. No unauthenticated remote start endpoint is exposed.
+- `GET /api/audit` — append-only audit events plus chain integrity state.
+- `GET /api/settings` — benchmark/handler/safety-pipeline product metadata.
 
-## Automated discovery / planning
+## State rules
 
-- `GET /api/automation/readiness` → `EnvironmentReadiness`
-- `POST /api/automation/scan {hostname,profile:"Auto"|"MemberServer"|"DomainController"|"Workstation"}` → `TargetScanResult`; read-only endpoint verification, auto-create/update FAIL findings
-- `POST /api/findings/{id}/safe-plan {}` → `SafePlanResult`; source analysis + safe GPO choice + preview + preflight + dry run, `writes:0`
-
-## Manual remediation workflow
-
-- `POST /api/findings/{id}/analyze {}` → `PolicySourceAnalysis`
-- `POST /api/findings/{id}/preview {selection}` → `{impact,preflight}`
-- `POST /api/findings/{id}/dry-run {previewId}` → `{dryRun:true,writes:0,impact,preflight}`
-- `POST /api/findings/{id}/apply {previewId,options}` → remediation job (`202`)
-- `GET /api/jobs` → jobs
-- `GET /api/jobs/{id}` → job + steps + redacted backup metadata + verifications
-- `POST /api/jobs/{id}/verify {}` → queued verification (`202`)
-- `POST /api/jobs/{id}/rollback {acknowledge:true}` → queued verified rollback (`202`)
-
-## Product setup automation
-
-- `GET /api/setup/config` → sanitized local Windows setup view. If `appsettings.Local.json` was changed while the current process is running, this endpoint reads the file rather than returning only stale startup configuration.
-- `POST /api/setup/config` → validates URL/domain/DC/GPO/OU/host/operator/backup allowlists, saves Windows config with `EnableWrites=false`, optionally writes a controlled launcher restart marker.
-- `POST /api/setup/write-mode {enable,confirmation,autoRestart}` → Windows mode only. Enabling requires readiness PASS and exact `ENABLE WRITES`; disabling requires `DISABLE WRITES`. Change is persisted for the next process and normally triggers controlled restart.
-- `GET /api/settings` → current mode, identity strategy, production requirements, supported adapters and limitations.
-
-The UI never submits PowerShell source or arbitrary commands. Backend PowerShell execution is restricted to the fixed operation allowlist implemented in `WindowsPowerShellExecutor` / `Invoke-PolicyOperation.ps1`.
+`Preview` expires after 10 minutes. Mapping hash, environment context and GPO/link fingerprint are revalidated before Apply. A write interruption is never automatically replayed; durable/local recovery moves ambiguous runs to `REVIEW_REQUIRED`. `NO_CHANGE` means the mapped value and required direct link already satisfy the plan and no new backup/write was created.

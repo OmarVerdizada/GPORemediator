@@ -1,4 +1,4 @@
-$ErrorActionPreference = 'Stop'
+﻿$ErrorActionPreference = 'Stop'
 Set-Location -LiteralPath $PSScriptRoot
 . (Join-Path $PSScriptRoot 'scripts\Tooling.ps1')
 $dotnet = Find-Dotnet
@@ -34,6 +34,7 @@ Write-Host 'Publishing self-contained Windows x64 backend...' -ForegroundColor C
 & $dotnet publish $project -c Release -r win-x64 --self-contained true -o $runtime --nologo --no-restore
 Assert-Exit
 (Get-BackendSourceFingerprint) | Set-Content -LiteralPath (Join-Path $runtime 'backend-source.sha256') -Encoding ASCII -NoNewline
+'production-backend-v3' | Set-Content -LiteralPath (Join-Path $runtime 'production-backend-v3.ready') -Encoding ASCII -NoNewline
 
 if (!(Test-PortableBackendMatchesSource)) { throw 'Portable backend fingerprint does not match current source. Do not distribute this package.' }
 if (!(Test-FrontendDistMatchesSource)) { throw 'Static frontend fingerprint does not match current source. Do not distribute this package.' }

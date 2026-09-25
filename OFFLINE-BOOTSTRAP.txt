@@ -1,20 +1,8 @@
-GPO Remediator bootstrap dependency model
-=========================================
+GPO Remediator - offline/bootstrap notes
 
-1. Frontend
-   - Fully packaged under frontend\source and frontend\dist.
-   - No Node.js, npm, pnpm, Corepack, Vite install, or registry.npmjs.org access.
-
-2. Backend
-   - Requires a .NET 8 SDK only when the current backend source has to be rebuilt.
-   - GpoRemediator.ps1 downloads a project-local .NET 8 SDK into .tools\dotnet when one is not already available.
-   - Build-Portable.ps1 restores the project's .NET/NuGet packages into .tools\nuget and reuses that cache on later builds.
-   - If your corporate network blocks NuGet, allow the approved NuGet source or pre-populate .tools\nuget. This is separate from npm.
-
-3. Runtime
-   - After a successful self-contained win-x64 publish, normal runs use runtime\GpoRemediator.exe.
-   - No SDK, Node.js, npm, or pnpm is needed when source fingerprints still match the packaged runtime.
-
-4. Windows / AD prerequisites
-   - Windows mode additionally needs the ActiveDirectory and GroupPolicy RSAT modules and an appropriate HTTPS server certificate.
-   - The launcher can invoke an elevated one-time RSAT prerequisite helper; the application itself is not kept elevated for ordinary operation.
+1. Normal operation uses the already published self-contained win-x64 runtime and does not require Node.js, npm or pnpm.
+2. A rebuild is required only when the packaged runtime is missing/outdated or Repair is requested.
+3. A rebuild requires .NET 8 SDK plus the NuGet packages used by the backend. The launcher can provision a project-local .NET SDK when network access is available; NuGet packages can also be pre-populated under .tools\nuget for offline builds.
+4. Real AD/GPO execution requires Kerberos PowerShell remoting to the configured writable DC. The selected DC must have the ActiveDirectory and GroupPolicy PowerShell modules/GPMC feature. The local management host does not auto-install or require RSAT for the production workflow.
+5. The web UI is local-only on http://127.0.0.1:5080 in this release. No HTTPS certificate is required while it remains loopback-only.
+6. Use PRODUCTION-TEST-CHECKLIST.md before any production rollout.
