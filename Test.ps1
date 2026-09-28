@@ -11,12 +11,8 @@ Write-Host '[1/7] Building current backend...' -ForegroundColor Cyan
 Assert-Exit
 
 Write-Host '[2/7] Running .NET invariants...' -ForegroundColor Cyan
-& $dotnet run --project (Join-Path $PSScriptRoot 'tests\InvariantTests\InvariantTests.csproj') -c Release --no-build
-if ($LASTEXITCODE -ne 0) {
-    # The invariant project has its own output and can require a first build after checkout.
-    & $dotnet run --project (Join-Path $PSScriptRoot 'tests\InvariantTests\InvariantTests.csproj') -c Release
-    Assert-Exit
-}
+& $dotnet run --project (Join-Path $PSScriptRoot 'tests\InvariantTests\InvariantTests.csproj') -c Release
+Assert-Exit
 
 Write-Host '[3/7] Validating production CIS mapping registry...' -ForegroundColor Cyan
 $mappingPath = Join-Path $backend 'data\gpo-production-mappings.json'
@@ -46,7 +42,7 @@ Assert-Exit
 
 Write-Host '[6/7] Verifying frontend source/dist integrity...' -ForegroundColor Cyan
 if (!(Test-FrontendDistMatchesSource)) { throw 'frontend/dist does not match frontend/source. Rebuild or resync the frontend before release.' }
-foreach ($name in @('workspace.js','automation.js','workspace.css','automation.css','index.html','benchmark-v4.json')) {
+foreach ($name in @('client.js','workspace.js','automation.js','workspace.css','automation.css','index.html','benchmark-v4.json')) {
     $a=Join-Path $PSScriptRoot ('frontend\source\'+$name); $b=Join-Path $PSScriptRoot ('frontend\dist\'+$name)
     if (!(Test-Path $a) -or !(Test-Path $b) -or (Get-FileHash $a -Algorithm SHA256).Hash -cne (Get-FileHash $b -Algorithm SHA256).Hash) { throw "Frontend source/dist mismatch: $name" }
 }

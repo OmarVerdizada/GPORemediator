@@ -94,7 +94,7 @@ check("UnableToRetrievePolicyRegistryItem" in worker and "GPO_REGISTRY_READ_FAIL
 check('Invoke-PasswordPilot.ps1' not in executor and 'Invoke-PolicyOperation.ps1' not in executor, 'Legacy Windows executor surface is still reachable')
 
 # Frontend/dist must be byte-for-byte synchronized for operator UI assets we own.
-for name in ('workspace.js','workspace.css','benchmark-v4.json','automation.js','automation.css'):
+for name in ('index.html','client.js','workspace.js','workspace.css','benchmark-v4.json','automation.js','automation.css'):
     a=ROOT/'frontend'/'source'/name; b=ROOT/'frontend'/'dist'/name
     if a.exists() or b.exists():
         check(a.exists() and b.exists(), f'{name}: source/dist missing')

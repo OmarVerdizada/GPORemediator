@@ -1,16 +1,23 @@
-# İstifadə qaydası
+# Sadə istifadə qaydası
 
-1. ZIP-i yeni qovluğa çıxarın və `GpoRemediator.cmd` açın.
-2. İlk açılışda Setup gəlirsə, `AD domain`, writable DC, `Backup path` və `AllowedOperators` məlumatlarını yoxlayıb saxlayın. HTTPS sertifikatı tələb olunmur; UI yalnız `127.0.0.1`-də açılır.
-3. Windows rejimində əsas səhifədə icra hesabı ilə qoşulun. Hazırkı mərhələdə DC/domain admin hesabı istifadə edilə bilər; parol diskə və loga yazılmır.
-4. `Environment Health / Readiness` yoxlamasını işlədin. Required check `FAIL` olarsa Apply aktivləşdirilməməlidir.
-5. Benchmark bölməsində domain → subsection → control seçin.
-6. Control workspace-də GPO və domain/OU scope seçin. Account Policy qaydaları server tərəfindən domain root + Default Domain Policy ilə məhdudlaşdırılır.
-7. `Preview` edin. Current/desired value, existing links, inheritance/conflict warnings, affected objects və refresh target-lərini yoxlayın. Preview heç nə yazmır.
-8. Settings-də `ENABLE WRITES` ilə write mode-u aktivləşdirin. Readiness yenidən yoxlanır.
-9. Apply üçün Change/Ticket ID, Approver, impact acknowledgment və `APPLY` təsdiqi daxil edin. Protected GPO üçün əlavə təsdiq tələb olunur.
-10. Backend əvvəlcə tam `Backup-GPO` yaradır, sonra yalnız seçilmiş mapping-i dəyişir/link edir və read-back edir. İstəsəniz bounded `gpupdate` seçə bilərsiniz.
-11. `Verify` ilə AD/SYSVOL version, replication və mümkün olduqda endpoint effective value yoxlanılır. `PENDING` nəticəni `PASS` kimi qəbul etməyin.
-12. Geri qaytarmaq lazım olarsa Operation Center-dən `ROLLBACK` istifadə edin. GPO başqa administrator tərəfindən sonradan dəyişibsə avtomatik rollback təhlükəsizlik üçün bloklanır.
+1. `GpoRemediator.cmd` faylını açın. İlk build lazım olsa avtomatik edilir.
+2. Sazlamalarda **Domen**, **Domen kontrolleri** və aşkarlanan Windows hesabını yoxlayın. **Saxla və yenidən başlat** seçin.
+3. Əsas ekranda **Qoşul** seçin. Cari Windows hesabı istifadə edilir. Başqa hesab üçün **Başqa hesab istifadə et** bölməsini açın. `DOMEN/istifadəçi` yazılışı avtomatik `DOMEN\istifadəçi` formasına çevrilir.
+4. **Bağlantını yoxla** nəticələrinə baxın. Domenə giriş alınması bütün hazırlıq yoxlamalarının keçməsi demək deyil. Problem varsa, uyğun yoxlamanın yanında göstərilir.
+5. **Benchmark** bölməsində qaydanın nömrəsini və ya adını axtarın. **Dəyişiklik** bölməsində GPO və hədəf seçib **Plan hazırla** düyməsini basın. Bu mərhələdə siyasət dəyişmir.
+6. Tətbiq etmək üçün **Sazlamalar** bölməsində dəyişiklik icazəsini açın. Tətbiq yenidən başladıqdan sonra yenidən qoşulub plan hazırlayın. Planı yoxlayın, dəyişiklik nömrəsini və təsdiqləyən şəxsi daxil edin, `APPLY` yazıb tətbiq edin.
+7. **Əməliyyatlar** bölməsində nəticəni yoxlayın. Lazım olduqda **Yenidən yoxla** və ya ehtiyat nüsxəsi olan əməliyyatda `ROLLBACK` istifadə edin.
 
-Real production-a keçməzdən əvvəl `PRODUCTION-TEST-CHECKLIST.md` tam icra olunmalıdır.
+## Mövcud versiyanı yeniləmək
+
+Git checkout-da `git pull --ff-only` işlədin və tətbiqi `GpoRemediator.cmd` ilə yenidən başladın. Köhnə runtime aşkarlanarsa avtomatik yenilənir. Build saxlanmış konfiqurasiyanı və əməliyyat məlumatlarını silmir. Brauzerdə köhnə ekran qalsa `Ctrl+F5` basın.
+
+## Bağlantı alınmırsa
+
+- Domen kontrollerinin tam DNS adını yazın: məsələn, `dc01.example.local`.
+- Domen hesabını istifadə edin; tətbiqin Windows hesabı icazəli hesablar siyahısında qalmalıdır.
+- Bağlantı xətası Kerberos/WinRM mərhələsindədirsə, kontrollerin DNS adını, WinRM xidmətini və hesabın uzaqdan giriş icazəsini yoxlayın.
+- Hazırlıq yoxlaması uğursuzdursa, həmin yoxlamanın nəticəsinə baxın. Ehtiyat nüsxə qovluğu seçilmiş DC üzərində olmalıdır.
+- Uzun sorğuda mərhələ və vaxt göstərilir. Yalnız oxuma sorğusunda gözləməni dayandırmaq olar. Tətbiq zamanı əlaqə itərsə, yenidən tətbiqdən əvvəl Əməliyyatlarda nəticəni yoxlayın.
+
+Account Policy qaydaları domenin kökünə və Default Domain Policy-yə tətbiq edilir. Real domen sınağını `PRODUCTION-TEST-CHECKLIST.md` üzrə test mühitində aparın. Domen və kompüterlərdə faktiki tətbiq ayrıca yoxlanılır; gözləyən nəticə uğurlu nəticə deyil.

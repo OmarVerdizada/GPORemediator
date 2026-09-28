@@ -10,13 +10,12 @@ $frontendDist = Join-Path $PSScriptRoot 'frontend\dist'
 if (!(Test-Path -LiteralPath (Join-Path $frontendSource 'index.html'))) {
     throw 'frontend\source is missing. The packaged static UI is required.'
 }
-if (Test-Path -LiteralPath $frontendDist) { Remove-Item -LiteralPath $frontendDist -Recurse -Force }
+# Do not remove runtime data or saved configuration during an in-place upgrade.
 New-Item -ItemType Directory -Path $frontendDist -Force | Out-Null
 Copy-Item -Path (Join-Path $frontendSource '*') -Destination $frontendDist -Recurse -Force
 (Get-FrontendSourceFingerprint) | Set-Content -LiteralPath (Join-Path $frontendDist 'source.sha256') -Encoding ASCII -NoNewline
 
 $runtime = Join-Path $PSScriptRoot 'runtime'
-if (Test-Path -LiteralPath $runtime) { Remove-Item -LiteralPath $runtime -Recurse -Force }
 New-Item -ItemType Directory -Path $runtime -Force | Out-Null
 
 # Keep NuGet artifacts local to the product so repeat builds can reuse them. This is

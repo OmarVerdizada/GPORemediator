@@ -19,6 +19,13 @@ void Reject(string code, Action action)
     catch (PolicyException e) { Check(e.Code == code, $"Expected {code}, got {e.Code}"); }
 }
 
+Test("Windows operator normalization accepts slash without widening account scope", () =>
+{
+    Check(WindowsAccount.Normalize(" PROSOL/Administrator ")==@"PROSOL\Administrator", "Slash normalization failed");
+    Check(WindowsAccount.IsOperator(WindowsAccount.Normalize("PROSOL/Administrator")), "Normalized operator rejected");
+    Check(!WindowsAccount.IsOperator("Administrator") && !WindowsAccount.IsOperator(@"A\B\C"), "Ambiguous identities accepted");
+});
+
 var network = Catalog.Controls.Single(c => c.Id == "cis-2.2.3");
 var target = new TargetResource("test-target", "SRV-APP-01.prosol.az", "prosol.az", "OU=Servers,DC=prosol,DC=az", "Windows Server 2022", "MemberServer");
 var adapters = new AdapterRegistry();
@@ -83,51 +90,7 @@ Test("Restart requirement is explicit control metadata", () =>
     Check(Catalog.Controls.Single(c => c.Id == "sec-uac").RequiresRestart == RestartRequirement.REQUIRED, "UAC restart not declared");
     Check(network.RequiresRestart == RestartRequirement.NOT_REQUIRED, "User-right restart unexpectedly required");
 });
-Test("Mock discovery and new-GPO preview do not write simulated GPOs or endpoints", () =>
-{
-    using var store = new Store(":memory:");
-    var provider = new MockWindowsPolicyProvider(store);
-    var before = PolicyValues.Hash(store.List<MockGpo>("mock_gpos"));
-    _ = provider.AnalyzeAsync(target, network).GetAwaiter().GetResult();
-    var preview = provider.PreviewAsync("finding", target, network, new("CREATE", NewGpoName: "ORG-CIS-Test-Remediation")).GetAwaiter().GetResult();
-    Check(preview.Gpo.Dedicated && preview.Gpo.Version == "0", "Create preview is not an uncreated dedicated GPO");
-    Check(before == PolicyValues.Hash(store.List<MockGpo>("mock_gpos")), "Discovery or preview changed simulated GPO state");
-    Check(store.List<MockEndpoint>("mock_endpoints").Length == 0, "Discovery or preview created endpoint policy state");
-});
-Test("Mock target selection protects default policies and requires a deterministic detected source", () =>
-{
-    using var store = new Store(":memory:");
-    var provider = new MockWindowsPolicyProvider(store);
-    Reject("GPO_NOT_APPROVED", () => provider.PreviewAsync("f", target, network, new("EXISTING", MockWindowsPolicyProvider.ProtectedId)).GetAwaiter().GetResult());
-    Reject("SOURCE_AMBIGUOUS", () => provider.PreviewAsync("f", target with { Hostname = "SRV-UNDEFINED.prosol.az" }, network, new("DETECTED")).GetAwaiter().GetResult());
-    Reject("SOURCE_AMBIGUOUS", () => provider.PreviewAsync("f", target with { Hostname = "SRV-AMBIGUOUS.prosol.az" }, network, new("DETECTED")).GetAwaiter().GetResult());
-});
-Test("Mock full-GPO backup restores unrelated settings as well as the changed right", () =>
-{
-    using var store = new Store(":memory:");
-    var provider = new MockWindowsPolicyProvider(store);
-    var before = store.Require<MockGpo>("mock_gpos", MockWindowsPolicyProvider.BaselineId);
-    var snapshotHash = PolicyValues.Hash(before.Settings);
-    var backup = provider.BackupAsync("job", target, network, before.Reference, "operator").GetAwaiter().GetResult();
-    provider.ApplyAsync(before.Reference, network, network.ExpectedValue).GetAwaiter().GetResult();
-    var after = store.Require<MockGpo>("mock_gpos", before.Reference.Id);
-    Check(PolicyValues.Equal(after.Settings[network.Id], network.ExpectedValue, network.PolicyType), "Apply failed");
-    Check(after.Settings["sec-uac"].SequenceEqual(before.Settings["sec-uac"]), "Unrelated UAC value changed");
-    backup = backup with { PostWriteVersion = after.Reference.Version };
-    provider.RestoreAsync(backup, network).GetAwaiter().GetResult();
-    Check(provider.VerifyRollbackAsync(backup, network).GetAwaiter().GetResult().Success, "Restore verification failed");
-    Check(PolicyValues.Hash(store.Require<MockGpo>("mock_gpos", before.Reference.Id).Settings) == snapshotHash, "Full GPO settings did not restore");
-});
-Test("Mock stale write and conflicting rollback versions fail closed", () =>
-{
-    using var store = new Store(":memory:");
-    var provider = new MockWindowsPolicyProvider(store);
-    var gpo = store.Require<MockGpo>("mock_gpos", MockWindowsPolicyProvider.BaselineId).Reference;
-    var backup = provider.BackupAsync("job", target, network, gpo, "operator").GetAwaiter().GetResult();
-    provider.ApplyAsync(gpo, network, network.ExpectedValue).GetAwaiter().GetResult();
-    Reject("CONCURRENT_GPO_CHANGE", () => provider.ApplyAsync(gpo, network, network.ExpectedValue).GetAwaiter().GetResult());
-    Reject("ROLLBACK_CONFLICT", () => provider.RestoreAsync(backup with { PostWriteVersion = "obsolete-version" }, network).GetAwaiter().GetResult());
-});
+// Production worker backup/replay/rollback checks are in tests/GpoWorkflow.ps1.
 Test("Password fields and bearer credentials are redacted", () =>
 {
     const string secret = "sensitive-example-123";
@@ -189,11 +152,7 @@ Test("A database cannot be reused across mock and Windows execution modes", () =
     rejected = false;
     try { windows.BindExecutionMode("MOCK"); } catch (InvalidOperationException) { rejected = true; }
     Check(rejected, "Windows deployment accepted mock execution");
-    using var legacy = new Store(":memory:");
-    _ = new MockWindowsPolicyProvider(legacy);
-    rejected = false;
-    try { legacy.BindExecutionMode("WINDOWS"); } catch (InvalidOperationException) { rejected = true; }
-    Check(rejected, "Legacy simulated GPO state accepted Windows execution");
+
 });
 Test("Jobs and execution steps survive database reopening", () =>
 {
@@ -220,39 +179,30 @@ Test("Jobs and execution steps survive database reopening", () =>
     Directory.Delete(resolved, true);
 });
 
-Test("Service lifecycle refuses to interrupt any active remediation stage", () =>
+Test("Service lifecycle refuses to interrupt active GPO work", () =>
 {
     using var store = new Store(":memory:");
-    using var engine = new RemediationEngine(store, new MockWindowsPolicyProvider(store), adapters, NullLogger<RemediationEngine>.Instance);
-    foreach(var state in RemediationEngine.ActiveStates)
-    {
-        var now = PolicyValues.Now();
-        var job = new RemediationJob("lifecycle-job", "finding", network.Id, target.Id, "gpo", state, "operator", "MOCK", now, now, null, new JobOptions(), "preview");
-        store.Put("jobs", job.Id, job, state);
-        var stopped = false;
-        Reject("JOB_BUSY", () => engine.BeginMaintenance(() => stopped = true));
-        Check(!stopped && !engine.Maintenance, $"Shutdown interrupted {state}");
-    }
-});
-Test("Accepted shutdown blocks apply, verify and rollback submissions", () =>
-{
-    using var store = new Store(":memory:");
-    using var engine = new RemediationEngine(store, new MockWindowsPolicyProvider(store), adapters, NullLogger<RemediationEngine>.Instance);
-    engine.BeginMaintenance(() => { });
-    Check(engine.Maintenance, "Maintenance was not recorded");
-    Reject("SERVICE_STOPPING", () => engine.Submit("finding", new ApplyRequest("preview", new JobOptions()), "operator"));
-    Reject("SERVICE_STOPPING", () => engine.SubmitFollowup("job", "VERIFY", "operator"));
-    Reject("SERVICE_STOPPING", () => engine.SubmitFollowup("job", "ROLLBACK", "operator", true));
-    Reject("SERVICE_STOPPING", () => engine.BeginMaintenance(() => { }));
+    var gate = new OperationGate(store);
+    gate.BeginOperation(() => { });
+    Reject("GPO_OPERATION_BUSY", () => gate.BeginMaintenance(() => { }));
+    Reject("GPO_OPERATION_BUSY", () => gate.BeginOperation(() => { }));
+    gate.EndOperation();
+    gate.BeginMaintenance(() => { });
+    Reject("SERVICE_STOPPING", () => gate.BeginOperation(() => { }));
+    gate.EndMaintenance();
+    gate.BeginOperation(() => { });
+    Check(gate.OperationActive, "Operation did not resume after maintenance");
 });
 Test("Failed lifecycle scheduling restores service availability", () =>
 {
     using var store = new Store(":memory:");
-    using var engine = new RemediationEngine(store, new MockWindowsPolicyProvider(store), adapters, NullLogger<RemediationEngine>.Instance);
-    try { engine.BeginMaintenance(() => throw new IOException("Cannot persist marker")); } catch(IOException) { }
-    Check(!engine.Maintenance, "Failed scheduling left the service locked");
-    engine.BeginMaintenance(() => { });
-    Check(engine.Maintenance, "A retry could not be accepted");
+    var gate = new OperationGate(store);
+    try { gate.BeginMaintenance(() => throw new IOException("Cannot persist marker")); } catch(IOException) { }
+    Check(!gate.Maintenance, "Failed scheduling left the service locked");
+    try { gate.BeginOperation(() => throw new IOException("Cannot persist run")); } catch(IOException) { }
+    Check(!gate.OperationActive, "Failed submission left the service locked");
+    gate.BeginMaintenance(() => { });
+    Check(gate.Maintenance, "A retry could not be accepted");
 });
 
 Test("Production GPO mapping registry covers the imported CIS v4 catalog", () =>

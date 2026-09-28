@@ -5,6 +5,7 @@ $WarningPreference='SilentlyContinue'
 $InformationPreference='SilentlyContinue'
 [Console]::InputEncoding=[Text.UTF8Encoding]::new($false)
 [Console]::OutputEncoding=[Text.UTF8Encoding]::new($false)
+$stage='configuration'
 $session=$null;$secure=$null;$credential=$null;$request=$null
 try {
     $request=[Console]::In.ReadToEnd() | ConvertFrom-Json
@@ -19,7 +20,9 @@ try {
         $options.Credential=$credential
     }
     $request.payload.credential.password=$null
+    $stage='connection'
     $session=New-PSSession @options
+    $stage=[string]$request.operation
     # Both script texts come exclusively from the installed, bundled product; browser data is passed as arguments.
     $worker=[IO.File]::ReadAllText((Join-Path $PSScriptRoot 'GpoWorkflow.Worker.ps1'))
     $module=[IO.File]::ReadAllText((Join-Path $PSScriptRoot 'SecurityTemplate.psm1'))
@@ -28,7 +31,19 @@ try {
 } catch {
     $message=[string]$_.Exception.Message
     if($message -match '^([A-Z][A-Z0-9_]+)\|(.+)$'){$code=$Matches[1];$safe=$Matches[2]}
-    else{$code='GPO_CONNECTION_OR_OPERATION_FAILED';$safe='Unable to complete the GPO operation. Check the execution account, Kerberos/WinRM to the selected DC, the ActiveDirectory/GroupPolicy modules on that DC, GPO edit/link permissions and DC backup access. No password or raw remote error is logged.'}
+    else{
+        # Emit only bounded, product-owned guidance, never raw remote errors/credentials.
+        switch($stage){
+            'connection' {
+                if($_.FullyQualifiedErrorId -match 'AccessDenied|LogonFailure|AuthenticationFailed'){$code='GPO_AUTH_FAILED';$safe='Windows rejected the connection account. Check DOMAIN\user and password, or use the signed-in domain account.'}
+                else{$code='GPO_REMOTING_FAILED';$safe='The domain controller could not be reached through Kerberos/WinRM. Check its DNS name, WinRM service and the account remoting permission.'}
+            }
+            'gpoReadiness' {$code='GPO_READINESS_FAILED';$safe='Connected to the domain, but readiness checks could not finish. Update the tool on the management host, then retry Check connection. Verify access to SYSVOL and the backup folder on the DC.'}
+            'gpoInventory' {$code='GPO_DISCOVERY_FAILED';$safe='Connected to the DC, but GPO and OU discovery failed. Check ActiveDirectory/GroupPolicy modules and read permissions on the selected domain.'}
+            'gpoPreview' {$code='GPO_PREVIEW_FAILED';$safe='The selected policy could not be inspected. Refresh the GPO list and check read access to the GPO, SYSVOL and target OU.'}
+            default {$code='GPO_OPERATION_FAILED';$safe='The operation could not finish. Open Operations and verify its recorded state before trying a change again.'}
+        }
+    }
     [Console]::Out.Write((@{ok=$false;code=$code;message=$safe} | ConvertTo-Json -Compress))
     exit 1
 } finally {

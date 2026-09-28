@@ -29,7 +29,7 @@ function Set-ADObject {param($Identity,$Server,$Replace) $script:version=$Replac
 function Get-GPO {param($Guid,$Domain,$Server,[switch]$All) return [pscustomobject]@{Id=$script:gpoId;DisplayName='Password Test';GpoStatus='AllSettingsEnabled'} }
 function Get-CimInstance {param($ClassName,$Filter) return [pscustomobject]@{Path=$script:sysvol} }
 function Get-GPPermission {param($Guid,[switch]$All,$Domain,$Server) $sid=[Security.Principal.WindowsIdentity]::GetCurrent().User.Value;return [pscustomobject]@{Trustee=[pscustomobject]@{Sid=[pscustomobject]@{Value=$sid};Name='Test Operator'};Permission='GpoEdit'} }
-function Get-GPInheritance {param($Target,$Domain,$Server) return [pscustomobject]@{GpoLinks=@(if($script:links.ContainsKey($Target)){$script:links[$Target]})} }
+function Get-GPInheritance {param($Target,$Domain,$Server) return [pscustomobject]@{GpoInheritanceBlocked=$false;InheritedGpoLinks=@();GpoLinks=@(if($script:links.ContainsKey($Target)){$script:links[$Target]})} }
 function Get-ADComputer {param($SearchBase,$SearchScope,$Filter,$Server,$Properties,$ResultSetSize) return [pscustomobject]@{DNSHostName='test-pc.example.com';OperatingSystem='Windows Server 2019';Enabled=$true} }
 function Backup-GPO {param($Guid,$Path,$Domain,$Server,$Comment)
   $id=[guid]::NewGuid();$files=@{};Get-ChildItem -LiteralPath $script:folder -Recurse -File|ForEach-Object{$files[$_.FullName]=[IO.File]::ReadAllBytes($_.FullName)}
@@ -52,17 +52,19 @@ function Get-ADReplicationPartnerMetadata {param($Target,$Scope,$ErrorAction) re
 $worker=Join-Path $PSScriptRoot '../backend/PowerShell/GpoWorkflow.Worker.ps1'
 $module=Get-Content (Join-Path $PSScriptRoot '../backend/PowerShell/SecurityTemplate.psm1') -Raw
 $cfg=[pscustomobject]@{domain='example.com';domainController=($env:COMPUTERNAME+'.example.com');backupPath=(Join-Path $script:fixture 'backups')}
-function Invoke-Worker($Operation,$Data){$result=& $worker -Operation $Operation -Configuration $cfg -Data $Data -SecurityModule $module;return ($result|ConvertTo-Json -Depth 40|ConvertFrom-Json)}
+function Invoke-Worker($Operation,$Data){if(!$Data.ContainsKey('consent')){$Data.consent=$null};$result=& ([scriptblock]::Create([IO.File]::ReadAllText($worker))) -Operation $Operation -Configuration $cfg -Data $Data -SecurityModule $module;return ($result|ConvertTo-Json -Depth 40|ConvertFrom-Json)}
 $inventory=Invoke-Worker 'gpoInventory' @{}
 Check ($inventory.gpos.Count -eq 1 -and $script:writes -eq 0) 'Inventory wrote or failed'
+$readiness=Invoke-Worker 'gpoReadiness' @{}
+Check ($readiness.checks.Count -ge 5 -and $readiness.ready) 'Readiness must return typed checks without throwing'
 $selection=[pscustomobject]@{gpoId=$script:gpoId.ToString();scopeDn=$script:domainDn;setting='1.1.4';value=14;accountScope='Domain';refresh='Pdc';firstLink=$true;customValue=$null}
-$mapping=[pscustomobject]@{id='1.1.4';controlId='1.1.4';title='Minimum password length';automation='Automated';handler='SecurityTemplate';scope='Domain';domainPolicySensitive=$true;requiresInput=$false;allowValueOverride=$true;minimum=0;maximum=20;source='test mapping';warnings=@();items=@([pscustomobject]@{section='System Access';key='MinimumPasswordLength';name=$null;type='Integer';value=@('14');guid=$null;state=$null;mask=$null})}
+$mapping=[pscustomobject]@{id='1.1.4';controlId='1.1.4';title='Minimum password length';automation='Automated';handler='SecurityTemplate';scope='Domain';domainPolicySensitive=$true;requiresInput=$false;allowValueOverride=$true;minimum=0;maximum=20;comparator='>=';source='test mapping';warnings=@();items=@([pscustomobject]@{section='System Access';key='MinimumPasswordLength';name=$null;type='Integer';value=@('14');guid=$null;state=$null;mask=$null})}
 $preview=Invoke-Worker 'gpoPreview' @{selection=$selection;mapping=$mapping}
 Check ($preview.previousValue -eq '8' -and $script:writes -eq 0) 'Read-only preview failed'
 $plan=[pscustomobject]@{id=[guid]::NewGuid().ToString('N');domain='example.com';domainController=$cfg.domainController;selection=$selection;preview=$preview}
 $result=Invoke-Worker 'gpoApply' @{plan=$plan;mapping=$mapping;previous=$null}
 Check ($result.state -eq 'PUBLISHED' -and $result.gpoPublished -and $result.linkVerified) ('Apply/link failed: '+($result|ConvertTo-Json -Compress -Depth 10))
-Check ($script:version -eq 1 -and $script:refreshCount -eq 1 -and $result.effectiveStatus -eq 'DOMAIN_VALUE_PENDING_OR_OVERRIDDEN') 'Version/refresh/effective status wrong'
+Check ($script:version -eq 1 -and $script:refreshCount -eq 1 -and $result.effectiveStatus -eq 'REPLICATION_PENDING' -and $null -ne $result.verification -and !$result.verification.replicationConverged) ('Version/refresh/effective status wrong: version='+$script:version+' refresh='+$script:refreshCount+' status='+$result.effectiveStatus)
 $updated=[IO.File]::ReadAllText((Join-Path $infDir 'GptTmpl.inf'))
 Check ($updated -match 'PasswordHistorySize = 12' -and $updated -match 'SeNetworkLogonRight = \*S-1-5-11') 'Unrelated security settings changed'
 $verified=Invoke-Worker 'gpoVerify' @{plan=$plan;mapping=$mapping;previous=$result}

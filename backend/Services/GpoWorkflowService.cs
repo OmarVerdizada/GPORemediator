@@ -28,6 +28,7 @@ public sealed class GpoWorkflowService(IConfiguration config,Store store,Operati
     {
         Expire();
         RequireReal();
+        request.UserName=WindowsAccount.Normalize(request.UserName);
         if(connections.Count>=32) throw new PolicyException("GPO_CONNECTION_LIMIT","Too many active GPO sessions. Disconnect unused sessions or wait ten minutes.");
         if(request.UserName.Length>256||request.Password.Length>1024||request.UserName.IndexOfAny(['\r','\n','\0'])>=0) throw new PolicyException("CREDENTIAL_FORMAT","Invalid login fields.");
         if(string.IsNullOrEmpty(request.Password)!=string.IsNullOrEmpty(request.UserName)) throw new PolicyException("CREDENTIAL_PAIR_REQUIRED","Supply both username and password, or leave both empty to use the service identity.");
@@ -123,7 +124,9 @@ public sealed class GpoWorkflowService(IConfiguration config,Store store,Operati
             result=await Run<GpoWorkflowResult>("gpo"+char.ToUpperInvariant(operation[0])+operation[1..],c,new{plan,mapping,previous=previous?.Result,consent=operation=="apply"?consent:previous?.Approval},CancellationToken.None);
             run=run with{Result=result,UpdatedAt=PolicyValues.Now()};
         }catch(Exception ex){
-            var safe=ex is PolicyException;
+            // A transport/timeout failure can occur after a remote write began.
+            // Never label an unknown outcome as a safe failure.
+            var safe=ex is PolicyException pex && new[]{"GPO_BUSY","GPO_ALREADY_STARTED","GPO_PLAN_STALE","GPO_PLAN_EXPIRED","ROLLBACK_CONFLICT","ROLLBACK_NOT_AVAILABLE","PREFLIGHT_FAILED"}.Contains(pex.Code);
             run=run with{Result=result with{State=safe?"FAILED_SAFE":"REVIEW_REQUIRED",Message=ex is PolicyException p?p.Code+": "+p.Message:"Execution interrupted. Inspect the DC backup/manifest before recovery."},UpdatedAt=PolicyValues.Now()};
         }
         finally{store.Put("gpo_runs",id,run,run.Result.State);gate.EndOperation();}

@@ -1,19 +1,12 @@
-# GPO Remediator — Local Enterprise UI
+# GPO Remediator — 2026-09-28
 
-## Current release
-- Certificate-free local-only HTTP (`127.0.0.1`) for both Setup and Windows/AD mode.
-- No inbound LAN binding and no Windows Firewall listener is required.
-- New enterprise benchmark workspace with compact CIS domain navigation, searchable controls, remediation detail panel, approval flow, and verification timeline.
-- New desktop Control Center visual design.
-- Runtime SDK is not downloaded during normal starts. This package requires one one-time backend rebuild because the transport model changed from HTTPS to local HTTP; after that, the local runtime marker prevents repeat downloads/builds.
-- Existing real GPO execution, backup, link, verify, gpupdate and rollback scripts remain the execution layer.
+- A single standalone interface replaces the competing legacy React shell. Removed unsupported legacy API requests and duplicate navigation.
+- Simplified dashboard: connect, select a control, review results. Accurate totals: 405 controls, 401 automated, four read-only.
+- Bounded requests, visible progress, cancelable read requests, recoverable startup errors and resilient local preferences.
+- Restored GPO selection, impact, verification and history helpers. Numeric overrides survive redraws; fixed-value controls send valid integer payloads.
+- Windows account slash normalization and case-insensitive reading of existing configuration files. Settings now wait for the restarted process instead of navigating after an arbitrary delay.
+- Corrected Windows PowerShell readiness array serialization, single-item mapping checks and atomic file replacement. Verification details are retained in operation results.
+- Stage-specific connection diagnostics. Domain sign-in and readiness are shown separately; uncertain execution outcomes require review.
+- Source fingerprints prevent stale binaries from being reused. Rebuilds preserve saved runtime configuration and data. UI responses are not cached.
 
-## Enterprise UX expansion
-- Added environment health / pre-flight readiness dashboard with explicit pending probe states.
-- Added saved benchmark views, favorites and bulk-remediation selection UX.
-- Added dry-run / what-if presentation and before/after change diff.
-- Added policy conflict graph and affected-object explorer placeholders without fabricating live probe results.
-- Added local exception-management UX and contextual control guidance.
-- Added evidence-pack JSON export for recorded control operations.
-- Added notification center, Ctrl+K command palette and keyboard search shortcut.
-- Existing real AD/GPO execution APIs and local-only HTTP transport remain unchanged.
+Validation: .NET invariants, isolated production PowerShell worker, recovery/configuration integration, browser workflow fixtures and real packaged-backend browser smoke tests. Real domain publication and effective-policy convergence still require the Windows/AD acceptance checklist.

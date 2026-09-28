@@ -30,6 +30,7 @@ internal sealed class WindowsPowerShellExecutor(ILogger logger)
         {
             "gpoApply" or "gpoRollback" => TimeSpan.FromMinutes(16),
             "gpoPreview" or "gpoVerify" => TimeSpan.FromMinutes(10),
+            "gpoInventory" or "gpoReadiness" => TimeSpan.FromSeconds(90),
             _ when gpo => TimeSpan.FromMinutes(6),
             _ => TimeSpan.FromMinutes(4)
         };
@@ -66,7 +67,7 @@ internal sealed class WindowsPowerShellExecutor(ILogger logger)
         {
             if (!process.HasExited) process.Kill(entireProcessTree: true);
             if (ct.IsCancellationRequested) throw;
-            throw new PolicyException("WINDOWS_TIMEOUT", $"Windows operation exceeded its {operationTimeout.TotalMinutes:0}-minute safety timeout. A remote operation may have partially completed; inspect the recorded state before retrying a write.");
+            throw new PolicyException("WINDOWS_TIMEOUT", $"Windows operation exceeded its {operationTimeout.TotalSeconds:0}-second safety timeout. Check DC reachability and Kerberos/WinRM. A remote operation may have partially completed; inspect the recorded state before retrying a write.");
         }
         catch (PolicyException ex)
         {

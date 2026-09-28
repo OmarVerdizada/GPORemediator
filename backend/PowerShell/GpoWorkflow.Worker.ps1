@@ -142,13 +142,13 @@ function Numeric-Complies($Current,$Desired,[string]$Comparator){
 function Mapping-Matches([string]$Id,$Map,$S){
     foreach($item in Mapping-Items $Map){
       $cur=Get-ItemCurrent $Id $Map $item;$want=Desired-Normalized $Map $item $S
-      if([bool]$Map.allowValueOverride -and (Mapping-Items $Map).Count -eq 1 -and ![string]::IsNullOrWhiteSpace([string]$Map.comparator)){if(!(Numeric-Complies $cur $want ([string]$Map.comparator))){return $false}}
+      if([bool]$Map.allowValueOverride -and @(Mapping-Items $Map).Count -eq 1 -and ![string]::IsNullOrWhiteSpace([string]$Map.comparator)){if(!(Numeric-Complies $cur $want ([string]$Map.comparator))){return $false}}
       elseif([string]$cur -cne [string]$want){return $false}
     }
     return $true
 }
 function Mapping-Display([string]$Id,$Map,$S,[bool]$Desired=$false){
-    $parts=@();foreach($item in Mapping-Items $Map){$label=[string]$(if($item.name){$item.name}elseif($item.key){$item.key}else{$item.guid});$v=if($Desired){Desired-Normalized $Map $item $S}else{Get-ItemCurrent $Id $Map $item};if((Mapping-Items $Map).Count -eq 1){return $(if($null -eq $v){$null}else{[string]$v})};$parts+=($label+'='+$(if($null -eq $v){'<not configured>'}else{[string]$v}))};return ($parts -join '; ')
+    $parts=@();foreach($item in Mapping-Items $Map){$label=[string]$(if($item.name){$item.name}elseif($item.key){$item.key}else{$item.guid});$v=if($Desired){Desired-Normalized $Map $item $S}else{Get-ItemCurrent $Id $Map $item};if(@(Mapping-Items $Map).Count -eq 1){return $(if($null -eq $v){$null}else{[string]$v})};$parts+=($label+'='+$(if($null -eq $v){'<not configured>'}else{[string]$v}))};return ($parts -join '; ')
 }
 function Fingerprint([string]$Id,[string]$ScopeDn){
     $ad=Gpo-Ad $Id;$folder=Gpo-Folder $Id
@@ -187,7 +187,7 @@ function Environment-Status {
     try{$root=[IO.Path]::GetFullPath([string]$cfg.backupPath);if($root -match '^[A-Za-z]:\\'){if(!(Test-Path -LiteralPath $root)){New-Item -ItemType Directory -Path $root -Force|Out-Null};$probe=Join-Path $root ('.write-probe-'+[guid]::NewGuid().ToString('N'));[IO.File]::WriteAllText($probe,'probe');Remove-Item -LiteralPath $probe -Force;Add-Check 'backup' 'Backup repository' 'PASS' $root}else{Add-Check 'backup' 'Backup repository' 'FAIL' 'Backup path must be a local drive path on the selected DC.'}}catch{Add-Check 'backup' 'Backup repository' 'FAIL' 'Backup directory is not writable by the execution identity.'}
     try{$bad=@(Get-ADReplicationPartnerMetadata -Target $env:COMPUTERNAME -Scope Server -ErrorAction Stop|Where-Object{$_.LastReplicationResult -ne 0});if($bad.Count){Add-Check 'replication' 'AD replication' 'WARN' ($bad.Count.ToString()+' replication partner(s) report a non-zero last result.') $false}else{Add-Check 'replication' 'AD replication' 'PASS' 'Local DC replication metadata reports no failed last result.' $false}}catch{Add-Check 'replication' 'AD replication' 'WARN' 'Replication metadata could not be read; Apply will still verify AD/SYSVOL versions for the selected GPO.' $false}
     $ready=@($checks|Where-Object{$_.required -and $_.state -eq 'FAIL'}).Count -eq 0
-    return @{domain=$domain.DNSRoot;domainController=$dc.HostName;executionUser=[Security.Principal.WindowsIdentity]::GetCurrent().Name;ready=$ready;checks=@($checks);checkedAt=[DateTimeOffset]::UtcNow.ToString('O')}
+    return @{domain=$domain.DNSRoot;domainController=$dc.HostName;executionUser=[Security.Principal.WindowsIdentity]::GetCurrent().Name;ready=$ready;checks=$checks.ToArray();checkedAt=[DateTimeOffset]::UtcNow.ToString('O')}
 }
 function Token-Sids {
     $id=[Security.Principal.WindowsIdentity]::GetCurrent();$s=@([string]$id.User.Value);$s+=@($id.Groups|ForEach-Object{[string]$_.Value});return @($s|Sort-Object -Unique)
@@ -219,7 +219,7 @@ function Selection-Preflight($S,$Map){
     }catch{Add-Specific 'link-write' 'GPO link authority' 'WARN' 'Target gPLink ACL could not be evaluated.' $false}
     Add-Specific 'handler' 'Remediation handler' 'PASS' ([string]$Map.handler+' · '+[string]$Map.source)
     $ready=@($checks|Where-Object{$_.required -and $_.state -eq 'FAIL'}).Count -eq 0
-    return @{domain=$base.domain;domainController=$base.domainController;executionUser=$base.executionUser;ready=$ready;checks=@($checks);checkedAt=[DateTimeOffset]::UtcNow.ToString('O')}
+    return @{domain=$base.domain;domainController=$base.domainController;executionUser=$base.executionUser;ready=$ready;checks=$checks.ToArray();checkedAt=[DateTimeOffset]::UtcNow.ToString('O')}
 }
 function Impact-Details($S,$Map,$Gpo,$Scope,[string[]]$LinkScopes){
     $inherit=Get-GPInheritance -Target $Scope.dn -Domain $cfg.domain -Server $cfg.domainController;$conflicts=@();$allLinks=@($inherit.GpoLinks)+@($inherit.InheritedGpoLinks);$desired=Mapping-Display $S.gpoId $Map $S $true
@@ -241,7 +241,7 @@ function Preview($S,$Map){
     $contentMatches=Mapping-Matches $S.gpoId $Map $S;$linkMatches=$null -ne $existing -and $existing.enabled -and (!$S.firstLink -or $existing.order -eq 1);$desired=Mapping-Display $S.gpoId $Map $S $true
     return @{gpo=(Gpo-Choice $gpo);scope=$scope;previousValue=(Mapping-Display $S.gpoId $Map $S $false);desiredValue=$desired;noChange=($contentMatches -and $linkMatches);fingerprint=(Fingerprint $S.gpoId $scope.dn);scopeLinks=$raw;existingLink=$existing;refreshComputers=$computers;warnings=$warnings;impact=$impact;preflight=$preflight}
 }
-function Atomic-Text([string]$Path,[string]$Text,[Text.Encoding]$Encoding){$null=[IO.Directory]::CreateDirectory([IO.Path]::GetDirectoryName($Path));$temp=$Path+'.'+[guid]::NewGuid().ToString('N')+'.tmp';try{[IO.File]::WriteAllText($temp,$Text,$Encoding);if([IO.File]::Exists($Path)){[IO.File]::Replace($temp,$Path,$null)}else{[IO.File]::Move($temp,$Path)}}finally{if([IO.File]::Exists($temp)){[IO.File]::Delete($temp)}}}
+function Atomic-Text([string]$Path,[string]$Text,[Text.Encoding]$Encoding){$null=[IO.Directory]::CreateDirectory([IO.Path]::GetDirectoryName($Path));$temp=$Path+'.'+[guid]::NewGuid().ToString('N')+'.tmp';try{[IO.File]::WriteAllText($temp,$Text,$Encoding);if([IO.File]::Exists($Path)){[IO.File]::Replace($temp,$Path,[System.Management.Automation.Language.NullString]::Value)}else{[IO.File]::Move($temp,$Path)}}finally{if([IO.File]::Exists($temp)){[IO.File]::Delete($temp)}}}
 function Assert-VersionSync([string]$Id){$ad=Gpo-Ad $Id;$gptPath=Join-Path (Gpo-Folder $Id) 'GPT.INI';$gpt=[IO.File]::ReadAllText($gptPath);$adVersion=[BitConverter]::ToUInt32([BitConverter]::GetBytes([int]$ad.versionNumber),0);$gptVersion=[uint32](Get-TemplateEntry $gpt 'General' 'Version');if($gptVersion -ne $adVersion){Fail 'REPLICATION_PENDING' 'AD and SYSVOL GPO versions differ. Wait for replication before applying.'};return @{ad=$ad;gptPath=$gptPath;gpt=$gpt;version=$adVersion}}
 function Bump-ComputerVersion([string]$Id,[ValidateSet('Security','Audit')][string]$Extension){
     $v=Assert-VersionSync $Id;$next=Get-NextComputerVersion ([uint32]$v.version)
@@ -334,7 +334,7 @@ function Verify-Published($Plan,$Map,[bool]$CheckEndpoints=$false){
 }
 function Run-Directory($Plan){if($Plan.id -notmatch '^[a-f0-9]{32}$' -or $Plan.domain -ine $cfg.domain -or $Plan.domainController -ine $cfg.domainController){Fail 'PLAN_CONTEXT_CHANGED' 'Plan context does not match the selected DC/domain.'};$root=[IO.Path]::GetFullPath([string]$cfg.backupPath);if($root -notmatch '^[A-Za-z]:\\'){Fail 'BACKUP_PATH_INVALID' 'A local backup path on the selected DC is required.'};return Join-Path $root ('GpoWorkflow\'+$Plan.id)}
 function Save-Manifest($Manifest,[string]$Directory){Atomic-Text (Join-Path $Directory 'manifest.json') ($Manifest|ConvertTo-Json -Depth 50) ([Text.UTF8Encoding]::new($false))}
-function Result([string]$State,[string]$Message,$Manifest,$V,$Refresh){$verification=$null;$endpointChecks=@();if($V -and $V.PSObject.Properties['verification']){$verification=$V.verification};if($V -and $V.PSObject.Properties['endpointChecks']){$endpointChecks=@($V.endpointChecks)};$backupId=$null;$backupDirectory=$null;$postFingerprint=$null;if($Manifest){$backupId=$Manifest.backupId;$backupDirectory=$Manifest.directory;$postFingerprint=$Manifest.postFingerprint};return @{state=$State;message=$Message;backupId=$backupId;backupDirectory=$backupDirectory;postFingerprint=$postFingerprint;gpoPublished=[bool]$V.published;linkVerified=[bool]$V.linked;refreshResults=@($Refresh);effectiveStatus=[string]$V.effective;verification=$verification;endpointChecks=$endpointChecks}}
+function Result([string]$State,[string]$Message,$Manifest,$V,$Refresh){$verification=$null;$endpointChecks=@();if($V -and (($V -is [Collections.IDictionary] -and $V.Contains('verification')) -or $V.PSObject.Properties['verification'])){$verification=$V.verification};if($V -and (($V -is [Collections.IDictionary] -and $V.Contains('endpointChecks')) -or $V.PSObject.Properties['endpointChecks'])){$endpointChecks=@($V.endpointChecks)};$backupId=$null;$backupDirectory=$null;$postFingerprint=$null;if($Manifest){$backupId=$Manifest.backupId;$backupDirectory=$Manifest.directory;$postFingerprint=$Manifest.postFingerprint};return @{state=$State;message=$Message;backupId=$backupId;backupDirectory=$backupDirectory;postFingerprint=$postFingerprint;gpoPublished=[bool]$V.published;linkVerified=[bool]$V.linked;refreshResults=@($Refresh);effectiveStatus=[string]$V.effective;verification=$verification;endpointChecks=$endpointChecks}}
 
 switch($Operation){
     'gpoReadiness'{return Environment-Status}

@@ -71,7 +71,7 @@ app.Use(async(context,next)=>
     if(real)
     {
         if(context.User.Identity?.IsAuthenticated!=true) { await context.ChallengeAsync(); return; }
-        var allowed=builder.Configuration.GetSection("Windows:AllowedOperators").Get<string[]>()??[];
+        var allowed=(builder.Configuration.GetSection("Windows:AllowedOperators").Get<string[]>()??[]).Select(WindowsAccount.Normalize);
         if(!allowed.Contains(context.User.Identity.Name??"",StringComparer.OrdinalIgnoreCase)) throw new PolicyException("OPERATOR_DENIED","Your Windows identity is not in the configured remediation operator allowlist.");
     }
     if(setup && context.Request.Path.StartsWithSegments("/api") &&
@@ -117,10 +117,12 @@ SetupConfigView CurrentSetupConfig()
         try
         {
             using var doc=JsonDocument.Parse(File.ReadAllText(path)); var root=doc.RootElement;
-            var win=root.TryGetProperty("Windows",out var w)?w:default;
-            string Text(JsonElement element,string name,string fallback="")=>element.ValueKind==JsonValueKind.Object&&element.TryGetProperty(name,out var value)&&value.ValueKind==JsonValueKind.String?(value.GetString()??fallback):fallback;
-            bool Flag(JsonElement element,string name)=>element.ValueKind==JsonValueKind.Object&&element.TryGetProperty(name,out var value)&&value.ValueKind==JsonValueKind.True;
-            string[] Array(JsonElement element,string name)=>element.ValueKind==JsonValueKind.Object&&element.TryGetProperty(name,out var value)&&value.ValueKind==JsonValueKind.Array?value.EnumerateArray().Where(v=>v.ValueKind==JsonValueKind.String).Select(v=>v.GetString()!).Where(v=>!string.IsNullOrWhiteSpace(v)).ToArray():[];
+            JsonElement Property(JsonElement element,string name)=>element.ValueKind==JsonValueKind.Object
+                ?element.EnumerateObject().FirstOrDefault(p=>p.Name.Equals(name,StringComparison.OrdinalIgnoreCase)).Value:default;
+            var win=Property(root,"Windows");
+            string Text(JsonElement element,string name,string fallback="")=>Property(element,name) is var value&&value.ValueKind==JsonValueKind.String?(value.GetString()??fallback):fallback;
+            bool Flag(JsonElement element,string name)=>Property(element,name).ValueKind==JsonValueKind.True;
+            string[] Array(JsonElement element,string name)=>Property(element,name) is var value&&value.ValueKind==JsonValueKind.Array?value.EnumerateArray().Where(v=>v.ValueKind==JsonValueKind.String).Select(v=>v.GetString()!).Where(v=>!string.IsNullOrWhiteSpace(v)).ToArray():[];
             return new SetupConfigView(Text(root,"Urls","http://127.0.0.1:5080"),Text(win,"Domain"),Text(win,"DomainController"),Array(win,"ApprovedGpoIds"),Array(win,"AuthorizedOus"),Array(win,"AllowedHosts"),Array(win,"AllowedOperators"),Text(win,"BackupPath",@"C:\ProgramData\GpoRemediator\Backups"),Flag(win,"EnableWrites"),"backend/appsettings.Local.json",true);
         }
         catch(JsonException) { }
@@ -186,10 +188,10 @@ app.MapPost("/api/setup/config",(SetupConfigRequest request,HttpContext context,
     var localUrl=$"http://127.0.0.1:{context.Request.Host.Port??5080}";
     var domain=request.Domain.Trim().ToLowerInvariant(); var dc=request.DomainController.Trim().ToLowerInvariant();
     if(!ValidHostname(domain)||!domain.Contains('.')||!ValidHostname(dc)||!dc.EndsWith("."+domain,StringComparison.OrdinalIgnoreCase)) throw new PolicyException("INVALID_DOMAIN","Domain and writable DC must be exact DNS names in the same domain.");
-    var gpos=CleanList(request.ApprovedGpoIds); var ous=CleanList(request.AuthorizedOus); var hosts=CleanList(request.AllowedHosts); var operators=CleanList(request.AllowedOperators);
+    var gpos=CleanList(request.ApprovedGpoIds); var ous=CleanList(request.AuthorizedOus); var hosts=CleanList(request.AllowedHosts); var operators=CleanList(request.AllowedOperators).Select(WindowsAccount.Normalize).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
     // GPOs and OUs are discovered after authentication; stale manual allowlist values are deliberately discarded.
     gpos=[]; ous=[]; hosts=[];
-    if(operators.Length==0||operators.Any(x=>!Regex.IsMatch(x,@"^[^\\/\s]+\\[^\\/\s]+$"))) throw new PolicyException("INVALID_OPERATOR_ALLOWLIST","Use exact Windows identities such as PROSOL\\omar.verdizada.");
+    if(operators.Length==0||operators.Any(x=>!WindowsAccount.IsOperator(x))) throw new PolicyException("INVALID_OPERATOR_ALLOWLIST","Enter an account as DOMAIN\\user. Use the detected Windows account if unsure.");
     if(real&&!operators.Contains(Operator(context),StringComparer.OrdinalIgnoreCase)) throw new PolicyException("OPERATOR_SELF_LOCKOUT","The active Windows operator must remain in AllowedOperators when saving a live configuration.");
     var backup=request.BackupPath.Trim(); if(!Regex.IsMatch(backup,@"^[A-Za-z]:\\")||backup.IndexOfAny(['\r','\n','\0'])>=0) throw new PolicyException("INVALID_BACKUP_PATH","Use a local absolute Windows path such as C:\\ProgramData\\GpoRemediator\\Backups.");
     var output=new
@@ -198,7 +200,7 @@ app.MapPost("/api/setup/config",(SetupConfigRequest request,HttpContext context,
         Windows=new{Workflow="GpoRemediation",EnableWrites=false,Domain=domain,DomainController=dc,ApprovedGpoIds=gpos,AuthorizedOus=ous,AllowedHosts=hosts,AllowedOperators=operators,AllowCreateGpo=false,BackupPath=backup}
     };
     var path=Path.Combine(builder.Environment.ContentRootPath,"appsettings.Local.json"); var temp=path+".tmp";
-    ConfigureService(request.AutoRestart,()=> { File.WriteAllText(temp,JsonSerializer.Serialize(output,new JsonSerializerOptions(JsonDefaults.Options){WriteIndented=true})); File.Move(temp,path,true);
+    ConfigureService(request.AutoRestart,()=> { File.WriteAllText(temp,JsonSerializer.Serialize(output,new JsonSerializerOptions{WriteIndented=true})); File.Move(temp,path,true);
     store.Audit("SETUP_CONFIG_SAVED",Operator(context),details:new{domain,domainController=dc,gpoCount=gpos.Length,ouCount=ous.Length,hostCount=hosts.Length,operatorCount=operators.Length,writes=false,autoRestart=request.AutoRestart});
     },lifetime);
     return new{saved=true,restartRequired=true,restartScheduled=request.AutoRestart,writesEnabled=false,path="backend/appsettings.Local.json"};
@@ -216,8 +218,9 @@ app.MapPost("/api/setup/write-mode",async(WriteModeRequest request,HttpContext c
     var path=Path.Combine(builder.Environment.ContentRootPath,"appsettings.Local.json");
     if(!File.Exists(path)) throw new PolicyException("CONFIG_NOT_FOUND","Save the Windows configuration first.");
     var node=JsonNode.Parse(File.ReadAllText(path))?.AsObject()??throw new PolicyException("INVALID_CONFIG","The Windows configuration file is invalid JSON.");
-    var windows=node["Windows"]?.AsObject()??throw new PolicyException("INVALID_CONFIG","The Windows configuration section is missing.");
-    windows["EnableWrites"]=request.Enable;
+    var windows=(node["Windows"]??node["windows"])?.AsObject()??throw new PolicyException("INVALID_CONFIG","The Windows configuration section is missing.");
+    var writeKey=windows.Select(p=>p.Key).FirstOrDefault(k=>k.Equals("EnableWrites",StringComparison.OrdinalIgnoreCase))??"EnableWrites";
+    windows[writeKey]=request.Enable;
     ConfigureService(request.AutoRestart,()=> { var temp=path+".tmp"; File.WriteAllText(temp,node.ToJsonString(new JsonSerializerOptions(JsonDefaults.Options){WriteIndented=true})); File.Move(temp,path,true);
     store.Audit(request.Enable?"WRITE_MODE_ENABLE_REQUESTED":"WRITE_MODE_DISABLE_REQUESTED",Operator(context),details:new{enabled=request.Enable,autoRestart=request.AutoRestart});
     },lifetime);
@@ -236,7 +239,8 @@ var frontendPath=Path.GetFullPath(Path.Combine(builder.Environment.ContentRootPa
 if(Directory.Exists(frontendPath))
 {
     var files=new Microsoft.Extensions.FileProviders.PhysicalFileProvider(frontendPath);
-    app.UseDefaultFiles(new DefaultFilesOptions{FileProvider=files}); app.UseStaticFiles(new StaticFileOptions{FileProvider=files});
+    app.UseDefaultFiles(new DefaultFilesOptions{FileProvider=files});
+    app.UseStaticFiles(new StaticFileOptions{FileProvider=files,OnPrepareResponse=context=>context.Context.Response.Headers.CacheControl="no-store"});
     app.MapFallback(async context=> { if(context.Request.Path.StartsWithSegments("/api")) {context.Response.StatusCode=404; await context.Response.WriteAsJsonAsync(new{code="NOT_FOUND",message="API route does not exist."});} else { context.Response.ContentType="text/html; charset=utf-8"; await context.Response.SendFileAsync(Path.Combine(frontendPath,"index.html")); } });
 }
 await app.RunAsync();

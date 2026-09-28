@@ -66,6 +66,7 @@ function Test-PackagedRelease {
         $runtime,
         (Join-Path $PSScriptRoot 'frontend\dist\index.html'),
         (Join-Path $PSScriptRoot 'frontend\dist\workspace.js'),
+        (Join-Path $PSScriptRoot 'frontend\dist\client.js'),
         (Join-Path $PSScriptRoot 'frontend\dist\workspace.css'),
         (Join-Path $PSScriptRoot 'frontend\dist\benchmark-v4.json')
     )
@@ -73,9 +74,8 @@ function Test-PackagedRelease {
 }
 function Ensure-CurrentBuild {
     # Normal operators run the signed/packaged self-contained runtime directly.
-    # Source fingerprint checks belong to Build/Test/Repair workflows and must not
-    # turn every ordinary startup into a development build or an SDK download.
-    if (!$Repair -and $Mode -notin @('Build','Test') -and (Test-PackagedRelease) -and (Test-Path -LiteralPath $runtimeGeneration)) {
+    # Fingerprint comparisons are local reads. Rebuild only when packaged code is stale.
+    if (!$Repair -and $Mode -notin @('Build','Test') -and (Test-PackagedRelease) -and (Test-Path -LiteralPath $runtimeGeneration) -and (Test-PortableBackendMatchesSource) -and (Test-FrontendDistMatchesSource)) {
         Write-Log 'Packaged local-only runtime: ready (no SDK download required).'
         return
     }
