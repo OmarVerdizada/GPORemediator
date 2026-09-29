@@ -92,20 +92,5 @@ Test("Policy hash is stable for the same object", () =>
     Check(DateTimeOffset.TryParse(PolicyValues.Now(), out _), "Timestamp is not ISO parseable");
 });
 
-Test("Endpoint refresh selection is bounded and explicit", () =>
-{
-    var m=ProductionGpoMappings.Settings.First(x=>x.Writable&&!x.RequiresInput);
-    var s=new GpoSelection(Guid.NewGuid().ToString(),"DC=example,DC=com",m.Id,m.Suggested??0);
-    ProductionGpoMappings.Validate(s);
-    Reject("REFRESH_TARGET_REQUIRED",()=>ProductionGpoMappings.Validate(s with{RunGpUpdate=true}));
-    Reject("ENDPOINT_SELECTION_REQUIRED",()=>ProductionGpoMappings.Validate(s with{Refresh="Selected"}));
-    Reject("ENDPOINT_SELECTION_REQUIRED",()=>ProductionGpoMappings.Validate(s with{Refresh="Selected",EndpointHosts=Enumerable.Repeat("pc.example.com",101).ToArray()}));
-    foreach(var invalid in new[]{"pc","pc.example.com'","pc..example.com","-pc.example.com","pc.example.com\n"})
-        Reject("ENDPOINT_NAME_INVALID",()=>ProductionGpoMappings.Validate(s with{Refresh="Selected",EndpointHosts=[invalid]}));
-    ProductionGpoMappings.Validate(s with{Refresh="Selected",RunGpUpdate=true,EndpointHosts=["pc.example.com"]});
-    var legacy=JsonSerializer.Deserialize<GpoSelection>("{\"GpoId\":\"x\",\"ScopeDn\":\"x\",\"Setting\":\"x\",\"Value\":0}")!;
-    Check(!legacy.RunGpUpdate&&legacy.EndpointHosts is null,"Legacy plans enabled refresh");
-});
-
 Console.WriteLine($"{passed} passed, {failed} failed");
 Environment.ExitCode = failed == 0 ? 0 : 1;

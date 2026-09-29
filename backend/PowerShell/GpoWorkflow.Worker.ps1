@@ -158,7 +158,7 @@ function Fingerprint([string]$Id,[string]$ScopeDn){
 }
 function Validate-Selection($S,$Map){
     if([string]$Map.automation -ne 'Automated' -or [string]$Map.handler -eq 'Manual'){Fail 'GPO_MANUAL_ONLY' 'This CIS control is read-only in the production mapping registry and cannot be remediated automatically.'}
-    if($S.refresh -notin @('None','Pdc','Scope','Selected')){Fail 'GPO_OPTIONS_INVALID' 'Unknown refresh option.'}
+    if($S.refresh -notin @('None','Pdc','Scope')){Fail 'GPO_OPTIONS_INVALID' 'Unknown refresh option.'}
     $scope=Scope $S.scopeDn;$gpo=Get-GPO -Guid ([guid]$S.gpoId) -Domain $cfg.domain -Server $cfg.domainController;$status=[string]$gpo.GpoStatus
     if($status -eq 'AllSettingsDisabled'){Fail 'GPO_SETTINGS_DISABLED' 'All settings are disabled in this GPO.'}
     if([string]$Map.scope -eq 'User' -and $status -eq 'UserSettingsDisabled'){Fail 'USER_POLICY_DISABLED' 'User settings are disabled in this GPO.'}
@@ -232,31 +232,9 @@ function Impact-Details($S,$Map,$Gpo,$Scope,[string[]]$LinkScopes){
     $enabled=@($objects|Where-Object Enabled);$servers=@($enabled|Where-Object{$_.OperatingSystem -match 'Server'});$workstations=@($enabled|Where-Object{$_.OperatingSystem -notmatch 'Server'});$sample=@($enabled|Where-Object DNSHostName|Select-Object -First 25 -ExpandProperty DNSHostName)
     return @{inheritance=$(if([bool]$inherit.GpoInheritanceBlocked){'BLOCKED'}else{'NORMAL'});blockInheritance=[bool]$inherit.GpoInheritanceBlocked;conflicts=@($conflicts);affectedObjects=@{computers=$enabled.Count;servers=$servers.Count;workstations=$workstations.Count;disabled=@($objects|Where-Object{-not $_.Enabled}).Count;sampleHosts=$sample;truncated=$truncated;users=$users.Count};existingLinkScopes=@($LinkScopes);securityFiltering=$permissions;wmiFilter=$(if($ad.gPCWQLFilter){[string]$ad.gPCWQLFilter}else{$null})}
 }
-function Resolve-RefreshTargets($S,$Scope){
-    if($S.refresh -eq 'None'){return @()}
-    if($S.refresh -eq 'Pdc'){return @([string]$domain.PDCEmulator)}
-    if($S.refresh -eq 'Scope'){
-        $targets=@(Get-ADComputer -SearchBase $Scope.dn -SearchScope Subtree -Filter {Enabled -eq $true} -Server $cfg.domainController -Properties DNSHostName -ResultSetSize 101)
-        if($targets.Count -gt 100){Fail 'REFRESH_SCOPE_TOO_LARGE' 'More than 100 computers. Choose a smaller OU or selected endpoints.'}
-        if(@($targets|Where-Object{!$_.DNSHostName}).Count){Fail 'ENDPOINT_NAME_MISSING' 'An enabled computer has no DNS hostname. Select explicit endpoints or repair its AD record.'}
-        return @($targets|ForEach-Object{[string]$_.DNSHostName}|Sort-Object -Unique)
-    }
-    if($S.refresh -ne 'Selected'){Fail 'GPO_OPTIONS_INVALID' 'Unknown refresh option.'}
-    $requested=@(Read-Field $S 'endpointHosts' @())
-    if(!$requested.Count -or $requested.Count -gt 100){Fail 'ENDPOINT_SELECTION_REQUIRED' 'Choose 1 to 100 AD computer DNS names.'}
-    $resolved=@()
-    foreach($name in $requested){
-        if([string]$name -notmatch '^(?=.{1,253}$)[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?)+$'){Fail 'ENDPOINT_NAME_INVALID' 'Use fully qualified AD DNS hostnames.'}
-        $matches=@(Get-ADComputer -SearchBase $Scope.dn -SearchScope Subtree -Filter "DNSHostName -eq '$name'" -Server $cfg.domainController -Properties DNSHostName,Enabled -ResultSetSize 2)
-        if($matches.Count -ne 1 -or !$matches[0].Enabled -or [string]$matches[0].DNSHostName -ine [string]$name){Fail 'ENDPOINT_OUT_OF_SCOPE' 'Every selected hostname must identify one enabled AD computer inside the selected scope.'}
-        $resolved+=[string]$matches[0].DNSHostName
-    }
-    return @($resolved|Sort-Object -Unique)
-}
 function Preview($S,$Map){
     Validate-Selection $S $Map;$gpo=Get-GPO -Guid ([guid]$S.gpoId) -Domain $cfg.domain -Server $cfg.domainController;$scope=Scope $S.scopeDn;$raw=Scope-Links $scope.dn;$existing=Selected-Link $scope.dn $S.gpoId;$computers=@()
-    $computers=@(Resolve-RefreshTargets $S $scope)
-    if([bool](Read-Field $S 'runGpUpdate' $false) -and !$computers.Count){Fail 'REFRESH_TARGET_REQUIRED' 'Automatic gpupdate requires at least one resolved endpoint.'}
+    if($S.refresh -eq 'Pdc'){$computers=@([string]$domain.PDCEmulator)}elseif($S.refresh -eq 'Scope'){$targets=@(Get-ADComputer -SearchBase $scope.dn -SearchScope Subtree -Filter {Enabled -eq $true} -Server $cfg.domainController -Properties DNSHostName -ResultSetSize 101);if($targets.Count -gt 100){Fail 'REFRESH_SCOPE_TOO_LARGE' 'This scope has more than 100 computers. Choose PDC-only/no refresh or a smaller OU.'};$computers=@($targets|Where-Object{$_.DNSHostName}|ForEach-Object{[string]$_.DNSHostName}|Sort-Object -Unique)}
     $links=@();foreach($candidateScope in All-LinkScopes){if(Link $candidateScope.rawLinks $S.gpoId $candidateScope.dn){$links+=$candidateScope.dn}}
     $preflight=Selection-Preflight $S $Map;$impact=Impact-Details $S $Map $gpo $scope $links;$warnings=@('Changing this GPO affects all of its existing links, not only the selected link.',('Existing links: '+$(if($links.Count){$links -join '; '}else{'none'})),'Security filtering, WMI filtering, inheritance and precedence are analyzed but are never silently changed.','gpupdate scheduling does not by itself prove effective endpoint compliance.','A full GPO backup is created before any policy write; rollback is blocked after external changes.')+@($Map.warnings)
     foreach($c in @($impact.conflicts|Where-Object{$_.severity -eq 'HIGH'})){$warnings+=('High-impact conflict: '+$c.message)}
@@ -434,8 +412,6 @@ switch($Operation){
         $plan=$Data.plan;$map=$Data.mapping;$directory=Run-Directory $plan;$manifest=$null;if(Test-Path -LiteralPath (Join-Path $directory 'manifest.json')){$manifest=Get-Content -LiteralPath (Join-Path $directory 'manifest.json') -Raw|ConvertFrom-Json}
         $before=Verify-Published $plan $map $false;if(!$before.published -or !$before.linked){return Result 'DRIFT_DETECTED' 'gpupdate was blocked because the live GPO content or link no longer matches the requested state. Re-verify and remediate the drift first.' $manifest $before @()}
         $computers=@($plan.preview.refreshComputers|Where-Object{$_}|Sort-Object -Unique)
-        $currentTargets=@(Resolve-RefreshTargets $plan.selection (Scope $plan.selection.scopeDn))
-        if(($currentTargets -join '|') -ine ($computers -join '|')){Fail 'REFRESH_TARGETS_CHANGED' 'Refresh targets changed since preview. Prepare a fresh plan.'}
         if(!$computers.Count){return Result 'REFRESH_NOT_CONFIGURED' 'No gpupdate targets were selected in the plan. Generate a new plan and choose PDC emulator or selected-scope computers before Apply.' $manifest $before @()}
         $refresh=@();$target=if([string]$map.scope -eq 'User'){'User'}else{'Computer'}
         foreach($computer in $computers){try{Invoke-GPUpdate -Computer $computer -Target $target -Force -RandomDelayInMinutes 0 -ErrorAction Stop|Out-Null;$refresh+=@{computer=$computer;state='SCHEDULED';message=('gpupdate /target:'+$target.ToLowerInvariant()+' /force scheduled.')}}catch{$refresh+=@{computer=$computer;state='FAILED';message='Remote gpupdate could not be scheduled. Check RPC/task-scheduler firewall, WinRM/Kerberos reachability and permissions.'}}}
@@ -458,7 +434,6 @@ switch($Operation){
             $manifest.phase=if($matches){'ROLLED_BACK'}else{'ROLLBACK_REVIEW_REQUIRED'};Save-Manifest $manifest $directory
             return Result $manifest.phase 'GPO snapshot and selected link restored. Endpoint refresh/replication still need to converge.' $manifest @{published=$false;linked=$false;effective='ROLLBACK_ENDPOINT_PENDING';currentValue=$null} @()
         }catch{
-            if($_.Exception.Message -like 'ROLLBACK_CONFLICT*'){throw}
             if($manifest){$manifest.phase='ROLLBACK_REVIEW_REQUIRED';Save-Manifest $manifest $directory;return Result 'ROLLBACK_REVIEW_REQUIRED' 'Rollback did not finish cleanly. Do not retry automatically; inspect the saved backup and verify the live GPO/link state.' $manifest @{published=$false;linked=$false;effective='ROLLBACK_ENDPOINT_PENDING';currentValue=$null} @()}
             throw
         }finally{if($lock){$lock.Dispose()}}

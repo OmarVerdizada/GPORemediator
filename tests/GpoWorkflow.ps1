@@ -92,22 +92,3 @@ Check ($refreshPartial.state -eq 'REFRESH_PARTIAL' -and $refreshPartial.gpoPubli
 $rolled=Invoke-Worker 'gpoRollback' @{plan=$plan;mapping=$mapping;previous=$partial}
 Check ($rolled.state -eq 'ROLLED_BACK' -and !$script:links[$script:domainDn].Enabled) 'Existing disabled link was not restored'
 Write-Host 'PASS: real GPO worker with AD doubles - discovery, preview, INF/CSE/version writes, backup, link creation, explicit force refresh, independent verification, replay, stale rollback, existing-link restore and refresh failure.'
-
-# Explicit endpoints resolve through scoped AD lookup, reject injection and re-check membership.
-$selection.refresh='Selected'
-$selection | Add-Member -NotePropertyName endpointHosts -NotePropertyValue @('test-pc.example.com')
-$preview=Invoke-Worker 'gpoPreview' @{selection=$selection;mapping=$mapping}
-Check ($preview.refreshComputers.Count -eq 1 -and $preview.refreshComputers[0] -eq 'test-pc.example.com') 'Selected endpoint resolution failed'
-$selection.endpointHosts=@('outside.example.com')
-try{Invoke-Worker 'gpoPreview' @{selection=$selection;mapping=$mapping}|Out-Null;throw 'Out of scope endpoint accepted'}catch{if($_.Exception.Message -notlike 'ENDPOINT_OUT_OF_SCOPE*'){throw}}
-$selection.endpointHosts=@("bad'host.example.com")
-try{Invoke-Worker 'gpoPreview' @{selection=$selection;mapping=$mapping}|Out-Null;throw 'Invalid hostname accepted'}catch{if($_.Exception.Message -notlike 'ENDPOINT_NAME_INVALID*'){throw}}
-$selection.endpointHosts=@('test-pc.example.com')
-$selection.refresh='None'
-$preview=Invoke-Worker 'gpoPreview' @{selection=$selection;mapping=$mapping}
-Check ($preview.refreshComputers.Count -eq 0) 'Disabled refresh selected endpoints'
-Write-Host 'PASS: selected AD endpoints, out-of-scope and invalid names, disabled refresh.'
-
-$selection | Add-Member -NotePropertyName runGpUpdate -NotePropertyValue $true
-try{Invoke-Worker 'gpoPreview' @{selection=$selection;mapping=$mapping}|Out-Null;throw 'Empty automatic refresh accepted'}catch{if($_.Exception.Message -notlike 'REFRESH_TARGET_REQUIRED*'){throw}}
-Write-Host 'PASS: automatic refresh rejects empty target plans.'

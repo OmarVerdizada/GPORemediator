@@ -71,11 +71,3 @@ The local management host does **not** auto-install RSAT. The production worker 
 ## Acceptance
 
 Run `PRODUCTION-TEST-CHECKLIST.md` against a disposable test GPO/OU in the organization's own Windows/AD lab before production rollout. Static package validation is not a substitute for real AD/SYSVOL/replication/RSoP testing.
-
-## Endpoint rollout and optional gpupdate
-
-Use a dedicated pilot OU and a dedicated GPO for member servers or workstations. Select that OU as **Link target**. This is a DC benchmark catalog; review each setting for the endpoint role before rollout. Domain password/lockout controls still require the domain root. Existing GPO links, inheritance, security filters and WMI filters determine policy applicability.
-
-**Run gpupdate after Apply** defaults to **No / disabled**. Choose **Yes / enabled** to schedule refresh after successful publication or a compliant no-change result. Choose PDC, selected scope (maximum 100 computers), or **Selected AD endpoints** and enter one FQDN per line. Explicit endpoints must resolve to enabled AD computer objects inside the selected scope. The plan displays the resolved names and the refresh choice. Targets are revalidated before refresh; changed membership requires a new plan.
-
-The endpoint list controls refresh destinations, not GPO security filtering. To limit policy rollout, use the pilot OU/GPO design. No computer objects are moved and no filtering ACLs are changed by this feature. Remote refresh requires the existing RPC/task-scheduler connectivity and permissions; scheduling is not proof of effective compliance. Manual Refresh remains available when targets were selected with automatic refresh disabled.

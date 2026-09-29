@@ -92,8 +92,7 @@
     INVALID_DOMAIN:'Domeni və həmin domenə aid kontrollerin tam adını daxil edin: məsələn, example.local və dc01.example.local.'
   };
   function policy(path) {
-    if (/\/gpo\/[^/]+\/apply$/.test(path)) return { timeout: 1740000, label: 'Backup, policy change, optional gpupdate and verification', cancelable: false };
-    if (/\/gpo\/[^/]+\/rollback$/.test(path)) return { timeout: 980000, label: 'Backup, policy change and verification', cancelable: false };
+    if (/\/gpo\/[^/]+\/(apply|rollback)$/.test(path)) return { timeout: 980000, label: 'Backup, policy change and verification', cancelable: false };
     if (/\/gpo\/[^/]+\/refresh$/.test(path)) return { timeout: 760000, label: 'Scheduling gpupdate and re-verifying policy', cancelable: false };
     if (/\/gpo\/(preview|[^/]+\/(verify|replan))$/.test(path)) return { timeout: 620000, label: 'Reading policy and verifying scope', cancelable: true };
     if (/\/gpo\/(connect|discover|readiness)$/.test(path)) return { timeout: 110000, label: path.endsWith('/readiness') ? 'Checking AD readiness' : 'Connecting to AD and loading GPOs', cancelable: true };

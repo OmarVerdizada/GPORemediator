@@ -79,11 +79,7 @@ public static class ProductionGpoMappings
         if (!mapping.Writable)
             throw new PolicyException("GPO_MANUAL_ONLY", "This CIS control is not classified as Automated in the imported CIS v4.0.0 catalog. It remains read-only and requires manual review.");
         if (!Guid.TryParse(selection.GpoId, out _)) throw new PolicyException("GPO_SELECTION_REQUIRED", "Select a GPO from the discovered list.");
-        if (selection.Refresh is not ("None" or "Pdc" or "Scope" or "Selected")) throw new PolicyException("GPO_OPTIONS_INVALID", "Invalid policy refresh option.");
-        if (selection.RunGpUpdate && selection.Refresh == "None") throw new PolicyException("REFRESH_TARGET_REQUIRED", "Choose gpupdate targets before enabling automatic refresh.");
-        var hosts = selection.EndpointHosts ?? [];
-        if (selection.Refresh == "Selected" && (hosts.Length == 0 || hosts.Length > 100)) throw new PolicyException("ENDPOINT_SELECTION_REQUIRED", "Select between 1 and 100 AD computer DNS names.");
-        if (hosts.Length > 100 || hosts.Any(h => string.IsNullOrWhiteSpace(h) || h.Length > 253 || !System.Text.RegularExpressions.Regex.IsMatch(h, @"\A[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?)+\z"))) throw new PolicyException("ENDPOINT_NAME_INVALID", "Use fully qualified AD computer DNS names.");
+        if (selection.Refresh is not ("None" or "Pdc" or "Scope")) throw new PolicyException("GPO_OPTIONS_INVALID", "Invalid policy refresh option.");
         if (selection.AccountScope is not ("Domain" or "LocalComputers")) throw new PolicyException("GPO_OPTIONS_INVALID", "Invalid target scope option.");
         if (string.IsNullOrWhiteSpace(selection.ScopeDn) || selection.ScopeDn.Length > 2048 || selection.ScopeDn.IndexOfAny(['\r','\n','\0']) >= 0)
             throw new PolicyException("GPO_SCOPE_REQUIRED", "Select a discovered domain or OU.");

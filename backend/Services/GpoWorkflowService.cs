@@ -160,21 +160,6 @@ public sealed class GpoWorkflowService(IConfiguration config,Store store,Operati
             if(operation=="verify" && previous is not null && result.RefreshResults.Length==0 && previous.Result.RefreshResults.Length>0)
                 result=result with{RefreshResults=previous.Result.RefreshResults};
             run=run with{Result=result,UpdatedAt=PolicyValues.Now()};
-            if(operation=="apply" && plan.Selection.RunGpUpdate && result.GpoPublished && result.LinkVerified && (result.State is "PUBLISHED" or "NO_CHANGE"))
-            {
-                // Persist publication before refresh and retain the same operation gate throughout.
-                store.Put("gpo_runs",id,run,run.Result.State);
-                store.Audit("GPO_AUTO_REFRESH_STARTED",actor,jobId:id,details:new{id,correlationId});
-                try
-                {
-                    result=await Run<GpoWorkflowResult>("gpoRefresh",c,new{plan,mapping,previous=result,consent},CancellationToken.None);
-                    run=run with{Result=result,UpdatedAt=PolicyValues.Now()};
-                }
-                catch(Exception)
-                {
-                    run=run with{Result=result with{State="REFRESH_PARTIAL",Message="GPO publication completed, but automatic gpupdate could not complete. Inspect endpoint state before retrying Refresh."},UpdatedAt=PolicyValues.Now()};
-                }
-            }
         }catch(Exception ex){
             // A transport/timeout failure can occur after a remote write began.
             // Never label an unknown outcome as a safe failure.

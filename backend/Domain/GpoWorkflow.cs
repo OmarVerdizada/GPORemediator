@@ -13,7 +13,7 @@ public record GpoScope(string Dn, string Name, string Kind);
 public record GpoInventory(string Domain, string DomainController, string ExecutionUser, GpoChoice[] Gpos, GpoScope[] Scopes);
 
 public record GpoSelection(string GpoId, string ScopeDn, string Setting, int Value,
-    string AccountScope = "Domain", string Refresh = "None", bool FirstLink = false, string? CustomValue = null, bool RunGpUpdate = false, string[]? EndpointHosts = null);
+    string AccountScope = "Domain", string Refresh = "None", bool FirstLink = false, string? CustomValue = null);
 
 public record GpoHealthCheck(string Id, string Label, string State, string Message, bool Required = true);
 public record GpoEnvironmentStatus(string Domain, string DomainController, string ExecutionUser,
