@@ -32,7 +32,7 @@ if(!ownsLock) throw new InvalidOperationException("Another GPO Remediator proces
 builder.WebHost.ConfigureKestrel(o=>o.Limits.MaxRequestBodySize=32*1024);
 builder.Services.ConfigureHttpJsonOptions(o=>o.SerializerOptions.Converters.Add(new System.Text.Json.Serialization.JsonStringEnumConverter()));
 builder.Services.AddAntiforgery(o=> { o.HeaderName="X-CSRF-Token"; o.Cookie.Name="GpoRemediator.Csrf"; o.Cookie.HttpOnly=true; o.Cookie.SameSite=SameSiteMode.Strict; o.Cookie.SecurePolicy=CookieSecurePolicy.SameAsRequest; });
-builder.Services.AddDataProtection().SetApplicationName("GpoRemediator");
+builder.Services.AddSingleton<IDataProtectionProvider>(new EphemeralDataProtectionProvider());
 if(real) { builder.Services.AddAuthentication(NegotiateDefaults.AuthenticationScheme).AddNegotiate(); builder.Services.AddAuthorization(); }
 builder.Services.AddSingleton(new Store(dbPath));
 builder.Services.AddSingleton<OperationGate>();
@@ -59,7 +59,7 @@ app.Use(async(context,next)=>
     catch(PolicyException ex)
     {
         context.Response.StatusCode=ex.Code=="NOT_FOUND"?404:ex.Code is "LOOPBACK_ONLY" or "OPERATOR_DENIED" or "ORIGIN_DENIED"?403:409;
-        await context.Response.WriteAsJsonAsync(new{code=ex.Code,message=Redactor.Clean(ex.Message)});
+        await context.Response.WriteAsJsonAsync(new{code=ex.Code,category=ErrorCategory(ex.Code),message=Redactor.Clean(ex.Message)});
     }
     catch(BadHttpRequestException) { context.Response.StatusCode=400; await context.Response.WriteAsJsonAsync(new{code="INVALID_REQUEST",message="The request format or values are invalid."}); }
     catch(JsonException) { context.Response.StatusCode=400; await context.Response.WriteAsJsonAsync(new{code="INVALID_JSON",message="Request must contain valid typed JSON."}); }
@@ -91,6 +91,16 @@ app.Use(async(context,next)=>
     }
     await next(context);
 });
+string ErrorCategory(string code)=>code switch
+{
+    var x when x.StartsWith("AUTH_",StringComparison.OrdinalIgnoreCase) || x.Contains("LOGIN",StringComparison.OrdinalIgnoreCase) || x.Contains("CREDENTIAL",StringComparison.OrdinalIgnoreCase) || x=="OPERATOR_DENIED" => "AUTH",
+    var x when x.StartsWith("GPO_",StringComparison.OrdinalIgnoreCase) || x.Contains("ROLLBACK",StringComparison.OrdinalIgnoreCase) || x.Contains("MAPPING",StringComparison.OrdinalIgnoreCase) => "GPO",
+    var x when x.StartsWith("AD_",StringComparison.OrdinalIgnoreCase) || x.Contains("DIRECTORY",StringComparison.OrdinalIgnoreCase) || x.Contains("LDAP",StringComparison.OrdinalIgnoreCase) => "AD",
+    var x when x.Contains("SYSVOL",StringComparison.OrdinalIgnoreCase) || x.Contains("REPLICATION",StringComparison.OrdinalIgnoreCase) => "SYSVOL",
+    var x when x.Contains("REFRESH",StringComparison.OrdinalIgnoreCase) || x.Contains("ENDPOINT",StringComparison.OrdinalIgnoreCase) => "REFRESH",
+    var x when x.Contains("SERVICE",StringComparison.OrdinalIgnoreCase) || x.Contains("LAUNCHER",StringComparison.OrdinalIgnoreCase) => "SERVICE",
+    _ => "GENERAL"
+};
 string Operator(HttpContext context)=>real?context.User.Identity!.Name!:"SETUP\\local-configuration";
 bool ValidHostname(string value)=>!string.IsNullOrWhiteSpace(value)&&value.Length<=253&&Regex.IsMatch(value,@"^(?=.{1,253}$)(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)*[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?$");
 string[] CleanList(string[]? values)=>values?.Select(x=>x.Trim()).Where(x=>x.Length>0).Distinct(StringComparer.OrdinalIgnoreCase).ToArray()??[];
@@ -154,11 +164,12 @@ string GpoToken(HttpContext context)=>context.Request.Cookies["GpoRemediator.Gpo
 app.MapPost("/api/gpo/connect",async(GpoLoginRequest request,HttpContext context,GpoWorkflowService service,CancellationToken ct)=>{
     var connected=await service.ConnectAsync(request,Operator(context),ct);
     service.Disconnect(GpoToken(context));
-    context.Response.Cookies.Append("GpoRemediator.GpoConnection",connected.Token,new CookieOptions{HttpOnly=true,Secure=context.Request.IsHttps,SameSite=SameSiteMode.Strict,Path="/api/gpo",MaxAge=TimeSpan.FromMinutes(10)});
+    context.Response.Cookies.Append("GpoRemediator.GpoConnection",connected.Token,new CookieOptions{HttpOnly=true,Secure=context.Request.IsHttps,SameSite=SameSiteMode.Strict,Path="/api"});
     return connected.Inventory;
 });
-app.MapPost("/api/gpo/disconnect",(HttpContext context,GpoWorkflowService service)=>{service.Disconnect(GpoToken(context));context.Response.Cookies.Delete("GpoRemediator.GpoConnection",new CookieOptions{Path="/api/gpo"});return new{disconnected=true};});
+app.MapPost("/api/gpo/disconnect",(HttpContext context,GpoWorkflowService service)=>{service.Disconnect(GpoToken(context));context.Response.Cookies.Delete("GpoRemediator.GpoConnection",new CookieOptions{Path="/api"});return new{disconnected=true};});
 app.MapGet("/api/gpo/inventory",(HttpContext context,GpoWorkflowService service)=>service.Inventory(GpoToken(context),Operator(context)));
+app.MapGet("/api/gpo/session",(HttpContext context,GpoWorkflowService service)=>service.SessionStatus(GpoToken(context),Operator(context)));
 app.MapGet("/api/gpo/readiness",async(HttpContext context,GpoWorkflowService service,CancellationToken ct)=>await service.ReadinessAsync(GpoToken(context),Operator(context),ct));
 app.MapPost("/api/gpo/discover",async(HttpContext context,GpoWorkflowService service,CancellationToken ct)=>await service.DiscoverAsync(GpoToken(context),Operator(context),ct));
 app.MapGet("/api/gpo/settings",()=>ProductionGpoMappings.Settings);
@@ -168,6 +179,8 @@ app.MapPost("/api/gpo/preview",async(GpoSelection request,HttpContext context,Gp
 app.MapPost("/api/gpo/{id}/apply",async(string id,GpoConsent request,HttpContext context,GpoWorkflowService service)=>await service.ExecuteAsync(id,"apply",request,GpoToken(context),Operator(context)));
 app.MapPost("/api/gpo/{id}/rollback",async(string id,GpoConsent request,HttpContext context,GpoWorkflowService service)=>await service.ExecuteAsync(id,"rollback",request,GpoToken(context),Operator(context)));
 app.MapPost("/api/gpo/{id}/verify",async(string id,HttpContext context,GpoWorkflowService service)=>await service.ExecuteAsync(id,"verify",new(""),GpoToken(context),Operator(context)));
+app.MapPost("/api/gpo/{id}/refresh",async(string id,HttpContext context,GpoWorkflowService service)=>await service.ExecuteAsync(id,"refresh",new(""),GpoToken(context),Operator(context)));
+app.MapPost("/api/gpo/{id}/replan",async(string id,HttpContext context,GpoWorkflowService service,CancellationToken ct)=>await service.ReplanAsync(id,GpoToken(context),Operator(context),ct));
 app.MapGet("/api/setup/discover",() =>
 {
     if(!OperatingSystem.IsWindows()) throw new PolicyException("WINDOWS_REQUIRED","Automatic setup discovery is available only on Windows. Enter the domain and writable DC manually.");

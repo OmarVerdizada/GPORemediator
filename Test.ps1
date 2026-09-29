@@ -1,4 +1,4 @@
-﻿param([int]$RecoveryPort = 5086)
+param([int]$RecoveryPort = 5086)
 $ErrorActionPreference = 'Stop'
 Set-Location -LiteralPath $PSScriptRoot
 . (Join-Path $PSScriptRoot 'scripts\Tooling.ps1')
@@ -40,7 +40,10 @@ Write-Host '[5/7] Running local recovery-mode startup test...' -ForegroundColor 
 & powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot 'tests\Startup-Recovery.ps1') -DotnetPath $dotnet -Port $RecoveryPort
 Assert-Exit
 
-Write-Host '[6/7] Verifying frontend source/dist integrity...' -ForegroundColor Cyan
+Write-Host '[6/7] Verifying frontend source/dist integrity and dependency-free workflow smoke checks...' -ForegroundColor Cyan
+$node = Get-Command node.exe,node -ErrorAction SilentlyContinue | Select-Object -First 1
+if ($node) { & $node.Source (Join-Path $PSScriptRoot 'tests\Frontend.Static.cjs'); Assert-Exit }
+else { Write-Warning 'Node.js is not installed; JS smoke execution is skipped. Source/dist integrity checks still run and Node.js is not required by the product runtime.' }
 if (!(Test-FrontendDistMatchesSource)) { throw 'frontend/dist does not match frontend/source. Rebuild or resync the frontend before release.' }
 foreach ($name in @('client.js','workspace.js','automation.js','workspace.css','automation.css','index.html','benchmark-v4.json')) {
     $a=Join-Path $PSScriptRoot ('frontend\source\'+$name); $b=Join-Path $PSScriptRoot ('frontend\dist\'+$name)
@@ -48,7 +51,7 @@ foreach ($name in @('client.js','workspace.js','automation.js','workspace.css','
 }
 
 Write-Host '[7/7] Checking release safety markers...' -ForegroundColor Cyan
-$prodMarker=Join-Path $PSScriptRoot 'runtime\production-backend-v3.ready'
+$prodMarker=Join-Path $PSScriptRoot 'runtime\production-backend-v4.ready'
 if (Test-Path -LiteralPath $prodMarker) { Write-Warning 'Production build marker exists. Remove it before packaging a source-changed release unless runtime was rebuilt from this exact source.' }
 
 Write-Host 'PASS: build, invariants, 405-control registry (401 automated + 4 read-only), isolated GPO transaction worker, recovery startup and frontend integrity.' -ForegroundColor Green

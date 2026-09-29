@@ -9,10 +9,10 @@ $stage='configuration'
 $session=$null;$secure=$null;$credential=$null;$request=$null
 try {
     $request=[Console]::In.ReadToEnd() | ConvertFrom-Json
-    if($request.operation -notin @('gpoInventory','gpoReadiness','gpoPreview','gpoApply','gpoRollback','gpoVerify')){throw 'OPERATION_DENIED|Unknown GPO operation.'}
+    if($request.operation -notin @('gpoInventory','gpoReadiness','gpoPreview','gpoApply','gpoRollback','gpoVerify','gpoRefresh')){throw 'OPERATION_DENIED|Unknown GPO operation.'}
     $cfg=$request.configuration
     if([string]$cfg.domainController -notmatch '^[a-zA-Z0-9][a-zA-Z0-9.-]+$' -or -not ([string]$cfg.domainController).EndsWith('.'+[string]$cfg.domain,[StringComparison]::OrdinalIgnoreCase)){throw 'DC_REQUIRED|Save the exact domain and writable DC first.'}
-    $remoteTimeout=if([string]$request.operation -in @('gpoApply','gpoRollback')){900000}elseif([string]$request.operation -in @('gpoPreview','gpoVerify')){540000}else{300000}
+    $remoteTimeout=if([string]$request.operation -in @('gpoApply','gpoRollback','gpoRefresh')){900000}elseif([string]$request.operation -in @('gpoPreview','gpoVerify')){540000}else{300000}
     $options=@{ComputerName=[string]$cfg.domainController;Authentication='Kerberos';SessionOption=(New-PSSessionOption -OpenTimeout 15000 -OperationTimeout $remoteTimeout)}
     if($request.payload.credential.userName){
         $secure=ConvertTo-SecureString -String $request.payload.credential.password -AsPlainText -Force

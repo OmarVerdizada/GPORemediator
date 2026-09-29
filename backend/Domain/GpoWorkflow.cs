@@ -13,7 +13,7 @@ public record GpoScope(string Dn, string Name, string Kind);
 public record GpoInventory(string Domain, string DomainController, string ExecutionUser, GpoChoice[] Gpos, GpoScope[] Scopes);
 
 public record GpoSelection(string GpoId, string ScopeDn, string Setting, int Value,
-    string AccountScope = "Domain", string Refresh = "None", bool FirstLink = false, string? CustomValue = null);
+    string AccountScope = "Domain", string Refresh = "None", bool FirstLink = false, string? CustomValue = null, bool RunGpUpdate = false, string[]? EndpointHosts = null);
 
 public record GpoHealthCheck(string Id, string Label, string State, string Message, bool Required = true);
 public record GpoEnvironmentStatus(string Domain, string DomainController, string ExecutionUser,
@@ -38,15 +38,16 @@ public record GpoConsent(string Confirmation, bool AcknowledgeImpact = false, bo
 public record GpoRefreshResult(string Computer, string State, string Message);
 public record GpoWorkflowResult(string State, string Message, string? BackupId, string? BackupDirectory, string? PostFingerprint,
     bool GpoPublished, bool LinkVerified, GpoRefreshResult[] RefreshResults, string EffectiveStatus,
-    GpoVerificationDetails? Verification = null, GpoEndpointCheck[]? EndpointChecks = null);
-public record GpoWorkflowRun(string Id, GpoWorkflowPlan Plan, GpoWorkflowResult Result, string UpdatedAt, GpoConsent? Approval = null);
+    GpoVerificationDetails? Verification = null, GpoEndpointCheck[]? EndpointChecks = null, string? CurrentValue = null);
+public record GpoWorkflowRun(string Id, GpoWorkflowPlan Plan, GpoWorkflowResult Result, string UpdatedAt, GpoConsent? Approval = null,
+    string? CorrelationId = null, string? StartedAt = null);
 
 public record GpoEvidence(string SchemaVersion, string Product, string Benchmark, string OperationId, string GeneratedAt,
     string Actor, string ExecutionUser, string Domain, string DomainController, string ControlId, string Setting,
     string GpoId, string GpoName, string ScopeDn, string? BeforeValue, string DesiredValue, string State,
     string? BackupId, string? BackupDirectory, string EffectiveStatus, GpoVerificationDetails? Verification,
     string[] Warnings, string IntegrityHash, string? ChangeReference = null, string? ApprovedBy = null, string? Handler = null, string? MappingSource = null,
-    GpoEndpointCheck[]? EndpointChecks = null);
+    GpoEndpointCheck[]? EndpointChecks = null, string? CorrelationId = null);
 
 public static class GpoWorkflowRules
 {

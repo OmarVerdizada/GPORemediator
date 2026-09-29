@@ -1,4 +1,4 @@
-# GPO Remediator — CIS Benchmark v4.0.0
+﻿# GPO Remediator — CIS Benchmark v4.0.0
 
 Local enterprise remediation console for controlled Windows Group Policy changes. The product embeds the operator-supplied CIS Benchmark v4.0.0 catalog, lets an operator choose a control, discovered GPO and target scope, then runs a guarded preview/apply/verify/rollback workflow against a pinned writable domain controller.
 
@@ -17,7 +17,7 @@ Local enterprise remediation console for controlled Windows Group Policy changes
 3. On first run, Setup opens if Windows/AD configuration does not exist. Domain, current operator and a likely logon DC are detected without RSAT where Windows exposes them; values remain editable.
 4. Save the exact AD DNS domain, writable DC FQDN, local backup path and allowed Windows operator(s).
 5. The launcher restarts into Windows mode.
-6. In the main workspace connect an execution account (for the current pilot rollout this can be the DC/domain administrative account). Its password is held only in a short-lived encrypted in-memory session and is never persisted.
+6. In the main workspace connect an execution account (for the current deployment this can be the DC/domain administrative account). Its password is held only in a short-lived encrypted in-memory session and is never persisted.
 7. Run real AD readiness, choose a mapped control, GPO and scope, then Preview before enabling writes.
 
 The web endpoint is local-only: `http://127.0.0.1:5080`. TLS/certificates are intentionally not required in this release because Kestrel rejects non-loopback access.
@@ -71,3 +71,11 @@ The local management host does **not** auto-install RSAT. The production worker 
 ## Acceptance
 
 Run `PRODUCTION-TEST-CHECKLIST.md` against a disposable test GPO/OU in the organization's own Windows/AD lab before production rollout. Static package validation is not a substitute for real AD/SYSVOL/replication/RSoP testing.
+
+## Endpoint rollout and optional gpupdate
+
+Use a dedicated pilot OU and a dedicated GPO for member servers or workstations. Select that OU as **Link target**. This is a DC benchmark catalog; review each setting for the endpoint role before rollout. Domain password/lockout controls still require the domain root. Existing GPO links, inheritance, security filters and WMI filters determine policy applicability.
+
+**Run gpupdate after Apply** defaults to **No / disabled**. Choose **Yes / enabled** to schedule refresh after successful publication or a compliant no-change result. Choose PDC, selected scope (maximum 100 computers), or **Selected AD endpoints** and enter one FQDN per line. Explicit endpoints must resolve to enabled AD computer objects inside the selected scope. The plan displays the resolved names and the refresh choice. Targets are revalidated before refresh; changed membership requires a new plan.
+
+The endpoint list controls refresh destinations, not GPO security filtering. To limit policy rollout, use the pilot OU/GPO design. No computer objects are moved and no filtering ACLs are changed by this feature. Remote refresh requires the existing RPC/task-scheduler connectivity and permissions; scheduling is not proof of effective compliance. Manual Refresh remains available when targets were selected with automatic refresh disabled.

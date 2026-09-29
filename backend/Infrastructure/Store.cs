@@ -43,7 +43,7 @@ public sealed class Store : IDisposable
         lock(gate)
         {
             // The production workflow is isolated by database file (windows.db/setup.db).
-            // Legacy demo/job tables may exist after an in-place upgrade and must not
+            // Legacy pre-production/job tables may exist after an in-place upgrade and must not
             // prevent the real GPO workflow from opening its own durable store.
             Execute("INSERT OR IGNORE INTO deployment(key,value) VALUES('execution_mode',$mode)",("$mode",mode));
             using var command=Command("SELECT value FROM deployment WHERE key='execution_mode'");

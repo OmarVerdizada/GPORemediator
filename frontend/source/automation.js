@@ -1,12 +1,12 @@
 (() => {
   'use strict';
-  const state={session:null,config:null,readiness:null,discovery:null,service:null,busy:false,notice:'',tab:'setup',loaded:false};
+  const state={session:null,config:null,readiness:null,discovery:null,service:null,busy:false,notice:'',connectionExpired:false,tab:'setup',loaded:false};
   const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   let panel,backdrop,returnFocus,draft=null;
   async function api(path,body){
     if(!state.session)state.session=await window.GpoClient.request('/api/session');
     try{return await window.GpoClient.request('/api'+path,{body,csrfToken:state.session.csrfToken});}
-    catch(e){if(e.status===401||e.code==='CSRF_INVALID')state.session=null;throw e;}
+    catch(e){if(e.status===401||e.code==='CSRF_INVALID')state.session=null;if(e.code==='GPO_LOGIN_REQUIRED')state.connectionExpired=true;throw e;}
   }
   function capture(){if(state.busy)return;const form=panel.querySelector('form');if(form)draft=Object.fromEntries(new FormData(form));}
   function render(){
@@ -16,16 +16,16 @@
       ${state.busy?'<p role="status">Gözləyin, sorğu icra olunur…</p>':''}${state.notice?`<div class="gr-auto-note" role="status">${esc(state.notice)}</div>`:''}
       <div class="gr-auto-note">${state.session?.mode==='WINDOWS'?'Domen sazlamaları':'İlk quraşdırma'}. Domenə qoşulduqdan sonra GPO və hədəflər siyahıdan seçilir.</div>
       ${warnings.length?`<div class="gr-auto-note warn">${warnings.map(esc).join('<br>')}</div>`:''}
-      <form id="windows-setup" class="gr-auto-card"><h3>Windows / AD bağlantısı</h3><p>Aşkarlanan məlumatları yoxlayın və saxlayın. Mövcud sazlamalarınız qorunur.</p><div class="gr-auto-grid">
+      ${state.session?.mode==='WINDOWS'?'<details class="gr-auto-card"><summary>Domen sazlamalarını dəyiş</summary>':''}<form id="windows-setup" class="gr-auto-card"><h3>Windows / AD bağlantısı</h3><p>Aşkarlanan məlumatları yoxlayın və saxlayın. Mövcud sazlamalarınız qorunur.</p><div class="gr-auto-grid">
       ${field('domain','Domen','example.local')}${field('domainController','Domen kontrolleri','dc01.example.local')}
 
       <label class="gr-auto-field gr-auto-span2">Bu tətbiqə giriş icazəsi olan Windows hesabları<textarea name="allowedOperators" required spellcheck="false" placeholder="DOMAIN\\user">${esc(Array.isArray(c.allowedOperators)?c.allowedOperators.join('\n'):c.allowedOperators||'')}</textarea><small>Hər sətirdə bir hesab. DOMEN/istifadəçi yazılışı avtomatik düzəldilir.</small></label></div><details><summary>Əlavə sazlamalar</summary>${field('backupPath','DC-də ehtiyat nüsxə qovluğu','C:\\ProgramData\\GpoRemediator\\Backups')}</details>
       <p>Sazlamalar saxlandıqda tətbiq yenidən başladılır. Siyasətləri dəyişmək üçün ayrıca icazə açılmalıdır.</p>
-      <div class="gr-auto-actions"><button class="gr-auto-btn primary">Saxla və yenidən başlat</button><button type="button" class="gr-auto-btn" data-detect>Məlumatları aşkarlayın</button></div></form>
-      ${state.discovery?`<details class="gr-auto-card"><summary>Aşkarlanan məlumatlar</summary><p>${esc(state.discovery.domain||'Domen aşkarlanmadı')} · ${esc(state.discovery.domainController||'DC aşkarlanmadı')} · ${esc(state.discovery.operator)}</p><button class="gr-auto-btn" data-use-detection>Bu məlumatları formaya köçür</button></details>`:''}
-      <div class="gr-auto-card"><h3>Siyasət dəyişikliklərinə icazə</h3>${state.session?.mode==='WINDOWS'?'<button class="gr-auto-btn" data-readiness>Bağlantını yoxla</button>':'<p>Əvvəlcə domen sazlamalarını saxlayın və tətbiqi yenidən başladın.</p>'}
-      ${(state.readiness?.checks||[]).map(c=>`<div class="gr-auto-row"><div><strong>${esc(c.label)} · ${esc(c.state||c.status)}</strong><small>${esc(c.message)}</small></div></div>`).join('')}
-      ${state.session?.mode==='WINDOWS'?`<p>Yazma ${state.config?.enableWrites?'aktivdir':'bağlıdır'}. Hər tətbiq ayrıca APPLY təsdiqi tələb edir.</p><label class="gr-auto-field">${state.config?.enableWrites?'DISABLE WRITES':'ENABLE WRITES'} yazın<input id="write-confirm" autocomplete="off"></label><button class="gr-auto-btn" data-write>${state.config?.enableWrites?'Yazmanı bağla':'Yazmanı aktivləşdir'}</button>`:'<p>Setup rejimində GPO əməliyyatı yoxdur. Sazlamaları saxlayın və Windows rejimində açın.</p>'}</div></div>`;
+      <div class="gr-auto-actions"><button class="gr-auto-btn primary">Saxla və yenidən başlat</button><button type="button" class="gr-auto-btn" data-detect>Məlumatları aşkarlayın</button></div></form>${state.session?.mode==='WINDOWS'?'</details>':''}
+      ${state.discovery&&state.session?.mode!=='WINDOWS'?`<details class="gr-auto-card"><summary>Aşkarlanan məlumatlar</summary><p>${esc(state.discovery.domain||'Domen aşkarlanmadı')} · ${esc(state.discovery.domainController||'DC aşkarlanmadı')} · ${esc(state.discovery.operator)}</p><button class="gr-auto-btn" data-use-detection>Bu məlumatları formaya köçür</button></details>`:''}
+      <div class="gr-auto-card"><h3>Siyasət dəyişikliklərinə icazə</h3>${state.connectionExpired?'<div class="gr-auto-note warn">Domen bağlantısı bitib. Əsas ekranda yenidən qoşulun.</div><button class="gr-auto-btn primary" data-reconnect>Domenə yenidən qoşul</button>':state.session?.mode==='WINDOWS'?'<button class="gr-auto-btn" data-readiness>Bağlantını yoxla</button>':'<p>Əvvəlcə domen sazlamalarını saxlayın və tətbiqi yenidən başladın.</p>'}
+      ${state.connectionExpired?'':(state.readiness?.checks||[]).map(c=>`<div class="gr-auto-row"><div><strong>${esc(c.label)} · ${esc(c.state||c.status)}</strong><small>${esc(c.message)}</small></div></div>`).join('')}
+      ${state.session?.mode==='WINDOWS'&&!state.connectionExpired?`<p>Yazma ${state.config?.enableWrites?'aktivdir':'bağlıdır'}. Hər tətbiq ayrıca APPLY təsdiqi tələb edir.</p><label class="gr-auto-field">${state.config?.enableWrites?'DISABLE WRITES':'ENABLE WRITES'} yazın<input id="write-confirm" autocomplete="off"></label><button class="gr-auto-btn" data-write>${state.config?.enableWrites?'Yazmanı bağla':'Yazmanı aktivləşdir'}</button>`:state.session?.mode==='WINDOWS'?'':'<p>Setup rejimində GPO əməliyyatı yoxdur. Sazlamaları saxlayın və Windows rejimində açın.</p>'}</div></div>`;
     window.GpoClient.localize(panel);
     if(state.busy)panel.querySelectorAll('button:not([data-close]),input,textarea').forEach(x=>x.disabled=true);
   }
@@ -53,9 +53,10 @@
     });});
     panel.addEventListener('click',e=>{
       if(e.target.closest('[data-close]'))return close();
+      if(e.target.closest('[data-reconnect]')){close();location.hash='#/dashboard';window.dispatchEvent(new CustomEvent('gr:connection-expired'));return;}
       if(e.target.closest('[data-detect]'))action(async()=>{state.discovery=await api('/setup/discover');state.notice='Aşkarlanan məlumatlar aşağıdadır. Formadakı düzəlişlər saxlanıldı.';});
       if(e.target.closest('[data-use-detection]')){capture();const d=state.discovery;draft={...draft,domain:d.domain,domainController:d.domainController,backupPath:d.backupPath,allowedOperators:d.operator};render();}
-      if(e.target.closest('[data-readiness]'))action(async()=>{state.readiness=await api('/gpo/readiness');});
+      if(e.target.closest('[data-readiness]'))action(async()=>{state.connectionExpired=false;state.readiness=await api('/gpo/readiness');});
       if(e.target.closest('[data-write]')){const confirmation=panel.querySelector('#write-confirm').value;action(async()=>{const result=await api('/setup/write-mode',{enable:!state.config?.enableWrites,confirmation,autoRestart:!!state.service?.managed});await restart(result);});}
     });
     document.addEventListener('keydown',e=>{

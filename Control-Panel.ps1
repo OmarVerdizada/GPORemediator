@@ -1,9 +1,10 @@
-﻿param([ValidateRange(1024,65535)][int]$Port = 5080, [switch]$SmokeTest)
+param([ValidateRange(1024,65535)][int]$Port = 5080, [switch]$SmokeTest)
 $ErrorActionPreference = 'Stop'
 $windowsModules = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\Modules'
 $env:PSModulePath = "$windowsModules;" + (($env:PSModulePath -split ';' | Where-Object { $_ -ine $windowsModules }) -join ';')
 Add-Type -AssemblyName PresentationFramework,PresentationCore,WindowsBase
 . (Join-Path $PSScriptRoot 'scripts\ServiceControl.ps1')
+. (Join-Path $PSScriptRoot 'scripts\Tooling.ps1')
 
 $projectRoot = $PSScriptRoot
 $work = Join-Path $projectRoot 'work'
@@ -119,7 +120,7 @@ function Refresh-Panel {
     $service = Get-RemediatorService
     $launching = $script:launcher -and !$script:launcher.HasExited
     $pending = $script:actionJob -or [DateTime]::UtcNow -lt $script:pendingUntil
-    $runtimeReady = (Test-Path -LiteralPath (Join-Path $projectRoot 'runtime\GpoRemediator.exe')) -and (Test-Path -LiteralPath (Join-Path $projectRoot 'runtime\local-http-v2.ready'))
+    $runtimeReady = (Test-Path -LiteralPath (Join-Path $projectRoot 'runtime\GpoRemediator.exe')) -and (Test-Path -LiteralPath (Join-Path $projectRoot 'runtime\production-backend-v4.ready')) -and (Test-PortableBackendMatchesSource) -and (Test-FrontendDistMatchesSource)
     $configExists = Test-Path -LiteralPath $localConfig
 
     $ui.RuntimeState.Text = if ($runtimeReady) { 'Local runtime hazırdır' } else { 'İlk dəfə yenilənəcək' }
@@ -197,7 +198,7 @@ function Refresh-Panel {
 }
 function Request-ServiceAction([string]$action) {
     if ($script:actionJob) { return }
-    $ui.Message.Text = 'Sorğu göndərilir. Aktiv GPO əməliyyatı varsa xidmət təhlükəsiz şəkildə dayandırılacaq.'
+    $ui.Message.Text = 'Sorğu göndərilir. Aktiv GPO əməliyyatı varsa stop/restart təhlükəsizlik üçün bloklanacaq.'
     $script:actionJob = Start-Job -ArgumentList $projectRoot,$action -ScriptBlock {
         param($root,$requested)
         try { . (Join-Path $root 'scripts\ServiceControl.ps1'); Invoke-RemediatorServiceAction $requested | Out-Null; @{ok=$true} }

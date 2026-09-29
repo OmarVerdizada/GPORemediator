@@ -3,8 +3,8 @@
   'use strict';
   const active = new Set();
   const storage = {
-    get(key, fallback) { try { return localStorage.getItem(key) ?? fallback; } catch { return fallback; } },
-    set(key, value) { try { localStorage.setItem(key, value); } catch { /* Storage may be disabled. */ } },
+    get(key, fallback) { try { return sessionStorage.getItem(key) ?? fallback; } catch { return fallback; } },
+    set(key, value) { try { sessionStorage.setItem(key, value); } catch { /* Storage may be disabled. */ } },
     favorites() { try { const value = JSON.parse(this.get('gr-favorites', '[]')); return Array.isArray(value) ? value.filter(x => typeof x === 'string') : []; } catch { return []; } }
   };
   const words = {
@@ -65,7 +65,7 @@
     'CHANGE & RECOVERY CENTER':'ƏMƏLİYYATLAR','Review completed changes, verification state, backups and rollback availability.':'Dəyişiklikləri, yoxlama nəticələrini və geri qaytarma imkanlarını izləyin.',
     'All':'Hamısı','Successful':'Tətbiq edilib','Review':'Diqqət tələb edir','Rolled back':'Geri qaytarılıb','Replication':'Yayılma','Effective':'Faktiki nəticə',
     'Kerberos / WinRM session':'Domenə giriş','DNS resolution':'Domen adının tapılması','Active Directory / LDAP':'Domen məlumatları','Backup repository':'Ehtiyat nüsxə qovluğu','AD replication':'Domen sinxronizasiyası',
-    'PUBLISHED':'GPO-ya tətbiq edilib','PUBLISHED_REFRESH_FAILED':'GPO dəyişib, kompüter yenilənməsi alınmayıb','NO_CHANGE':'Dəyişiklik tələb olunmur','VERIFY_MISMATCH':'Yoxlama nəticəsi uyğun deyil','REVIEW_REQUIRED':'Əl ilə yoxlama tələb olunur','FAILED_SAFE':'Tətbiq edilmədi','ROLLED_BACK':'Geri qaytarılıb','ROLLBACK_REVIEW_REQUIRED':'Geri qaytarma yoxlanılmalıdır','REPLICATION_PENDING':'Kontrollerlər arasında yayılma gözlənilir','ENDPOINT_VERIFICATION_PENDING':'Kompüterdə yoxlama gözlənilir','VERIFIED_ON_SAMPLE':'Yoxlanılan kompüterlərdə təsdiqlənib',
+    'PUBLISHED':'GPO-ya tətbiq edilib','PUBLISHED_REFRESH_FAILED':'GPO dəyişib, kompüter yenilənməsi alınmayıb','NO_CHANGE':'Dəyişiklik tələb olunmur','VERIFY_MISMATCH':'Yoxlama nəticəsi uyğun deyil','REVIEW_REQUIRED':'Əl ilə yoxlama tələb olunur','FAILED_SAFE':'Tətbiq edilmədi','ROLLED_BACK':'Geri qaytarılıb','ROLLBACK_REVIEW_REQUIRED':'Geri qaytarma yoxlanılmalıdır','ROLLBACK_DRIFT_DETECTED':'Rollback-dan sonra dəyişiklik aşkarlanıb','REPLICATION_PENDING':'Kontrollerlər arasında yayılma gözlənilir','ENDPOINT_VERIFICATION_PENDING':'Kompüterdə yoxlama gözlənilir','VERIFIED_ON_SAMPLE':'Yoxlanılan kompüterlərdə təsdiqlənib',
     'DOMAIN_VALUE_MATCHES_ON_SELECTED_DC':'Seçilmiş kontrollerdə dəyər uyğundur','DOMAIN_VALUE_PENDING_OR_OVERRIDDEN':'Domen dəyəri hələ uyğun deyil','ROLLBACK_ENDPOINT_PENDING':'Geri qaytarılıb, kompüter yenilənməsi gözlənilir',
     '☆ Save':'☆ Seçilmişlərə əlavə et','★ Saved':'★ Seçilmişlərdədir','Light':'Açıq','Dark':'Tünd','Retry':'Yenidən cəhd et','Settings':'Sazlamalar','Loading benchmark catalog…':'Qaydalar yüklənir…',
     'Authenticated remote session':'Domen hesabı ilə giriş alınıb','Backup directory is writable':'Ehtiyat nüsxə qovluğuna yazmaq mümkündür'
@@ -79,7 +79,7 @@
   const errors = {
     INVALID_OPERATOR_ALLOWLIST:'Hesabı DOMEN\\istifadəçi formasında yazın və ya aşkarlanan Windows hesabını seçin.',
     OPERATOR_SELF_LOCKOUT:'Hazırda istifadə etdiyiniz Windows hesabı icazəli hesablar siyahısında qalmalıdır.',
-    GPO_LOGIN_REQUIRED:'Bağlantının vaxtı bitib. Domenə yenidən qoşulun.',
+    GPO_LOGIN_REQUIRED:'Domen bağlantısı bitib və ya tətbiq yenidən başlayıb. Əsas ekranda yenidən qoşulun.',
     GPO_AUTH_FAILED:'Hesab və ya şifrə qəbul edilmədi. Domen hesabını yoxlayın və ya cari Windows hesabı ilə qoşulun.',
     GPO_REMOTING_FAILED:'Domen kontrollerinə bağlantı alınmadı. Kontrollerin adını, WinRM xidmətini və hesabın uzaqdan giriş icazəsini yoxlayın.',
     GPO_READINESS_FAILED:'Domenə giriş alınıb, amma hazırlıq yoxlaması tamamlanmadı. Tətbiqi yeniləyin və bağlantını yenidən yoxlayın.',
@@ -92,14 +92,17 @@
     INVALID_DOMAIN:'Domeni və həmin domenə aid kontrollerin tam adını daxil edin: məsələn, example.local və dc01.example.local.'
   };
   function policy(path) {
-    if (/\/gpo\/[^/]+\/(apply|rollback)$/.test(path)) return { timeout: 980000, label: 'Backup, policy change and verification', cancelable: false };
-    if (/\/gpo\/(preview|[^/]+\/verify)$/.test(path)) return { timeout: 620000, label: 'Reading policy and verifying scope', cancelable: true };
-    if (/\/gpo\/(connect|discover|readiness)$/.test(path)) return { timeout: 100000, label: path.endsWith('/readiness') ? 'Checking AD readiness' : 'Connecting to AD and loading GPOs', cancelable: true };
+    if (/\/gpo\/[^/]+\/apply$/.test(path)) return { timeout: 1740000, label: 'Backup, policy change, optional gpupdate and verification', cancelable: false };
+    if (/\/gpo\/[^/]+\/rollback$/.test(path)) return { timeout: 980000, label: 'Backup, policy change and verification', cancelable: false };
+    if (/\/gpo\/[^/]+\/refresh$/.test(path)) return { timeout: 760000, label: 'Scheduling gpupdate and re-verifying policy', cancelable: false };
+    if (/\/gpo\/(preview|[^/]+\/(verify|replan))$/.test(path)) return { timeout: 620000, label: 'Reading policy and verifying scope', cancelable: true };
+    if (/\/gpo\/(connect|discover|readiness)$/.test(path)) return { timeout: 110000, label: path.endsWith('/readiness') ? 'Checking AD readiness' : 'Connecting to AD and loading GPOs', cancelable: true };
+    if (/\/setup\/write-mode$/.test(path)) return { timeout: 120000, label: 'Checking readiness and updating write mode', cancelable: false };
     return { timeout: 20000, label: 'Loading application data', cancelable: true };
   }
   async function request(path, { body, csrfToken, ...options } = {}) {
     const settings = { ...policy(path), ...options };
-    if (body !== undefined && !/^\/api\/gpo\/(connect|discover|preview|[^/]+\/verify)$/.test(path)) settings.cancelable = false;
+    if (body !== undefined && !/^\/api\/gpo\/(connect|discover|preview|[^/]+\/(verify|replan))$/.test(path)) settings.cancelable = false;
     const controller = new AbortController();
     const pending = { controller, path, ...settings, started: Date.now() };
     active.add(pending);

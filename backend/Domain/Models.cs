@@ -1,3 +1,5 @@
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
@@ -66,6 +68,25 @@ public record ExecutionIdentity(string Strategy, string Name);
 public sealed class PolicyException(string code, string message) : Exception(message)
 {
     public string Code { get; } = code;
+}
+
+public static class PolicyValues
+{
+    public static string Now() => DateTimeOffset.UtcNow.ToString("O");
+
+    public static string Hash<T>(T value)
+    {
+        var json = JsonDefaults.Serialize(value);
+        var bytes = Encoding.UTF8.GetBytes(json);
+        try
+        {
+            return Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
+        }
+        finally
+        {
+            CryptographicOperations.ZeroMemory(bytes);
+        }
+    }
 }
 
 public static class JsonDefaults

@@ -64,11 +64,13 @@ Check ($preview.previousValue -eq '8' -and $script:writes -eq 0) 'Read-only prev
 $plan=[pscustomobject]@{id=[guid]::NewGuid().ToString('N');domain='example.com';domainController=$cfg.domainController;selection=$selection;preview=$preview}
 $result=Invoke-Worker 'gpoApply' @{plan=$plan;mapping=$mapping;previous=$null}
 Check ($result.state -eq 'PUBLISHED' -and $result.gpoPublished -and $result.linkVerified) ('Apply/link failed: '+($result|ConvertTo-Json -Compress -Depth 10))
-Check ($script:version -eq 1 -and $script:refreshCount -eq 1 -and $result.effectiveStatus -eq 'REPLICATION_PENDING' -and $null -ne $result.verification -and !$result.verification.replicationConverged) ('Version/refresh/effective status wrong: version='+$script:version+' refresh='+$script:refreshCount+' status='+$result.effectiveStatus)
+Check ($script:version -eq 1 -and $script:refreshCount -eq 0 -and $result.effectiveStatus -eq 'REPLICATION_PENDING' -and $null -ne $result.verification -and !$result.verification.replicationConverged) ('Version/explicit-refresh/effective status wrong: version='+$script:version+' refresh='+$script:refreshCount+' status='+$result.effectiveStatus)
 $updated=[IO.File]::ReadAllText((Join-Path $infDir 'GptTmpl.inf'))
 Check ($updated -match 'PasswordHistorySize = 12' -and $updated -match 'SeNetworkLogonRight = \*S-1-5-11') 'Unrelated security settings changed'
 $verified=Invoke-Worker 'gpoVerify' @{plan=$plan;mapping=$mapping;previous=$result}
 Check ($verified.gpoPublished -and $verified.linkVerified) 'Read-only verification failed'
+$refreshed=Invoke-Worker 'gpoRefresh' @{plan=$plan;mapping=$mapping;previous=$verified}
+Check ($refreshed.state -eq 'REFRESH_SCHEDULED' -and $script:refreshCount -eq 1 -and $refreshed.refreshResults[0].state -eq 'SCHEDULED') 'Explicit gpupdate refresh failed'
 $beforeWrites=$script:writes
 try{Invoke-Worker 'gpoApply' @{plan=$plan;mapping=$mapping;previous=$null}|Out-Null;throw 'Replay accepted'}catch{if($_.Exception.Message -notlike 'GPO_ALREADY_STARTED*'){throw}}
 Check ($script:writes -eq $beforeWrites) 'Replay wrote again'
@@ -77,12 +79,35 @@ try{Invoke-Worker 'gpoRollback' @{plan=$plan;mapping=$mapping;previous=$result}|
 $script:changed=$script:changed.AddSeconds(-1)
 $rolled=Invoke-Worker 'gpoRollback' @{plan=$plan;mapping=$mapping;previous=$result}
 Check ($rolled.state -eq 'ROLLED_BACK' -and !$script:links.ContainsKey($script:domainDn)) 'Rollback did not restore snapshot/remove link'
+$rollbackVerified=Invoke-Worker 'gpoVerify' @{plan=$plan;mapping=$mapping;previous=$rolled}
+Check ($rollbackVerified.state -eq 'ROLLED_BACK') 'Verify after rollback must preserve ROLLED_BACK when the pre-change snapshot still matches'
 Check ([IO.File]::ReadAllText((Join-Path $infDir 'GptTmpl.inf')) -match 'MinimumPasswordLength = 8') 'Old password value not restored'
 # Existing disabled link must return to its original state after rollback.
 $script:links[$script:domainDn]=[pscustomobject]@{GpoId=$script:gpoId;Order=1;Enabled=$false;Enforced=$false}
 $preview=Invoke-Worker 'gpoPreview' @{selection=$selection;mapping=$mapping};$plan.id=[guid]::NewGuid().ToString('N');$plan.preview=$preview;$script:refreshFails=$true
 $partial=Invoke-Worker 'gpoApply' @{plan=$plan;mapping=$mapping;previous=$null}
-Check ($partial.state -eq 'PUBLISHED_REFRESH_FAILED' -and $partial.gpoPublished -and $partial.refreshResults[0].state -eq 'FAILED') 'Refresh failure obscured successful GPO write'
+Check ($partial.state -eq 'PUBLISHED' -and $partial.gpoPublished) 'Apply should publish without running gpupdate'
+$refreshPartial=Invoke-Worker 'gpoRefresh' @{plan=$plan;mapping=$mapping;previous=$partial}
+Check ($refreshPartial.state -eq 'REFRESH_PARTIAL' -and $refreshPartial.gpoPublished -and $refreshPartial.refreshResults[0].state -eq 'FAILED') 'Explicit refresh failure obscured successful GPO write'
 $rolled=Invoke-Worker 'gpoRollback' @{plan=$plan;mapping=$mapping;previous=$partial}
 Check ($rolled.state -eq 'ROLLED_BACK' -and !$script:links[$script:domainDn].Enabled) 'Existing disabled link was not restored'
-Write-Host 'PASS: real GPO worker with AD doubles - discovery, preview, INF/CSE/version writes, backup, link creation, force refresh, independent verification, replay, stale rollback, existing-link restore and refresh failure.'
+Write-Host 'PASS: real GPO worker with AD doubles - discovery, preview, INF/CSE/version writes, backup, link creation, explicit force refresh, independent verification, replay, stale rollback, existing-link restore and refresh failure.'
+
+# Explicit endpoints resolve through scoped AD lookup, reject injection and re-check membership.
+$selection.refresh='Selected'
+$selection | Add-Member -NotePropertyName endpointHosts -NotePropertyValue @('test-pc.example.com')
+$preview=Invoke-Worker 'gpoPreview' @{selection=$selection;mapping=$mapping}
+Check ($preview.refreshComputers.Count -eq 1 -and $preview.refreshComputers[0] -eq 'test-pc.example.com') 'Selected endpoint resolution failed'
+$selection.endpointHosts=@('outside.example.com')
+try{Invoke-Worker 'gpoPreview' @{selection=$selection;mapping=$mapping}|Out-Null;throw 'Out of scope endpoint accepted'}catch{if($_.Exception.Message -notlike 'ENDPOINT_OUT_OF_SCOPE*'){throw}}
+$selection.endpointHosts=@("bad'host.example.com")
+try{Invoke-Worker 'gpoPreview' @{selection=$selection;mapping=$mapping}|Out-Null;throw 'Invalid hostname accepted'}catch{if($_.Exception.Message -notlike 'ENDPOINT_NAME_INVALID*'){throw}}
+$selection.endpointHosts=@('test-pc.example.com')
+$selection.refresh='None'
+$preview=Invoke-Worker 'gpoPreview' @{selection=$selection;mapping=$mapping}
+Check ($preview.refreshComputers.Count -eq 0) 'Disabled refresh selected endpoints'
+Write-Host 'PASS: selected AD endpoints, out-of-scope and invalid names, disabled refresh.'
+
+$selection | Add-Member -NotePropertyName runGpUpdate -NotePropertyValue $true
+try{Invoke-Worker 'gpoPreview' @{selection=$selection;mapping=$mapping}|Out-Null;throw 'Empty automatic refresh accepted'}catch{if($_.Exception.Message -notlike 'REFRESH_TARGET_REQUIRED*'){throw}}
+Write-Host 'PASS: automatic refresh rejects empty target plans.'

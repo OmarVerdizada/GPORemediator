@@ -36,3 +36,7 @@ All endpoints are local-only and served from the same origin. In Windows mode th
 ## State rules
 
 `Preview` expires after 10 minutes. Mapping hash, environment context and GPO/link fingerprint are revalidated before Apply. A write interruption is never automatically replayed; durable/local recovery moves ambiguous runs to `REVIEW_REQUIRED`. `NO_CHANGE` means the mapped value and required direct link already satisfy the plan and no new backup/write was created.
+
+## Optional endpoint refresh fields
+
+GPO selection accepts `runGpUpdate` (boolean, default false), `refresh` (`None`, `Pdc`, `Scope`, `Selected`) and `endpointHosts` (optional array of up to 100 AD computer FQDNs). `Selected` requires at least one hostname. `runGpUpdate: true` requires a non-None refresh mode. Explicit hosts are resolved against the selected domain/OU and must be enabled. The stored preview freezes the resolved target list; Refresh rejects changed targets. These fields do not restrict the GPO's existing policy scope. Legacy stored plans remain manual-refresh only.

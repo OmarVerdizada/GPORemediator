@@ -6,7 +6,6 @@
     <Content Include="PowerShell\GpoWorkflow.Worker.ps1" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="PowerShell\SecurityTemplate.psm1" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
-  <ItemGroup><EmbeddedResource Include="data\benchmark.json" LogicalName="GpoRemediator.Data.benchmark.json" /></ItemGroup>
   <ItemGroup>
     <EmbeddedResource Include="data/gpo-production-mappings.json" />
   </ItemGroup>

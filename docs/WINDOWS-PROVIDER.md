@@ -77,13 +77,13 @@ Bu yanaşma “link edilmişdir” ilə “bu endpoint-ə faktiki tətbiq olunmu
 
 ## 6. Mövcud production adapterləri
 
-MVP-də write adapterləri qəsdən məhduddur:
+Production release-də write adapterləri qəsdən məhduddur:
 
 - `USER_RIGHTS_ASSIGNMENT` — hazır nümunədə `SeNetworkLogonRight`, security template (`GptTmpl.inf`) vasitəsilə;
 - bəzi `SECURITY_OPTION` DWORD parametrləri — security template `Registry Values` bölməsi;
 - nəzərdən keçirilmiş `REGISTRY_POLICY` / `ADMINISTRATIVE_TEMPLATE` nümunələri — GroupPolicy registry cmdlet-ləri.
 
-Account Policy/PSO, Advanced Audit Policy, Firewall, Service Configuration, Registry Preference və sərbəst PowerShell bu MVP-də generic writer kimi açılmır. Hər yeni policy family ayrıca adapter, backup və verification modelinə malik olmalıdır.
+Account Policy/PSO, Advanced Audit Policy, Firewall, Service Configuration, Registry Preference və sərbəst PowerShell bu Production release-də generic writer kimi açılmır. Hər yeni policy family ayrıca adapter, backup və verification modelinə malik olmalıdır.
 
 ## 7. Preflight
 
@@ -170,6 +170,6 @@ Konfiqurasiya yoxdursa MOCK onboarding açılır. Konfiqurasiya varsa launcher W
 
 ## 13. Production hardening qeydləri
 
-MVP-ni production service kimi yerləşdirərkən əlavə olaraq service recovery, mərkəzi log forwarding, backup ACL/retention, reverse proxy və ya enterprise TLS standardı, endpoint firewall qaydaları, patching, certificate rotation, SQLite backup/retention və audit artefaktlarının xarici immutable saxlanması ayrıca planlanmalıdır.
+Production service yerləşdirərkən əlavə olaraq service recovery, mərkəzi log forwarding, backup ACL/retention, reverse proxy və ya enterprise TLS standardı, endpoint firewall qaydaları, patching, certificate rotation, SQLite backup/retention və audit artefaktlarının xarici immutable saxlanması ayrıca planlanmalıdır.
 
 Yeni GPO yaratma/link etmə browser workflow-na açılmır. Provisioning ayrı administrative proses kimi saxlanır; sonra yalnız təsdiqlənmiş GUID application allowlist-ə əlavə edilir.

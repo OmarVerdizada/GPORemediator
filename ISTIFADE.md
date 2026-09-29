@@ -1,8 +1,9 @@
-# Sadə istifadə qaydası
+﻿# Sadə istifadə qaydası
 
 1. `GpoRemediator.cmd` faylını açın. İlk build lazım olsa avtomatik edilir.
 2. Sazlamalarda **Domen**, **Domen kontrolleri** və aşkarlanan Windows hesabını yoxlayın. **Saxla və yenidən başlat** seçin.
 3. Əsas ekranda **Qoşul** seçin. Cari Windows hesabı istifadə edilir. Başqa hesab üçün **Başqa hesab istifadə et** bölməsini açın. `DOMEN/istifadəçi` yazılışı avtomatik `DOMEN\istifadəçi` formasına çevrilir.
+   Bağlantı aktiv istifadə zamanı yenilənir və 30 dəqiqə fəaliyyətsizlikdən sonra silinir. Tətbiq yenidən başladıqda təhlükəsizlik üçün yenidən qoşulmaq lazımdır.
 4. **Bağlantını yoxla** nəticələrinə baxın. Domenə giriş alınması bütün hazırlıq yoxlamalarının keçməsi demək deyil. Problem varsa, uyğun yoxlamanın yanında göstərilir.
 5. **Benchmark** bölməsində qaydanın nömrəsini və ya adını axtarın. **Dəyişiklik** bölməsində GPO və hədəf seçib **Plan hazırla** düyməsini basın. Bu mərhələdə siyasət dəyişmir.
 6. Tətbiq etmək üçün **Sazlamalar** bölməsində dəyişiklik icazəsini açın. Tətbiq yenidən başladıqdan sonra yenidən qoşulub plan hazırlayın. Planı yoxlayın, dəyişiklik nömrəsini və təsdiqləyən şəxsi daxil edin, `APPLY` yazıb tətbiq edin.

@@ -8,7 +8,7 @@ const assert = require('node:assert/strict');
 const root = path.resolve(__dirname, '../frontend/dist');
 const mappings = JSON.parse(fs.readFileSync(path.resolve(__dirname, '../backend/data/gpo-production-mappings.json'))).mappings;
 const inventory = { domain:'example.test',domainController:'dc.example.test',executionUser:'TEST\\operator',gpos:[{id:'gpo-1',name:'Test policy',protected:false,selectable:true}],scopes:[{dn:'DC=example,DC=test',name:'Domain',kind:'Domain'}] };
-let mode='WINDOWS',connected=false,readinessFails=false,hangConnect=false,catalogFails=false,history=[],plan,requests=[],previewBody,loginBody,setupBody;
+let mode='WINDOWS',connected=false,connectionExpired=false,readinessFails=false,hangConnect=false,catalogFails=false,history=[],plan,requests=[],previewBody,loginBody,setupBody;
 const server=http.createServer(async(req,res)=>{
   const url=new URL(req.url,'http://localhost').pathname;
   const reply=(data,status=200)=>{res.writeHead(status,{'Content-Type':'application/json'});res.end(JSON.stringify(data));};
@@ -25,18 +25,20 @@ const server=http.createServer(async(req,res)=>{
     if(url==='/api/gpo/settings')return reply(mappings);
     if(url==='/api/gpo/history')return reply(history);
     if(url==='/api/gpo/connect'){loginBody=body;if(hangConnect)return;connected=true;return reply(inventory);}
-    if(url==='/api/gpo/inventory')return connected?reply(inventory):reply({code:'GPO_LOGIN_REQUIRED',message:'Connect again'},409);
-    if(url==='/api/gpo/readiness')return readinessFails?reply({code:'WINDOWS_TIMEOUT',message:'Readiness timeout'},409):reply({ready:true,checks:[{id:'session',label:'Kerberos / WinRM session',state:'PASS',message:'Authenticated remote session'},{id:'backup',label:'Backup repository',state:'PASS',message:'Backup directory is writable'}]});
+    if(url==='/api/gpo/inventory')return connected&&!connectionExpired?reply(inventory):reply({code:'GPO_LOGIN_REQUIRED',message:'Connect again'},409);
+    if(url==='/api/gpo/session')return connected&&!connectionExpired?reply({connected:true,executionUser:inventory.executionUser,expiresAt:new Date(Date.now()+30*60000).toISOString(),idleTimeoutMinutes:30}):reply({code:'GPO_LOGIN_REQUIRED',message:'Connect again'},409);
+    if(url==='/api/gpo/readiness')return connectionExpired?reply({code:'GPO_LOGIN_REQUIRED',message:'Connect again'},409):readinessFails?reply({code:'WINDOWS_TIMEOUT',message:'Readiness timeout'},409):reply({ready:true,checks:[{id:'session',label:'Kerberos / WinRM session',state:'PASS',message:'Authenticated remote session'},{id:'backup',label:'Backup repository',state:'PASS',message:'Backup directory is writable'}]});
     if(url==='/api/gpo/plan-1/evidence')return reply({operationId:plan.id,integrityHash:'fixture-hash'});
     if(url==='/api/gpo/preview'){
       previewBody=body;
-      plan={id:'plan-1',selection:body,executionUser:inventory.executionUser,preview:{gpo:inventory.gpos[0],scope:inventory.scopes[0],previousValue:'0',desiredValue:String(body.value),warnings:[],refreshComputers:[]}};
+      plan={id:'plan-1',selection:body,executionUser:inventory.executionUser,preview:{gpo:inventory.gpos[0],scope:inventory.scopes[0],previousValue:'0',desiredValue:String(body.value),warnings:[],refreshComputers:body.refresh==='Selected'?body.endpointHosts:[]}};
       return reply(plan);
     }
-    if(/^\/api\/gpo\/plan-1\/(apply|verify|rollback)$/.test(url)){
+    if(url==='/api/gpo/plan-1/replan'){plan={...plan,id:'plan-2'};return reply(plan);}
+    if(/^\/api\/gpo\/plan-1\/(apply|verify|rollback|refresh)$/.test(url)){
       assert.equal(req.headers['x-csrf-token'],'fixture');
       if(url.endsWith('/apply')){assert.equal(body.confirmation,'APPLY');assert.equal(body.changeReference,'CHG-1');}
-      const result={state:url.endsWith('/rollback')?'ROLLED_BACK':url.endsWith('/verify')?'VERIFIED':'PUBLISHED',message:'Fixture operation completed',gpoPublished:true,linkVerified:true,backupId:'backup-1',refreshResults:[],effectiveStatus:'ENDPOINT_VERIFICATION_PENDING'};
+      const result={state:url.endsWith('/rollback')?'ROLLED_BACK':url.endsWith('/verify')?'VERIFIED':url.endsWith('/refresh')?'REFRESH_SCHEDULED':'PUBLISHED',message:'Fixture operation completed',gpoPublished:true,linkVerified:true,backupId:'backup-1',refreshResults:[],effectiveStatus:'ENDPOINT_VERIFICATION_PENDING'};
       history=[{id:plan.id,plan,result}];return reply(history[0]);
     }
     return reply({code:'NOT_FOUND',message:'Unexpected test API: '+url},404);
@@ -52,7 +54,7 @@ const server=http.createServer(async(req,res)=>{
   try{
     const context=await browser.newContext();
     const page=await context.newPage();const errors=[];page.on('pageerror',e=>errors.push(e.message));
-    await page.addInitScript(()=>{localStorage.setItem('gr-favorites','broken json');localStorage.setItem('gr-lang','en');});
+    await page.addInitScript(()=>{sessionStorage.setItem('gr-favorites','broken json');sessionStorage.setItem('gr-lang','en');});
     const origin=`http://127.0.0.1:${server.address().port}`;
     const idle=()=>page.waitForFunction(()=>document.querySelector('#operator-modules .product-main')?.getAttribute('aria-busy')==='false');
     await page.goto(origin+'/#/');await idle();assert.equal(new URL(page.url()).hash,'#/dashboard');
@@ -72,16 +74,33 @@ const server=http.createServer(async(req,res)=>{
     await page.locator('#gpo-login [name="userName"]').fill('TEST/operator');await page.locator('#gpo-login [name="password"]').fill('fixture-only');
     await page.locator('#gpo-login button').click();await idle();
     assert.match(await page.locator('.inline-notice').innerText(),/Readiness timeout/);assert.equal(loginBody.userName,'TEST\\operator');
+    readinessFails=false;connectionExpired=true;await page.locator('[data-settings-nav]').click();await page.locator('[data-readiness]').click();await page.locator('[data-reconnect]').waitFor();
+    assert.equal(await page.locator('.gr-auto-row').count(),0);await page.locator('[data-reconnect]').click();await idle();assert.equal(await page.locator('#gpo-login').count(),1);
+    connectionExpired=false;await page.locator('#gpo-login button').click();await idle();await page.goto(origin+'/#/control');await page.locator('[data-tab="remediation"]').click();
     await page.locator('[data-gpo-toggle]').click();await page.locator('[data-gpo="gpo-1"]').click();
     await page.locator('[name="value"]').fill('2');await page.locator('[name="value"]').press('Tab');
     assert.equal(await page.locator('[name="value"]').inputValue(),'2');
+    await page.locator('[name="runGpUpdate"]').selectOption('true');
+    await page.locator('[name="refresh"]').selectOption('Selected');
+    await page.locator('[name="endpointHosts"]').fill('pc01.example.test\nserver01.example.test');
+    await page.locator('[data-tab="impact"]').click();await page.locator('[data-tab="remediation"]').click();
+    assert.equal(await page.locator('[name="runGpUpdate"]').inputValue(),'true');
     await page.locator('#gpo-selection .primary-action').click();await idle();assert.equal(previewBody.value,2);
+    assert.equal(previewBody.runGpUpdate,true);assert.deepEqual(previewBody.endpointHosts,['pc01.example.test','server01.example.test']);
     await page.locator('#approval-ref').fill('CHG-1');await page.locator('#approval-by').fill('Reviewer');await page.locator('#approval-ok').check();
+    for(const width of [1440,768,390]){
+      await page.setViewportSize({width,height:1000});
+      const box=await page.locator('#gpo-apply [name="impact"]').boundingBox();assert.ok(box.width<=18&&box.height<=18,'Checkbox stretched');
+      assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>window.innerWidth),false,'Horizontal overflow');
+    }
+    await page.screenshot({path:path.resolve(__dirname,'../work/remediation-mobile.png'),fullPage:true});
+    await page.setViewportSize({width:1440,height:1000});
+    await page.screenshot({path:path.resolve(__dirname,'../work/remediation-desktop.png'),fullPage:true});
     await page.locator('#gpo-apply [name="impact"]').check();await page.locator('#gpo-apply [name="confirmation"]').fill('APPLY');await page.locator('#gpo-apply button').click();await idle();
     const downloadPromise=page.waitForEvent('download');await page.locator('[data-evidence]').click();const download=await downloadPromise;assert.match(download.suggestedFilename(),/gpo-evidence/);await idle();
     await page.locator('[data-gpo-nav][href="#/operations"]').click();await page.locator('[data-ops-filter="SUCCESS"]').click();assert.equal(await page.locator('.op-card').count(),1);
     await page.locator('[data-verify]').click();await idle();
-    await page.locator('[data-rollback] input').fill('ROLLBACK');await page.locator('[data-rollback] button').click();await idle();
+    await page.locator('[data-rollback] input').fill('ROLLBACK');await page.locator('[data-rollback] button').click();await page.locator('[data-confirm-run]').click();await idle();
     await page.locator('[data-ops-filter="ROLLED_BACK"]').click();assert.equal(await page.locator('.op-card').count(),1);
     const fixed=mappings.find(m=>m.automation==='Automated'&&!m.allowValueOverride&&!m.requiresInput&&!m.domainPolicySensitive);
     await page.locator('[data-gpo-nav][href="#/benchmark"]').click();await page.locator('#catalog-search').fill(fixed.id);await page.locator(`[data-rule="${fixed.id}"]`).click();await page.locator('[data-tab="remediation"]').click();

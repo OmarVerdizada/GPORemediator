@@ -1,4 +1,4 @@
-﻿# Runs on the pinned writable DC using the authenticated remoting identity.
+# Runs on the pinned writable DC using the authenticated remoting identity.
 param([string]$Operation,$Configuration,$Data,[string]$SecurityModule)
 $ErrorActionPreference='Stop';$ProgressPreference='SilentlyContinue';$WarningPreference='SilentlyContinue';$InformationPreference='SilentlyContinue'
 Set-StrictMode -Version Latest
@@ -158,7 +158,7 @@ function Fingerprint([string]$Id,[string]$ScopeDn){
 }
 function Validate-Selection($S,$Map){
     if([string]$Map.automation -ne 'Automated' -or [string]$Map.handler -eq 'Manual'){Fail 'GPO_MANUAL_ONLY' 'This CIS control is read-only in the production mapping registry and cannot be remediated automatically.'}
-    if($S.refresh -notin @('None','Pdc','Scope')){Fail 'GPO_OPTIONS_INVALID' 'Unknown refresh option.'}
+    if($S.refresh -notin @('None','Pdc','Scope','Selected')){Fail 'GPO_OPTIONS_INVALID' 'Unknown refresh option.'}
     $scope=Scope $S.scopeDn;$gpo=Get-GPO -Guid ([guid]$S.gpoId) -Domain $cfg.domain -Server $cfg.domainController;$status=[string]$gpo.GpoStatus
     if($status -eq 'AllSettingsDisabled'){Fail 'GPO_SETTINGS_DISABLED' 'All settings are disabled in this GPO.'}
     if([string]$Map.scope -eq 'User' -and $status -eq 'UserSettingsDisabled'){Fail 'USER_POLICY_DISABLED' 'User settings are disabled in this GPO.'}
@@ -232,9 +232,31 @@ function Impact-Details($S,$Map,$Gpo,$Scope,[string[]]$LinkScopes){
     $enabled=@($objects|Where-Object Enabled);$servers=@($enabled|Where-Object{$_.OperatingSystem -match 'Server'});$workstations=@($enabled|Where-Object{$_.OperatingSystem -notmatch 'Server'});$sample=@($enabled|Where-Object DNSHostName|Select-Object -First 25 -ExpandProperty DNSHostName)
     return @{inheritance=$(if([bool]$inherit.GpoInheritanceBlocked){'BLOCKED'}else{'NORMAL'});blockInheritance=[bool]$inherit.GpoInheritanceBlocked;conflicts=@($conflicts);affectedObjects=@{computers=$enabled.Count;servers=$servers.Count;workstations=$workstations.Count;disabled=@($objects|Where-Object{-not $_.Enabled}).Count;sampleHosts=$sample;truncated=$truncated;users=$users.Count};existingLinkScopes=@($LinkScopes);securityFiltering=$permissions;wmiFilter=$(if($ad.gPCWQLFilter){[string]$ad.gPCWQLFilter}else{$null})}
 }
+function Resolve-RefreshTargets($S,$Scope){
+    if($S.refresh -eq 'None'){return @()}
+    if($S.refresh -eq 'Pdc'){return @([string]$domain.PDCEmulator)}
+    if($S.refresh -eq 'Scope'){
+        $targets=@(Get-ADComputer -SearchBase $Scope.dn -SearchScope Subtree -Filter {Enabled -eq $true} -Server $cfg.domainController -Properties DNSHostName -ResultSetSize 101)
+        if($targets.Count -gt 100){Fail 'REFRESH_SCOPE_TOO_LARGE' 'More than 100 computers. Choose a smaller OU or selected endpoints.'}
+        if(@($targets|Where-Object{!$_.DNSHostName}).Count){Fail 'ENDPOINT_NAME_MISSING' 'An enabled computer has no DNS hostname. Select explicit endpoints or repair its AD record.'}
+        return @($targets|ForEach-Object{[string]$_.DNSHostName}|Sort-Object -Unique)
+    }
+    if($S.refresh -ne 'Selected'){Fail 'GPO_OPTIONS_INVALID' 'Unknown refresh option.'}
+    $requested=@(Read-Field $S 'endpointHosts' @())
+    if(!$requested.Count -or $requested.Count -gt 100){Fail 'ENDPOINT_SELECTION_REQUIRED' 'Choose 1 to 100 AD computer DNS names.'}
+    $resolved=@()
+    foreach($name in $requested){
+        if([string]$name -notmatch '^(?=.{1,253}$)[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?)+$'){Fail 'ENDPOINT_NAME_INVALID' 'Use fully qualified AD DNS hostnames.'}
+        $matches=@(Get-ADComputer -SearchBase $Scope.dn -SearchScope Subtree -Filter "DNSHostName -eq '$name'" -Server $cfg.domainController -Properties DNSHostName,Enabled -ResultSetSize 2)
+        if($matches.Count -ne 1 -or !$matches[0].Enabled -or [string]$matches[0].DNSHostName -ine [string]$name){Fail 'ENDPOINT_OUT_OF_SCOPE' 'Every selected hostname must identify one enabled AD computer inside the selected scope.'}
+        $resolved+=[string]$matches[0].DNSHostName
+    }
+    return @($resolved|Sort-Object -Unique)
+}
 function Preview($S,$Map){
     Validate-Selection $S $Map;$gpo=Get-GPO -Guid ([guid]$S.gpoId) -Domain $cfg.domain -Server $cfg.domainController;$scope=Scope $S.scopeDn;$raw=Scope-Links $scope.dn;$existing=Selected-Link $scope.dn $S.gpoId;$computers=@()
-    if($S.refresh -eq 'Pdc'){$computers=@([string]$domain.PDCEmulator)}elseif($S.refresh -eq 'Scope'){$targets=@(Get-ADComputer -SearchBase $scope.dn -SearchScope Subtree -Filter {Enabled -eq $true} -Server $cfg.domainController -Properties DNSHostName -ResultSetSize 101);if($targets.Count -gt 100){Fail 'REFRESH_SCOPE_TOO_LARGE' 'This scope has more than 100 computers. Choose PDC-only/no refresh or a smaller OU.'};$computers=@($targets|Where-Object{$_.DNSHostName}|ForEach-Object{[string]$_.DNSHostName}|Sort-Object -Unique)}
+    $computers=@(Resolve-RefreshTargets $S $scope)
+    if([bool](Read-Field $S 'runGpUpdate' $false) -and !$computers.Count){Fail 'REFRESH_TARGET_REQUIRED' 'Automatic gpupdate requires at least one resolved endpoint.'}
     $links=@();foreach($candidateScope in All-LinkScopes){if(Link $candidateScope.rawLinks $S.gpoId $candidateScope.dn){$links+=$candidateScope.dn}}
     $preflight=Selection-Preflight $S $Map;$impact=Impact-Details $S $Map $gpo $scope $links;$warnings=@('Changing this GPO affects all of its existing links, not only the selected link.',('Existing links: '+$(if($links.Count){$links -join '; '}else{'none'})),'Security filtering, WMI filtering, inheritance and precedence are analyzed but are never silently changed.','gpupdate scheduling does not by itself prove effective endpoint compliance.','A full GPO backup is created before any policy write; rollback is blocked after external changes.')+@($Map.warnings)
     foreach($c in @($impact.conflicts|Where-Object{$_.severity -eq 'HIGH'})){$warnings+=('High-impact conflict: '+$c.message)}
@@ -330,11 +352,23 @@ function Verify-Published($Plan,$Map,[bool]$CheckEndpoints=$false){
     $s=$Plan.selection;$metadata=Verification-Metadata $s;$published=(Mapping-Matches $s.gpoId $Map $s) -and [bool]$metadata.versionsMatch;$link=Selected-Link $s.scopeDn $s.gpoId;$linked=$null -ne $link -and $link.enabled -and (!$s.firstLink -or $link.order -eq 1);$effective='GPO_VALUE_VERIFIED_ENDPOINT_PENDING';$endpointChecks=@()
     if([bool]$Map.domainPolicySensitive){$policy=Get-ADDefaultDomainPasswordPolicy -Identity $domainDn -Server $cfg.domainController;$actual=$null;switch([string]$Map.id){'1.1.1'{$actual=$policy.PasswordHistoryCount}'1.1.3'{$actual=$policy.MinPasswordAge.TotalDays}'1.1.4'{$actual=$policy.MinPasswordLength}'1.1.5'{$actual=[int][bool]$policy.ComplexityEnabled}'1.1.6'{$actual=[int][bool]$policy.ReversibleEncryptionEnabled}'1.2.1'{$actual=$policy.LockoutDuration.TotalMinutes}'1.2.2'{$actual=$policy.LockoutThreshold}'1.2.4'{$actual=$policy.LockoutObservationWindow.TotalMinutes}};if($null -eq $actual){$effective='DOMAIN_VALUE_NOT_EXPOSED_BY_AD_CMDLET'}elseif(Numeric-Complies $actual $s.value ([string]$Map.comparator)){$effective='DOMAIN_VALUE_MATCHES_ON_SELECTED_DC'}else{$effective='DOMAIN_VALUE_PENDING_OR_OVERRIDDEN'}}elseif($CheckEndpoints){$endpointChecks=@(Verify-EffectiveSamples $Plan $Map);if(@($endpointChecks|Where-Object{$_.state -eq 'MISMATCH'}).Count){$effective='ENDPOINT_MISMATCH'}elseif(@($endpointChecks|Where-Object{$_.state -eq 'VERIFIED'}).Count -gt 0 -and @($endpointChecks|Where-Object{$_.state -ne 'VERIFIED'}).Count -eq 0){$effective='VERIFIED_ON_SAMPLE'}else{$effective='ENDPOINT_VERIFICATION_PENDING'}}
     if(!$metadata.replicationConverged -and $published){$effective=if($effective -eq 'ENDPOINT_MISMATCH'){$effective}else{'REPLICATION_PENDING'}}
-    return @{published=[bool]$published;linked=[bool]$linked;effective=$effective;verification=$metadata;endpointChecks=@($endpointChecks)}
+    return @{published=[bool]$published;linked=[bool]$linked;effective=$effective;verification=$metadata;endpointChecks=@($endpointChecks);currentValue=(Mapping-Display $s.gpoId $Map $s $false)}
 }
 function Run-Directory($Plan){if($Plan.id -notmatch '^[a-f0-9]{32}$' -or $Plan.domain -ine $cfg.domain -or $Plan.domainController -ine $cfg.domainController){Fail 'PLAN_CONTEXT_CHANGED' 'Plan context does not match the selected DC/domain.'};$root=[IO.Path]::GetFullPath([string]$cfg.backupPath);if($root -notmatch '^[A-Za-z]:\\'){Fail 'BACKUP_PATH_INVALID' 'A local backup path on the selected DC is required.'};return Join-Path $root ('GpoWorkflow\'+$Plan.id)}
 function Save-Manifest($Manifest,[string]$Directory){Atomic-Text (Join-Path $Directory 'manifest.json') ($Manifest|ConvertTo-Json -Depth 50) ([Text.UTF8Encoding]::new($false))}
-function Result([string]$State,[string]$Message,$Manifest,$V,$Refresh){$verification=$null;$endpointChecks=@();if($V -and (($V -is [Collections.IDictionary] -and $V.Contains('verification')) -or $V.PSObject.Properties['verification'])){$verification=$V.verification};if($V -and (($V -is [Collections.IDictionary] -and $V.Contains('endpointChecks')) -or $V.PSObject.Properties['endpointChecks'])){$endpointChecks=@($V.endpointChecks)};$backupId=$null;$backupDirectory=$null;$postFingerprint=$null;if($Manifest){$backupId=$Manifest.backupId;$backupDirectory=$Manifest.directory;$postFingerprint=$Manifest.postFingerprint};return @{state=$State;message=$Message;backupId=$backupId;backupDirectory=$backupDirectory;postFingerprint=$postFingerprint;gpoPublished=[bool]$V.published;linkVerified=[bool]$V.linked;refreshResults=@($Refresh);effectiveStatus=[string]$V.effective;verification=$verification;endpointChecks=$endpointChecks}}
+function Read-Field($Object,[string]$Name,$Default=$null){
+    if($null -eq $Object){return $Default}
+    if($Object -is [Collections.IDictionary]){if($Object.Contains($Name)){return $Object[$Name]};return $Default}
+    $property=$Object.PSObject.Properties[$Name];if($property){return $property.Value};return $Default
+}
+function Result([string]$State,[string]$Message,$Manifest,$V,$Refresh){
+    $verification=Read-Field $V 'verification' $null
+    $endpointChecks=@(Read-Field $V 'endpointChecks' @())
+    $backupId=Read-Field $Manifest 'backupId' $null
+    $backupDirectory=Read-Field $Manifest 'directory' $null
+    $postFingerprint=Read-Field $Manifest 'postFingerprint' $null
+    return @{state=$State;message=$Message;backupId=$backupId;backupDirectory=$backupDirectory;postFingerprint=$postFingerprint;gpoPublished=[bool](Read-Field $V 'published' $false);linkVerified=[bool](Read-Field $V 'linked' $false);refreshResults=@($Refresh);effectiveStatus=[string](Read-Field $V 'effective' 'UNKNOWN');verification=$verification;endpointChecks=$endpointChecks;currentValue=Read-Field $V 'currentValue' $null}
+}
 
 switch($Operation){
     'gpoReadiness'{return Environment-Status}
@@ -356,15 +390,78 @@ switch($Operation){
             $manifest.phase='WRITING';Save-Manifest $manifest $directory;$null=Write-Mapping $plan $map
             if($null -eq $fresh.existingLink){$p=@{Guid=[guid]$s.gpoId;Target=$s.scopeDn;Domain=$cfg.domain;Server=$cfg.domainController;LinkEnabled='Yes'};if($s.firstLink){$p.Order=1};New-GPLink @p|Out-Null}else{$p=@{Guid=[guid]$s.gpoId;Target=$s.scopeDn;Domain=$cfg.domain;Server=$cfg.domainController;LinkEnabled='Yes'};if($s.firstLink){$p.Order=1};Set-GPLink @p|Out-Null}
             $v=Verify-Published $plan $map $false;$manifest.postFingerprint=Fingerprint $s.gpoId $s.scopeDn;$manifest.phase='PUBLISHED';Save-Manifest $manifest $directory
-            $refresh=@();$target=if([string]$map.scope -eq 'User'){'User'}else{'Computer'};foreach($computer in $plan.preview.refreshComputers){try{Invoke-GPUpdate -Computer $computer -Target $target -Force -RandomDelayInMinutes 0 -ErrorAction Stop|Out-Null;$refresh+=@{computer=$computer;state='SCHEDULED';message=('gpupdate /target:'+$target.ToLowerInvariant()+' /force scheduled; endpoint completion remains to be verified.')}}catch{$refresh+=@{computer=$computer;state='FAILED';message='Remote refresh could not be scheduled. Check RPC/task-scheduler firewall and permissions.'}}}
-            $state=if(!$v.published -or !$v.linked){'VERIFY_MISMATCH'}elseif(@($refresh|Where-Object{$_.state -eq 'FAILED'}).Count){'PUBLISHED_REFRESH_FAILED'}else{'PUBLISHED'};return Result $state 'GPO content and selected link were read back after the write. Effective endpoint convergence is reported separately.' $manifest $v $refresh
-        }catch{if($manifest){$manifest.phase='REVIEW_REQUIRED';Save-Manifest $manifest $directory;return Result 'REVIEW_REQUIRED' 'Operation did not finish. The full Backup-GPO snapshot and manifest are on the selected DC. Use Verify; partial writes require administrator review.' $manifest @{published=$false;linked=$false;effective='UNKNOWN'} @()};throw}finally{if($lock){$lock.Dispose()}}
+            # Do not force endpoint refresh as a side effect of Apply. Publication and refresh are
+            # intentionally separate operator decisions so the change result is visible first.
+            $state=if(!$v.published -or !$v.linked){'VERIFY_MISMATCH'}else{'PUBLISHED'};return Result $state 'GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.' $manifest $v @()
+        }catch{
+            if($manifest){
+                $preWrite=([string]$manifest.phase -in @('BACKUP_STARTED','BACKED_UP'))
+                $manifest.phase=if($preWrite){'FAILED_SAFE'}else{'REVIEW_REQUIRED'};Save-Manifest $manifest $directory
+                $message=if($preWrite){'Apply stopped before the policy write began. The backup/manifest were retained and no policy change should be assumed.'}else{'Operation did not finish after the write phase began. The full Backup-GPO snapshot and manifest are on the selected DC. Use Verify; partial writes require administrator review.'}
+                return Result $manifest.phase $message $manifest @{published=$false;linked=$false;effective='UNKNOWN';currentValue=$null} @()
+            }
+            throw
+        }finally{if($lock){$lock.Dispose()}}
     }
-    'gpoVerify'{$plan=$Data.plan;$map=$Data.mapping;$directory=Run-Directory $plan;if(!(Test-Path -LiteralPath (Join-Path $directory 'manifest.json'))){$v=Verify-Published $plan $map $true;return Result $(if($v.published -and $v.linked){'NO_CHANGE'}else{'VERIFY_MISMATCH'}) 'Read-only verification completed; no execution manifest exists because the prior plan required no change.' $null $v @()};$manifest=Get-Content -LiteralPath (Join-Path $directory 'manifest.json') -Raw|ConvertFrom-Json;$v=Verify-Published $plan $map $true;return Result $(if($v.published -and $v.linked){'PUBLISHED'}else{'VERIFY_MISMATCH'}) 'Verification is read-only. Endpoint convergence is not assumed without endpoint evidence.' $manifest $v @()}
+    'gpoVerify'{
+        $plan=$Data.plan;$map=$Data.mapping;$directory=Run-Directory $plan
+        if(!(Test-Path -LiteralPath (Join-Path $directory 'manifest.json'))){
+            $v=Verify-Published $plan $map $true
+            $state=if($v.published -and $v.linked){'NO_CHANGE'}else{'DRIFT_DETECTED'}
+            $message=if($state -eq 'DRIFT_DETECTED'){'Current GPO content or link no longer matches the requested state. The previous success state has been invalidated; generate a fresh plan before remediation.'}else{'Read-only verification completed; the current GPO/link still matches the requested state.'}
+            return Result $state $message $null $v @()
+        }
+        $manifest=Get-Content -LiteralPath (Join-Path $directory 'manifest.json') -Raw|ConvertFrom-Json
+        if([string]$manifest.phase -in @('ROLLED_BACK','ROLLBACK_REVIEW_REQUIRED','ROLLBACK_DRIFT_DETECTED')){
+            $contentMatches=(Get-NormalizedGpoContentFingerprint (Gpo-Folder $plan.selection.gpoId)) -ceq [string]$manifest.beforeContent
+            $extensionMatches=([string](Gpo-Ad $plan.selection.gpoId).gPCMachineExtensionNames -ceq [string]$manifest.beforeExtensions)
+            $linkMatches=((Scope-Links $plan.selection.scopeDn) -ceq [string]$plan.preview.scopeLinks)
+            $rolledBack=$contentMatches -and $extensionMatches -and $linkMatches
+            $v=@{published=$false;linked=$false;effective='ROLLBACK_ENDPOINT_PENDING';verification=(Verification-Metadata $plan.selection);endpointChecks=@();currentValue=(Mapping-Display $plan.selection.gpoId $map $plan.selection $false)}
+            if($rolledBack){
+                $manifest.phase='ROLLED_BACK';Save-Manifest $manifest $directory
+                return Result 'ROLLED_BACK' 'Rollback was re-verified against the pre-change GPO content, extensions and link state. Endpoint policy convergence may still be pending.' $manifest $v @()
+            }
+            $manifest.phase='ROLLBACK_DRIFT_DETECTED';Save-Manifest $manifest $directory
+            return Result 'ROLLBACK_DRIFT_DETECTED' 'The GPO or selected link changed after rollback. The rollback record is preserved, but the current state no longer matches the pre-change snapshot.' $manifest $v @()
+        }
+        $v=Verify-Published $plan $map $true
+        $state=if($v.published -and $v.linked){'PUBLISHED'}else{'DRIFT_DETECTED'}
+        $message=if($state -eq 'DRIFT_DETECTED'){'Drift detected: the live GPO content or selected link changed after Apply. This operation is no longer compliant until it is remediated again.'}else{'Read-only verification completed against the live GPO, link, replication metadata and available endpoint evidence.'}
+        return Result $state $message $manifest $v @()
+    }
+    'gpoRefresh'{
+        $plan=$Data.plan;$map=$Data.mapping;$directory=Run-Directory $plan;$manifest=$null;if(Test-Path -LiteralPath (Join-Path $directory 'manifest.json')){$manifest=Get-Content -LiteralPath (Join-Path $directory 'manifest.json') -Raw|ConvertFrom-Json}
+        $before=Verify-Published $plan $map $false;if(!$before.published -or !$before.linked){return Result 'DRIFT_DETECTED' 'gpupdate was blocked because the live GPO content or link no longer matches the requested state. Re-verify and remediate the drift first.' $manifest $before @()}
+        $computers=@($plan.preview.refreshComputers|Where-Object{$_}|Sort-Object -Unique)
+        $currentTargets=@(Resolve-RefreshTargets $plan.selection (Scope $plan.selection.scopeDn))
+        if(($currentTargets -join '|') -ine ($computers -join '|')){Fail 'REFRESH_TARGETS_CHANGED' 'Refresh targets changed since preview. Prepare a fresh plan.'}
+        if(!$computers.Count){return Result 'REFRESH_NOT_CONFIGURED' 'No gpupdate targets were selected in the plan. Generate a new plan and choose PDC emulator or selected-scope computers before Apply.' $manifest $before @()}
+        $refresh=@();$target=if([string]$map.scope -eq 'User'){'User'}else{'Computer'}
+        foreach($computer in $computers){try{Invoke-GPUpdate -Computer $computer -Target $target -Force -RandomDelayInMinutes 0 -ErrorAction Stop|Out-Null;$refresh+=@{computer=$computer;state='SCHEDULED';message=('gpupdate /target:'+$target.ToLowerInvariant()+' /force scheduled.')}}catch{$refresh+=@{computer=$computer;state='FAILED';message='Remote gpupdate could not be scheduled. Check RPC/task-scheduler firewall, WinRM/Kerberos reachability and permissions.'}}}
+        $v=Verify-Published $plan $map $true;$failed=@($refresh|Where-Object{$_.state -eq 'FAILED'}).Count
+        $state=if(!$v.published -or !$v.linked){'DRIFT_DETECTED'}elseif($failed){'REFRESH_PARTIAL'}else{'REFRESH_SCHEDULED'}
+        return Result $state $(if($failed){'gpupdate /force was scheduled on some targets, but one or more targets failed. Live GPO publication was re-verified.'}else{'gpupdate /force was scheduled on the selected targets. Live GPO publication was re-verified; effective endpoint convergence may still be pending.'}) $manifest $v $refresh
+    }
     'gpoRollback'{
         $plan=$Data.plan;$map=$Data.mapping;$s=$plan.selection;$directory=Run-Directory $plan;if(!(Test-Path -LiteralPath (Join-Path $directory 'manifest.json'))){Fail 'ROLLBACK_NOT_AVAILABLE' 'No backup exists because this operation did not change the GPO.'};$manifest=Get-Content -LiteralPath (Join-Path $directory 'manifest.json') -Raw|ConvertFrom-Json;if(!$manifest.backupId){Fail 'ROLLBACK_BACKUP_INCOMPLETE' 'The operation manifest exists but no completed Backup-GPO ID was recorded. Verify current policy and inspect the operation directory; automatic rollback is unavailable.'};if(!$manifest.postFingerprint){Fail 'ROLLBACK_VERSION_UNKNOWN' 'A completed post-write fingerprint is missing. Recover the recorded Backup-GPO snapshot manually after inspecting AD/SYSVOL.'};$lock=$null
         try{$lock=[IO.File]::Open((Join-Path (Split-Path $directory -Parent) (([guid]$s.gpoId).ToString()+'.lock')),[IO.FileMode]::OpenOrCreate,[IO.FileAccess]::ReadWrite,[IO.FileShare]::None)}catch{Fail 'GPO_BUSY' 'Another operation is writing this GPO.'}
-        try{if((Fingerprint $s.gpoId $s.scopeDn) -cne $manifest.postFingerprint){Fail 'ROLLBACK_CONFLICT' 'The GPO or links changed after Apply. Automatic full-GPO restore is blocked.'};$manifest.phase='ROLLING_BACK';Save-Manifest $manifest $directory;Restore-GPO -BackupId ([guid]$manifest.backupId) -Path $directory -Domain $cfg.domain -Server $cfg.domainController|Out-Null;$before=$plan.preview.existingLink;if($null -eq $before){Remove-GPLink -Guid ([guid]$s.gpoId) -Target $s.scopeDn -Domain $cfg.domain -Server $cfg.domainController -Confirm:$false|Out-Null}else{Set-GPLink -Guid ([guid]$s.gpoId) -Target $s.scopeDn -Domain $cfg.domain -Server $cfg.domainController -Order ([int]$before.order) -LinkEnabled $(if($before.enabled){'Yes'}else{'No'}) -Enforced $(if($before.enforced){'Yes'}else{'No'})|Out-Null};$matches=(Get-NormalizedGpoContentFingerprint (Gpo-Folder $s.gpoId)) -ceq $manifest.beforeContent;$matches=$matches -and ([string](Gpo-Ad $s.gpoId).gPCMachineExtensionNames -ceq [string]$manifest.beforeExtensions) -and ((Scope-Links $s.scopeDn) -ceq [string]$plan.preview.scopeLinks);$manifest.phase=if($matches){'ROLLED_BACK'}else{'ROLLBACK_REVIEW_REQUIRED'};Save-Manifest $manifest $directory;return Result $manifest.phase 'GPO snapshot and selected link restored. Endpoint refresh/replication still need to converge.' $manifest @{published=$false;linked=$false;effective='ROLLBACK_ENDPOINT_PENDING'} @()}finally{if($lock){$lock.Dispose()}}
+        try{
+            if((Fingerprint $s.gpoId $s.scopeDn) -cne $manifest.postFingerprint){Fail 'ROLLBACK_CONFLICT' 'The GPO or links changed after Apply. Automatic full-GPO restore is blocked.'}
+            $manifest.phase='ROLLING_BACK';Save-Manifest $manifest $directory
+            Restore-GPO -BackupId ([guid]$manifest.backupId) -Path $directory -Domain $cfg.domain -Server $cfg.domainController|Out-Null
+            $before=$plan.preview.existingLink
+            if($null -eq $before){Remove-GPLink -Guid ([guid]$s.gpoId) -Target $s.scopeDn -Domain $cfg.domain -Server $cfg.domainController -Confirm:$false|Out-Null}
+            else{Set-GPLink -Guid ([guid]$s.gpoId) -Target $s.scopeDn -Domain $cfg.domain -Server $cfg.domainController -Order ([int]$before.order) -LinkEnabled $(if($before.enabled){'Yes'}else{'No'}) -Enforced $(if($before.enforced){'Yes'}else{'No'})|Out-Null}
+            $matches=(Get-NormalizedGpoContentFingerprint (Gpo-Folder $s.gpoId)) -ceq $manifest.beforeContent
+            $matches=$matches -and ([string](Gpo-Ad $s.gpoId).gPCMachineExtensionNames -ceq [string]$manifest.beforeExtensions) -and ((Scope-Links $s.scopeDn) -ceq [string]$plan.preview.scopeLinks)
+            $manifest.phase=if($matches){'ROLLED_BACK'}else{'ROLLBACK_REVIEW_REQUIRED'};Save-Manifest $manifest $directory
+            return Result $manifest.phase 'GPO snapshot and selected link restored. Endpoint refresh/replication still need to converge.' $manifest @{published=$false;linked=$false;effective='ROLLBACK_ENDPOINT_PENDING';currentValue=$null} @()
+        }catch{
+            if($_.Exception.Message -like 'ROLLBACK_CONFLICT*'){throw}
+            if($manifest){$manifest.phase='ROLLBACK_REVIEW_REQUIRED';Save-Manifest $manifest $directory;return Result 'ROLLBACK_REVIEW_REQUIRED' 'Rollback did not finish cleanly. Do not retry automatically; inspect the saved backup and verify the live GPO/link state.' $manifest @{published=$false;linked=$false;effective='ROLLBACK_ENDPOINT_PENDING';currentValue=$null} @()}
+            throw
+        }finally{if($lock){$lock.Dispose()}}
     }
     default{Fail 'OPERATION_DENIED' 'Unknown GPO operation.'}
 }

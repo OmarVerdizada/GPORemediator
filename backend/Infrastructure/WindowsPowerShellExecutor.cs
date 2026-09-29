@@ -11,7 +11,7 @@ internal sealed class WindowsPowerShellExecutor(ILogger logger)
     public async Task<T> RunAsync<T>(string operation, object configuration, object payload, CancellationToken ct)
     {
         if (!OperatingSystem.IsWindows()) throw new PolicyException("WINDOWS_REQUIRED", "Real execution requires a domain-connected Windows management host.");
-        var gpo = new[] {"gpoInventory","gpoReadiness","gpoPreview","gpoApply","gpoRollback","gpoVerify"}.Contains(operation);
+        var gpo = new[] {"gpoInventory","gpoReadiness","gpoPreview","gpoApply","gpoRollback","gpoVerify","gpoRefresh"}.Contains(operation);
         if (!gpo) throw new PolicyException("OPERATION_DENIED", "Only the production GPO workflow is exposed by the Windows executor.");
         var script = Path.Combine(AppContext.BaseDirectory, "PowerShell", "Invoke-GpoWorkflow.ps1");
         if (!File.Exists(script)) throw new PolicyException("SCRIPT_MISSING", "Publish the bundled PowerShell directory with the backend.");
@@ -30,6 +30,7 @@ internal sealed class WindowsPowerShellExecutor(ILogger logger)
         {
             "gpoApply" or "gpoRollback" => TimeSpan.FromMinutes(16),
             "gpoPreview" or "gpoVerify" => TimeSpan.FromMinutes(10),
+            "gpoRefresh" => TimeSpan.FromMinutes(12),
             "gpoInventory" or "gpoReadiness" => TimeSpan.FromSeconds(90),
             _ when gpo => TimeSpan.FromMinutes(6),
             _ => TimeSpan.FromMinutes(4)

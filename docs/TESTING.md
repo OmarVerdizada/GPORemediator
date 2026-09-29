@@ -16,3 +16,9 @@ Developer browser tests require Node.js and Playwright (not required to run the 
 - After `Build-Portable.ps1`, `node tests/Frontend.Live.cjs`: the packaged executable and a real browser in isolated Setup mode with a temporary database. Does not save the host configuration or contact AD.
 
 Both browser tests use installed Edge by default; set `PLAYWRIGHT_CHANNEL` to select another installed Playwright browser channel. Provide Playwright through the development environment's module search path.
+
+### Endpoint refresh regression coverage
+
+The invariant suite checks disabled defaults, legacy plan compatibility, explicit hostname validation and the 100-host limit. Worker doubles check selected endpoints, out-of-scope and invalid names, empty automatic targets, publication, manual refresh, partial scheduling and rollback conflict preservation. Browser fixtures cover the new refresh controls, persisted selection across tabs, checkbox size and horizontal overflow at 1440/768/390 widths.
+
+Automatic Apply plus gpupdate uses one operation gate, persists the publication result before scheduling and has a client timeout covering both worker stages. Real AD/RPC scheduling, membership changes between preview and refresh, and endpoint convergence must still be exercised in the domain lab with both automatic Yes and No.

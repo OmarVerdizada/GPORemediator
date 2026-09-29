@@ -15,6 +15,7 @@ $ProgressPreference = 'SilentlyContinue'
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 Set-Location -LiteralPath $PSScriptRoot
 . (Join-Path $PSScriptRoot 'scripts\Tooling.ps1')
+. (Join-Path $PSScriptRoot 'scripts\ServiceControl.ps1')
 
 $toolsRoot = Join-Path $PSScriptRoot '.tools'
 $workRoot = Join-Path $PSScriptRoot 'work'
@@ -22,7 +23,7 @@ $restartMarker = Join-Path $workRoot 'restart.request.json'
 $backend = Join-Path $PSScriptRoot 'backend'
 $runtime = Join-Path $PSScriptRoot 'runtime\GpoRemediator.exe'
 $localConfig = Join-Path $backend 'appsettings.Local.json'
-$runtimeGeneration = Join-Path $PSScriptRoot 'runtime\production-backend-v3.ready'
+$runtimeGeneration = Join-Path $PSScriptRoot 'runtime\production-backend-v4.ready'
 New-Item -ItemType Directory -Force -Path $toolsRoot,$workRoot | Out-Null
 $logFile = Join-Path $workRoot 'bootstrap.log'
 $stateFile = Join-Path $workRoot 'service.json'
@@ -51,9 +52,13 @@ function Ensure-Dotnet8Sdk {
     Write-Log 'Downloading portable .NET 8 SDK...' Yellow
     New-Item -ItemType Directory -Force -Path $installRoot | Out-Null
     $installer = Join-Path $toolsRoot 'dotnet-install.ps1'
-    Invoke-WebRequest -UseBasicParsing -Uri 'https://dot.net/v1/dotnet-install.ps1' -OutFile $installer
-    & powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File $installer -Channel 8.0 -InstallDir $installRoot -NoPath
-    if ($LASTEXITCODE -ne 0 -or !(Test-Dotnet8Sdk $localExe)) { throw 'Portable .NET 8 SDK installation failed.' }
+    $downloaded=$false
+    for($attempt=1;$attempt -le 3 -and !$downloaded;$attempt++){
+        try{Invoke-WebRequest -UseBasicParsing -Uri 'https://dot.net/v1/dotnet-install.ps1' -OutFile $installer -TimeoutSec 45;$downloaded=$true}
+        catch{if($attempt -eq 3){throw};Write-Log ('.NET installer download failed; retrying ('+$attempt+'/3)...') Yellow;Start-Sleep -Seconds (2*$attempt)}
+    }
+    & powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File $installer -Version 8.0.425 -InstallDir $installRoot -NoPath
+    if ($LASTEXITCODE -ne 0 -or !(Test-Dotnet8Sdk $localExe)) { throw 'Portable .NET 8 SDK 8.0.425 installation failed. Check HTTPS access to dot.net/builds.dotnet.microsoft.com and retry GpoRemediator.cmd.' }
     Add-ToolPath $installRoot
     Write-Log '.NET 8 SDK installed.' Green
 }
@@ -223,11 +228,13 @@ try {
             Write-Log ('Windows mode could not be recovered. ' + $script:startupIssue) Red
             exit 1
         }
+        Clear-RemediatorEphemeralState
         exit ([int]$result.ExitCode)
     }
 } catch {
     Write-Log ('FATAL: ' + $_.Exception.Message) Red
-    Write-Log 'No policy write was attempted by the bootstrapper. Review the message and work\bootstrap.log.' Yellow
+    Write-Log 'No policy write was attempted by the bootstrapper.' Yellow
+    Clear-RemediatorEphemeralState -PreserveDiagnostics
     exit 1
 } finally {
     if ($ownsLauncher -and $launcherMutex) { $launcherMutex.ReleaseMutex() }

@@ -1,4 +1,4 @@
-function Find-Dotnet {
+﻿function Find-Dotnet {
     $portable = Join-Path $PSScriptRoot '..\.tools\dotnet\dotnet.exe'
     if (Test-Path -LiteralPath $portable) { return (Resolve-Path -LiteralPath $portable).Path }
     $candidate = Get-Command dotnet.exe,dotnet -ErrorAction SilentlyContinue | Select-Object -First 1
@@ -13,7 +13,11 @@ function Get-FileSetFingerprint([System.IO.FileInfo[]]$Files, [string]$BasePath)
     $lines = [Collections.Generic.List[string]]::new()
     foreach ($file in @($Files | Sort-Object FullName)) {
         $relative = $file.FullName.Substring($BasePath.TrimEnd('\').Length).TrimStart('\')
-        $hash = (Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash
+        # Source manifests must survive Git checkout line-ending conversion.
+        $content = [IO.File]::ReadAllText($file.FullName).Replace("`r`n", "`n")
+        $fileSha = [Security.Cryptography.SHA256]::Create()
+        try { $hash = [BitConverter]::ToString($fileSha.ComputeHash([Text.Encoding]::UTF8.GetBytes($content))).Replace('-', '') }
+        finally { $fileSha.Dispose() }
         $lines.Add($relative.Replace('\','/') + ':' + $hash)
     }
     $sha = [Security.Cryptography.SHA256]::Create()

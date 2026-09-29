@@ -92,6 +92,16 @@ check("if([string]$Map.handler -eq 'AdvancedAudit'){return [string]$Item.state}"
 check("[string]$item.mask" in worker, 'Advanced Audit endpoint mask verification missing')
 check("UnableToRetrievePolicyRegistryItem" in worker and "GPO_REGISTRY_READ_FAILED" in worker, 'Registry policy read must distinguish absent values from read failures')
 check('Invoke-PasswordPilot.ps1' not in executor and 'Invoke-PolicyOperation.ps1' not in executor, 'Legacy Windows executor surface is still reachable')
+check(not (ROOT/'backend'/'PowerShell'/'Test-SecurityTemplate.ps1').exists(), 'stale legacy PowerShell test remains in production source')
+
+check('\"gpoRefresh\"' in executor, 'gpoRefresh is not allowed by the Windows PowerShell executor')
+check('ROLLBACK_DRIFT_DETECTED' in worker and "'ROLLBACK_DRIFT_DETECTED'" in worker and "Read-Field" in worker, 'rollback-aware verification/result-safety contract missing')
+check('production-backend-v3' not in (ROOT/'GpoRemediator.ps1').read_text(encoding='utf-8-sig'), 'stale production-backend-v3 marker remains in launcher')
+check('production-backend-v4.ready' in (ROOT/'Control-Panel.ps1').read_text(encoding='utf-8-sig'), 'control panel does not use the current runtime marker')
+
+check('EphemeralDataProtectionProvider' in (ROOT/'backend'/'Program.cs').read_text(encoding='utf-8-sig'), 'data-protection keys may persist outside the project')
+check('760000' in (ROOT/'frontend'/'source'/'client.js').read_text(encoding='utf-8-sig') and '/refresh$' in (ROOT/'frontend'/'source'/'client.js').read_text(encoding='utf-8-sig'), 'frontend gpupdate timeout contract missing')
+check('PolicyValues.Equal' not in (ROOT/'tests'/'InvariantTests'/'Program.cs').read_text(encoding='utf-8-sig') and 'AdapterRegistry' not in (ROOT/'tests'/'InvariantTests'/'Program.cs').read_text(encoding='utf-8-sig'), 'stale legacy invariant tests remain')
 
 # Frontend/dist must be byte-for-byte synchronized for operator UI assets we own.
 for name in ('index.html','client.js','workspace.js','workspace.css','benchmark-v4.json','automation.js','automation.css'):
@@ -99,6 +109,13 @@ for name in ('index.html','client.js','workspace.js','workspace.css','benchmark-
     if a.exists() or b.exists():
         check(a.exists() and b.exists(), f'{name}: source/dist missing')
         if a.exists() and b.exists(): check(a.read_bytes()==b.read_bytes(), f'{name}: source/dist mismatch')
+
+# Runtime/test state and environment-specific secrets/configuration must never ship.
+for pattern in ('*.db','*.db-wal','*.db-shm','*.log'):
+    for found in ROOT.rglob(pattern):
+        # runtime/framework files are DLL/JSON, so any match here is product state.
+        check(False, f'shipped runtime state artifact: {found.relative_to(ROOT)}')
+check(not (ROOT/'backend'/'appsettings.Local.json').exists(), 'shipped environment-specific appsettings.Local.json')
 
 # No development simulation database or known mock state should ship.
 for bad in ('mock.db','mock.db-wal','mock.db-shm'):
