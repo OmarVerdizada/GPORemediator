@@ -11,26 +11,25 @@ public sealed class OperationGate(Store store)
 {
     private readonly object gate = new();
     private bool maintenance;
-    private bool operation;
+    private readonly HashSet<string> operations = new(StringComparer.OrdinalIgnoreCase);
 
     public bool Maintenance { get { lock (gate) return maintenance; } }
-    public bool OperationActive { get { lock (gate) return operation; } }
+    public bool OperationActive { get { lock (gate) return operations.Count>0; } }
 
-    public void BeginOperation(Action action)
+    public void BeginOperation(string resourceKey,Action action)
     {
         lock (gate)
         {
             if (maintenance) throw new PolicyException("SERVICE_STOPPING", "The service is stopping, restarting, or saving configuration.");
-            if (operation) throw new PolicyException("GPO_OPERATION_BUSY", "Another privileged GPO operation is active. Wait for it to finish.");
-            operation = true;
+            if (!operations.Add(resourceKey)) throw new PolicyException("GPO_OPERATION_BUSY", "Another privileged operation is active for this GPO. Wait for it to finish.");
             try { action(); }
-            catch { operation = false; throw; }
+            catch { operations.Remove(resourceKey); throw; }
         }
     }
 
-    public void EndOperation()
+    public void EndOperation(string resourceKey)
     {
-        lock (gate) operation = false;
+        lock (gate) operations.Remove(resourceKey);
     }
 
     public void BeginMaintenance(Action action)
@@ -38,7 +37,7 @@ public sealed class OperationGate(Store store)
         lock (gate)
         {
             if (maintenance) throw new PolicyException("SERVICE_STOPPING", "The service is already stopping, restarting, or saving configuration.");
-            if (operation || store.List<GpoWorkflowRun>("gpo_runs").Any(r => IsActive(r.Result.State)))
+            if (operations.Count>0 || store.List<GpoWorkflowRun>("gpo_runs").Any(r => IsActive(r.Result.State)))
                 throw new PolicyException("GPO_OPERATION_BUSY", "A GPO operation is active. Wait for it to finish before changing service state or configuration.");
             maintenance = true;
             try { action(); }

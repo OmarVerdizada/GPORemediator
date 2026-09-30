@@ -15,10 +15,6 @@ Get-ChildItem -LiteralPath $frontendDist -Force -ErrorAction SilentlyContinue | 
 Copy-Item -Path (Join-Path $frontendSource '*') -Destination $frontendDist -Recurse -Force
 (Get-FrontendSourceFingerprint) | Set-Content -LiteralPath (Join-Path $frontendDist 'source.sha256') -Encoding ASCII -NoNewline
 
-# Keep NuGet artifacts local so subsequent repairs/builds can run from cache.
-$nugetCache = Join-Path $PSScriptRoot '.tools\nuget'
-New-Item -ItemType Directory -Path $nugetCache -Force | Out-Null
-$env:NUGET_PACKAGES = $nugetCache
 $project = Join-Path $PSScriptRoot 'backend\GpoRemediator.csproj'
 
 function Invoke-RestoreWithRetry {
@@ -30,7 +26,7 @@ function Invoke-RestoreWithRetry {
         $last = $LASTEXITCODE
         if ($attempt -lt 3) { Start-Sleep -Seconds (2 * $attempt) }
     }
-    throw "NuGet restore failed after 3 attempts (exit $last). Node.js/npm/pnpm are not involved. Allow the approved NuGet source (normally https://api.nuget.org/v3/index.json) or pre-populate .tools\nuget, then run GpoRemediator.cmd again."
+    throw "NuGet restore failed after 3 attempts (exit $last). Use the approved developer build environment and NuGet source, then retry the explicit build."
 }
 
 Invoke-RestoreWithRetry

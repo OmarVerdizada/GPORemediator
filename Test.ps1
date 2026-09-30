@@ -6,6 +6,9 @@ Set-Location -LiteralPath $PSScriptRoot
 $dotnet = Find-Dotnet
 $backend = Join-Path $PSScriptRoot 'backend'
 
+$controlPanelBytes=[IO.File]::ReadAllBytes((Join-Path $PSScriptRoot 'Control-Panel.ps1'))
+if($controlPanelBytes.Length -lt 3 -or $controlPanelBytes[0] -ne 0xEF -or $controlPanelBytes[1] -ne 0xBB -or $controlPanelBytes[2] -ne 0xBF){throw 'Control-Panel.ps1 must be UTF-8 with BOM for Windows PowerShell 5.1.'}
+
 Write-Host '[1/7] Building current backend...' -ForegroundColor Cyan
 & $dotnet build (Join-Path $backend 'GpoRemediator.csproj') -c Release --nologo
 Assert-Exit
@@ -42,8 +45,9 @@ Assert-Exit
 
 Write-Host '[6/7] Verifying frontend source/dist integrity and dependency-free workflow smoke checks...' -ForegroundColor Cyan
 $node = Get-Command node.exe,node -ErrorAction SilentlyContinue | Select-Object -First 1
-if ($node) { & $node.Source (Join-Path $PSScriptRoot 'tests\Frontend.Static.cjs'); Assert-Exit }
-else { Write-Warning 'Node.js is not installed; JS smoke execution is skipped. Source/dist integrity checks still run and Node.js is not required by the product runtime.' }
+if (!$node) { throw 'Node.js and the pinned Playwright test dependencies are required for the release gate; frontend tests may not be skipped.' }
+& $node.Source (Join-Path $PSScriptRoot 'tests\Frontend.Static.cjs'); Assert-Exit
+& $node.Source (Join-Path $PSScriptRoot 'tests\Frontend.cjs'); Assert-Exit
 if (!(Test-FrontendDistMatchesSource)) { throw 'frontend/dist does not match frontend/source. Rebuild or resync the frontend before release.' }
 foreach ($name in @('client.js','workspace.js','automation.js','workspace.css','automation.css','index.html','benchmark-v4.json')) {
     $a=Join-Path $PSScriptRoot ('frontend\source\'+$name); $b=Join-Path $PSScriptRoot ('frontend\dist\'+$name)

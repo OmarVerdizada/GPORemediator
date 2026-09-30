@@ -1,6 +1,6 @@
 # Windows / Active Directory provider
 
-Bu sənəd `Mode=Windows` rejiminin necə işlədiyini və real domenə keçməzdən əvvəl hansı şərtlərin ödənməli olduğunu izah edir. **MOCK nəticəsi real AD qəbul sınağını əvəz etmir.** İlk real yoxlamanı ayrıca laboratoriya domenində və `Windows.EnableWrites=false` ilə aparın.
+Bu sənəd `Mode=Windows` rejiminin necə işlədiyini və real domenə keçməzdən əvvəl hansı şərtlərin ödənməli olduğunu izah edir. İlk real yoxlamanı ayrıca laboratoriya domenində və `Windows.EnableWrites=false` ilə aparın.
 
 ## 1. İcra modeli
 
@@ -31,7 +31,7 @@ Target FQDN-ləri və DC FQDN-i DNS-də düzgün resolve olunmalıdır. IP ilə 
 
 ## 3. Konfiqurasiya və unified launcher
 
-Operatorun normal istifadəsində JSON-u əl ilə kopyalamaq lazım deyil. `GpoRemediator.cmd` ilk dəfə safe MOCK UI açır; `Setup & settings` wizard domain/DC, approved GPO GUID, OU, host, operator, backup path və HTTPS URL-ni validate edib `backend/appsettings.Local.json` yaradır. Save əməliyyatı həmişə `EnableWrites=false` saxlayır və controlled restart marker vasitəsilə eyni launcher-i Windows mode-a keçirir.
+Operatorun normal istifadəsində JSON-u əl ilə kopyalamaq lazım deyil. `GpoRemediator.cmd` ilk dəfə yalnız autentifikasiyalı Setup UI açır; `Setup & settings` wizard domain/DC, approved GPO GUID, OU, host, operator və backup path-i yoxlayıb `%ProgramData%\GpoRemediator\Config\appsettings.Local.json` yaradır. Save əməliyyatı həmişə `EnableWrites=false` saxlayır və controlled restart marker vasitəsilə eyni launcher-i Windows mode-a keçirir.
 
 Konfiqurasiyanın mahiyyəti aşağıdakı kimidir:
 
@@ -136,9 +136,9 @@ Normal operator əmri yalnız budur:
 GpoRemediator.cmd
 ```
 
-Launcher source fingerprint-lərini yoxlayır. Backend build lazımdırsa portable .NET 8 SDK-nı project-local `.tools\dotnet` altında provision edir; static frontend `frontend\source`-dan dependency olmadan paketlənir. Node.js/npm/pnpm/Corepack və npm registry tələb olunmur. Windows mode üçün RSAT yoxdursa UAC-approved ayrıca prerequisite helper işə düşür; application prosesi sırf buna görə elevated saxlanmır.
+Launcher paket fingerprint-lərini yoxlayır və uyğunsuzluqda fail-closed dayanır. Production serverdə source build, SDK download və toolchain provisioning edilmir. Build yalnız ayrıca təsdiqlənmiş developer/release mühitində aparılır.
 
-Konfiqurasiya yoxdursa MOCK onboarding açılır. Konfiqurasiya varsa launcher Windows mode-u seçir. Windows mode certificate/config səbəbilə erkən start edə bilməsə safe MOCK UI-yə fallback edir ki, setup düzəldilə bilsin.
+Konfiqurasiya yoxdursa autentifikasiyalı Setup açılır. Konfiqurasiya varsa launcher Windows mode-u seçir. Windows mode config səbəbilə erkən start edə bilməsə yalnız konfiqurasiya əməliyyatlarına icazə verən Setup açılır.
 
 `Build-Portable.ps1`, `Test.ps1`, `Start-*` faylları development/compatibility utility-ləridir və gündəlik operator workflow-u deyil.
 

@@ -99,7 +99,8 @@ check('ROLLBACK_DRIFT_DETECTED' in worker and "'ROLLBACK_DRIFT_DETECTED'" in wor
 check('production-backend-v3' not in (ROOT/'GpoRemediator.ps1').read_text(encoding='utf-8-sig'), 'stale production-backend-v3 marker remains in launcher')
 check('production-backend-v4.ready' in (ROOT/'Control-Panel.ps1').read_text(encoding='utf-8-sig'), 'control panel does not use the current runtime marker')
 
-check('EphemeralDataProtectionProvider' in (ROOT/'backend'/'Program.cs').read_text(encoding='utf-8-sig'), 'data-protection keys may persist outside the project')
+program=(ROOT/'backend'/'Program.cs').read_text(encoding='utf-8-sig')
+check('PersistKeysToFileSystem' in program and 'CommonApplicationData' in program, 'data-protection keys must persist under protected ProgramData state')
 check('760000' in (ROOT/'frontend'/'source'/'client.js').read_text(encoding='utf-8-sig') and '/refresh$' in (ROOT/'frontend'/'source'/'client.js').read_text(encoding='utf-8-sig'), 'frontend gpupdate timeout contract missing')
 check('PolicyValues.Equal' not in (ROOT/'tests'/'InvariantTests'/'Program.cs').read_text(encoding='utf-8-sig') and 'AdapterRegistry' not in (ROOT/'tests'/'InvariantTests'/'Program.cs').read_text(encoding='utf-8-sig'), 'stale legacy invariant tests remain')
 
@@ -116,10 +117,6 @@ for pattern in ('*.db','*.db-wal','*.db-shm','*.log'):
         # runtime/framework files are DLL/JSON, so any match here is product state.
         check(False, f'shipped runtime state artifact: {found.relative_to(ROOT)}')
 check(not (ROOT/'backend'/'appsettings.Local.json').exists(), 'shipped environment-specific appsettings.Local.json')
-
-# No development simulation database or known mock state should ship.
-for bad in ('mock.db','mock.db-wal','mock.db-shm'):
-    check(not any(ROOT.rglob(bad)), f'shipped development artifact: {bad}')
 
 if errors:
     print('PRODUCTION PACKAGE VALIDATION: FAIL')

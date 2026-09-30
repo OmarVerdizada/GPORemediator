@@ -1,11 +1,9 @@
 function Find-Dotnet {
-    $portable = Join-Path $PSScriptRoot '..\.tools\dotnet\dotnet.exe'
-    if (Test-Path -LiteralPath $portable) { return (Resolve-Path -LiteralPath $portable).Path }
     $candidate = Get-Command dotnet.exe,dotnet -ErrorAction SilentlyContinue | Select-Object -First 1
     if ($candidate) {
         try { if ((& $candidate.Source --list-sdks 2>$null) -match '^8\.') { return $candidate.Source } } catch { }
     }
-    throw '.NET 8 SDK is required for source builds. The unified GpoRemediator.cmd launcher installs a portable SDK automatically when needed.'
+    throw '.NET 8 SDK is required in the approved developer build environment. Production startup never installs a toolchain.'
 }
 function Assert-Exit { if ($LASTEXITCODE -ne 0) { throw "Build command failed with exit code $LASTEXITCODE." } }
 

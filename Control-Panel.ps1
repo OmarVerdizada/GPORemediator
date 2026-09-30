@@ -1,4 +1,4 @@
-param([ValidateRange(1024,65535)][int]$Port = 5080, [switch]$SmokeTest)
+﻿param([ValidateRange(1024,65535)][int]$Port = 5080, [switch]$SmokeTest)
 $ErrorActionPreference = 'Stop'
 $windowsModules = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\Modules'
 $env:PSModulePath = "$windowsModules;" + (($env:PSModulePath -split ';' | Where-Object { $_ -ine $windowsModules }) -join ';')
@@ -7,8 +7,9 @@ Add-Type -AssemblyName PresentationFramework,PresentationCore,WindowsBase
 . (Join-Path $PSScriptRoot 'scripts\Tooling.ps1')
 
 $projectRoot = $PSScriptRoot
-$work = Join-Path $projectRoot 'work'
-$localConfig = Join-Path $projectRoot 'backend\appsettings.Local.json'
+$stateRoot = Join-Path $env:ProgramData 'GpoRemediator'
+$work = Join-Path $stateRoot 'State'
+$localConfig = Join-Path $stateRoot 'Config\appsettings.Local.json'
 New-Item -ItemType Directory -Path $work -Force | Out-Null
 
 [xml]$layout = @'
@@ -100,6 +101,7 @@ $script:launcher = $null
 $script:actionJob = $null
 $script:pendingUntil = [DateTime]::MinValue
 $script:lastLog = ''
+$script:runtimeReady = (Test-Path -LiteralPath (Join-Path $projectRoot 'runtime\GpoRemediator.exe')) -and (Test-Path -LiteralPath (Join-Path $projectRoot 'runtime\production-backend-v4.ready')) -and (Test-PortableBackendMatchesSource) -and (Test-FrontendDistMatchesSource)
 $script:autoOpen = $false
 $script:openedForLaunch = $false
 
@@ -107,7 +109,7 @@ function Set-DotColor([string]$hex) { $ui.StatusDot.Fill = New-Object Windows.Me
 function Open-Product {
     $service = Get-RemediatorService
     if (!$service -or $service.ready -eq $false) { return }
-    $path = if ($service.openPath) { [string]$service.openPath } else { '/#/home' }
+    $path = if ($service.openPath) { [string]$service.openPath } else { '/#/dashboard' }
     Start-Process (([string]$service.url).TrimEnd('/') + $path) | Out-Null
 }
 function Start-Launcher([string]$Mode = 'Auto', [switch]$RepairBuild) {
@@ -120,10 +122,10 @@ function Refresh-Panel {
     $service = Get-RemediatorService
     $launching = $script:launcher -and !$script:launcher.HasExited
     $pending = $script:actionJob -or [DateTime]::UtcNow -lt $script:pendingUntil
-    $runtimeReady = (Test-Path -LiteralPath (Join-Path $projectRoot 'runtime\GpoRemediator.exe')) -and (Test-Path -LiteralPath (Join-Path $projectRoot 'runtime\production-backend-v4.ready')) -and (Test-PortableBackendMatchesSource) -and (Test-FrontendDistMatchesSource)
+    $runtimeReady = $script:runtimeReady
     $configExists = Test-Path -LiteralPath $localConfig
 
-    $ui.RuntimeState.Text = if ($runtimeReady) { 'Local runtime hazırdır' } else { 'İlk dəfə yenilənəcək' }
+    $ui.RuntimeState.Text = if ($runtimeReady) { 'Paket yoxlanılıb' } else { 'Runtime paketi yoxdur/zədəlidir' }
     $ui.ConfigState.Text = if ($configExists) { 'Saxlanıb' } else { 'İlk sazlama' }
 
     $ui.Start.IsEnabled = !$service -and !$launching -and !$pending
@@ -184,7 +186,7 @@ function Refresh-Panel {
 
     $logPath = Join-Path $work 'bootstrap.log'
     if (Test-Path -LiteralPath $logPath) {
-        $content = (Get-Content -LiteralPath $logPath -Tail 45 -ErrorAction SilentlyContinue) -join [Environment]::NewLine
+        $content = (Get-Content -LiteralPath $logPath -Encoding UTF8 -Tail 45 -ErrorAction SilentlyContinue) -join [Environment]::NewLine
         if ($content -ne $script:lastLog) { $ui.Log.Text = $content; $ui.Log.ScrollToEnd(); $script:lastLog = $content }
     } else { $ui.Log.Text = 'Hələ log qeydi yoxdur.' }
 

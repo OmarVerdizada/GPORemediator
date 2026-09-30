@@ -40,7 +40,7 @@ Test("Selection validation fails closed", () =>
     Reject("GPO_MANUAL_ONLY", () => ProductionGpoMappings.Validate(new GpoSelection(Guid.NewGuid().ToString(), "DC=prosol,DC=az", manual.Id, 0)));
 });
 
-Test("Consent requires approval metadata", () =>
+Test("Consent requires a change reference and treats approver text as an optional reference", () =>
 {
     var mapping = ProductionGpoMappings.Settings.First(x => x.Writable && !x.RequiresInput);
     var gpo = new GpoChoice(Guid.NewGuid().ToString(), "Test", false, true);
@@ -49,7 +49,7 @@ Test("Consent requires approval metadata", () =>
     var preview = new GpoPreview(gpo, scope, null, "fp", "", null, [], [], DesiredValue:"x");
     var plan = new GpoWorkflowPlan(Guid.NewGuid().ToString("N"), @"PROSOL\Operator", @"PROSOL\Svc", "WINDOWS", "prosol.az", "dc01.prosol.az", selection, preview, PolicyValues.Now(), PolicyValues.Hash(mapping));
     Reject("CHANGE_REFERENCE_REQUIRED", () => GpoWorkflowRules.ValidateConsent(plan, new GpoConsent("APPLY", true)));
-    Reject("APPROVER_REQUIRED", () => GpoWorkflowRules.ValidateConsent(plan, new GpoConsent("APPLY", true, false, "CHG-1")));
+    GpoWorkflowRules.ValidateConsent(plan, new GpoConsent("APPLY", true, false, "CHG-1"));
     GpoWorkflowRules.ValidateConsent(plan, new GpoConsent("APPLY", true, false, "CHG-1", @"PROSOL\Reviewer"));
 });
 

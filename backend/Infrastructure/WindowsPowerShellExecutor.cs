@@ -23,7 +23,7 @@ internal sealed class WindowsPowerShellExecutor(ILogger logger)
             StandardInputEncoding = new UTF8Encoding(false), StandardOutputEncoding = Encoding.UTF8,
             StandardErrorEncoding = Encoding.UTF8
         };
-        foreach (var argument in new[] { "-NoLogo", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", script }) start.ArgumentList.Add(argument);
+        foreach (var argument in new[] { "-NoLogo", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "RemoteSigned", "-File", script }) start.ArgumentList.Add(argument);
         using var process = new Process { StartInfo = start };
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
         var operationTimeout = operation switch

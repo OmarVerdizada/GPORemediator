@@ -33,7 +33,7 @@ public record GpoPreview(GpoChoice Gpo, GpoScope Scope, string? PreviousValue, s
     GpoImpactDetails? Impact = null, GpoEnvironmentStatus? Preflight = null, string? DesiredValue = null, bool NoChange = false);
 
 public record GpoWorkflowPlan(string Id, string Actor, string ExecutionUser, string Mode, string Domain, string DomainController,
-    GpoSelection Selection, GpoPreview Preview, string CreatedAt, string? MappingHash = null);
+    GpoSelection Selection, GpoPreview Preview, string CreatedAt, string? MappingHash = null, string? ConfigHash = null);
 public record GpoConsent(string Confirmation, bool AcknowledgeImpact = false, bool AcknowledgeProtected = false, string? ChangeReference = null, string? ApprovedBy = null);
 public record GpoRefreshResult(string Computer, string State, string Message);
 public record GpoWorkflowResult(string State, string Message, string? BackupId, string? BackupDirectory, string? PostFingerprint,
@@ -57,8 +57,8 @@ public static class GpoWorkflowRules
             throw new PolicyException("GPO_CONFIRMATION_REQUIRED", "Type APPLY and acknowledge all existing links and the selected scope.");
         if (string.IsNullOrWhiteSpace(consent.ChangeReference) || consent.ChangeReference.Length > 128 || consent.ChangeReference.IndexOfAny(['\r','\n','\0']) >= 0)
             throw new PolicyException("CHANGE_REFERENCE_REQUIRED", "Enter the approved change/ticket reference before Apply.");
-        if (string.IsNullOrWhiteSpace(consent.ApprovedBy) || consent.ApprovedBy.Length > 256 || consent.ApprovedBy.IndexOfAny(['\r','\n','\0']) >= 0)
-            throw new PolicyException("APPROVER_REQUIRED", "Enter the reviewer/approver before Apply.");
+        if (!string.IsNullOrWhiteSpace(consent.ApprovedBy) && (consent.ApprovedBy.Length > 256 || consent.ApprovedBy.IndexOfAny(['\r','\n','\0']) >= 0))
+            throw new PolicyException("APPROVER_REFERENCE_INVALID", "The optional operator-entered approver reference is invalid.");
         if (plan.Preview.Gpo.Protected && !consent.AcknowledgeProtected)
             throw new PolicyException("PROTECTED_GPO_CONFIRMATION", "Explicitly acknowledge editing the protected default domain policy.");
     }

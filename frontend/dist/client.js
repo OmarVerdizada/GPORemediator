@@ -71,7 +71,9 @@
     'Authenticated remote session':'Domen hesabı ilə giriş alınıb','Backup directory is writable':'Ehtiyat nüsxə qovluğuna yazmaq mümkündür'
   };
   function localize(root) {
-    if (storage.get('gr-lang','az') !== 'az' || !root) return;
+    const language=storage.get('gr-lang','az') === 'az' ? 'az' : 'en';
+    document.documentElement.lang=language;
+    if (language !== 'az' || !root) return;
     const walker=document.createTreeWalker(root,NodeFilter.SHOW_TEXT);
     while(walker.nextNode()) {const node=walker.currentNode,key=node.nodeValue.trim();if(words[key])node.nodeValue=node.nodeValue.replace(key,words[key]);}
     for(const input of root.querySelectorAll('[placeholder]'))if(words[input.placeholder])input.placeholder=words[input.placeholder];

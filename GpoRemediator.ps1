@@ -17,14 +17,27 @@ Set-Location -LiteralPath $PSScriptRoot
 . (Join-Path $PSScriptRoot 'scripts\Tooling.ps1')
 . (Join-Path $PSScriptRoot 'scripts\ServiceControl.ps1')
 
-$toolsRoot = Join-Path $PSScriptRoot '.tools'
-$workRoot = Join-Path $PSScriptRoot 'work'
+$stateRoot = Join-Path $env:ProgramData 'GpoRemediator'
+$workRoot = Join-Path $stateRoot 'State'
 $restartMarker = Join-Path $workRoot 'restart.request.json'
 $backend = Join-Path $PSScriptRoot 'backend'
 $runtime = Join-Path $PSScriptRoot 'runtime\GpoRemediator.exe'
-$localConfig = Join-Path $backend 'appsettings.Local.json'
+$localConfig = Join-Path $stateRoot 'Config\appsettings.Local.json'
 $runtimeGeneration = Join-Path $PSScriptRoot 'runtime\production-backend-v4.ready'
-New-Item -ItemType Directory -Force -Path $toolsRoot,$workRoot | Out-Null
+function Initialize-SecureState {
+    foreach ($path in @($stateRoot,$workRoot,(Split-Path $localConfig -Parent),(Join-Path $stateRoot 'Data'),(Join-Path $stateRoot 'Backups'))) {
+        New-Item -ItemType Directory -Force -Path $path | Out-Null
+        $acl = Get-Acl -LiteralPath $path
+        $acl.SetAccessRuleProtection($true,$false)
+        foreach($rule in @(
+            (New-Object Security.AccessControl.FileSystemAccessRule('SYSTEM','FullControl','ContainerInherit,ObjectInherit','None','Allow')),
+            (New-Object Security.AccessControl.FileSystemAccessRule('BUILTIN\Administrators','FullControl','ContainerInherit,ObjectInherit','None','Allow')),
+            (New-Object Security.AccessControl.FileSystemAccessRule([Security.Principal.WindowsIdentity]::GetCurrent().Name,'FullControl','ContainerInherit,ObjectInherit','None','Allow'))
+        )) { $acl.AddAccessRule($rule) | Out-Null }
+        Set-Acl -LiteralPath $path -AclObject $acl
+    }
+}
+Initialize-SecureState
 $logFile = Join-Path $workRoot 'bootstrap.log'
 $stateFile = Join-Path $workRoot 'service.json'
 $launcherMutex = $null
@@ -36,35 +49,18 @@ function Write-Log([string]$Message, [ConsoleColor]$Color = [ConsoleColor]::Gray
     Add-Content -LiteralPath $logFile -Value $line -Encoding UTF8
     Write-Host $Message -ForegroundColor $Color
 }
-function Add-ToolPath([string]$Path) {
-    if ((Test-Path -LiteralPath $Path) -and (($env:Path -split ';') -notcontains $Path)) { $env:Path = "$Path;$env:Path" }
-}
 function Test-Dotnet8Sdk([string]$Exe) {
     if (!(Test-Path -LiteralPath $Exe) -and !(Get-Command $Exe -ErrorAction SilentlyContinue)) { return $false }
     try { return [bool]((& $Exe --list-sdks 2>$null) -match '^8\.') } catch { return $false }
 }
-function Ensure-Dotnet8Sdk {
+function Require-Dotnet8Sdk {
     $existing = Get-Command dotnet.exe,dotnet -ErrorAction SilentlyContinue | Select-Object -First 1
     if ($existing -and (Test-Dotnet8Sdk $existing.Source)) { Write-Log '.NET 8 SDK: OK'; return }
-    $installRoot = Join-Path $toolsRoot 'dotnet'
-    $localExe = Join-Path $installRoot 'dotnet.exe'
-    if (Test-Dotnet8Sdk $localExe) { Add-ToolPath $installRoot; Write-Log '.NET 8 SDK: portable cache OK'; return }
-    Write-Log 'Downloading portable .NET 8 SDK...' Yellow
-    New-Item -ItemType Directory -Force -Path $installRoot | Out-Null
-    $installer = Join-Path $toolsRoot 'dotnet-install.ps1'
-    $downloaded=$false
-    for($attempt=1;$attempt -le 3 -and !$downloaded;$attempt++){
-        try{Invoke-WebRequest -UseBasicParsing -Uri 'https://dot.net/v1/dotnet-install.ps1' -OutFile $installer -TimeoutSec 45;$downloaded=$true}
-        catch{if($attempt -eq 3){throw};Write-Log ('.NET installer download failed; retrying ('+$attempt+'/3)...') Yellow;Start-Sleep -Seconds (2*$attempt)}
-    }
-    & powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File $installer -Version 8.0.425 -InstallDir $installRoot -NoPath
-    if ($LASTEXITCODE -ne 0 -or !(Test-Dotnet8Sdk $localExe)) { throw 'Portable .NET 8 SDK 8.0.425 installation failed. Check HTTPS access to dot.net/builds.dotnet.microsoft.com and retry GpoRemediator.cmd.' }
-    Add-ToolPath $installRoot
-    Write-Log '.NET 8 SDK installed.' Green
+    throw '.NET 8 SDK is required only for an explicit developer Build/Test. Production startup never downloads or compiles code.'
 }
 function Ensure-BuildToolchain {
     # The shipped UI is static and dependency-free. Only .NET is required to rebuild the backend.
-    Ensure-Dotnet8Sdk
+    Require-Dotnet8Sdk
 }
 function Test-PackagedRelease {
     $required = @(
@@ -78,20 +74,14 @@ function Test-PackagedRelease {
     return @($required | Where-Object { !(Test-Path -LiteralPath $_) }).Count -eq 0
 }
 function Ensure-CurrentBuild {
-    # Normal operators run the signed/packaged self-contained runtime directly.
-    # Fingerprint comparisons are local reads. Rebuild only when packaged code is stale.
+    # Normal operators run the prebuilt package. A missing/stale runtime fails closed;
+    # source is never compiled implicitly on a customer machine.
     if (!$Repair -and $Mode -notin @('Build','Test') -and (Test-PackagedRelease) -and (Test-Path -LiteralPath $runtimeGeneration) -and (Test-PortableBackendMatchesSource) -and (Test-FrontendDistMatchesSource)) {
         Write-Log 'Packaged local-only runtime: ready (no SDK download required).'
         return
     }
-    if (!$Repair -and $Mode -notin @('Build','Test') -and (Test-PackagedRelease) -and !(Test-Path -LiteralPath $runtimeGeneration)) {
-        Write-Log 'This package contains a newer production remediation backend. Performing the one-time runtime upgrade...' Yellow
-    }
-    if (!$Repair -and $Mode -notin @('Build','Test')) {
-        Write-Log 'A one-time runtime build is required. After it completes, normal starts do not download the SDK.' Yellow
-    } else {
-        Write-Log 'Developer/repair build requested. Checking source fingerprints...' Yellow
-    }
+    if (!$Repair -and $Mode -notin @('Build','Test')) { throw 'Packaged runtime integrity check failed. Install a complete signed release; production startup will not rebuild modified or missing source.' }
+    Write-Log 'Explicit developer build requested. Checking source fingerprints...' Yellow
     Ensure-BuildToolchain
     & (Join-Path $PSScriptRoot 'Build-Portable.ps1')
     if ($LASTEXITCODE -ne 0) { throw 'Application build failed.' }
@@ -100,7 +90,7 @@ function Ensure-CurrentBuild {
 }
 function Read-LocalConfig {
     if (!(Test-Path -LiteralPath $localConfig)) { return $null }
-    try { return Get-Content -LiteralPath $localConfig -Raw | ConvertFrom-Json } catch { Write-Log ('Ignoring invalid local config: ' + $_.Exception.Message) Yellow; return $null }
+    try { return Get-Content -LiteralPath $localConfig -Encoding UTF8 -Raw | ConvertFrom-Json } catch { Write-Log ('Ignoring invalid local config: ' + $_.Exception.Message) Yellow; return $null }
 }
 function Resolve-RunMode([string]$Requested) {
     if ($Requested -ne 'Auto') { return $Requested }
@@ -112,7 +102,7 @@ function Resolve-RunMode([string]$Requested) {
 function Wait-ApplicationReady([System.Diagnostics.Process]$Process,[string]$Url) {
     for ($i=0; $i -lt 40; $i++) {
         if ($Process.HasExited) { return $false }
-        try { $r = Invoke-WebRequest -UseBasicParsing -UseDefaultCredentials -Uri ($Url.TrimEnd('/') + '/api/session') -TimeoutSec 2; if ($r.StatusCode -eq 200) { return $true } } catch { }
+        try { $r = Invoke-WebRequest -UseBasicParsing -Uri ($Url.TrimEnd('/') + '/api/v1/health/ready') -TimeoutSec 2; if ($r.StatusCode -eq 200) { return $true } } catch { }
         Start-Sleep -Milliseconds 300
     }
     return $false
@@ -129,17 +119,17 @@ function Start-Application([string]$RunMode) {
         # GPO/AD modules execute on the pinned writable DC over Kerberos PowerShell remoting.
         # The local management host therefore does not need RSAT/GPMC installed.
         $url = "http://127.0.0.1:$Port"
-        $arguments = @('--contentRoot',('"'+$backend+'"'),'--Mode','Windows','--urls',$url)
+        $arguments = @('--contentRoot',('"'+$backend+'"'),'--LocalConfigPath',('"'+$localConfig+'"'),'--Mode','Windows','--urls',$url)
         Write-Log ('Starting local-only WINDOWS / AD mode at ' + $url) Cyan
     } elseif ($RunMode -eq 'Setup') {
         $url = "http://localhost:$Port"
-        $arguments = @('--contentRoot',('"'+$backend+'"'),'--Mode','Setup','--LocalSetup','true','--urls',$url)
+        $arguments = @('--contentRoot',('"'+$backend+'"'),'--LocalConfigPath',('"'+$localConfig+'"'),'--Mode','Setup','--LocalSetup','true','--urls',$url)
         Write-Log ('Starting configuration-only SETUP mode at ' + $url) Cyan
     } else { throw ('Unsupported runtime mode: ' + $RunMode) }
     Remove-Item -LiteralPath $restartMarker -Force -ErrorAction SilentlyContinue
     $arguments += @('--LauncherManaged','true')
     $process = Start-Process -FilePath $runtime -ArgumentList $arguments -WorkingDirectory $backend -PassThru -WindowStyle Hidden -RedirectStandardOutput $serverLog -RedirectStandardError $serverError
-    $openPath = if ($script:startupIssue) { '/#/settings' } else { '/#/home' }
+    $openPath = if ($script:startupIssue) { '/#/settings' } else { '/#/dashboard' }
     $serviceState = @{ processId=$process.Id; startedAt=$process.StartTime.ToUniversalTime().ToString('o'); url=$url; mode=$RunMode; launcherId=$PID; ready=$false; openPath=$openPath; startupIssue=$script:startupIssue }
     $serviceState | ConvertTo-Json | Set-Content -LiteralPath ($stateFile+'.tmp') -Encoding UTF8
     Move-Item -LiteralPath ($stateFile+'.tmp') -Destination $stateFile -Force
@@ -147,7 +137,7 @@ function Start-Application([string]$RunMode) {
     if (!$ready) {
         if (!$process.HasExited) { Stop-Process -Id $process.Id -ErrorAction SilentlyContinue }
         Remove-Item -LiteralPath $stateFile -Force -ErrorAction SilentlyContinue
-        $details = if (Test-Path -LiteralPath $serverError) { (Get-Content -LiteralPath $serverError -Tail 30) -join [Environment]::NewLine } else { 'No server error log was produced.' }
+        $details = if (Test-Path -LiteralPath $serverError) { (Get-Content -LiteralPath $serverError -Encoding UTF8 -Tail 30) -join [Environment]::NewLine } else { 'No server error log was produced.' }
         Write-Log "Application did not start successfully.`n$details" Red
         return @{ ExitCode = if ($process.HasExited) { $process.ExitCode } else { 1 }; FailedEarly = $true; Url = $url }
     }
@@ -170,7 +160,7 @@ function Start-Application([string]$RunMode) {
 try {
     $sha = [Security.Cryptography.SHA256]::Create()
     try { $rootHash = [BitConverter]::ToString($sha.ComputeHash([Text.Encoding]::UTF8.GetBytes($PSScriptRoot.ToLowerInvariant()))).Replace('-','').Substring(0,24) } finally { $sha.Dispose() }
-    $launcherMutex = New-Object Threading.Mutex($false, ('Local\GpoRemediatorLauncher-' + $rootHash))
+    $launcherMutex = New-Object Threading.Mutex($false, ('Global\GpoRemediatorLauncher-' + $rootHash))
     try { $ownsLauncher = $launcherMutex.WaitOne(0) } catch [Threading.AbandonedMutexException] { $ownsLauncher = $true }
     if (!$ownsLauncher) {
         Write-Log 'This project is already running or building. Use the control panel to open or stop it.' Yellow
@@ -203,7 +193,7 @@ try {
         }
         if (Test-Path -LiteralPath $restartMarker) {
             try {
-                $marker = Get-Content -LiteralPath $restartMarker -Raw | ConvertFrom-Json
+                $marker = Get-Content -LiteralPath $restartMarker -Encoding UTF8 -Raw | ConvertFrom-Json
                 $requested = [string]$marker.mode
             } catch { $requested = 'Windows' }
             Remove-Item -LiteralPath $restartMarker -Force -ErrorAction SilentlyContinue

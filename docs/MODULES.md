@@ -10,4 +10,4 @@ GPO Remediator uses a single production workflow.
 6. `backend/PowerShell/SecurityTemplate.psm1` safely edits security-template content used by mapped CIS controls.
 7. `backend/Infrastructure/Store.cs` stores only ephemeral local operation state while the service is running; normal stop removes it.
 
-There is no legacy mock, Password Pilot, adapter-registry or general-purpose PowerShell execution path in the production application.
+The production application exposes only the Windows GPO workflow; obsolete Password Pilot, adapter-registry and general-purpose PowerShell execution surfaces are not included.

@@ -20,6 +20,17 @@ public sealed class GpoWorkflowService(IConfiguration config,Store store,Operati
     private string Domain=>config["Windows:Domain"]??"";
     private string Dc=>config["Windows:DomainController"]??"";
     private object Configuration=>new{domain=Domain,domainController=Dc,backupPath=config["Windows:BackupPath"]};
+    private string[] ApprovedGpos=>config.GetSection("Windows:ApprovedGpoIds").Get<string[]>()??[];
+    private string[] AuthorizedOus=>config.GetSection("Windows:AuthorizedOus").Get<string[]>()??[];
+    private string[] AllowedHosts=>config.GetSection("Windows:AllowedHosts").Get<string[]>()??[];
+    private string ConfigHash=>PolicyValues.Hash(new{domain=Domain,dc=Dc,backupPath=config["Windows:BackupPath"],approvedGpos=ApprovedGpos,authorizedOus=AuthorizedOus,allowedHosts=AllowedHosts});
+    private GpoInventory Authorize(GpoInventory source)
+    {
+        var allGpos=ApprovedGpos.Contains("*"); var allScopes=AuthorizedOus.Contains("*");
+        var gpos=source.Gpos.Where(g=>allGpos||ApprovedGpos.Any(id=>string.Equals(id.Trim('{','}'),g.Id.Trim('{','}'),StringComparison.OrdinalIgnoreCase))).ToArray();
+        var scopes=source.Scopes.Where(s=>allScopes||AuthorizedOus.Any(dn=>string.Equals(s.Dn,dn,StringComparison.OrdinalIgnoreCase)||s.Dn.EndsWith(","+dn,StringComparison.OrdinalIgnoreCase))).ToArray();
+        return source with{Gpos=gpos,Scopes=scopes};
+    }
     private Timer? cleanup;
     private void Expire()
     {
@@ -32,10 +43,10 @@ public sealed class GpoWorkflowService(IConfiguration config,Store store,Operati
         request.UserName=WindowsAccount.Normalize(request.UserName);
         if(connections.Count>=32) throw new PolicyException("GPO_CONNECTION_LIMIT","Too many active GPO sessions. Disconnect unused sessions or wait for the 30-minute idle timeout.");
         if(request.UserName.Length>256||request.Password.Length>1024||request.UserName.IndexOfAny(['\r','\n','\0'])>=0) throw new PolicyException("CREDENTIAL_FORMAT","Invalid login fields.");
-        if(string.IsNullOrEmpty(request.Password)!=string.IsNullOrEmpty(request.UserName)) throw new PolicyException("CREDENTIAL_PAIR_REQUIRED","Supply both username and password, or leave both empty to use the service identity.");
+        if(string.IsNullOrWhiteSpace(request.UserName)||string.IsNullOrEmpty(request.Password)) throw new PolicyException("DELEGATED_CREDENTIAL_REQUIRED","Supply an explicit delegated DOMAIN\\user credential. The backend service identity is never used for GPO execution.");
         GpoInventory inventory;
         try {
-            inventory=await executor.RunAsync<GpoInventory>("gpoInventory",Configuration,new{credential=new{userName=request.UserName,password=request.Password}},ct);
+            inventory=Authorize(await executor.RunAsync<GpoInventory>("gpoInventory",Configuration,new{credential=new{userName=request.UserName,password=request.Password}},ct));
             var bytes=Encoding.UTF8.GetBytes(request.Password);
             byte[] encrypted;
             try{encrypted=protector.Protect(bytes);}finally{CryptographicOperations.ZeroMemory(bytes);}
@@ -52,7 +63,7 @@ public sealed class GpoWorkflowService(IConfiguration config,Store store,Operati
     private Connection Get(string token,string actor)
     {
         Expire();
-        if(!connections.TryGetValue(token,out var c)||c.Actor!=actor)throw new PolicyException("GPO_LOGIN_REQUIRED","Connect again. The temporary GPO connection expired or the service restarted.");
+        if(!connections.TryGetValue(token,out var c)||!string.Equals(c.Actor,actor,StringComparison.OrdinalIgnoreCase))throw new PolicyException("GPO_LOGIN_REQUIRED","Connect again. The temporary GPO connection expired or the service restarted.");
         var refreshed=c with{Expires=DateTimeOffset.UtcNow.Add(ConnectionIdleTimeout)};
         connections.TryUpdate(token,refreshed,c);
         return refreshed;
@@ -91,7 +102,7 @@ public sealed class GpoWorkflowService(IConfiguration config,Store store,Operati
     {
         var c=Get(token,actor);
         RequireReal();
-        var inventory=await Run<GpoInventory>("gpoInventory",c,new{},ct);
+        var inventory=Authorize(await Run<GpoInventory>("gpoInventory",c,new{},ct));
         connections.TryUpdate(token,c with{Inventory=inventory},c);
         return inventory;
     }
@@ -104,18 +115,22 @@ public sealed class GpoWorkflowService(IConfiguration config,Store store,Operati
         var scope=c.Inventory.Scopes.SingleOrDefault(s=>string.Equals(s.Dn,selection.ScopeDn,StringComparison.OrdinalIgnoreCase));
         if(gpo is null||!gpo.Selectable||scope is null)throw new PolicyException("GPO_SELECTION_REQUIRED","Select an available GPO and scope from the discovered list.");
         if(mapping.DomainPolicySensitive && scope.Kind!="Domain") throw new PolicyException("PASSWORD_SCOPE_MISMATCH","Domain password and lockout policies require the domain root.");
-        var preview=await Run<GpoPreview>("gpoPreview",c,new{selection,mapping},ct);
-        var plan=new GpoWorkflowPlan(Guid.NewGuid().ToString("N"),actor,c.Inventory.ExecutionUser,Mode,Domain,Dc,selection,preview,PolicyValues.Now(),PolicyValues.Hash(mapping));
+        var preview=await Run<GpoPreview>("gpoPreview",c,new{selection,mapping,allowedHosts=AllowedHosts},ct);
+        if(!AllowedHosts.Contains("*"))
+        {
+            var permitted=new HashSet<string>(AllowedHosts,StringComparer.OrdinalIgnoreCase);
+            var impact=preview.Impact;
+            if(impact is not null) impact=impact with{AffectedObjects=impact.AffectedObjects with{SampleHosts=impact.AffectedObjects.SampleHosts.Where(permitted.Contains).ToArray()}};
+            preview=preview with{RefreshComputers=preview.RefreshComputers.Where(permitted.Contains).ToArray(),Impact=impact};
+        }
+        var plan=new GpoWorkflowPlan(Guid.NewGuid().ToString("N"),actor,c.Inventory.ExecutionUser,Mode,Domain,Dc,selection,preview,PolicyValues.Now(),PolicyValues.Hash(mapping),ConfigHash);
         store.Put("gpo_plans",plan.Id,plan);store.Audit("GPO_PLAN_PREPARED",actor,details:plan);
         return plan;
     }
-    public GpoWorkflowRun[] History(string actor)=>store.List<GpoWorkflowRun>("gpo_runs")
-        .Where(x=>string.Equals(x.Plan.Actor,actor,StringComparison.OrdinalIgnoreCase))
-        .OrderByDescending(x=>DateTimeOffset.TryParse(x.UpdatedAt,out var updated)?updated:DateTimeOffset.MinValue)
-        .ToArray();
+    public GpoWorkflowRun[] History(string actor)=>store.GpoRunsForActor(actor);
     private void AssertContext(GpoWorkflowPlan p,Connection c,string actor)
     {
-        if(!string.Equals(p.Actor,actor,StringComparison.OrdinalIgnoreCase)||p.Mode!=Mode||p.Domain!=Domain||p.DomainController!=Dc||!string.Equals(p.ExecutionUser,c.Inventory.ExecutionUser,StringComparison.OrdinalIgnoreCase))throw new PolicyException("GPO_PLAN_CONTEXT","Reconnect with the same execution account and environment or prepare a new plan.");
+        if(!string.Equals(p.Actor,actor,StringComparison.OrdinalIgnoreCase)||p.Mode!=Mode||p.Domain!=Domain||p.DomainController!=Dc||!string.Equals(p.ExecutionUser,c.Inventory.ExecutionUser,StringComparison.OrdinalIgnoreCase)||!string.Equals(p.ConfigHash,ConfigHash,StringComparison.Ordinal))throw new PolicyException("GPO_PLAN_CONTEXT","Reconnect with the same execution account and unchanged authorization configuration, then prepare a new plan.");
     }
     public async Task<GpoWorkflowRun> ExecuteAsync(string id,string operation,GpoConsent consent,string token,string actor)
     {
@@ -149,7 +164,8 @@ public sealed class GpoWorkflowService(IConfiguration config,Store store,Operati
                 throw new PolicyException("GPO_DRIFT_DETECTED","Live GPO or link state no longer matches the requested state. Refresh was blocked; prepare a fresh remediation plan.");
         }
         if(Real&&operation!="verify"&&!config.GetValue<bool>("Windows:EnableWrites"))throw new PolicyException("WRITES_DISABLED","Enable writes in Settings first.");
-        gate.BeginOperation(()=>{if(operation=="apply"&&store.Get<GpoWorkflowRun>("gpo_runs",id)is not null)throw new PolicyException("GPO_ALREADY_STARTED","This operation already exists. Refresh history.");});
+        var resourceKey=plan.Selection.GpoId;
+        gate.BeginOperation(resourceKey,()=>{if(operation=="apply"&&store.Get<GpoWorkflowRun>("gpo_runs",id)is not null)throw new PolicyException("GPO_ALREADY_STARTED","This operation already exists. Refresh history.");});
         var result=previous?.Result??new("APPLYING","Execution started; inspect backup after an interruption.",null,null,null,false,false,[],"PENDING");
         var correlationId=previous?.CorrelationId??Guid.NewGuid().ToString("N");
         var startedAt=previous?.StartedAt??PolicyValues.Now();
@@ -166,7 +182,7 @@ public sealed class GpoWorkflowService(IConfiguration config,Store store,Operati
             var safe=ex is PolicyException pex && new[]{"GPO_BUSY","GPO_ALREADY_STARTED","GPO_PLAN_STALE","GPO_PLAN_EXPIRED","ROLLBACK_CONFLICT","ROLLBACK_NOT_AVAILABLE","PREFLIGHT_FAILED"}.Contains(pex.Code);
             run=run with{Result=result with{State=safe?"FAILED_SAFE":"REVIEW_REQUIRED",Message=ex is PolicyException p?p.Code+": "+p.Message:"Execution interrupted. Inspect the DC backup/manifest before recovery."},UpdatedAt=PolicyValues.Now()};
         }
-        finally{store.Put("gpo_runs",id,run,run.Result.State);gate.EndOperation();}
+        finally{store.Put("gpo_runs",id,run,run.Result.State);gate.EndOperation(resourceKey);}
         store.Audit("GPO_EXECUTION_RESULT",actor,jobId:id,controlId:plan.Selection.Setting,gpoId:plan.Selection.GpoId,details:new{run,correlationId=run.CorrelationId});
         return run;
     }
@@ -174,12 +190,14 @@ public sealed class GpoWorkflowService(IConfiguration config,Store store,Operati
     {
         var run=store.Require<GpoWorkflowRun>("gpo_runs",id);
         if(!string.Equals(run.Plan.Actor,actor,StringComparison.OrdinalIgnoreCase)) throw new PolicyException("NOT_FOUND","Operation not found.");
+        var persisted=store.Get<GpoEvidence>("gpo_evidence",id);
+        if(persisted is not null) return persisted;
         var body=new {
             schemaVersion="1.0",
             product="GPO Remediator",
             benchmark="CIS v4.0.0",
             operationId=run.Id,
-            generatedAt=PolicyValues.Now(),
+            generatedAt=run.UpdatedAt,
             actor=run.Plan.Actor,
             executionUser=run.Plan.ExecutionUser,
             domain=run.Plan.Domain,
@@ -205,11 +223,13 @@ public sealed class GpoWorkflowService(IConfiguration config,Store store,Operati
             mappingSource=ProductionGpoMappings.Require(run.Plan.Selection.Setting).Source
         };
         var hash=PolicyValues.Hash(body);
-        return new("1.0","GPO Remediator","CIS v4.0.0",run.Id,(string)body.generatedAt,run.Plan.Actor,
+        var evidence=new GpoEvidence("1.0","GPO Remediator","CIS v4.0.0",run.Id,(string)body.generatedAt,run.Plan.Actor,
             run.Plan.ExecutionUser,run.Plan.Domain,run.Plan.DomainController,(string)body.controlId,run.Plan.Selection.Setting,
             run.Plan.Selection.GpoId,run.Plan.Preview.Gpo.Name,run.Plan.Selection.ScopeDn,run.Plan.Preview.PreviousValue,
             ProductionGpoMappings.Require(run.Plan.Selection.Setting).DesiredDisplay(run.Plan.Selection),run.Result.State,run.Result.BackupId,run.Result.BackupDirectory,run.Result.EffectiveStatus,
             run.Result.Verification,run.Plan.Preview.Warnings,hash,run.Approval?.ChangeReference,run.Approval?.ApprovedBy,ProductionGpoMappings.Require(run.Plan.Selection.Setting).Handler,ProductionGpoMappings.Require(run.Plan.Selection.Setting).Source,run.Result.EndpointChecks,run.CorrelationId);
+        store.Put("gpo_evidence",id,evidence,"IMMUTABLE");
+        return evidence;
     }
     public void Dispose(){cleanup?.Dispose();foreach(var key in connections.Keys)Disconnect(key);}
 }

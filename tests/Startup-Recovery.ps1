@@ -18,29 +18,30 @@ try {
     $session=$null
     for($i=0;$i -lt 60;$i++) {
         if($process.HasExited){throw "Recovery process stopped unexpectedly. Inspect $testRoot"}
-        try { $session=Invoke-RestMethod "http://127.0.0.1:$Port/api/session" -TimeoutSec 2; break } catch { Start-Sleep -Milliseconds 250 }
+        try { $session=Invoke-RestMethod "http://127.0.0.1:$Port/api/session" -UseDefaultCredentials -TimeoutSec 2; break } catch { Start-Sleep -Milliseconds 250 }
     }
     if(!$session -or !$session.setupRequired -or $session.mode -ne 'SETUP'){throw 'Local recovery did not start in explicit SETUP mode.'}
-    $config=Invoke-RestMethod "http://127.0.0.1:$Port/api/setup/config" -TimeoutSec 5
+    $config=Invoke-RestMethod "http://127.0.0.1:$Port/api/setup/config" -UseDefaultCredentials -TimeoutSec 5
     if($config.enableWrites){throw 'Recovery mode exposed enabled writes.'}
-    $service=Invoke-RestMethod "http://127.0.0.1:$Port/api/service" -TimeoutSec 5
+    $service=Invoke-RestMethod "http://127.0.0.1:$Port/api/service" -UseDefaultCredentials -TimeoutSec 5
     if($service.writesEnabled){throw 'Recovery mode permits real writes.'}
     $blocked=$false
-    try { Invoke-RestMethod "http://127.0.0.1:$Port/api/gpo/settings" -TimeoutSec 5 | Out-Null }
+    try { Invoke-RestMethod "http://127.0.0.1:$Port/api/gpo/settings" -UseDefaultCredentials -TimeoutSec 5 | Out-Null }
     catch { if ($_.Exception.Response -and [int]$_.Exception.Response.StatusCode -in @(403,409)) { $blocked=$true } else { throw } }
     if(!$blocked){throw 'Setup mode exposed GPO operation API.'}
     if((Get-Content (Join-Path $testRoot 'appsettings.Local.json') -Raw).Trim() -ne '{broken json'){throw 'Recovery modified the malformed configuration before an explicit save.'}
-    $csrf=Invoke-RestMethod "http://127.0.0.1:$Port/api/session" -SessionVariable webSession
-    $body=@{domain='example.local';domainController='dc01.example.local';backupPath='C:\GpoTestBackups';allowedOperators=@('TEST/Administrator');autoRestart=$false}|ConvertTo-Json
+    $csrf=Invoke-RestMethod "http://127.0.0.1:$Port/api/session" -UseDefaultCredentials -SessionVariable webSession
+    $body=@{domain='example.local';domainController='dc01.example.local';backupPath=(Join-Path $env:ProgramData 'GpoRemediator\Backups\RecoveryTest');approvedGpoIds=@('{11111111-1111-1111-1111-111111111111}');authorizedOus=@('OU=Servers,DC=example,DC=local');allowedHosts=@();allowedOperators=@('TEST/Administrator');autoRestart=$false}|ConvertTo-Json
     $saved=Invoke-RestMethod "http://127.0.0.1:$Port/api/setup/config" -Method Post -ContentType 'application/json' -Body $body -WebSession $webSession -Headers @{'Origin'="http://127.0.0.1:$Port";'X-CSRF-Token'=$csrf.csrfToken}
-    $config=Invoke-RestMethod "http://127.0.0.1:$Port/api/setup/config"
+    $config=Invoke-RestMethod "http://127.0.0.1:$Port/api/setup/config" -UseDefaultCredentials
     if(!$saved.saved -or $config.allowedOperators[0] -cne 'TEST\Administrator'){throw 'Setup did not normalize the operator account.'}
     $savedPath=Join-Path $testRoot 'appsettings.Local.json'
     $legacy=(Get-Content -LiteralPath $savedPath -Raw).Replace('"Windows"','"windows"').Replace('"AllowedOperators"','"allowedOperators"').Replace('"DomainController"','"domainController"')
     Set-Content -LiteralPath $savedPath -Value $legacy -Encoding UTF8
-    $legacyConfig=Invoke-RestMethod "http://127.0.0.1:$Port/api/setup/config"
+    $legacyConfig=Invoke-RestMethod "http://127.0.0.1:$Port/api/setup/config" -UseDefaultCredentials
     if($legacyConfig.allowedOperators[0] -cne 'TEST\Administrator' -or $legacyConfig.domainController -cne 'dc01.example.local'){throw 'Existing camelCase configuration could not be read.'}
     Write-Host 'PASS: malformed saved configuration opens local-only SETUP mode without writes or silent configuration replacement.'
 } finally {
-    if($process -and !$process.HasExited){Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue}
+    if($process -and !$process.HasExited){Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue; $process.WaitForExit(5000) | Out-Null}
+    if($testRoot.StartsWith((Join-Path $root 'work')+[IO.Path]::DirectorySeparatorChar,[StringComparison]::OrdinalIgnoreCase)) { Remove-Item -LiteralPath $testRoot -Recurse -Force -ErrorAction SilentlyContinue }
 }

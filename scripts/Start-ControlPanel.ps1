@@ -1,7 +1,7 @@
 param([switch]$SmokeTest)
 $ErrorActionPreference='Stop'
 $projectRoot=Split-Path $PSScriptRoot -Parent
-$workRoot=Join-Path $projectRoot 'work'
+$workRoot=Join-Path $env:ProgramData 'GpoRemediator\State'
 try {
     New-Item -ItemType Directory -Path $workRoot -Force | Out-Null
     $panel=Join-Path $projectRoot 'Control-Panel.ps1'

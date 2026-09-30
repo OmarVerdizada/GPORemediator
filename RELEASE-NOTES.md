@@ -7,7 +7,7 @@
 - Live verification exposes the current GPO value and endpoint evidence so manual out-of-band changes are visible.
 - Operations now includes timestamps, change reference, approver, evidence export, verification, rollback, and drift recovery actions.
 - Added delegated-session expiry visibility and clearer session-expired behavior.
-- Removed unused Password Pilot/demo remediation backend surface from the production source tree.
+- Removed the obsolete Password Pilot and non-production remediation backend surface from the source tree.
 - Release package no longer contains environment-specific config, SQLite runtime state, WAL/SHM files, logs, or screenshots.
 - Added dependency-free workflow smoke tests plus an optional pinned Playwright browser-test dependency manifest.
 

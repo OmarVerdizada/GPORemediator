@@ -10,7 +10,7 @@ public sealed class Store : IDisposable
 {
     private readonly SqliteConnection db;
     private readonly object gate = new();
-    private static readonly HashSet<string> Tables = ["controls", "targets", "findings", "analyses", "previews", "jobs", "backups", "password_plans", "password_jobs", "gpo_plans", "gpo_runs"];
+    private static readonly HashSet<string> Tables = ["controls", "targets", "findings", "analyses", "previews", "jobs", "backups", "password_plans", "password_jobs", "gpo_plans", "gpo_runs", "gpo_evidence"];
     public Store(string path)
     {
         if (path != ":memory:") Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(path))!);
@@ -28,6 +28,8 @@ public sealed class Store : IDisposable
             CREATE TRIGGER IF NOT EXISTS audit_no_update BEFORE UPDATE ON audit BEGIN SELECT RAISE(ABORT,'Audit events are append-only'); END;
             CREATE TRIGGER IF NOT EXISTS audit_no_delete BEFORE DELETE ON audit BEGIN SELECT RAISE(ABORT,'Audit events are append-only'); END;
             CREATE INDEX IF NOT EXISTS ix_jobs_state ON jobs(state);
+            CREATE INDEX IF NOT EXISTS ix_gpo_runs_state_updated ON gpo_runs(state,updated_at DESC);
+            CREATE INDEX IF NOT EXISTS ix_audit_operator_created ON audit(operator,created_at DESC);
             """);
     }
     private SqliteCommand Command(string sql, params (string, object?)[] parameters)
@@ -85,6 +87,24 @@ public sealed class Store : IDisposable
         lock (gate) { using var command = Command($"SELECT data FROM {Table(table)} ORDER BY updated_at DESC,id"); using var reader = command.ExecuteReader();
             var items = new List<T>(); while (reader.Read()) items.Add(JsonDefaults.Deserialize<T>(reader.GetString(0))); return items.ToArray(); }
     }
+    public int CountActiveGpoRuns()
+    {
+        lock(gate)
+        {
+            using var command=Command("SELECT COUNT(*) FROM gpo_runs WHERE state LIKE '%ING'");
+            return Convert.ToInt32(command.ExecuteScalar());
+        }
+    }
+    public GpoWorkflowRun[] GpoRunsForActor(string actor,int limit=200)
+    {
+        lock(gate)
+        {
+            using var command=Command("SELECT data FROM gpo_runs WHERE json_extract(data,'$.plan.actor')=$actor COLLATE NOCASE ORDER BY updated_at DESC,id LIMIT $limit",("$actor",actor),("$limit",Math.Clamp(limit,1,500)));
+            using var reader=command.ExecuteReader(); var items=new List<GpoWorkflowRun>();
+            while(reader.Read()) items.Add(JsonDefaults.Deserialize<GpoWorkflowRun>(reader.GetString(0)));
+            return items.ToArray();
+        }
+    }
     public void Step(string jobId, string state, string message) => Execute("INSERT INTO steps(job_id,state,message,created_at) VALUES($j,$s,$m,$a)",
         ("$j", jobId), ("$s", state), ("$m", Redactor.Clean(message)), ("$a", PolicyValues.Now()));
     public RemediationStep[] Steps(string jobId)
@@ -113,9 +133,10 @@ public sealed class Store : IDisposable
                 ("$e",eventName),("$o",operatorName),("$j",jobId),("$c",controlId),("$g",gpoId),("$d",safe),("$a",at),("$p",previous),("$h",hash));
         }
     }
-    public AuditEvent[] AuditEvents()
+    public AuditEvent[] AuditEvents(int? limit=null)
     {
-        lock (gate) { using var command = Command("SELECT id,event,operator,job_id,control_id,gpo_id,details,created_at,previous_hash,hash FROM audit ORDER BY id");
+        lock (gate) { var sql=limit is null?"SELECT id,event,operator,job_id,control_id,gpo_id,details,created_at,previous_hash,hash FROM audit ORDER BY id":"SELECT id,event,operator,job_id,control_id,gpo_id,details,created_at,previous_hash,hash FROM (SELECT * FROM audit ORDER BY id DESC LIMIT $limit) ORDER BY id";
+            using var command = limit is null?Command(sql):Command(sql,("$limit",Math.Clamp(limit.Value,1,1000)));
             using var r=command.ExecuteReader(); var list=new List<AuditEvent>();
             while(r.Read()) list.Add(new(r.GetInt64(0),r.GetString(1),r.GetString(2),r.IsDBNull(3)?null:r.GetString(3),r.IsDBNull(4)?null:r.GetString(4),r.IsDBNull(5)?null:r.GetString(5),r.GetString(6),r.GetString(7),r.GetString(8),r.GetString(9))); return list.ToArray(); }
     }
