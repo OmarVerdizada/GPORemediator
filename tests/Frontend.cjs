@@ -63,7 +63,7 @@ const server=http.createServer(async(req,res)=>{
     assert.equal(await page.locator('script[src*="/assets/"]').count(),0);
     await page.locator('[data-gpo-nav][href="#/benchmark"]').click();
     await page.locator('#catalog-search').pressSequentially('1.1.3');assert.equal(await page.locator('#catalog-search').inputValue(),'1.1.3');
-    assert.equal(await page.locator('#catalog-search').evaluate(e=>document.activeElement===e),true);
+    await page.waitForFunction(()=>document.activeElement?.id==='catalog-search');
     await page.locator('[data-rule="1.1.3"]').click();
     for(const tab of ['impact','verification','audit','remediation','overview'])await page.locator(`[data-tab="${tab}"]`).click();
     await page.locator('[data-tab="remediation"]').click();

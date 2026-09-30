@@ -66,5 +66,19 @@ try {
     if (Test-Path -LiteralPath $stage) { Remove-Item -LiteralPath $stage -Recurse -Force -ErrorAction SilentlyContinue }
 }
 
+# Produce the SDK-free runtime payload consumed by Auto mode in a clean
+# checkout. The archive is content-verified before extraction by the launcher.
+$release = Join-Path $PSScriptRoot 'release'
+New-Item -ItemType Directory -Path $release -Force | Out-Null
+$archive = Join-Path $release 'GpoRemediator-runtime-win-x64.zip'
+$archiveStage = Join-Path $PSScriptRoot ('work\runtime-archive-' + [guid]::NewGuid().ToString('N') + '.zip')
+try {
+    Compress-Archive -Path (Join-Path $runtime '*') -DestinationPath $archiveStage -CompressionLevel Optimal
+    Move-Item -LiteralPath $archiveStage -Destination $archive -Force
+    (Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash | Set-Content -LiteralPath ($archive + '.sha256') -Encoding ASCII -NoNewline
+} finally {
+    if (Test-Path -LiteralPath $archiveStage) { Remove-Item -LiteralPath $archiveStage -Force -ErrorAction SilentlyContinue }
+}
+
 Write-Host 'Portable Windows x64 application ready. No Node.js/pnpm/npm registry is required.' -ForegroundColor Green
 Write-Host 'Run GpoRemediator.cmd. For real AD/GPO use, complete Setup in the built-in Automation Center.' -ForegroundColor Green

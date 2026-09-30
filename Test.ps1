@@ -59,6 +59,15 @@ foreach ($name in @('client.js','workspace.js','automation.js','ui-domain.js','i
 
 Write-Host '[8/8] Checking release safety markers...' -ForegroundColor Cyan
 $prodMarker=Join-Path $PSScriptRoot 'runtime\production-backend-v4.ready'
+$runtimeArchive=Join-Path $PSScriptRoot 'release\GpoRemediator-runtime-win-x64.zip'
+$runtimeArchiveHash=$runtimeArchive+'.sha256'
+if ((Test-Path -LiteralPath $runtimeArchive) -xor (Test-Path -LiteralPath $runtimeArchiveHash)) { throw 'Packaged runtime archive and its SHA-256 manifest must be shipped together.' }
+if (Test-Path -LiteralPath $runtimeArchive) {
+    $expected=(Get-Content -LiteralPath $runtimeArchiveHash -Raw -Encoding ASCII).Trim().ToUpperInvariant()
+    $actual=(Get-FileHash -LiteralPath $runtimeArchive -Algorithm SHA256).Hash
+    if ($expected -cne $actual) { throw 'Packaged runtime archive SHA-256 verification failed.' }
+    Write-Host 'Packaged runtime archive SHA-256: verified.' -ForegroundColor Green
+}
 if ((Test-Path -LiteralPath $prodMarker) -and !(Test-PortableBackendMatchesSource)) { Write-Warning 'Production runtime exists but does not match the current backend source. Rebuild the portable package before release.' }
 elseif (Test-Path -LiteralPath $prodMarker) { Write-Host 'Production runtime fingerprint matches the current backend source.' -ForegroundColor Green }
 

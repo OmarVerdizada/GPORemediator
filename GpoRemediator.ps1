@@ -24,6 +24,8 @@ $backend = Join-Path $PSScriptRoot 'backend'
 $runtime = Join-Path $PSScriptRoot 'runtime\GpoRemediator.exe'
 $localConfig = Join-Path $stateRoot 'Config\appsettings.Local.json'
 $runtimeGeneration = Join-Path $PSScriptRoot 'runtime\production-backend-v4.ready'
+$runtimeArchive = Join-Path $PSScriptRoot 'release\GpoRemediator-runtime-win-x64.zip'
+$runtimeArchiveHash = Join-Path $PSScriptRoot 'release\GpoRemediator-runtime-win-x64.zip.sha256'
 function Initialize-SecureState {
     foreach ($path in @($stateRoot,$workRoot,(Split-Path $localConfig -Parent),(Join-Path $stateRoot 'Data'),(Join-Path $stateRoot 'Backups'))) {
         New-Item -ItemType Directory -Force -Path $path | Out-Null
@@ -81,6 +83,39 @@ function Test-PackagedRelease {
     )
     return @($required | Where-Object { !(Test-Path -LiteralPath $_) }).Count -eq 0
 }
+function Install-PackagedRuntime {
+    if (!(Test-Path -LiteralPath $runtimeArchive) -or !(Test-Path -LiteralPath $runtimeArchiveHash)) { return $false }
+    $expected = (Get-Content -LiteralPath $runtimeArchiveHash -Raw -Encoding ASCII).Trim()
+    if ($expected -notmatch '^[A-Fa-f0-9]{64}$') { throw 'Packaged runtime hash manifest is invalid.' }
+    $actual = (Get-FileHash -LiteralPath $runtimeArchive -Algorithm SHA256).Hash
+    if ($actual -cne $expected.ToUpperInvariant()) { throw 'Packaged runtime archive failed SHA-256 verification.' }
+    $stage = Join-Path $workRoot ('runtime-install-' + [Guid]::NewGuid().ToString('N'))
+    $old = Join-Path $workRoot ('runtime-old-' + [Guid]::NewGuid().ToString('N'))
+    New-Item -ItemType Directory -Path $stage -Force | Out-Null
+    try {
+        Expand-Archive -LiteralPath $runtimeArchive -DestinationPath $stage -Force
+        foreach ($required in @('GpoRemediator.exe','backend-source.sha256','production-backend-v4.ready')) {
+            if (!(Test-Path -LiteralPath (Join-Path $stage $required))) { throw "Packaged runtime archive is incomplete: $required is missing." }
+        }
+        $sourceHash = (Get-BackendSourceFingerprint)
+        $archiveSourceHash = (Get-Content -LiteralPath (Join-Path $stage 'backend-source.sha256') -Raw).Trim()
+        if ($archiveSourceHash -cne $sourceHash) { throw 'Packaged runtime does not match the current backend source.' }
+        $runtimeRoot = Split-Path $runtime -Parent
+        if (Test-Path -LiteralPath $runtimeRoot) { Move-Item -LiteralPath $runtimeRoot -Destination $old }
+        try {
+            Move-Item -LiteralPath $stage -Destination $runtimeRoot
+            if (Test-Path -LiteralPath $old) { Remove-Item -LiteralPath $old -Recurse -Force }
+        } catch {
+            if (Test-Path -LiteralPath $runtimeRoot) { Remove-Item -LiteralPath $runtimeRoot -Recurse -Force -ErrorAction SilentlyContinue }
+            if (Test-Path -LiteralPath $old) { Move-Item -LiteralPath $old -Destination $runtimeRoot -Force }
+            throw
+        }
+        Write-Log 'Verified packaged runtime installed locally; no SDK or compilation was used.' Green
+        return $true
+    } finally {
+        if (Test-Path -LiteralPath $stage) { Remove-Item -LiteralPath $stage -Recurse -Force -ErrorAction SilentlyContinue }
+    }
+}
 function Ensure-CurrentBuild {
     # Normal operators run the prebuilt package. A missing/stale runtime fails closed;
     # source is never compiled implicitly on a customer machine.
@@ -88,7 +123,13 @@ function Ensure-CurrentBuild {
         Write-Log 'Packaged local-only runtime: ready (no SDK download required).'
         return
     }
-    if (!$Repair -and $Mode -notin @('Build','Test')) { throw 'Packaged runtime integrity check failed. Install a complete signed release; production startup will not rebuild modified or missing source.' }
+    if (!$Repair -and $Mode -notin @('Build','Test')) {
+        if ((Install-PackagedRuntime) -and (Test-PackagedRelease) -and (Test-PortableBackendMatchesSource) -and (Test-FrontendDistMatchesSource)) {
+            Write-Log 'Packaged local-only runtime: ready (no SDK download required).'
+            return
+        }
+        throw 'Packaged runtime integrity check failed. Install a complete verified release; production startup will not download or compile source.'
+    }
     Write-Log 'Explicit developer build requested. Checking source fingerprints...' Yellow
     Ensure-BuildToolchain
     & (Join-Path $PSScriptRoot 'Build-Portable.ps1')
