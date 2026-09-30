@@ -58,11 +58,12 @@ public record EnvironmentReadiness(string Mode, bool Ready, string Identity, str
 public record SafePlanResult(PolicySourceAnalysis Analysis, ImpactAnalysis Impact, PreflightResult Preflight,
     bool DryRun, int Writes, TargetSelection Selection);
 public record SetupConfigRequest(string Urls, string Domain, string DomainController, string[] ApprovedGpoIds,
-    string[] AuthorizedOus, string[] AllowedHosts, string[] AllowedOperators, string BackupPath, bool AutoRestart = true);
+    string[] AuthorizedOus, string[] AllowedHosts, string[] AllowedOperators, string BackupPath, bool AutoRestart = true,
+    string[]? Remediators = null, string[]? Auditors = null, string[]? Viewers = null);
 public record WriteModeRequest(bool Enable, string Confirmation, bool AutoRestart = true);
 public record SetupConfigView(string Urls, string Domain, string DomainController, string[] ApprovedGpoIds,
     string[] AuthorizedOus, string[] AllowedHosts, string[] AllowedOperators, string BackupPath, bool EnableWrites,
-    string ConfigPath, bool Exists);
+    string ConfigPath, bool Exists, string[] Remediators, string[] Auditors, string[] Viewers);
 public record ExecutionIdentity(string Strategy, string Name);
 
 public sealed class PolicyException(string code, string message) : Exception(message)

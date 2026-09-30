@@ -16,7 +16,7 @@ const server=http.createServer(async(req,res)=>{
     requests.push(url);
     let raw='';for await(const chunk of req)raw+=chunk;
     const body=raw?JSON.parse(raw):null;
-    if(url==='/api/session')return reply({mode,csrfToken:'fixture',setupRequired:false});
+    if(url==='/api/session')return reply({mode,role:'Administrator',operator:'TEST\\operator',csrfToken:'fixture',setupRequired:false});
     if(url==='/api/service')return reply({mode,writesEnabled:mode==='WINDOWS',managed:false});
     if(url==='/api/setup/config'&&body){setupBody=body;return reply({saved:true,restartScheduled:false});}
     if(url==='/api/setup/config')return reply({exists:true,domain:'example.test',domainController:'dc.example.test',allowedOperators:['TEST\\operator'],backupPath:'C:\\Backups'});
@@ -24,6 +24,7 @@ const server=http.createServer(async(req,res)=>{
     if(mode==='SETUP')return reply({code:'WINDOWS_MODE_REQUIRED',message:'Setup only'},409);
     if(url==='/api/gpo/settings')return reply(mappings);
     if(url==='/api/gpo/history')return reply(history);
+    if(url==='/api/audit')return reply({integrityValid:true,pageSize:500,events:[{id:1,event:'GPO_EXECUTION_RESULT',operator:'TEST\\operator',jobId:'plan-1',controlId:'1.1.3',gpoId:'gpo-1',details:'{}',createdAt:new Date().toISOString(),previousHash:'GENESIS',hash:'abcdef0123456789abcdef0123456789'}]});
     if(url==='/api/gpo/connect'){loginBody=body;if(hangConnect)return;connected=true;return reply(inventory);}
     if(url==='/api/gpo/inventory')return connected&&!connectionExpired?reply(inventory):reply({code:'GPO_LOGIN_REQUIRED',message:'Connect again'},409);
     if(url==='/api/gpo/session')return connected&&!connectionExpired?reply({connected:true,executionUser:inventory.executionUser,expiresAt:new Date(Date.now()+30*60000).toISOString(),idleTimeoutMinutes:30}):reply({code:'GPO_LOGIN_REQUIRED',message:'Connect again'},409);
@@ -38,7 +39,7 @@ const server=http.createServer(async(req,res)=>{
     if(/^\/api\/gpo\/plan-1\/(apply|verify|rollback|refresh)$/.test(url)){
       assert.equal(req.headers['x-csrf-token'],'fixture');
       if(url.endsWith('/apply')){assert.equal(body.confirmation,'APPLY');assert.equal(body.changeReference,'CHG-1');}
-      const result={state:url.endsWith('/rollback')?'ROLLED_BACK':url.endsWith('/verify')?'VERIFIED':url.endsWith('/refresh')?'REFRESH_SCHEDULED':'PUBLISHED',message:'Fixture operation completed',gpoPublished:true,linkVerified:true,backupId:'backup-1',refreshResults:[],effectiveStatus:'ENDPOINT_VERIFICATION_PENDING'};
+      const result={state:url.endsWith('/rollback')?'ROLLED_BACK':url.endsWith('/verify')?'VERIFIED':url.endsWith('/refresh')?'REFRESH_SCHEDULED':'PUBLISHED',message:'Fixture operation completed',gpoPublished:true,linkVerified:true,backupId:'backup-1',refreshResults:[],effectiveStatus:'VERIFIED_ON_SAMPLE',verification:{replicationConverged:true,replicationWarnings:[]},endpointChecks:[{hostname:'server01.example.com',state:'VERIFIED'}]};
       history=[{id:plan.id,plan,result}];return reply(history[0]);
     }
     return reply({code:'NOT_FOUND',message:'Unexpected test API: '+url},404);
@@ -58,7 +59,7 @@ const server=http.createServer(async(req,res)=>{
     const origin=`http://127.0.0.1:${server.address().port}`;
     const idle=()=>page.waitForFunction(()=>document.querySelector('#operator-modules .product-main')?.getAttribute('aria-busy')==='false');
     await page.goto(origin+'/#/');await idle();assert.equal(new URL(page.url()).hash,'#/dashboard');
-    assert.equal(await page.locator('.sidebar nav a,.sidebar nav button').count(),4);
+    assert.equal(await page.locator('.sidebar nav a,.sidebar nav button').count(),5);
     assert.equal(await page.locator('script[src*="/assets/"]').count(),0);
     await page.locator('[data-gpo-nav][href="#/benchmark"]').click();
     await page.locator('#catalog-search').pressSequentially('1.1.3');assert.equal(await page.locator('#catalog-search').inputValue(),'1.1.3');
@@ -68,7 +69,7 @@ const server=http.createServer(async(req,res)=>{
     await page.locator('[data-tab="remediation"]').click();
     hangConnect=true;await page.locator('#gpo-login [name="userName"]').fill('TEST/operator');await page.locator('#gpo-login [name="password"]').fill('fixture-only');
     await page.locator('#gpo-login button').click();await page.locator('[data-cancel-request]:not([hidden])').waitFor();await page.locator('[data-cancel-request]').click();await idle();
-    assert.match(await page.locator('.inline-notice').innerText(),/canceled/);
+    assert.match(await page.locator('.inline-notice').innerText(),/Stopped waiting/);
     hangConnect=false;readinessFails=true;
     await page.locator('#gpo-login [name="userName"]').fill('TEST/operator');await page.locator('#gpo-login [name="password"]').fill('fixture-only');
     await page.locator('#gpo-login button').click();await idle();
@@ -91,6 +92,7 @@ const server=http.createServer(async(req,res)=>{
     await page.locator('[data-gpo-nav][href="#/benchmark"]').click();await page.locator('#catalog-search').fill(fixed.id);await page.locator(`[data-rule="${fixed.id}"]`).click();await page.locator('[data-tab="remediation"]').click();
     await page.locator('[data-gpo-toggle]').click();await page.locator('[data-gpo="gpo-1"]').click();await page.locator('#gpo-selection .primary-action').click();await idle();assert.equal(previewBody.value,0);
     await page.locator('[data-gpo-nav][href="#/benchmark"]').click();await page.locator('#catalog-search').fill('1.2.3');await page.locator('[data-rule="1.2.3"]').click();await page.locator('[data-tab="remediation"]').click();assert.equal(await page.locator('#gpo-selection .primary-action').isDisabled(),true);
+    await page.locator('[data-gpo-nav][href="#/audit"]').click();await page.locator('.audit-event-row').waitFor();assert.equal(await page.locator('.integrity-card.ok').count(),1);await page.locator('#audit-search').fill('GPO_EXECUTION_RESULT');assert.equal(await page.locator('.audit-event-row').count(),1);
     // A delayed transport is exercised separately, without touching real AD.
     hangConnect=true;
     const timeoutMessage=await page.evaluate(async()=>{try{await GpoClient.request('/api/gpo/connect',{body:{},timeout:20});return '';}catch(e){return e.message;}});

@@ -9,7 +9,7 @@
   };
   const words = {
     'Main navigation':'Əsas menyu','Security operations':'Təhlükəsizlik idarəetməsi',
-    'Loading application data':'Məlumatlar yüklənir','Processing request':'Sorğu icra olunur','Please keep this window open.':'Pəncərəni açıq saxlayın.','Cancel request':'Gözləməni dayandır',
+    'Loading application data':'Məlumatlar yüklənir','Processing request':'Sorğu icra olunur','Please keep this window open.':'Pəncərəni açıq saxlayın.','Stop waiting':'Gözləməyi dayandır',
     'Overview':'Ümumi məlumat','Remediation':'Dəyişiklik','Impact':'Təsir','Verification':'Yoxlama','Audit':'Tarixçə',
     'Target & policy':'Siyasət və hədəf','Generate plan':'Planı göstər','Change approval':'Dəyişikliyin təsdiqi',
     'CIS BENCHMARK LIBRARY':'CIS QAYDALARI','Navigate by domain, use saved views, and favorite recurring controls without flattening the benchmark hierarchy.':'Qaydanın nömrəsi və ya adı ilə axtarın, sonra bölməni açın.',
@@ -128,7 +128,7 @@
     } catch (error) {
       if (controller.signal.aborted) throw new Error(timedOut
         ? `Request timed out after ${Math.round(settings.timeout / 1000)} seconds. ${settings.cancelable ? 'Check the service, DC and Kerberos/WinRM connection, then retry.' : 'The operation may still be running. Review Operations before submitting it again.'}`
-        : 'Request canceled. No further step was submitted.');
+        : 'Stopped waiting for the response. No new operation was submitted; the server may still be completing work.');
       if (error instanceof TypeError) throw new Error('The service connection was lost. Check that GPO Remediator is running. Review Operations before retrying a change.');
       throw error;
     } finally { clearTimeout(timer); active.delete(pending); }

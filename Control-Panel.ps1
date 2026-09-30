@@ -18,7 +18,7 @@ New-Item -ItemType Directory -Path $work -Force | Out-Null
         Title="GPO Remediator — Local Control Center"
         Width="1080" Height="720" MinWidth="960" MinHeight="650"
         WindowStartupLocation="CenterScreen" Background="#F4F7FB"
-        FontFamily="Segoe UI Variable, Segoe UI" FontSize="13">
+        FontFamily="Segoe UI Variable, Segoe UI" FontSize="13" UseLayoutRounding="True" SnapsToDevicePixels="True">
   <Window.Resources>
     <SolidColorBrush x:Key="Ink" Color="#142033"/>
     <SolidColorBrush x:Key="Muted" Color="#6F7F92"/>
@@ -31,7 +31,8 @@ New-Item -ItemType Directory -Path $work -Force | Out-Null
     <Style TargetType="Button" x:Key="PrimaryButton" BasedOn="{StaticResource GhostButton}"><Setter Property="Foreground" Value="#FFFFFF"/><Setter Property="Background" Value="#0B87C9"/><Setter Property="BorderBrush" Value="#0B87C9"/><Setter Property="Height" Value="42"/><Setter Property="Padding" Value="20,0"/></Style>
     <Style TargetType="Button" x:Key="DangerButton" BasedOn="{StaticResource GhostButton}"><Setter Property="Foreground" Value="#B4232D"/><Setter Property="BorderBrush" Value="#F1C8CC"/><Setter Property="Background" Value="#FFF8F8"/></Style>
   </Window.Resources>
-  <Grid>
+  <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto">
+  <Grid MinWidth="930" MinHeight="620">
     <Grid.ColumnDefinitions><ColumnDefinition Width="250"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
     <Border Grid.Column="0" Background="#0B1322">
       <Grid Margin="24,28">
@@ -83,24 +84,26 @@ New-Item -ItemType Directory -Path $work -Force | Out-Null
         </Grid>
       </Border>
       <Border Grid.Row="6" Background="#0B1322" BorderBrush="#17263A" BorderThickness="1" CornerRadius="12" Padding="0">
-        <Grid><Grid.RowDefinitions><RowDefinition Height="42"/><RowDefinition Height="*"/></Grid.RowDefinitions>
-          <Grid Margin="15,0"><TextBlock Text="LIVE DIAGNOSTICS" Foreground="#718CA1" FontSize="9" FontWeight="Bold" VerticalAlignment="Center"/><TextBlock Text="bootstrap.log" Foreground="#445E72" FontSize="9" HorizontalAlignment="Right" VerticalAlignment="Center"/></Grid>
+        <Grid><Grid.RowDefinitions><RowDefinition Height="48"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+          <Grid Margin="15,0"><Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="12"/><ColumnDefinition Width="150"/><ColumnDefinition Width="10"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBlock Text="LIVE DIAGNOSTICS" Foreground="#718CA1" FontSize="9" FontWeight="Bold" VerticalAlignment="Center"/><ComboBox Grid.Column="2" Name="LogSource" Height="28" VerticalContentAlignment="Center"><ComboBoxItem Content="bootstrap.log" IsSelected="True"/><ComboBoxItem Content="launcher-output.log"/><ComboBoxItem Content="launcher-error.log"/><ComboBoxItem Content="server.log"/><ComboBoxItem Content="server-error.log"/></ComboBox><TextBox Grid.Column="4" Name="LogFilter" Height="28" Padding="8,4" VerticalContentAlignment="Center" ToolTip="Filter visible lines"/><Button Grid.Column="5" Name="CopyLog" Content="Copy" Style="{StaticResource GhostButton}" Height="28" Margin="8,0,6,0" Padding="10,0"/><Button Grid.Column="6" Name="ClearFilter" Content="Clear" Style="{StaticResource GhostButton}" Height="28" Margin="0" Padding="10,0"/></Grid>
           <TextBox Grid.Row="1" Name="Log" IsReadOnly="True" TextWrapping="NoWrap" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto" Background="#08101C" Foreground="#9CB1C4" BorderThickness="0" Padding="15,13" FontFamily="Cascadia Mono, Consolas" FontSize="10"/>
         </Grid>
       </Border>
     </Grid>
   </Grid>
+  </ScrollViewer>
 </Window>
 '@
 
 $window = [Windows.Markup.XamlReader]::Load((New-Object Xml.XmlNodeReader $layout))
 $ui = @{}
-foreach ($name in @('TopMode','StatusDot','Status','Address','Environment','RuntimeState','ConfigState','ModeState','Start','Open','Restart','Stop','Message','Repair','Logs','Log','NoticeBorder')) { $ui[$name] = $window.FindName($name) }
+foreach ($name in @('TopMode','StatusDot','Status','Address','Environment','RuntimeState','ConfigState','ModeState','Start','Open','Restart','Stop','Message','Repair','Logs','Log','LogSource','LogFilter','CopyLog','ClearFilter','NoticeBorder')) { $ui[$name] = $window.FindName($name) }
 
 $script:launcher = $null
 $script:actionJob = $null
 $script:pendingUntil = [DateTime]::MinValue
 $script:lastLog = ''
+$script:rawLog = ''
 $script:runtimeReady = (Test-Path -LiteralPath (Join-Path $projectRoot 'runtime\GpoRemediator.exe')) -and (Test-Path -LiteralPath (Join-Path $projectRoot 'runtime\production-backend-v4.ready')) -and (Test-PortableBackendMatchesSource) -and (Test-FrontendDistMatchesSource)
 $script:autoOpen = $false
 $script:openedForLaunch = $false
@@ -126,7 +129,10 @@ function Refresh-Panel {
     $configExists = Test-Path -LiteralPath $localConfig
 
     $ui.RuntimeState.Text = if ($runtimeReady) { 'Paket yoxlanılıb' } else { 'Runtime paketi yoxdur/zədəlidir' }
-    $ui.ConfigState.Text = if ($configExists) { 'Saxlanıb' } else { 'İlk sazlama' }
+    if ($configExists) {
+        try { $cfg=Get-Content -LiteralPath $localConfig -Raw -Encoding UTF8 | ConvertFrom-Json; $ui.ConfigState.Text = '{0} · {1}' -f $cfg.Windows.Domain,$cfg.Windows.DomainController }
+        catch { $ui.ConfigState.Text = 'Sazlama oxunmadı' }
+    } else { $ui.ConfigState.Text = 'İlk sazlama' }
 
     $ui.Start.IsEnabled = !$service -and !$launching -and !$pending
     $ui.Open.IsEnabled = [bool]$service -and $service.ready -ne $false
@@ -184,11 +190,14 @@ function Refresh-Panel {
         $script:launcher = $null
     }
 
-    $logPath = Join-Path $work 'bootstrap.log'
+    $selectedLog = if ($ui.LogSource.SelectedItem) { [string]$ui.LogSource.SelectedItem.Content } else { 'bootstrap.log' }
+    $logPath = Join-Path $work $selectedLog
     if (Test-Path -LiteralPath $logPath) {
-        $content = (Get-Content -LiteralPath $logPath -Encoding UTF8 -Tail 45 -ErrorAction SilentlyContinue) -join [Environment]::NewLine
+        $script:rawLog = (Get-Content -LiteralPath $logPath -Encoding UTF8 -Tail 200 -ErrorAction SilentlyContinue) -join [Environment]::NewLine
+        $filter=[string]$ui.LogFilter.Text
+        $content=if([string]::IsNullOrWhiteSpace($filter)){$script:rawLog}else{(($script:rawLog -split '\r?\n') | Where-Object { $_ -match [Regex]::Escape($filter) }) -join [Environment]::NewLine}
         if ($content -ne $script:lastLog) { $ui.Log.Text = $content; $ui.Log.ScrollToEnd(); $script:lastLog = $content }
-    } else { $ui.Log.Text = 'Hələ log qeydi yoxdur.' }
+    } else { $script:rawLog=''; $ui.Log.Text = "$selectedLog üçün hələ qeyd yoxdur." }
 
     if ($script:actionJob -and $script:actionJob.State -in @('Completed','Failed','Stopped')) {
         $result = Receive-Job $script:actionJob -ErrorAction SilentlyContinue
@@ -227,6 +236,10 @@ $ui.Repair.Add_Click({
     }
 })
 $ui.Logs.Add_Click({ Start-Process explorer.exe -ArgumentList ('"' + $work + '"') })
+$ui.LogSource.Add_SelectionChanged({ $script:lastLog=''; Refresh-Panel })
+$ui.LogFilter.Add_TextChanged({ $script:lastLog=''; Refresh-Panel })
+$ui.CopyLog.Add_Click({ if (![string]::IsNullOrEmpty($ui.Log.Text)) { [Windows.Clipboard]::SetText($ui.Log.Text); $ui.Message.Text='Görünən diaqnostika mətni buferə köçürüldü.' } })
+$ui.ClearFilter.Add_Click({ $ui.LogFilter.Clear(); $script:lastLog='' })
 
 $timer = New-Object Windows.Threading.DispatcherTimer
 $timer.Interval = [TimeSpan]::FromSeconds(1)

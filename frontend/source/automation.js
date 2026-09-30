@@ -20,6 +20,9 @@
       ${field('domain','Domen','example.local')}${field('domainController','Domen kontrolleri','dc01.example.local')}
 
       <label class="gr-auto-field gr-auto-span2">Administrator Windows hesabları<textarea name="allowedOperators" required spellcheck="false" placeholder="DOMAIN\\user">${esc(Array.isArray(c.allowedOperators)?c.allowedOperators.join('\n'):c.allowedOperators||'')}</textarea><small>Hər sətirdə bir hesab. Bu siyahı Administrator roludur.</small></label>
+      <label class="gr-auto-field">Remediator hesabları<textarea name="remediators" spellcheck="false" placeholder="DOMAIN\\operator">${esc(Array.isArray(c.remediators)?c.remediators.join('\n'):c.remediators||'')}</textarea><small>Plan, tətbiq, yoxlama və rollback icazəsi.</small></label>
+      <label class="gr-auto-field">Auditor hesabları<textarea name="auditors" spellcheck="false" placeholder="DOMAIN\\auditor">${esc(Array.isArray(c.auditors)?c.auditors.join('\n'):c.auditors||'')}</textarea><small>Oxu, sübut və audit jurnalı icazəsi.</small></label>
+      <label class="gr-auto-field gr-auto-span2">Viewer hesabları<textarea name="viewers" spellcheck="false" placeholder="DOMAIN\\viewer">${esc(Array.isArray(c.viewers)?c.viewers.join('\n'):c.viewers||'')}</textarea><small>Yalnız kataloq və əməliyyat nəticələrinə baxış.</small></label>
       <label class="gr-auto-field gr-auto-span2">İcazəli GPO GUID-ləri<textarea name="approvedGpoIds" required spellcheck="false" placeholder="{00000000-0000-0000-0000-000000000000}">${esc(Array.isArray(c.approvedGpoIds)?c.approvedGpoIds.join('\n'):c.approvedGpoIds||'')}</textarea><small>Hər sətirdə bir GUID. Şüurlu limitsiz seçim üçün yalnız * yazın.</small></label>
       <label class="gr-auto-field gr-auto-span2">İcazəli domen/OU DN-ləri<textarea name="authorizedOus" required spellcheck="false" placeholder="OU=Servers,DC=example,DC=local">${esc(Array.isArray(c.authorizedOus)?c.authorizedOus.join('\n'):c.authorizedOus||'')}</textarea><small>Hər sətirdə bir DN. Alt OU-lar server tərəfindən bu sərhəddə yoxlanır.</small></label>
       <label class="gr-auto-field gr-auto-span2">gpupdate üçün icazəli hostlar<textarea name="allowedHosts" spellcheck="false" placeholder="server01.example.local">${esc(Array.isArray(c.allowedHosts)?c.allowedHosts.join('\n'):c.allowedHosts||'')}</textarea><small>Boş siyahı endpoint refresh-i bloklayır; limitsiz seçim üçün * yazın.</small></label></div><details><summary>Əlavə sazlamalar</summary>${field('backupPath','DC-də ehtiyat nüsxə qovluğu','C:\\ProgramData\\GpoRemediator\\Backups')}</details>
@@ -51,7 +54,8 @@
     panel.addEventListener('input',capture);
     panel.addEventListener('submit',e=>{e.preventDefault();capture();const c={...draft};action(async()=>{
       const lines=value=>String(value||'').split(/[\n;]/).map(v=>v.trim()).filter(Boolean);
-      const payload={...c,urls:location.origin,approvedGpoIds:lines(c.approvedGpoIds),authorizedOus:lines(c.authorizedOus),allowedHosts:lines(c.allowedHosts),allowedOperators:lines(c.allowedOperators).map(v=>v.replaceAll('/','\\')),autoRestart:!!state.service?.managed};
+      const accounts=name=>lines(c[name]).map(v=>v.replaceAll('/','\\'));
+      const payload={...c,urls:location.origin,approvedGpoIds:lines(c.approvedGpoIds),authorizedOus:lines(c.authorizedOus),allowedHosts:lines(c.allowedHosts),allowedOperators:accounts('allowedOperators'),remediators:accounts('remediators'),auditors:accounts('auditors'),viewers:accounts('viewers'),autoRestart:!!state.service?.managed};
       const result=await api('/setup/config',payload);state.notice='Saxlanıldı. Windows rejimi yenidən başladılır; yazma bağlıdır.';
       await restart(result);
     });});
