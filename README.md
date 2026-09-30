@@ -64,7 +64,7 @@ Rollback uses the `Backup-GPO` snapshot created by the same operation and restor
 
 ## Build behavior
 
-A packaged runtime starts without SDK downloads. This source generation changes the backend, so the first start of this release may perform one one-time .NET 8 publish if the final runtime marker is absent. If .NET 8 SDK is already installed it is reused; otherwise a project-local SDK is provisioned. Subsequent normal starts use the packaged runtime directly.
+Normal `Auto` startup never downloads an SDK and never compiles source. A clean GitHub ZIP includes a prebuilt self-contained Windows x64 runtime archive; the launcher verifies its SHA-256 manifest and canonical source fingerprint before atomically installing it locally. `Build` and `Test` modes are developer-only and require an approved .NET 8 SDK environment.
 
 The local management host does **not** auto-install RSAT. The production worker runs over Kerberos PowerShell remoting on the selected writable DC and validates the `ActiveDirectory` and `GroupPolicy` modules there.
 

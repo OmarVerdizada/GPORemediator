@@ -56,7 +56,10 @@ try {
         Move-Item -LiteralPath $stage -Destination $runtime
         if (!(Test-PortableBackendMatchesSource)) { throw 'Portable backend fingerprint does not match current source.' }
         if (!(Test-FrontendDistMatchesSource)) { throw 'Static frontend fingerprint does not match current source.' }
-        if (Test-Path -LiteralPath $old) { Remove-Item -LiteralPath $old -Recurse -Force }
+        if (Test-Path -LiteralPath $old) {
+            try { Remove-Item -LiteralPath $old -Recurse -Force -ErrorAction Stop }
+            catch { Write-Warning "Previous runtime is still locked by a running instance and will remain in the ignored work directory until that instance stops: $old" }
+        }
     } catch {
         if (Test-Path -LiteralPath $runtime) { Remove-Item -LiteralPath $runtime -Recurse -Force -ErrorAction SilentlyContinue }
         if (Test-Path -LiteralPath $old) { Move-Item -LiteralPath $old -Destination $runtime -Force }
