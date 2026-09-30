@@ -53,7 +53,7 @@ const server=http.createServer(async(req,res)=>{
   await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
   const browser=await chromium.launch({channel:process.env.PLAYWRIGHT_CHANNEL||'msedge',headless:true});
   try{
-    const context=await browser.newContext();
+    const context=await browser.newContext({viewport:{width:1600,height:900}});
     const page=await context.newPage();const errors=[];page.on('pageerror',e=>errors.push(e.message));
     await page.addInitScript(()=>{localStorage.setItem('gr-favorites','broken json');localStorage.setItem('gr-lang','en');});
     const origin=`http://127.0.0.1:${server.address().port}`;
@@ -61,6 +61,9 @@ const server=http.createServer(async(req,res)=>{
     await page.goto(origin+'/#/');await idle();assert.equal(new URL(page.url()).hash,'#/dashboard');
     assert.equal(await page.locator('.sidebar nav a,.sidebar nav button').count(),5);
     assert.equal(await page.locator('script[src*="/assets/"]').count(),0);
+    await page.locator('[data-gpo-nav][href="#/operations"]').click();await page.locator('.empty-state').waitFor();assert.equal(await page.locator('.empty-state').count(),1);assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth),true);
+    await page.screenshot({path:path.resolve(__dirname,'../work/frontend-operations-empty.png'),fullPage:true});
+    await page.setViewportSize({width:390,height:844});assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth),true);await page.screenshot({path:path.resolve(__dirname,'../work/frontend-operations-mobile.png'),fullPage:true});await page.setViewportSize({width:1600,height:900});
     await page.locator('[data-gpo-nav][href="#/benchmark"]').click();
     await page.locator('#catalog-search').pressSequentially('1.1.3');assert.equal(await page.locator('#catalog-search').inputValue(),'1.1.3');
     await page.waitForFunction(()=>document.activeElement?.id==='catalog-search');
@@ -100,10 +103,9 @@ const server=http.createServer(async(req,res)=>{
     mode='SETUP';requests=[];await page.reload();await idle();assert.equal(requests.some(p=>p.startsWith('/api/gpo/')),false);
     await page.locator('#windows-setup [name="domain"]').waitFor();
     await page.waitForFunction(()=>!document.querySelector('#windows-setup [name="domain"]').disabled);
+    await page.screenshot({path:path.resolve(__dirname,'../work/frontend-settings.png'),fullPage:true});
     await page.locator('#windows-setup [name="allowedOperators"]').fill('TEST/operator');
-    await page.locator('#windows-setup [name="approvedGpoIds"]').fill('{11111111-1111-1111-1111-111111111111}');
-    await page.locator('#windows-setup [name="authorizedOus"]').fill('OU=Servers,DC=example,DC=com');
-    await page.locator('#windows-setup button.primary').click();await page.waitForFunction(()=>!document.querySelector('#windows-setup [name="domain"]').disabled);assert.deepEqual(setupBody.allowedOperators,['TEST\\operator']);
+    await page.locator('#windows-setup button.primary').click();await page.waitForFunction(()=>!document.querySelector('#windows-setup [name="domain"]').disabled);assert.deepEqual(setupBody.allowedOperators,['TEST\\operator']);assert.deepEqual(setupBody.approvedGpoIds,['*']);assert.deepEqual(setupBody.authorizedOus,['DC=example,DC=test']);
     await page.locator('[data-close]').click();await idle();
     catalogFails=true;await page.reload();await page.locator('[data-close]').click();await page.locator('[data-refresh]').waitFor();
     await page.waitForFunction(()=>!document.querySelector('[data-refresh]')?.disabled);catalogFails=false;await page.locator('[data-refresh]').click();await idle();

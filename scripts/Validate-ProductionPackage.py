@@ -105,7 +105,7 @@ check('760000' in (ROOT/'frontend'/'source'/'client.js').read_text(encoding='utf
 check('PolicyValues.Equal' not in (ROOT/'tests'/'InvariantTests'/'Program.cs').read_text(encoding='utf-8-sig') and 'AdapterRegistry' not in (ROOT/'tests'/'InvariantTests'/'Program.cs').read_text(encoding='utf-8-sig'), 'stale legacy invariant tests remain')
 
 # Frontend/dist must be byte-for-byte synchronized for operator UI assets we own.
-for name in ('index.html','client.js','workspace.js','workspace.css','benchmark-v4.json','automation.js','automation.css'):
+for name in ('index.html','client.js','workspace.js','workspace.css','product-v2.css','benchmark-v4.json','automation.js','automation.css'):
     a=ROOT/'frontend'/'source'/name; b=ROOT/'frontend'/'dist'/name
     if a.exists() or b.exists():
         check(a.exists() and b.exists(), f'{name}: source/dist missing')
