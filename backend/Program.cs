@@ -95,6 +95,7 @@ app.Use(async(context,next)=>
             throw new PolicyException("SETUP_OPERATOR_DENIED","Setup is restricted to the Windows identity that launched the service.");
     }
     if(setup && context.Request.Path.StartsWithSegments("/api") &&
+       !context.Request.Path.StartsWithSegments("/api/v1/health") &&
        !context.Request.Path.StartsWithSegments("/api/setup") &&
        !context.Request.Path.StartsWithSegments("/api/session") &&
        !context.Request.Path.StartsWithSegments("/api/service"))

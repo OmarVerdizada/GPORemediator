@@ -15,6 +15,12 @@ $db=Join-Path $testRoot 'setup-recovery.db'
 $arguments=@(('"'+$dll+'"'),'--contentRoot',('"'+$testRoot+'"'),'--LocalSetup','true','--Mode','Setup','--urls',"http://127.0.0.1:$Port",'--DatabasePath',('"'+$db+'"'))
 $process=Start-Process -FilePath $DotnetPath -ArgumentList $arguments -WorkingDirectory $testRoot -WindowStyle Hidden -PassThru -RedirectStandardOutput (Join-Path $testRoot 'stdout.log') -RedirectStandardError (Join-Path $testRoot 'stderr.log')
 try {
+    $health=$null
+    for($i=0;$i -lt 60;$i++) {
+        if($process.HasExited){throw "Recovery process stopped unexpectedly. Inspect $testRoot"}
+        try { $health=Invoke-RestMethod "http://127.0.0.1:$Port/api/v1/health/ready" -TimeoutSec 2; break } catch { Start-Sleep -Milliseconds 250 }
+    }
+    if(!$health -or $health.status -ne 'ready' -or $health.mode -ne 'SETUP'){throw 'Unauthenticated readiness health did not become available in SETUP mode.'}
     $session=$null
     for($i=0;$i -lt 60;$i++) {
         if($process.HasExited){throw "Recovery process stopped unexpectedly. Inspect $testRoot"}

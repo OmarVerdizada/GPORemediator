@@ -59,7 +59,8 @@ foreach ($name in @('client.js','workspace.js','automation.js','ui-domain.js','i
 
 Write-Host '[8/8] Checking release safety markers...' -ForegroundColor Cyan
 $prodMarker=Join-Path $PSScriptRoot 'runtime\production-backend-v4.ready'
-if (Test-Path -LiteralPath $prodMarker) { Write-Warning 'Production build marker exists. Remove it before packaging a source-changed release unless runtime was rebuilt from this exact source.' }
+if ((Test-Path -LiteralPath $prodMarker) -and !(Test-PortableBackendMatchesSource)) { Write-Warning 'Production runtime exists but does not match the current backend source. Rebuild the portable package before release.' }
+elseif (Test-Path -LiteralPath $prodMarker) { Write-Host 'Production runtime fingerprint matches the current backend source.' -ForegroundColor Green }
 
 Write-Host 'PASS: build, invariants, 405-control registry (401 automated + 4 read-only), isolated GPO transaction worker, recovery startup and frontend integrity.' -ForegroundColor Green
 Write-Host 'Real AD/GPO publication, replication, gpupdate and effective-policy convergence still require the final Windows domain test.' -ForegroundColor Yellow

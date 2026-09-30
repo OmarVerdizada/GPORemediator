@@ -27,14 +27,18 @@ $runtimeGeneration = Join-Path $PSScriptRoot 'runtime\production-backend-v4.read
 function Initialize-SecureState {
     foreach ($path in @($stateRoot,$workRoot,(Split-Path $localConfig -Parent),(Join-Path $stateRoot 'Data'),(Join-Path $stateRoot 'Backups'))) {
         New-Item -ItemType Directory -Force -Path $path | Out-Null
-        $acl = Get-Acl -LiteralPath $path
+        # Read/write only the DACL. Re-applying inherited SACL data through Set-Acl
+        # can require SeSecurityPrivilege even when the operator already owns this
+        # product directory.
+        $item = Get-Item -LiteralPath $path
+        $acl = $item.GetAccessControl([Security.AccessControl.AccessControlSections]::Access)
         $acl.SetAccessRuleProtection($true,$false)
         foreach($rule in @(
             (New-Object Security.AccessControl.FileSystemAccessRule('SYSTEM','FullControl','ContainerInherit,ObjectInherit','None','Allow')),
             (New-Object Security.AccessControl.FileSystemAccessRule('BUILTIN\Administrators','FullControl','ContainerInherit,ObjectInherit','None','Allow')),
             (New-Object Security.AccessControl.FileSystemAccessRule([Security.Principal.WindowsIdentity]::GetCurrent().Name,'FullControl','ContainerInherit,ObjectInherit','None','Allow'))
         )) { $acl.AddAccessRule($rule) | Out-Null }
-        Set-Acl -LiteralPath $path -AclObject $acl
+        $item.SetAccessControl($acl)
     }
 }
 Initialize-SecureState
@@ -68,6 +72,10 @@ function Test-PackagedRelease {
         (Join-Path $PSScriptRoot 'frontend\dist\index.html'),
         (Join-Path $PSScriptRoot 'frontend\dist\workspace.js'),
         (Join-Path $PSScriptRoot 'frontend\dist\client.js'),
+        (Join-Path $PSScriptRoot 'frontend\dist\automation.js'),
+        (Join-Path $PSScriptRoot 'frontend\dist\ui-domain.js'),
+        (Join-Path $PSScriptRoot 'frontend\dist\i18n.js'),
+        (Join-Path $PSScriptRoot 'frontend\dist\router.js'),
         (Join-Path $PSScriptRoot 'frontend\dist\workspace.css'),
         (Join-Path $PSScriptRoot 'frontend\dist\benchmark-v4.json')
     )
