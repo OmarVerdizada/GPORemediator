@@ -7,6 +7,7 @@ const path = require('node:path');
 const assert = require('node:assert/strict');
 const root = path.resolve(__dirname, '../frontend/dist');
 const mappings = JSON.parse(fs.readFileSync(path.resolve(__dirname, '../backend/data/gpo-production-mappings.json'))).mappings;
+for(const mapping of mappings)mapping.operationalImpact=mapping.domainPolicySensitive?'HIGH':mapping.requiresRestart?'HIGH':mapping.requiresGpUpdate?'MEDIUM':'LOW';
 const inventory = { domain:'example.test',domainController:'dc.example.test',executionUser:'TEST\\operator',gpos:[{id:'gpo-1',name:'Test policy',protected:false,selectable:true}],scopes:[{dn:'DC=example,DC=test',name:'Domain',kind:'Domain'}] };
 let mode='WINDOWS',connected=false,connectionExpired=false,readinessFails=false,hangConnect=false,catalogFails=false,history=[],plan,requests=[],previewBody,loginBody,setupBody,writeModeBody;
 const server=http.createServer(async(req,res)=>{
@@ -113,7 +114,31 @@ const server=http.createServer(async(req,res)=>{
     catalogFails=true;await page.reload();await page.locator('[data-close]').click();await page.locator('[data-refresh]').waitFor();
     await page.waitForFunction(()=>!document.querySelector('[data-refresh]')?.disabled);catalogFails=false;await page.locator('[data-refresh]').click();await idle();
     mode='WINDOWS';connected=true;readinessFails=false;await page.goto(origin+'/#/dashboard');await page.reload();await idle();await page.locator('[data-readiness]').first().click();await idle();await page.locator('[data-lang]').click();await page.locator('[data-settings]').click();await page.locator('.gr-auto-permission').waitFor();await page.waitForTimeout(500);await page.screenshot({path:path.resolve(__dirname,'../work/frontend-settings-windows.png'),fullPage:true});await page.locator('[data-write]').click();await page.waitForFunction(()=>!document.querySelector('[data-write]')?.disabled);assert.equal(writeModeBody.confirmation,'DISABLE WRITES');await page.locator('[data-close]').click();
+    await page.waitForTimeout(250);
+    await page.locator('[data-gpo-nav][href="#/dashboard"]').click();await idle();
     await page.screenshot({path:path.resolve(__dirname,'../work/frontend-fixed.png'),fullPage:true});
+    await page.locator('[data-theme]').click();
+    await page.screenshot({path:path.resolve(__dirname,'../work/frontend-dark.png'),fullPage:true});
+    await page.locator('[data-theme]').click();
+    await page.locator('[data-gpo-nav][href="#/benchmark"]').click();
+    await page.locator('#catalog-search').fill('no-control-matches-this-query');
+    await page.locator('.empty-state[role="status"]').waitFor();
+    await page.locator('#catalog-search').fill('');
+    await page.locator('[data-view="HIGH"]').click();
+    await page.waitForTimeout(200);
+    const highEn=await page.locator('.ent-domain').count();assert.ok(highEn>0);
+    await page.locator('[data-lang]').click();
+    assert.equal(await page.locator('.ent-domain').count(),highEn,'High impact filter must not depend on display language');
+    await page.locator('[data-view="ALL"]').click();
+    await page.screenshot({path:path.resolve(__dirname,'../work/frontend-library.png'),fullPage:true});
+    for(const width of [390,768,1366]){
+      await page.setViewportSize({width,height:900});
+      assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true,`Library overflow at ${width}px`);
+    }
+    await page.setViewportSize({width:1600,height:900});
+    await page.locator('.skip-link').focus();await page.keyboard.press('Enter');
+    assert.equal(await page.evaluate(()=>document.activeElement.id),'main-content');
+    assert.equal(new URL(page.url()).hash,'#/benchmark');
     assert.deepEqual(errors,[]);console.log('PASS: standalone shell, setup, legacy routes, corrupt storage, all control tabs, cancel, timeout, readiness failure, preview values, apply, verify, rollback, history filters, catalog retry.');
   }finally{await browser.close();server.closeAllConnections();await new Promise(resolve=>server.close(resolve));}
 })().catch(e=>{console.error(e);process.exitCode=1;server.closeAllConnections();server.close();});
