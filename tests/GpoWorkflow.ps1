@@ -1,8 +1,7 @@
 ﻿# Real GPO worker exercised against isolated files and fake AD/GroupPolicy cmdlets. No domain connection.
 $ErrorActionPreference='Stop'
-$script:fixture=Join-Path ([IO.Path]::GetTempPath()) ('gpor-'+[guid]::NewGuid().ToString('N'))
+$script:fixture=Join-Path $PSScriptRoot ('../work/gpo-worker-'+[guid]::NewGuid().ToString('N'))
 $script:fixture=[IO.Path]::GetFullPath($script:fixture)
-try {
 $script:gpoId=[guid]'31b2f340-016d-11d2-945f-00c04fb984f9'
 $script:domainDn='DC=example,DC=com';$script:ouDn='OU=Test,DC=example,DC=com'
 $script:sysvol=Join-Path $script:fixture 'sysvol'
@@ -93,6 +92,3 @@ Check ($refreshPartial.state -eq 'REFRESH_PARTIAL' -and $refreshPartial.gpoPubli
 $rolled=Invoke-Worker 'gpoRollback' @{plan=$plan;mapping=$mapping;previous=$partial}
 Check ($rolled.state -eq 'ROLLED_BACK' -and !$script:links[$script:domainDn].Enabled) 'Existing disabled link was not restored'
 Write-Host 'PASS: real GPO worker with AD doubles - discovery, preview, INF/CSE/version writes, backup, link creation, explicit force refresh, independent verification, replay, stale rollback, existing-link restore and refresh failure.'
-} finally {
-    if (Test-Path -LiteralPath $script:fixture) { Remove-Item -LiteralPath $script:fixture -Recurse -Force }
-}

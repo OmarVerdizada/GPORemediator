@@ -1,58 +1,70 @@
-# Shared by the desktop control panel and the command-line stop utility.
 function Get-RemediatorService {
-    $projectRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
-    $statePath = Join-Path $env:ProgramData 'GpoRemediator\State\service.json'
-    if (!(Test-Path -LiteralPath $statePath)) { return $null }
+    $statePath=Join-Path $env:ProgramData 'GpoRemediator\State\service.json'
+    if(!(Test-Path -LiteralPath $statePath)){ return $null }
     try {
-        $state = Get-Content -LiteralPath $statePath -Encoding UTF8 -Raw | ConvertFrom-Json
-        $process = Get-Process -Id ([int]$state.processId) -ErrorAction Stop
-        $expected = Join-Path $projectRoot 'runtime\GpoRemediator.exe'
-        if ($process.Path -ine $expected) { return $null }
-        if ($process.StartTime.ToUniversalTime().ToString('o') -ne $state.startedAt) { return $null }
+        $state=Get-Content -LiteralPath $statePath -Raw -Encoding UTF8 | ConvertFrom-Json
+        $process=Get-Process -Id ([int]$state.processId) -ErrorAction Stop
+        if($process.ProcessName -ine 'GpoRemediator'){ return $null }
+        if($state.startedAt){
+            $actual=$process.StartTime.ToUniversalTime()
+            $expected=[DateTimeOffset]::Parse([string]$state.startedAt).UtcDateTime
+            if([Math]::Abs(($actual-$expected).TotalSeconds) -gt 2){ return $null }
+        }
+        if($state.executablePath -and $process.Path -and ([IO.Path]::GetFullPath($process.Path) -ine [IO.Path]::GetFullPath([string]$state.executablePath))){ return $null }
         return $state
     } catch { return $null }
 }
+
 function Invoke-RemediatorServiceAction {
     param([ValidateSet('stop','restart')][string]$Action)
-    $state = Get-RemediatorService
-    if (!$state) { throw 'No running service belonging to this project was found.' }
-    $baseUrl = ([string]$state.url).TrimEnd('/')
-    $session = Invoke-WebRequest -UseBasicParsing -UseDefaultCredentials -Uri ($baseUrl + '/api/session') -SessionVariable serviceWeb -TimeoutSec 8
-    $token = ($session.Content | ConvertFrom-Json).csrfToken
-    $headers = @{ 'X-CSRF-Token'=[string]$token; 'Origin'=$baseUrl }
-    try {
-        $result = Invoke-WebRequest -UseBasicParsing -UseDefaultCredentials -Uri ($baseUrl + '/api/service/' + $Action) -WebSession $serviceWeb -Headers $headers -Method Post -ContentType 'application/json' -Body '{}' -TimeoutSec 8
-        $parsed = ($result.Content | ConvertFrom-Json)
-        if ($Action -eq 'stop') {
-            for ($attempt=0; $attempt -lt 40; $attempt++) {
-                Start-Sleep -Milliseconds 250
-                if (!(Get-RemediatorService)) { Clear-RemediatorTransientState; break }
-            }
-        }
-        return $parsed
-    } catch {
-        if ($_.ErrorDetails.Message) { throw $_.ErrorDetails.Message }
-        throw
+    $state=Get-RemediatorService
+    if(!$state){ throw 'No running GPO Remediator service was found.' }
+    $work=Join-Path $env:ProgramData 'GpoRemediator\State'
+    $stopMarker=Join-Path $work 'stop.request.json'
+    if($Action -eq 'stop'){
+        @{requestedAt=[DateTimeOffset]::UtcNow.ToString('o');requestedBy=[Security.Principal.WindowsIdentity]::GetCurrent().Name} |
+            ConvertTo-Json | Set-Content -LiteralPath $stopMarker -Encoding UTF8
     }
+    $baseUrl=([string]$state.url).TrimEnd('/')
+    try {
+        $session=Invoke-WebRequest -UseBasicParsing -UseDefaultCredentials -Uri ($baseUrl+'/api/session') -SessionVariable web -TimeoutSec 8
+        $token=($session.Content | ConvertFrom-Json).csrfToken
+        $headers=@{'X-CSRF-Token'=[string]$token;'Origin'=$baseUrl}
+        $result=Invoke-WebRequest -UseBasicParsing -UseDefaultCredentials -Uri ($baseUrl+'/api/service/'+$Action) -WebSession $web -Headers $headers -Method Post -ContentType 'application/json' -Body '{}' -TimeoutSec 8
+        $parsed=$result.Content | ConvertFrom-Json
+        # The backend's generic restart endpoint preserves the current mode. In recovery Setup mode
+        # the operator expects Restart to promote a valid saved configuration into Windows / AD mode.
+        # Overwrite the launcher marker after the API accepted the restart so the handoff is explicit.
+        if($Action -eq 'restart' -and [string]$state.mode -eq 'Setup'){
+            @{mode='Windows';requestedAt=[DateTimeOffset]::UtcNow.ToString('o');requestedBy=[Security.Principal.WindowsIdentity]::GetCurrent().Name;source='ControlCenterPromotion'} |
+                ConvertTo-Json | Set-Content -LiteralPath (Join-Path $work 'restart.request.json') -Encoding UTF8
+            $parsed | Add-Member -NotePropertyName requestedMode -NotePropertyValue 'Windows' -Force
+        }
+    } catch {
+        if($Action -eq 'restart'){ throw }
+        # A dead/unresponsive backend must not keep the old launcher alive forever.
+        try {
+            $p=Get-Process -Id ([int]$state.processId) -ErrorAction Stop
+            if($p.ProcessName -ieq 'GpoRemediator'){ Stop-Process -Id $p.Id -Force -ErrorAction Stop }
+        } catch { }
+        $parsed=[pscustomobject]@{action='stop';accepted=$true;forced=$true}
+    }
+    if($Action -eq 'stop'){
+        for($i=0;$i -lt 40;$i++){ Start-Sleep -Milliseconds 250; if(!(Get-RemediatorService)){ break } }
+        Remove-Item -LiteralPath (Join-Path $work 'service.json') -Force -ErrorAction SilentlyContinue
+    }
+    return $parsed
 }
 
-# Remove launcher-owned transient files after a full stop. Operational databases,
-# audit history, evidence and diagnostics are durable and are never stop-time cleanup.
 function Clear-RemediatorTransientState {
     param([switch]$PreserveDiagnostics)
-    $projectRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
-    $work = Join-Path $env:ProgramData 'GpoRemediator\State'
-
-    # Launcher/service logs, state and transient worker/test artifacts. Keep documentation placeholders only.
-    if (Test-Path -LiteralPath $work) {
-        foreach ($name in @('service.json','restart.request.json')) {
-            Remove-Item -LiteralPath (Join-Path $work $name) -Force -ErrorAction SilentlyContinue
-        }
-    }
-
-    # Defensive cleanup for transient config write files only; the saved local configuration remains.
+    $work=Join-Path $env:ProgramData 'GpoRemediator\State'
+    foreach($name in @('service.json','restart.request.json','stop.request.json')){ Remove-Item -LiteralPath (Join-Path $work $name) -Force -ErrorAction SilentlyContinue }
     Remove-Item -LiteralPath (Join-Path $env:ProgramData 'GpoRemediator\Config\appsettings.Local.json.tmp') -Force -ErrorAction SilentlyContinue
+    if(Test-Path -LiteralPath $work){
+        Get-ChildItem -LiteralPath $work -Directory -ErrorAction SilentlyContinue |
+            Where-Object { $_.Name -match '^runtime-(install|old)-[a-f0-9]{32}$' } |
+            Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
+    }
 }
-
-# Backward-compatible function name for older shortcuts. It deliberately preserves data.
 function Clear-RemediatorEphemeralState { param([switch]$PreserveDiagnostics); Clear-RemediatorTransientState -PreserveDiagnostics:$PreserveDiagnostics }

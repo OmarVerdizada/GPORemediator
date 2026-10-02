@@ -12,5 +12,14 @@ try {
     $details=('[{0}] Control panel startup failed: {1}{2}{3}' -f (Get-Date -Format 's'),$_.Exception.Message,[Environment]::NewLine,$_.ScriptStackTrace)
     try { Add-Content -LiteralPath (Join-Path $workRoot 'panel-error.log') -Value $details -Encoding UTF8 } catch { }
     [Console]::Error.WriteLine($details)
+    try {
+        Add-Type -AssemblyName PresentationFramework -ErrorAction Stop
+        [System.Windows.MessageBox]::Show(
+            "GPO Remediator Control Center could not start.\n\n$($_.Exception.Message)\n\nFull details were written to:\n$workRoot\panel-error.log",
+            'GPO Remediator - Startup Error',
+            [System.Windows.MessageBoxButton]::OK,
+            [System.Windows.MessageBoxImage]::Error
+        ) | Out-Null
+    } catch { }
     exit 1
 }

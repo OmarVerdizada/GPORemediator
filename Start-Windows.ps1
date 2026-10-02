@@ -1,3 +1,3 @@
-Write-Warning 'Start-Windows.ps1 is a compatibility wrapper. Normal users should run GpoRemediator.cmd; mode is selected automatically from UI-saved configuration.'
+Write-Warning 'Start-Windows.ps1 is a compatibility wrapper. Use GpoRemediator.cmd for normal operation.'
 & (Join-Path $PSScriptRoot 'GpoRemediator.ps1') -Mode Windows
 exit $LASTEXITCODE

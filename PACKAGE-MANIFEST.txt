@@ -1,0 +1,23 @@
+GPO Remediator 3.1.1 — production package
+
+Top-level runtime/operator files:
+- GpoRemediator.cmd
+- GpoRemediator.ps1
+- Control-Panel.ps1
+- Start-Windows.ps1
+- Stop-GpoRemediator.ps1
+- scripts/ServiceControl.ps1
+- scripts/Start-ControlPanel.ps1
+- frontend/dist/*
+- release/GpoRemediator-runtime-win-x64.zip
+- release/GpoRemediator-runtime-win-x64.zip.sha256
+
+Documentation:
+- README.md
+- RELEASE.txt
+- CONNECTION-TROUBLESHOOTING.md
+- PRODUCTION-TEST-CHECKLIST.md
+- VALIDATION.txt
+
+Persistent runtime state is intentionally outside the release folder under C:\ProgramData\GpoRemediator.
+Development-only folders, SDK caches, node_modules, backend source, tests, bin/obj, PDB/debug payloads, and temporary runtime-install directories are not included in this production package.

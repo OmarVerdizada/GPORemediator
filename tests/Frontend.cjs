@@ -55,7 +55,7 @@ const server=http.createServer(async(req,res)=>{
   const browser=await chromium.launch({channel:process.env.PLAYWRIGHT_CHANNEL||'msedge',headless:true});
   try{
     const context=await browser.newContext({viewport:{width:1600,height:900}});
-    const page=await context.newPage();const errors=[];page.on('pageerror',e=>{errors.push(e.message);console.error('Browser page error:',e.message);});
+    const page=await context.newPage();const errors=[];page.on('pageerror',e=>errors.push(e.message));
     await page.addInitScript(()=>{localStorage.setItem('gr-favorites','broken json');localStorage.setItem('gr-lang','en');});
     const origin=`http://127.0.0.1:${server.address().port}`;
     const idle=()=>page.waitForFunction(()=>document.querySelector('#operator-modules .product-main')?.getAttribute('aria-busy')==='false');
@@ -78,10 +78,7 @@ const server=http.createServer(async(req,res)=>{
     await page.locator('#gpo-login [name="userName"]').fill('TEST/operator');await page.locator('#gpo-login [name="password"]').fill('fixture-only');
     await page.locator('#gpo-login button').click();await idle();
     assert.match(await page.locator('.inline-notice').innerText(),/Readiness timeout/);assert.equal(loginBody.userName,'TEST\\operator');
-    readinessFails=false;connectionExpired=true;await page.locator('[data-settings-nav]').click();
-    const readinessButton=page.locator('[data-readiness]');
-    if(await readinessButton.count())await readinessButton.click();
-    await page.locator('[data-reconnect]').waitFor();
+    readinessFails=false;connectionExpired=true;await page.locator('[data-settings-nav]').click();await page.locator('[data-readiness]').click();await page.locator('[data-reconnect]').waitFor();
     assert.equal(await page.locator('.gr-auto-row').count(),0);await page.locator('[data-reconnect]').click();await idle();assert.equal(await page.locator('#gpo-login').count(),1);
     connectionExpired=false;await page.locator('#gpo-login [name="userName"]').fill('TEST/operator');await page.locator('#gpo-login [name="password"]').fill('fixture-only');await page.locator('#gpo-login button').click();await idle();
     await page.locator('[data-gpo-nav][href="#/benchmark"]').click();await page.locator('[data-rule="1.1.3"]').click();await page.locator('[data-tab="remediation"]').click();await page.waitForTimeout(450);await page.screenshot({path:path.resolve(__dirname,'../work/frontend-target.png'),fullPage:true});await page.locator('[data-gpo-toggle]').click();await page.locator('[data-gpo="gpo-1"]').click();
@@ -112,7 +109,7 @@ const server=http.createServer(async(req,res)=>{
     await page.locator('[data-close]').click();await idle();
     catalogFails=true;await page.reload();await page.locator('[data-close]').click();await page.locator('[data-refresh]').waitFor();
     await page.waitForFunction(()=>!document.querySelector('[data-refresh]')?.disabled);catalogFails=false;await page.locator('[data-refresh]').click();await idle();
-    mode='WINDOWS';connected=true;readinessFails=false;await page.goto(origin+'/#/dashboard');await page.reload();await idle();await page.locator('[data-readiness]').first().click();await idle();await page.locator('[data-lang]').click();await page.locator('[data-settings]').click();await page.locator('.gr-auto-permission').waitFor();await page.waitForTimeout(500);await page.screenshot({path:path.resolve(__dirname,'../work/frontend-settings-windows.png'),fullPage:true});await page.locator('[data-write]').click();await page.waitForFunction(()=>!document.querySelector('[data-write]')?.disabled);assert.equal(writeModeBody.confirmation,'DISABLE WRITES');await page.locator('[data-close]').click();
+    mode='WINDOWS';connected=true;readinessFails=false;await page.goto(origin+'/#/dashboard');await page.reload();await idle();await page.locator('[data-readiness]').first().click();await idle();await page.locator('[data-lang]').click();await page.locator('[data-settings]').click();await page.locator('.gr-auto-permission').waitFor();await page.waitForTimeout(500);await page.screenshot({path:path.resolve(__dirname,'../work/frontend-settings-windows.png'),fullPage:true});await page.locator('[data-write]').click();await page.waitForFunction(()=>!document.querySelector('[data-write]')?.disabled);assert.equal(writeModeBody.confirmation,'ENABLE WRITES');await page.locator('[data-close]').click();
     await page.screenshot({path:path.resolve(__dirname,'../work/frontend-fixed.png'),fullPage:true});
     assert.deepEqual(errors,[]);console.log('PASS: standalone shell, setup, legacy routes, corrupt storage, all control tabs, cancel, timeout, readiness failure, preview values, apply, verify, rollback, history filters, catalog retry.');
   }finally{await browser.close();server.closeAllConnections();await new Promise(resolve=>server.close(resolve));}

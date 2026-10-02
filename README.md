@@ -1,73 +1,102 @@
-﻿# GPO Remediator — CIS Benchmark v4.0.0
+# GPO Remediator 3.1.1
 
-Local enterprise remediation console for controlled Windows Group Policy changes. The product embeds the operator-supplied CIS Benchmark v4.0.0 catalog, lets an operator choose a control, discovered GPO and target scope, then runs a guarded preview/apply/verify/rollback workflow against a pinned writable domain controller.
-
-## Current production-backend scope
-
-- 405 unique CIS v4 controls in the UI/catalog.
-- 401 controls classified `Automated` in the imported catalog have server-authoritative mappings.
-- Four catalog `Manual/Unspecified` controls remain intentionally read-only: `1.2.3`, `2.3.11.6`, `18.10.43.10.1`, `18.10.43.10.2`.
-- Generic handlers: Security Template, Registry Policy, Registry Set and Advanced Audit Policy.
-- No simulation fallback and no SecHard API integration. The operator selects the CIS control directly in the product.
+GPO Remediator is a local Windows/Active Directory policy-remediation console for CIS Windows controls. The production package contains a verified self-contained Windows runtime, the operator frontend, the local launcher/control center, and the PowerShell GPO worker. It does not require a .NET SDK, Node.js, pnpm, build tools, or internet access at runtime.
 
 ## Start
 
-1. Extract the release into a new folder.
+1. Extract the ZIP into a new folder. Do not overlay an older release folder.
 2. Run `GpoRemediator.cmd`.
-3. On first run, Setup opens if Windows/AD configuration does not exist. Domain, current operator and a likely logon DC are detected without RSAT where Windows exposes them; values remain editable.
-4. Save the exact AD DNS domain, writable DC FQDN, local backup path and allowed Windows operator(s).
-5. The launcher restarts into Windows mode.
-6. In the main workspace connect an execution account (for the current deployment this can be the DC/domain administrative account). Its password is held only in a short-lived encrypted in-memory session and is never persisted.
-7. Run real AD readiness, choose a mapped control, GPO and scope, then Preview before enabling writes.
+3. Use the Local Control Center to start the workspace.
+4. In Settings, save the AD DNS domain and a writable DC FQDN.
+5. Start Windows / AD mode.
+6. Connect from Dashboard with the delegated domain execution account.
 
-The web endpoint is local-only: `http://127.0.0.1:5080`. TLS/certificates are intentionally not required in this release because Kestrel rejects non-loopback access.
+The UI listens only on `http://127.0.0.1:5080` / `localhost`.
 
-## Production transaction
+## Persistent state
 
-`Control → Target → Preview/Preflight → Approval → Backup-GPO → Write → Link → Read-back → Optional gpupdate → Verify`
+Application state is stored outside the extracted package:
 
-Safety properties include:
+- configuration: `C:\ProgramData\GpoRemediator\Config\appsettings.Local.json`
+- diagnostics and launcher state: `C:\ProgramData\GpoRemediator\State`
+- workflow database: `C:\ProgramData\GpoRemediator\Data`
+- GPO backups: `C:\ProgramData\GpoRemediator\Backups`
+- preserved recovery copies: `C:\ProgramData\GpoRemediator\Recovery`
 
-- server-authoritative mapping/value validation;
-- domain-sensitive Account Policy enforcement at the domain root and Default Domain Policy;
-- environment and selection preflight;
-- impact/conflict analysis for inheritance, direct/effective links, security filtering and WMI filtering;
-- stale-plan, stale-mapping and GPO fingerprint rejection;
-- process-wide privileged-operation gate plus per-GPO remote lock;
-- full `Backup-GPO` before a write plus a durable DC-side transaction manifest;
-- idempotent `NO_CHANGE` result when policy/link already satisfies the requested state;
-- comparator-aware Account Policy checks that do not weaken a stricter compliant value;
-- AD/SYSVOL GPO version verification across discovered DCs;
-- bounded `gpupdate` scheduling;
-- effective sample verification for supported computer-scoped handlers;
-- conflict-aware full snapshot rollback;
-- append-only SHA-256-chained audit and evidence export.
+Do not delete `Backups`, `Data`, or `Recovery` while troubleshooting.
 
-## Handler behavior
 
-### Security Template
-Used for password/lockout policy, User Rights Assignment and selected security-template settings. Principal assignments are resolved to SIDs before writing. GPO security extension metadata and the computer version are updated explicitly.
+## Windows / AD mode recovery
 
-### Registry / Registry Set
-Uses GroupPolicy cmdlets against the selected GPO, with HKLM/HKCU scope enforced by the server mapping registry. Browser-supplied arbitrary registry keys or values are not accepted.
+3.1.1 removes the operator-facing Setup loop. If the browser is running in configuration mode while Domain/DC are already saved, use **Windows / AD-ni başlat** on the connection banner. The UI re-saves the canonical configuration and the launcher itself owns the handoff:
 
-### Advanced Audit
-Writes the standard UTF-8 `Machine\Microsoft\Windows NT\Audit\audit.csv`, maintains the official Audit Configuration CSE/tool extension pair, updates the computer GPO version, and verifies effective endpoint masks with `auditpol /r` when a concrete endpoint can be reached.
+`Configuration service → launcher stop → port release → Windows / AD service → readiness`
 
-## Verification semantics
+The launcher also watches a valid configuration save while Setup is healthy. This means the transition no longer depends on the packaged backend successfully terminating itself after a settings save. If Windows mode fails again, the UI surfaces the preserved `startupIssue` and diagnostics instead of silently returning the operator through the same workflow.
 
-A successful GPO write is not treated as proof of endpoint compliance. The result distinguishes publication/link verification, replication convergence, gpupdate scheduling and effective endpoint evidence. User-scoped controls remain `PENDING` for effective RSoP unless a concrete user/session verification target exists; the tool does not manufacture a green result.
+3.1.1 uses fresh `setup-3.1.1.db` and `windows-3.1.1.db` stores. Older database files are left untouched in ProgramData; they are not deleted by the upgrade.
 
-## Rollback
+## Production change gate
 
-Rollback uses the `Backup-GPO` snapshot created by the same operation and restores the previous direct link state. If the GPO/link fingerprint changed after Apply, automatic rollback is blocked rather than overwriting a later administrator change.
+Preview, discovery, readiness, verification, history, and evidence are read-only. Apply and Rollback require the production change gate.
 
-## Build behavior
+The gate transition is intentionally a controlled restart because ASP.NET configuration is immutable for the lifetime of the running backend process:
 
-Normal `Auto` startup never downloads an SDK and never compiles source. A clean GitHub ZIP includes a prebuilt self-contained Windows x64 runtime archive; the launcher verifies its SHA-256 manifest and canonical source fingerprint before atomically installing it locally. `Build` and `Test` modes are developer-only and require an approved .NET 8 SDK environment.
+1. prepare a read-only plan;
+2. enable the change gate;
+3. the backend persists `EnableWrites=true` in the canonical ProgramData configuration;
+4. the launcher performs one controlled Windows-mode restart;
+5. the browser restores the selected control/GPO/scope/plan from session storage;
+6. the delegated password is entered once again because credentials are never written to disk;
+7. the backend must report `writesEnabled=true` before Apply becomes available.
 
-The local management host does **not** auto-install RSAT. The production worker runs over Kerberos PowerShell remoting on the selected writable DC and validates the `ActiveDirectory` and `GroupPolicy` modules there.
+If the restarted backend does not report the gate as active, the UI blocks automatic reactivation instead of entering an enable/restart/login loop.
 
-## Acceptance
+### Write-scope safety
 
-Run `PRODUCTION-TEST-CHECKLIST.md` against a disposable test GPO/OU in the organization's own Windows/AD lab before production rollout. Static package validation is not a substitute for real AD/SYSVOL/replication/RSoP testing.
+Wildcard scope is permitted for read-only discovery, but production writes remain fail-closed. When a read-only preview exists, the UI can narrow the persisted write scope automatically to exactly the selected GPO GUID and selected OU/domain DN before the one controlled write-gate restart. This removes the old manual wildcard-to-GUID configuration loop without making wildcard writes possible.
+
+Web UI identity and execution identity are separate:
+
+- **Web UI Administrator / Remediator / Auditor / Viewer** = Windows account used to open and authorize the console.
+- **Delegated execution account** = the domain account entered on Dashboard for Kerberos/WinRM/GPO execution. Its password stays in memory and it is never automatically written into the UI role lists.
+
+Legacy configurations that accidentally list one Web UI account in several roles are normalized on launcher startup with precedence `Administrator → Remediator → Auditor → Viewer`.
+
+## GPO workflow
+
+The execution chain is:
+
+`Connect → Readiness → Preview → Approval → Backup-GPO → Write → Link → Read-back → Verify → optional gpupdate → Evidence / Rollback`
+
+Important behavior:
+
+- a fresh preview is required before Apply;
+- a plan expires and is rejected when its live GPO/link fingerprint changes;
+- a full `Backup-GPO` snapshot is created before a policy write;
+- Apply never runs `gpupdate /force` as an implicit side effect;
+- replication and endpoint verification are tracked separately from publication;
+- rollback is blocked after external GPO/link changes;
+- interrupted/ambiguous write outcomes are recorded for administrator review rather than automatically replayed;
+- the durable operation manifest now records `VERIFY_MISMATCH` when immediate post-write read-back fails instead of incorrectly recording `PUBLISHED`.
+
+## Runtime prerequisites
+
+The management host must be domain-connected and use AD DNS. The selected DC must be writable and provide Kerberos, WinRM, LDAP, SYSVOL, the ActiveDirectory module, and GroupPolicy/GPMC.
+
+Windows Time is checked and shown in readiness. If Kerberos/WinRM authentication is already working but the selected DC reports `Free-running System Clock` or `Local CMOS Clock`, 3.1.1 reports a visible **WARN** rather than incorrectly treating that condition alone as proof that the GPO path is unusable. Configure a trusted PDC/NTP source before broad production rollout.
+
+See `CONNECTION-TROUBLESHOOTING.md` for commands and `PRODUCTION-TEST-CHECKLIST.md` for final acceptance testing.
+
+## Plan-bound production authorization (3.1.1)
+
+The default `*` entries are intentionally discovery-only. Operators do not need to copy GPO GUIDs or OU DNs into Settings before every change. The production workflow is now:
+
+1. Connect the delegated AD execution account.
+2. Select a CIS control, real GPO, and AD scope.
+3. Generate the read-only preview.
+4. Choose **Authorize this GPO + scope & continue**.
+5. The UI persists exactly that GPO GUID and scope DN as the production allowlist, then opens the change gate through one managed restart.
+6. Reconnect the delegated account once and continue the preserved plan.
+
+Settings therefore keeps wildcard discovery read-only and directs production authorization back to the remediation plan instead of asking the operator to enter GUID/OU values manually.

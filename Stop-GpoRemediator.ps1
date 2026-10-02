@@ -1,17 +1,12 @@
-﻿param([int]$Port = 5080)
-$ErrorActionPreference = 'Stop'
+$ErrorActionPreference='Stop'
 . (Join-Path $PSScriptRoot 'scripts\ServiceControl.ps1')
 try {
-    $state = Get-RemediatorService
-    if (!$state) { Clear-RemediatorEphemeralState; Write-Host 'This project is already stopped. Any leftover local runtime data was cleaned.'; exit 0 }
+    $state=Get-RemediatorService
+    if(!$state){ Clear-RemediatorTransientState -PreserveDiagnostics; Write-Host 'GPO Remediator is already stopped.' -ForegroundColor Yellow; exit 0 }
+    $launcherId=if($state.launcherId){[int]$state.launcherId}else{0}
     Invoke-RemediatorServiceAction -Action stop | Out-Null
-    for ($attempt=0; $attempt -lt 30; $attempt++) {
-        if (!(Get-RemediatorService)) {
-            Clear-RemediatorEphemeralState
-            Write-Host 'GPO Remediator stopped successfully. Local runtime history, database state, logs and session artifacts were removed.' -ForegroundColor Green
-            exit 0
-        }
-        Start-Sleep -Milliseconds 500
-    }
-    throw 'Shutdown was requested but has not completed. Check the control panel and logs.'
+    if($launcherId -gt 0){ for($i=0;$i -lt 30;$i++){ if(!(Get-Process -Id $launcherId -ErrorAction SilentlyContinue)){break};Start-Sleep -Milliseconds 200 } }
+    Clear-RemediatorTransientState -PreserveDiagnostics
+    Write-Host 'GPO Remediator stopped. Audit data, backups, recovery copies and diagnostics were preserved.' -ForegroundColor Green
+    exit 0
 } catch { Write-Error $_; exit 1 }
