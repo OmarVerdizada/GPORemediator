@@ -52,7 +52,7 @@ Write-Host '[7/8] Verifying frontend source/dist integrity and dependency-free w
 & $node.Source (Join-Path $PSScriptRoot 'tests\Frontend.Static.cjs'); Assert-Exit
 & $node.Source (Join-Path $PSScriptRoot 'tests\Frontend.cjs'); Assert-Exit
 if (!(Test-FrontendDistMatchesSource)) { throw 'frontend/dist does not match frontend/source. Rebuild or resync the frontend before release.' }
-foreach ($name in @('client.js','workspace.js','automation.js','ui-domain.js','i18n.js','router.js','workspace.css','automation.css','product-v2.css','index.html','benchmark-v4.json')) {
+foreach ($name in @('client.js','workspace.js','automation.js','ui-domain.js','i18n.js','router.js','workspace.css','automation.css','command-center.css','index.html','benchmark-v4.json')) {
     $a=Join-Path $PSScriptRoot ('frontend\source\'+$name); $b=Join-Path $PSScriptRoot ('frontend\dist\'+$name)
     if (!(Test-Path $a) -or !(Test-Path $b) -or (Get-FileHash $a -Algorithm SHA256).Hash -cne (Get-FileHash $b -Algorithm SHA256).Hash) { throw "Frontend source/dist mismatch: $name" }
 }

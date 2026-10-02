@@ -83,7 +83,7 @@
     window.addEventListener('gr:service-restarting',()=>{state.serviceOffline=true;state.gpoSession=null;state.readiness=null;if(panel.classList.contains('open'))render();});
     window.addEventListener('gr:service-ready',()=>{state.serviceOffline=false;state.loaded=false;state.session=null;state.gpoSession=null;if(panel.classList.contains('open'))load();});
     window.addEventListener('hashchange',()=>{if(location.hash==='#/settings')open();else if(panel.classList.contains('open'))close();else setRootBlocked(false);});
-    api('/session').then(()=>{if(location.hash==='#/settings')open();else setRootBlocked(false);}).catch(()=>{setRootBlocked(false);});
+    api('/session').then(()=>{if(location.hash==='#/settings'||state.session?.mode==='SETUP')open();else setRootBlocked(false);}).catch(()=>{setRootBlocked(false);});
   }
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init);else init();
 })();

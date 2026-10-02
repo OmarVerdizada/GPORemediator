@@ -1,4 +1,4 @@
-param([ValidateRange(1024,65535)][int]$Port = 5080, [switch]$SmokeTest)
+﻿param([ValidateRange(1024,65535)][int]$Port = 5080, [switch]$SmokeTest)
 $ErrorActionPreference = 'Stop'
 $windowsModules = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\Modules'
 $env:PSModulePath = "$windowsModules;" + (($env:PSModulePath -split ';' | Where-Object { $_ -ine $windowsModules }) -join ';')

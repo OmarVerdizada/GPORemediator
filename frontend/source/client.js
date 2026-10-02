@@ -34,14 +34,14 @@
     'Selected GPO':'Seçilmiş GPO','Choose a Group Policy Object':'GPO seçin','Search GPO by name…':'GPO adı ilə axtarın…','No matching GPO':'Uyğun GPO tapılmadı',
     'Selectable':'Seçmək olar','Unavailable for this workflow':'Bu əməliyyat üçün əlçatan deyil','Protected':'Qorunan',
     'Policy target':'Siyasətin növü','Link target':'Tətbiq ediləcək hədəf','Desired value':'Yeni dəyər','Desired benchmark state':'Tövsiyə edilən vəziyyət',
-    'Policy refresh':'Kompüterlərdə yenilənmə','Do not force update':'Növbəti avtomatik yenilənməni gözlə','PDC emulator only':'Yalnız əsas domen kontrolleri','Selected scope computers':'Seçilmiş hədəfdəki kompüterlər',
+    'Policy refresh':'Kompüterlərdə yenilənmə','Do not force update':'Avtomatik yenilənməni gözlə','PDC emulator only':'Yalnız PDC üzərində yoxla','Selected scope computers':'Seçilmiş scope kompüterlərini yenilə',
     'Highest link priority':'Ən yüksək tətbiq prioriteti','Move the selected link to first position. Existing Enforced and filtering settings are not changed.':'Seçilmiş GPO əlaqəsini ilk yerə keçir. Digər məcburilik və filtr sazlamaları saxlanılır.',
     'DRY RUN / WHAT-IF':'DƏYİŞİKLİK PLANI','No read-only plan generated yet.':'Plan hələ hazırlanmayıb.','Select a GPO and target, then generate a plan. The preview performs no domain write.':'GPO və hədəfi seçin, sonra planı hazırlayın. Bu mərhələdə siyasət dəyişmir.',
     'Before/after diff':'Əvvəlki və yeni dəyər','Link intent':'Tətbiq hədəfi','Warning aggregation':'Xəbərdarlıqlar','Rollback context':'Geri qaytarma',
     'DRY RUN · READ-ONLY PREVIEW':'YALNIZ BAXIŞ','Change plan ready':'Dəyişiklik planı hazırdır','NO WRITE YET':'HƏLƏ TƏTBİQ EDİLMƏYİB',
     'BEFORE / AFTER DIFF':'DƏYƏRİN DƏYİŞMƏSİ','CURRENT':'ƏVVƏLKİ','DESIRED':'YENİ','Not configured':'Təyin edilməyib',
     'Link':'Əlaqə','Execution':'İcra hesabı','Rollback':'Geri qaytarma','Backup before write':'Dəyişiklikdən əvvəl ehtiyat nüsxə','Not requested':'Seçilməyib',
-    'GOVERNANCE':'TƏSDİQ','Change / Ticket ID':'Dəyişiklik nömrəsi','Reviewed / Approved by':'Təsdiqləyən şəxs','Name or operator':'Ad və ya istifadəçi hesabı',
+    'GOVERNANCE':'TƏSDİQ','Change / Ticket ID':'Dəyişiklik nömrəsi','Reviewed / Approved by':'Təsdiqləyən istinad','Name or operator':'Ad, qeyd və ya istinad',
     'Impact reviewed and approved':'Planı və təsiri yoxlayıb təsdiqlədim','I reviewed the target, GPO, scope and potential precedence impact.':'Seçilmiş GPO-nu, hədəfi və prioritetin təsirini yoxladım.',
     'Confirm production impact':'Dəyişikliyin təsirini təsdiqləyin','Backup will be created before the GPO write.':'GPO dəyişməzdən əvvəl ehtiyat nüsxə yaradılacaq.',
     'Protected GPO confirmation':'Qorunan GPO təsdiqi','I explicitly approve changing this protected/default policy.':'Qorunan və ya standart siyasətin dəyişdirilməsini təsdiqləyirəm.',
@@ -64,7 +64,7 @@
     'Operation':'Əməliyyat','State':'Vəziyyət','Backup':'Ehtiyat nüsxə','Action':'Əməliyyat','Re-verify':'Yenidən yoxla','No operation has been recorded for this control.':'Bu qayda üzrə əməliyyat yoxdur.',
     'CHANGE & RECOVERY CENTER':'ƏMƏLİYYATLAR','Review completed changes, verification state, backups and rollback availability.':'Dəyişiklikləri, yoxlama nəticələrini və geri qaytarma imkanlarını izləyin.',
     'All':'Hamısı','Successful':'Tətbiq edilib','Review':'Diqqət tələb edir','Rolled back':'Geri qaytarılıb','Replication':'Yayılma','Effective':'Faktiki nəticə',
-    'Kerberos / WinRM session':'Domenə giriş','DNS resolution':'Domen adının tapılması','Active Directory / LDAP':'Domen məlumatları','Backup repository':'Ehtiyat nüsxə qovluğu','AD replication':'Domen sinxronizasiyası',
+    'Kerberos / WinRM session':'Kerberos / WinRM bağlantısı','DNS resolution':'Domen adının tapılması','DC-side DNS resolution':'DC tərəfində DNS yoxlaması','Writable domain controller':'Yazıla bilən domen kontrolleri','ActiveDirectory PowerShell module':'ActiveDirectory PowerShell modulu','GroupPolicy PowerShell module':'GroupPolicy PowerShell modulu','Active Directory / LDAP':'Domen məlumatları','Backup repository':'Ehtiyat nüsxə qovluğu','AD replication':'Domen sinxronizasiyası',
     'PUBLISHED':'GPO-ya tətbiq edilib','PUBLISHED_REFRESH_FAILED':'GPO dəyişib, kompüter yenilənməsi alınmayıb','NO_CHANGE':'Dəyişiklik tələb olunmur','VERIFY_MISMATCH':'Yoxlama nəticəsi uyğun deyil','REVIEW_REQUIRED':'Əl ilə yoxlama tələb olunur','FAILED_SAFE':'Tətbiq edilmədi','ROLLED_BACK':'Geri qaytarılıb','ROLLBACK_REVIEW_REQUIRED':'Geri qaytarma yoxlanılmalıdır','ROLLBACK_DRIFT_DETECTED':'Rollback-dan sonra dəyişiklik aşkarlanıb','REPLICATION_PENDING':'Kontrollerlər arasında yayılma gözlənilir','ENDPOINT_VERIFICATION_PENDING':'Kompüterdə yoxlama gözlənilir','VERIFIED_ON_SAMPLE':'Yoxlanılan kompüterlərdə təsdiqlənib',
     'DOMAIN_VALUE_MATCHES_ON_SELECTED_DC':'Seçilmiş kontrollerdə dəyər uyğundur','DOMAIN_VALUE_PENDING_OR_OVERRIDDEN':'Domen dəyəri hələ uyğun deyil','ROLLBACK_ENDPOINT_PENDING':'Geri qaytarılıb, kompüter yenilənməsi gözlənilir',
     '☆ Save':'☆ Seçilmişlərə əlavə et','★ Saved':'★ Seçilmişlərdədir','Light':'Açıq','Dark':'Tünd','Retry':'Yenidən cəhd et','Settings':'Sazlamalar','Loading benchmark catalog…':'Qaydalar yüklənir…',
@@ -82,14 +82,23 @@
     INVALID_OPERATOR_ALLOWLIST:'Hesabı DOMEN\\istifadəçi formasında yazın və ya aşkarlanan Windows hesabını seçin.',
     OPERATOR_SELF_LOCKOUT:'Hazırda istifadə etdiyiniz Windows hesabı icazəli hesablar siyahısında qalmalıdır.',
     GPO_LOGIN_REQUIRED:'Domen bağlantısı bitib və ya tətbiq yenidən başlayıb. Əsas ekranda yenidən qoşulun.',
-    GPO_AUTH_FAILED:'Hesab və ya şifrə qəbul edilmədi. Domen hesabını yoxlayın və ya cari Windows hesabı ilə qoşulun.',
-    GPO_REMOTING_FAILED:'Domen kontrollerinə bağlantı alınmadı. Kontrollerin adını, WinRM xidmətini və hesabın uzaqdan giriş icazəsini yoxlayın.',
+    GPO_AUTH_FAILED:'Delegated icra hesabı qəbul edilmədi. DOMAIN\\user (və ya düzgün UPN), şifrə və DC-də PowerShell remoting icazəsini yoxlayın.',
+    GPO_DNS_FAILED:'DC-nin FQDN-i bu management hostdan resolve olunmur. Kompüterin DNS serverini AD DNS-ə yönəldin və domen/DC adlarını yoxlayın.',
+    GPO_WINRM_UNREACHABLE:'DC resolve olunur, amma TCP/5985 bağlıdır. DC-də WinRM/PowerShell Remoting-i və Windows Remote Management (HTTP-In) firewall qaydasını aktiv edin.',
+    GPO_WINRM_HTTP_REQUIRED:'DC-də yalnız 5986 əlçatandır. Bu versiya Kerberos + WinRM HTTP/5985 istifadə edir; 5985 listener/firewall qaydasını aktiv edin.',
+    GPO_KERBEROS_FAILED:'WinRM işləyir, amma Kerberos autentifikasiyası alınmır. AD DNS, saat sinxronizasiyası, TCP/88 və DC FQDN üçün WSMAN/HTTP SPN-ləri yoxlayın.',
+    GPO_REMOTING_FAILED:'DC-də TCP/5985 açıqdır, amma PowerShell remoting sessiyası qurulmur. WinRM listener, endpoint permission və delegated hesabı yoxlayın.',
     GPO_READINESS_FAILED:'Domenə giriş alınıb, amma hazırlıq yoxlaması tamamlanmadı. Tətbiqi yeniləyin və bağlantını yenidən yoxlayın.',
     GPO_DISCOVERY_FAILED:'GPO siyahısı alınmadı. Kontrollerdə GroupPolicy və ActiveDirectory modullarını, hesabın oxuma icazəsini yoxlayın.',
     GPO_PREVIEW_FAILED:'Plan hazırlana bilmədi. GPO və hədəfi yenidən seçin, SYSVOL oxuma icazəsini yoxlayın.',
-    WRITES_DISABLED:'Dəyişiklik icazəsi bağlıdır. Sazlamalarda aktivləşdirin, sonra yenidən qoşulun.',
+    WRITES_DISABLED:'Production change gate bağlıdır. Explicit GPO və OU scope-u təsdiqləyin, sonra gate-i aktivləşdirin.',
     ENVIRONMENT_NOT_READY:'Əvvəlcə bağlantı yoxlamasında göstərilən problemləri aradan qaldırın.',
-    WINDOWS_MODE_REQUIRED:'Əvvəlcə domen sazlamalarını saxlayıb tətbiqi yenidən başladın.',
+    WRITE_SCOPE_UNRESTRICTED:'Production write scope məhdudlaşdırılmayıb. * əvəzinə konkret GPO GUID-ləri və konkret OU/domain DN-ləri daxil edin.',
+    WRITE_GATE_TRANSITION_BLOCKED:'Əvvəlki change-gate keçidi uğurla tamamlanmayıb. Avtomatik təkrar bloklanıb; Settings və Local Control Center-də service/config vəziyyətini yoxlayın.',
+    WINDOWS_MODE_REQUIRED:'Tətbiq konfiqurasiya rejimindədir; bu rejim AD əməliyyatı icra etmir. Domain/DC saxlanılıbsa Local Control Center-də Start Windows / AD seçin. Windows rejimi açılmasa windows-startup-error.log və bootstrap.log-u yoxlayın.',
+    SERVICE_RESTARTED:'Windows / AD xidməti yenidən başlayıb. Delegated domen parolu diskdə saxlanmadığı üçün təhlükəsizlik məqsədilə domen sessiyasına yenidən qoşulmaq lazımdır.',
+    SERVICE_RESTARTING:'Windows / AD xidməti idarəli şəkildə yenidən başladılır. Xidmət qayıdana qədər gözləyin.',
+    SERVICE_UNREACHABLE:'GPO Remediator backend xidməti ilə əlaqə kəsilib. Local Control Center-də xidmətin işlədiyini və windows-startup-error.log / server-error.log / bootstrap.log fayllarını yoxlayın.',
     CSRF_INVALID:'Sessiya yenilənməlidir. Səhifəni yeniləyib təkrar cəhd edin.',
     INVALID_DOMAIN:'Domeni və həmin domenə aid kontrollerin tam adını daxil edin: məsələn, example.local və dc01.example.local.'
   };
@@ -126,10 +135,21 @@
       }
       return data;
     } catch (error) {
-      if (controller.signal.aborted) throw new Error(timedOut
-        ? `Request timed out after ${Math.round(settings.timeout / 1000)} seconds. ${settings.cancelable ? 'Check the service, DC and Kerberos/WinRM connection, then retry.' : 'The operation may still be running. Review Operations before submitting it again.'}`
-        : 'Stopped waiting for the response. No new operation was submitted; the server may still be completing work.');
-      if (error instanceof TypeError) throw new Error('The service connection was lost. Check that GPO Remediator is running. Review Operations before retrying a change.');
+      if (controller.signal.aborted) {
+        const e = new Error(timedOut
+          ? `Request timed out after ${Math.round(settings.timeout / 1000)} seconds. ${settings.cancelable ? 'Check the service, DC and Kerberos/WinRM connection, then retry.' : 'The operation may still be running. Review Operations before submitting it again.'}`
+          : 'Stopped waiting for the response. No new operation was submitted; the server may still be completing work.');
+        e.code = timedOut ? 'REQUEST_TIMEOUT' : 'REQUEST_CANCELLED';
+        throw e;
+      }
+      if (error instanceof TypeError) {
+        const az = storage.get('gr-lang','az') === 'az';
+        const e = new Error(az
+          ? 'GPO Remediator backend xidməti ilə əlaqə kəsildi. Xidmət yenidən başlayırsa gözləyin; əks halda Local Control Center-də service status, windows-startup-error.log və bootstrap.log-u yoxlayın.'
+          : 'The GPO Remediator backend connection was lost. If the service is restarting, wait for it to return; otherwise check service status, windows-startup-error.log and bootstrap.log in Local Control Center.');
+        e.code = 'SERVICE_UNREACHABLE';
+        throw e;
+      }
       throw error;
     } finally { clearTimeout(timer); active.delete(pending); }
   }
