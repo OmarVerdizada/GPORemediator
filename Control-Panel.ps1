@@ -30,120 +30,122 @@ $script:releaseReady = Test-VerifiedReleaseArchive
 <Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="GPO Remediator — Policy Operations Control Center"
-        Width="1240" Height="800" MinWidth="1080" MinHeight="700"
-        WindowStartupLocation="CenterScreen" Background="#EEF2F7"
+        Width="1280" Height="850" MinWidth="1000" MinHeight="720"
+        WindowStartupLocation="CenterScreen" Background="#F4F5FC"
         FontFamily="Segoe UI Variable, Segoe UI" FontSize="13"
         UseLayoutRounding="True" SnapsToDevicePixels="True">
   <Window.Resources>
-    <SolidColorBrush x:Key="Ink" Color="#101828"/>
-    <SolidColorBrush x:Key="Muted" Color="#667085"/>
-    <SolidColorBrush x:Key="Line" Color="#E4EAF1"/>
-    <SolidColorBrush x:Key="Brand" Color="#0797B8"/>
-    <SolidColorBrush x:Key="BrandDark" Color="#087D9A"/>
+    <LinearGradientBrush x:Key="NavGradient" StartPoint="0,0" EndPoint="1,1"><GradientStop Color="#2B2851" Offset="0"/><GradientStop Color="#151B32" Offset="1"/></LinearGradientBrush>
+    <LinearGradientBrush x:Key="AccentGradient" StartPoint="0,0" EndPoint="1,1"><GradientStop Color="#8475F3" Offset="0"/><GradientStop Color="#5956DB" Offset="1"/></LinearGradientBrush>
+    <SolidColorBrush x:Key="Ink" Color="#242941"/>
+    <SolidColorBrush x:Key="Muted" Color="#69718B"/>
+    <SolidColorBrush x:Key="Line" Color="#E5E7F2"/>
+    <SolidColorBrush x:Key="Brand" Color="#7064E7"/>
+    <SolidColorBrush x:Key="BrandDark" Color="#5956DB"/>
     <Style TargetType="Button" x:Key="BaseButton">
       <Setter Property="Height" Value="40"/><Setter Property="Padding" Value="16,0"/><Setter Property="Margin" Value="0,0,9,0"/>
-      <Setter Property="Foreground" Value="#344054"/><Setter Property="Background" Value="#FFFFFF"/><Setter Property="BorderBrush" Value="#D8E0EA"/><Setter Property="BorderThickness" Value="1"/>
+      <Setter Property="HorizontalContentAlignment" Value="Center"/><Setter Property="Foreground" Value="#344054"/><Setter Property="Background" Value="#FFFFFF"/><Setter Property="BorderBrush" Value="#D8E0EA"/><Setter Property="BorderThickness" Value="1"/>
       <Setter Property="FontWeight" Value="SemiBold"/><Setter Property="FontSize" Value="12"/><Setter Property="Cursor" Value="Hand"/>
-      <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Button"><Border x:Name="B" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="8"><ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/></Border><ControlTemplate.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter TargetName="B" Property="Background" Value="#F8FAFC"/></Trigger><Trigger Property="IsPressed" Value="True"><Setter TargetName="B" Property="Opacity" Value="0.86"/></Trigger><Trigger Property="IsEnabled" Value="False"><Setter Property="Opacity" Value="0.38"/><Setter Property="Cursor" Value="Arrow"/></Trigger></ControlTemplate.Triggers></ControlTemplate></Setter.Value></Setter>
+      <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Button"><Border x:Name="B" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="10"><ContentPresenter Margin="{TemplateBinding Padding}" HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}" VerticalAlignment="Center"/></Border><ControlTemplate.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter TargetName="B" Property="Opacity" Value="0.85"/></Trigger><Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="B" Property="BorderBrush" Value="#A99AFF"/><Setter TargetName="B" Property="BorderThickness" Value="2"/></Trigger><Trigger Property="IsPressed" Value="True"><Setter TargetName="B" Property="Opacity" Value="0.86"/></Trigger><Trigger Property="IsEnabled" Value="False"><Setter Property="Opacity" Value="0.38"/><Setter Property="Cursor" Value="Arrow"/></Trigger></ControlTemplate.Triggers></ControlTemplate></Setter.Value></Setter>
     </Style>
-    <Style TargetType="Button" x:Key="PrimaryButton" BasedOn="{StaticResource BaseButton}"><Setter Property="Foreground" Value="#FFFFFF"/><Setter Property="Background" Value="#0797B8"/><Setter Property="BorderBrush" Value="#0797B8"/><Setter Property="Height" Value="44"/><Setter Property="Padding" Value="20,0"/></Style>
+    <Style TargetType="Button" x:Key="PrimaryButton" BasedOn="{StaticResource BaseButton}"><Setter Property="Foreground" Value="#FFFFFF"/><Setter Property="Background" Value="{StaticResource AccentGradient}"/><Setter Property="BorderBrush" Value="#7064E7"/><Setter Property="Height" Value="44"/><Setter Property="Padding" Value="20,0"/></Style>
     <Style TargetType="Button" x:Key="DangerButton" BasedOn="{StaticResource BaseButton}"><Setter Property="Foreground" Value="#B4232D"/><Setter Property="BorderBrush" Value="#F2CDD1"/><Setter Property="Background" Value="#FFF8F8"/></Style>
-    <Style TargetType="Button" x:Key="SideButton" BasedOn="{StaticResource BaseButton}"><Setter Property="Foreground" Value="#B7C8D8"/><Setter Property="Background" Value="#101D2D"/><Setter Property="BorderBrush" Value="#22364A"/><Setter Property="Margin" Value="0,0,0,8"/><Setter Property="HorizontalContentAlignment" Value="Left"/></Style>
+    <Style TargetType="Button" x:Key="SideButton" BasedOn="{StaticResource BaseButton}"><Setter Property="Foreground" Value="#C4C8E2"/><Setter Property="Background" Value="#242943"/><Setter Property="BorderBrush" Value="#3E4668"/><Setter Property="Margin" Value="0,0,0,8"/><Setter Property="HorizontalContentAlignment" Value="Left"/></Style>
     <Style TargetType="ComboBox"><Setter Property="Height" Value="34"/><Setter Property="Padding" Value="8,0"/><Setter Property="VerticalContentAlignment" Value="Center"/><Setter Property="BorderBrush" Value="#D7E0E9"/><Setter Property="Background" Value="#FFFFFF"/></Style>
     <Style TargetType="TextBox" x:Key="FilterBox"><Setter Property="Height" Value="34"/><Setter Property="Padding" Value="10,5"/><Setter Property="BorderBrush" Value="#D7E0E9"/><Setter Property="Background" Value="#FFFFFF"/><Setter Property="VerticalContentAlignment" Value="Center"/></Style>
   </Window.Resources>
 
   <Grid>
-    <Grid.ColumnDefinitions><ColumnDefinition Width="278"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+    <Grid.ColumnDefinitions><ColumnDefinition Width="248"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
 
-    <Border Grid.Column="0" Background="#07111F">
+    <Border Grid.Column="0" Background="{StaticResource NavGradient}">
       <Grid Margin="24,26,24,22">
         <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="28"/><RowDefinition Height="Auto"/><RowDefinition Height="22"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
         <StackPanel>
           <StackPanel Orientation="Horizontal">
-            <Border Width="34" Height="34" Background="#0797B8" CornerRadius="9" Margin="0,0,11,0"><TextBlock Text="G" Foreground="White" FontSize="17" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border>
-            <StackPanel VerticalAlignment="Center"><TextBlock Text="GPO REMEDIATOR" Foreground="#F2F8FC" FontSize="15" FontWeight="Bold"/><TextBlock Text="POLICY OPERATIONS CONTROL" Foreground="#5F7B91" FontSize="8" FontWeight="SemiBold" Margin="0,4,0,0"/></StackPanel>
+            <Border Width="34" Height="34" Background="#7064E7" CornerRadius="9" Margin="0,0,11,0"><TextBlock Text="G" Foreground="White" FontSize="17" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border>
+            <StackPanel VerticalAlignment="Center"><TextBlock Text="GPO REMEDIATOR" Foreground="#F2F8FC" FontSize="15" FontWeight="Bold"/><TextBlock Text="POLICY OPERATIONS CONTROL" Foreground="#A6ADCC" FontSize="10" FontWeight="SemiBold" Margin="0,4,0,0"/></StackPanel>
           </StackPanel>
         </StackPanel>
 
         <StackPanel Grid.Row="2">
-          <TextBlock Text="SERVICE STATUS" Foreground="#4C687E" FontSize="9" FontWeight="Bold" Margin="0,0,0,10"/>
-          <Border Background="#0E1C2D" BorderBrush="#1E344A" BorderThickness="1" CornerRadius="12" Padding="14">
+          <TextBlock Text="SERVICE STATUS" Foreground="#959EBF" FontSize="10" FontWeight="Bold" Margin="0,0,0,10"/>
+          <Border Background="#242943" BorderBrush="#3E4668" BorderThickness="1" CornerRadius="16" Padding="14">
             <StackPanel>
               <StackPanel Orientation="Horizontal"><Ellipse Name="StatusDot" Width="10" Height="10" Fill="#94A3B8" Margin="0,4,9,0"/><TextBlock Name="Status" Text="Ready" Foreground="#F3F8FC" FontWeight="SemiBold" FontSize="13"/></StackPanel>
-              <TextBlock Name="Environment" Text="Automatic" Foreground="#8AA0B2" FontSize="10" Margin="19,6,0,0" TextWrapping="Wrap"/>
-              <TextBlock Name="Address" Text="Local service is stopped" Foreground="#607D93" FontSize="9" Margin="19,5,0,0" TextWrapping="Wrap"/>
+              <TextBlock Name="Environment" Text="Automatic" Foreground="#BDC3DF" FontSize="10" Margin="19,6,0,0" TextWrapping="Wrap"/>
+              <TextBlock Name="Address" Text="Local service is stopped" Foreground="#A4ADCD" FontSize="10" Margin="19,5,0,0" TextWrapping="Wrap"/>
             </StackPanel>
           </Border>
         </StackPanel>
 
         <StackPanel Grid.Row="4">
-          <TextBlock Text="SESSION" Foreground="#4C687E" FontSize="9" FontWeight="Bold" Margin="0,0,0,10"/>
-          <Border Background="#0D1928" CornerRadius="10" Padding="13"><Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><StackPanel><TextBlock Name="TopMode" Text="READY" Foreground="#67E8F9" FontSize="10" FontWeight="Bold"/><TextBlock Text="Loopback only · Windows auth" Foreground="#617C91" FontSize="9" Margin="0,4,0,0"/></StackPanel><Border Grid.Column="1" Background="#12283A" CornerRadius="12" Padding="8,4" VerticalAlignment="Center"><TextBlock Text="LOCAL" Foreground="#6FD8EE" FontSize="8" FontWeight="Bold"/></Border></Grid></Border>
+          <TextBlock Text="SESSION" Foreground="#959EBF" FontSize="10" FontWeight="Bold" Margin="0,0,0,10"/>
+          <Border Background="#242943" CornerRadius="10" Padding="13"><Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><StackPanel><TextBlock Name="TopMode" Text="READY" Foreground="#C4B8FF" FontSize="10" FontWeight="Bold"/><TextBlock TextWrapping="Wrap" Text="Loopback · Windows auth" Foreground="#A4ADCD" FontSize="10" Margin="0,4,0,0"/></StackPanel><Border Grid.Column="1" Background="#38365B" CornerRadius="16" Padding="8,4" VerticalAlignment="Center"><TextBlock Text="LOCAL" Foreground="#C4B8FF" FontSize="10" FontWeight="Bold"/></Border></Grid></Border>
         </StackPanel>
 
         <StackPanel Grid.Row="6">
           <Button Name="Repair" Content="Reinstall verified runtime" Style="{StaticResource SideButton}"/>
           <Button Name="Logs" Content="Open diagnostics folder" Style="{StaticResource SideButton}" Margin="0"/>
-          <TextBlock Text="No SDK is required for normal startup or runtime repair." Foreground="#526E84" FontSize="9" TextWrapping="Wrap" Margin="2,10,2,0"/>
+          <TextBlock Text="No SDK is required for normal startup or runtime repair." Foreground="#A4ADCD" FontSize="10" TextWrapping="Wrap" Margin="2,10,2,0"/>
         </StackPanel>
       </Grid>
     </Border>
 
-    <Grid Grid.Column="1" Margin="34,26,34,24">
+    <Grid Grid.Column="1" Margin="28,26,28,24">
       <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="18"/><RowDefinition Height="108"/><RowDefinition Height="16"/><RowDefinition Height="Auto"/><RowDefinition Height="16"/><RowDefinition Height="*"/></Grid.RowDefinitions>
 
       <Grid>
         <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
         <StackPanel>
-          <TextBlock Text="LOCAL CONTROL CENTER" Foreground="#0797B8" FontSize="10" FontWeight="Bold"/>
-          <TextBlock Text="Policy Operations Control Center" Foreground="#101828" FontSize="28" FontWeight="SemiBold" Margin="0,5,0,0"/>
-          <TextBlock Text="Operate the local Windows / AD service, validate prerequisites, and inspect diagnostics from a single control plane." Foreground="#718096" FontSize="11" Margin="0,6,0,0"/>
+          <TextBlock Text="LOCAL CONTROL CENTER" Foreground="#7064E7" FontSize="10" FontWeight="Bold"/>
+          <TextBlock Text="Your policy workspace" Foreground="#242941" FontSize="28" FontWeight="SemiBold" Margin="0,5,0,0"/>
+          <TextBlock TextWrapping="Wrap" Text="Start your workspace, check service health, and review diagnostics." Foreground="#718096" FontSize="11" Margin="0,6,0,0"/>
         </StackPanel>
-        <Border Grid.Column="1" Background="#EAF8FC" BorderBrush="#C9EAF2" BorderThickness="1" CornerRadius="17" Padding="12,7" VerticalAlignment="Top"><TextBlock Text="LOCAL MANAGEMENT" Foreground="#087D9A" FontSize="9" FontWeight="Bold"/></Border>
+        <Border Grid.Column="1" Background="#EFEDFF" BorderBrush="#DDD7FA" BorderThickness="1" CornerRadius="17" Padding="12,7" VerticalAlignment="Top"><TextBlock Text="LOCAL MANAGEMENT" Foreground="#5956DB" FontSize="10" FontWeight="Bold"/></Border>
       </Grid>
 
       <Grid Grid.Row="2">
         <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="12"/><ColumnDefinition Width="*"/><ColumnDefinition Width="12"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-        <Border Background="White" BorderBrush="{StaticResource Line}" BorderThickness="1" CornerRadius="12" Padding="16">
-          <Grid><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions><Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBlock Text="RUNTIME" Foreground="#8A98A8" FontSize="9" FontWeight="Bold"/><Ellipse Name="RuntimeDot" Grid.Column="1" Width="8" Height="8" Fill="#94A3B8" Margin="6,2,0,0"/></Grid><StackPanel Grid.Row="1" Margin="0,8,0,0"><TextBlock Name="RuntimeState" Text="Checking" Foreground="{StaticResource Ink}" FontSize="15" FontWeight="SemiBold"/><TextBlock Name="RuntimeDetail" Text="Verifying packaged runtime" Foreground="{StaticResource Muted}" FontSize="10" Margin="0,5,0,0" TextWrapping="Wrap"/></StackPanel></Grid>
+        <Border Background="White" BorderBrush="{StaticResource Line}" BorderThickness="1" CornerRadius="16" Padding="16">
+          <Grid><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions><Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBlock Text="RUNTIME" Foreground="#8A98A8" FontSize="10" FontWeight="Bold"/><Ellipse Name="RuntimeDot" Grid.Column="1" Width="8" Height="8" Fill="#94A3B8" Margin="6,2,0,0"/></Grid><StackPanel Grid.Row="1" Margin="0,8,0,0"><TextBlock Name="RuntimeState" Text="Checking" Foreground="{StaticResource Ink}" FontSize="15" FontWeight="SemiBold"/><TextBlock Name="RuntimeDetail" Text="Verifying packaged runtime" Foreground="{StaticResource Muted}" FontSize="10" Margin="0,5,0,0" TextWrapping="Wrap"/></StackPanel></Grid>
         </Border>
-        <Border Grid.Column="2" Background="White" BorderBrush="{StaticResource Line}" BorderThickness="1" CornerRadius="12" Padding="16">
-          <Grid><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions><Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBlock Text="DOMAIN CONFIG" Foreground="#8A98A8" FontSize="9" FontWeight="Bold"/><Ellipse Name="ConfigDot" Grid.Column="1" Width="8" Height="8" Fill="#94A3B8" Margin="6,2,0,0"/></Grid><StackPanel Grid.Row="1" Margin="0,8,0,0"><TextBlock Name="ConfigState" Text="Checking" Foreground="{StaticResource Ink}" FontSize="15" FontWeight="SemiBold"/><TextBlock Name="ConfigDetail" Text="No saved configuration" Foreground="{StaticResource Muted}" FontSize="10" Margin="0,5,0,0" TextWrapping="Wrap"/></StackPanel></Grid>
+        <Border Grid.Column="2" Background="White" BorderBrush="{StaticResource Line}" BorderThickness="1" CornerRadius="16" Padding="16">
+          <Grid><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions><Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBlock Text="DOMAIN CONFIG" Foreground="#8A98A8" FontSize="10" FontWeight="Bold"/><Ellipse Name="ConfigDot" Grid.Column="1" Width="8" Height="8" Fill="#94A3B8" Margin="6,2,0,0"/></Grid><StackPanel Grid.Row="1" Margin="0,8,0,0"><TextBlock Name="ConfigState" Text="Checking" Foreground="{StaticResource Ink}" FontSize="15" FontWeight="SemiBold"/><TextBlock Name="ConfigDetail" Text="No saved configuration" Foreground="{StaticResource Muted}" FontSize="10" Margin="0,5,0,0" TextWrapping="Wrap"/></StackPanel></Grid>
         </Border>
-        <Border Grid.Column="4" Background="White" BorderBrush="{StaticResource Line}" BorderThickness="1" CornerRadius="12" Padding="16">
-          <Grid><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions><Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBlock Text="EXECUTION" Foreground="#8A98A8" FontSize="9" FontWeight="Bold"/><Ellipse Name="ModeDot" Grid.Column="1" Width="8" Height="8" Fill="#94A3B8" Margin="6,2,0,0"/></Grid><StackPanel Grid.Row="1" Margin="0,8,0,0"><TextBlock Name="ModeState" Text="AUTO" Foreground="{StaticResource Ink}" FontSize="15" FontWeight="SemiBold"/><TextBlock Name="ModeDetail" Text="Service is not running" Foreground="{StaticResource Muted}" FontSize="10" Margin="0,5,0,0" TextWrapping="Wrap"/></StackPanel></Grid>
+        <Border Grid.Column="4" Background="White" BorderBrush="{StaticResource Line}" BorderThickness="1" CornerRadius="16" Padding="16">
+          <Grid><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions><Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBlock Text="EXECUTION" Foreground="#8A98A8" FontSize="10" FontWeight="Bold"/><Ellipse Name="ModeDot" Grid.Column="1" Width="8" Height="8" Fill="#94A3B8" Margin="6,2,0,0"/></Grid><StackPanel Grid.Row="1" Margin="0,8,0,0"><TextBlock Name="ModeState" Text="AUTO" Foreground="{StaticResource Ink}" FontSize="15" FontWeight="SemiBold"/><TextBlock Name="ModeDetail" Text="Service is not running" Foreground="{StaticResource Muted}" FontSize="10" Margin="0,5,0,0" TextWrapping="Wrap"/></StackPanel></Grid>
         </Border>
       </Grid>
 
-      <Border Grid.Row="4" Name="NoticeBorder" Background="#FFFFFF" BorderBrush="{StaticResource Line}" BorderThickness="1" CornerRadius="12" Padding="18,16">
+      <Border Grid.Row="4" Name="NoticeBorder" Background="#FFFFFF" BorderBrush="{StaticResource Line}" BorderThickness="1" CornerRadius="16" Padding="18,16">
         <Grid>
-          <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-          <StackPanel VerticalAlignment="Center"><TextBlock Text="SERVICE CONTROL" Foreground="#8A98A8" FontSize="9" FontWeight="Bold"/><TextBlock Name="Message" Text="Ready to start. The browser workspace opens automatically after the service is healthy." Foreground="#344054" FontSize="12" FontWeight="SemiBold" Margin="0,6,18,0" TextWrapping="Wrap"/><TextBlock Text="AD preflight checks DNS/SRV, Kerberos, LDAP, SYSVOL, WinRM, DC modules and time without policy changes." Foreground="#7B8998" FontSize="9" Margin="0,5,18,0"/></StackPanel>
-          <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+          <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="18"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+          <StackPanel VerticalAlignment="Center"><TextBlock Text="SERVICE CONTROL" Foreground="#8A98A8" FontSize="10" FontWeight="Bold"/><TextBlock Name="Message" Text="Ready to start. The browser workspace opens automatically after the service is healthy." Foreground="#344054" FontSize="12" FontWeight="SemiBold" Margin="0,6,18,0" TextWrapping="Wrap"/><TextBlock TextWrapping="Wrap" Text="AD preflight checks DNS/SRV, Kerberos, LDAP, SYSVOL, WinRM, DC modules and time without policy changes." Foreground="#7B8998" FontSize="10" Margin="0,5,18,0"/></StackPanel>
+          <WrapPanel Grid.Row="2" Orientation="Horizontal" VerticalAlignment="Center">
             <Button Name="Preflight" Content="AD preflight" Style="{StaticResource BaseButton}"/>
             <Button Name="Start" Content="Start workspace" Style="{StaticResource PrimaryButton}"/>
             <Button Name="Open" Content="Open browser" Style="{StaticResource BaseButton}"/>
             <Button Name="Restart" Content="Restart" Style="{StaticResource BaseButton}"/>
             <Button Name="Stop" Content="Stop" Style="{StaticResource DangerButton}" Margin="0"/>
-          </StackPanel>
+          </WrapPanel>
         </Grid>
       </Border>
 
-      <Border Grid.Row="6" Background="#08111E" BorderBrush="#18283A" BorderThickness="1" CornerRadius="12" ClipToBounds="True">
+      <Border Grid.Row="6" Background="#171C31" BorderBrush="#333B59" BorderThickness="1" CornerRadius="16" ClipToBounds="True">
         <Grid>
           <Grid.RowDefinitions><RowDefinition Height="50"/><RowDefinition Height="*"/></Grid.RowDefinitions>
-          <Border Grid.Row="0" Background="#0D1826" Padding="13,8">
+          <Border Grid.Row="0" Background="#232943" Padding="13,8">
           <Grid>
             <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="12"/><ColumnDefinition Width="170"/><ColumnDefinition Width="10"/><ColumnDefinition Width="*"/><ColumnDefinition Width="10"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="8"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-            <StackPanel Orientation="Horizontal" VerticalAlignment="Center"><Ellipse Width="7" Height="7" Fill="#2DD4BF" Margin="0,0,8,0"/><TextBlock Text="LIVE DIAGNOSTICS" Foreground="#AFC3D3" FontSize="9" FontWeight="Bold" VerticalAlignment="Center"/></StackPanel>
+            <StackPanel Orientation="Horizontal" VerticalAlignment="Center"><Ellipse Width="7" Height="7" Fill="#2DD4BF" Margin="0,0,8,0"/><TextBlock Text="LIVE DIAGNOSTICS" Foreground="#C2CAE6" FontSize="10" FontWeight="Bold" VerticalAlignment="Center"/></StackPanel>
             <ComboBox Grid.Column="2" Name="LogSource" SelectedIndex="0"><ComboBoxItem Content="bootstrap.log"/><ComboBoxItem Content="windows-startup-error.log"/><ComboBoxItem Content="server-error.log"/><ComboBoxItem Content="server.log"/><ComboBoxItem Content="preflight.log"/><ComboBoxItem Content="startup-diagnosis.json"/><ComboBoxItem Content="panel-error.log"/></ComboBox>
             <TextBox Grid.Column="4" Name="LogFilter" Style="{StaticResource FilterBox}" ToolTip="Filter visible log lines"/>
             <Button Grid.Column="6" Name="CopyLog" Content="Copy" Style="{StaticResource BaseButton}" Height="34" Margin="0" Padding="12,0"/>
             <Button Grid.Column="8" Name="ClearFilter" Content="Clear" Style="{StaticResource BaseButton}" Height="34" Margin="0" Padding="12,0"/>
           </Grid>
           </Border>
-          <TextBox Grid.Row="1" Name="Log" IsReadOnly="True" TextWrapping="NoWrap" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto" Background="#08111E" Foreground="#A8BCCB" BorderThickness="0" Padding="16,14" FontFamily="Cascadia Mono, Consolas" FontSize="10"/>
+          <TextBox Grid.Row="1" Name="Log" IsReadOnly="True" TextWrapping="NoWrap" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto" Background="#171C31" Foreground="#C2CAE6" BorderThickness="0" Padding="16,14" FontFamily="Cascadia Mono, Consolas" FontSize="12"/>
         </Grid>
       </Border>
     </Grid>
@@ -207,7 +209,8 @@ function Start-Launcher([string]$Mode = 'Auto', [switch]$RepairPackage) {
     $script:runtimeStateCache=$null; $script:runtimeStateChecked=[DateTime]::MinValue
     $extra = if ($RepairPackage) { ' -Repair' } else { '' }
     $arguments = '-NoLogo -NoProfile -ExecutionPolicy Bypass -File "{0}" -Mode {1} -Port {2} -NoBrowser{3}' -f (Join-Path $projectRoot 'GpoRemediator.ps1'),$Mode,$Port,$extra
-    $script:launcher = Start-Process powershell.exe -ArgumentList $arguments -WorkingDirectory $projectRoot -WindowStyle Hidden -PassThru
+    $windowsPowerShell=Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
+    $script:launcher = Start-Process $windowsPowerShell -ArgumentList $arguments -WorkingDirectory $projectRoot -WindowStyle Hidden -PassThru
 }
 function Start-AdPreflight {
     if ($script:preflightJob -or $script:actionJob) { return }

@@ -16,6 +16,8 @@ GPO Remediator is a local Windows/Active Directory policy-remediation console fo
 5. Start Windows / AD mode.
 6. Connect from Dashboard with the delegated domain execution account.
 
+The startup console stays attached until the Control Center closes. If startup fails, the error and diagnostic location remain visible; press a key after reviewing them. `GpoRemediator.cmd -Port 5081` opens the panel for an alternate local port.
+
 The UI listens only on `http://127.0.0.1:5080` / `localhost`.
 
 ## Persistent state

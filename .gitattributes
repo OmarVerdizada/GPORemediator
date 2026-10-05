@@ -1,0 +1,2 @@
+# Preserve Windows command-file line endings in clones and source archives.
+*.cmd -text whitespace=cr-at-eol

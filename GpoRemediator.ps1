@@ -7,6 +7,9 @@
     [switch]$Repair
 )
 
+# Start-Process can inherit PowerShell 7 module paths. Resolve Windows modules first.
+$windowsModules = [IO.Path]::Combine($env:SystemRoot, 'System32\WindowsPowerShell\v1.0\Modules')
+$env:PSModulePath = $windowsModules + ';' + $env:PSModulePath
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
 Set-Location -LiteralPath $PSScriptRoot
