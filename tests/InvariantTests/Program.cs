@@ -92,5 +92,28 @@ Test("Policy hash is stable for the same object", () =>
     Check(DateTimeOffset.TryParse(PolicyValues.Now(), out _), "Timestamp is not ISO parseable");
 });
 
+Test("GPO service serializes operations, blocks ambiguous refresh and produces verifiable evidence", WorkflowServiceTests.Run);
+Test("Write authorization rejects wildcard discovery boundaries", () =>
+{
+    Reject("WRITE_SCOPE_UNRESTRICTED",()=>GpoWorkflowRules.ValidateWriteScope(["*"],["DC=test"]));
+    Reject("WRITE_SCOPE_UNRESTRICTED",()=>GpoWorkflowRules.ValidateWriteScope([Guid.NewGuid().ToString()],["*"]));
+    Reject("WRITE_SCOPE_UNRESTRICTED",()=>GpoWorkflowRules.ValidateWriteScope([],[]));
+    GpoWorkflowRules.ValidateWriteScope([Guid.NewGuid().ToString()],["OU=Servers,DC=test"]);
+});
+Test("Pending results are not mistaken for running operations during recovery", () =>
+{
+    Check(!GpoWorkflowRules.IsActive("REPLICATION_PENDING"),"Pending result treated as active");
+    Check(GpoWorkflowRules.IsActive("ROLLING_BACK"),"Interrupted rollback not active");
+    using var store=new Store(":memory:");
+    var plan=new GpoWorkflowPlan("id","actor","executor","WINDOWS","test","dc.test",
+        new GpoSelection(Guid.NewGuid().ToString(),"DC=test","1.1.4",14),
+        new GpoPreview(new("gpo","Fixture",false,true),new("DC=test","test","Domain"),null,"fp","",null,[],[]),PolicyValues.Now());
+    var result=new GpoWorkflowResult("ROLLING_BACK","",null,null,null,false,false,[],"PENDING");
+    store.Put("gpo_runs","id",new GpoWorkflowRun("id",plan,result,PolicyValues.Now()),result.State);
+    Check(store.CountActiveGpoRuns()==1&&store.RecoverInterruptedGpoRuns()==1,"Rollback was not recovered");
+    Check(store.Require<GpoWorkflowRun>("gpo_runs","id").Result.State=="REVIEW_REQUIRED","Unknown rollback outcome lost");
+    Check(store.CountActiveGpoRuns()==0&&store.RecoverInterruptedGpoRuns()==0,"Recovered run still active");
+});
+
 Console.WriteLine($"{passed} passed, {failed} failed");
 Environment.ExitCode = failed == 0 ? 0 : 1;

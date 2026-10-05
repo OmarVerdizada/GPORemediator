@@ -47,10 +47,22 @@ public record GpoEvidence(string SchemaVersion, string Product, string Benchmark
     string GpoId, string GpoName, string ScopeDn, string? BeforeValue, string DesiredValue, string State,
     string? BackupId, string? BackupDirectory, string EffectiveStatus, GpoVerificationDetails? Verification,
     string[] Warnings, string IntegrityHash, string? ChangeReference = null, string? ApprovedBy = null, string? Handler = null, string? MappingSource = null,
-    GpoEndpointCheck[]? EndpointChecks = null, string? CorrelationId = null);
+    GpoEndpointCheck[]? EndpointChecks = null, string? CorrelationId = null, string? CurrentValue = null);
 
 public static class GpoWorkflowRules
 {
+    public static string EvidenceHash(GpoEvidence evidence) => PolicyValues.Hash(evidence with { IntegrityHash = "" });
+    public static bool IsActive(string state) => state.ToUpperInvariant() is
+        "APPLYING" or "VERIFYING" or "REFRESHING" or "ROLLBACKING" or "ROLLING_BACK";
+
+    public static void ValidateWriteScope(string[] gpos, string[] scopes)
+    {
+        if (gpos.Length == 0 || scopes.Length == 0 ||
+            gpos.Any(x => !Guid.TryParse(x, out _)) ||
+            scopes.Any(x => string.IsNullOrWhiteSpace(x) || x.Contains('*')))
+            throw new PolicyException("WRITE_SCOPE_UNRESTRICTED", "Authorize explicit GPO GUIDs and OU/domain DNs before enabling production writes.");
+    }
+
     public static void ValidateConsent(GpoWorkflowPlan plan, GpoConsent consent)
     {
         if (consent.Confirmation != "APPLY" || !consent.AcknowledgeImpact)

@@ -2,6 +2,31 @@
 (() => {
   'use strict';
   const active = new Set();
+  // Browser-tab memory only. The delegated password is never written to
+  // sessionStorage/localStorage/disk. This short-lived cache exists only so a
+  // launcher-managed backend restart does not force the operator to type the
+  // same account again during one remediation workflow.
+  let delegatedSecret = null;
+  const credentialIdleMs = 30 * 60 * 1000;
+  const ephemeralCredential = {
+    set(userName, password) {
+      this.clear();
+      const bytes = new TextEncoder().encode(String(password || ''));
+      delegatedSecret = { userName: String(userName || ''), bytes, lastUsed: Date.now() };
+    },
+    get() {
+      if (!delegatedSecret) return null;
+      if (Date.now() - delegatedSecret.lastUsed > credentialIdleMs) { this.clear(); return null; }
+      delegatedSecret.lastUsed = Date.now();
+      return { userName: delegatedSecret.userName, password: new TextDecoder().decode(delegatedSecret.bytes) };
+    },
+    touch() { if (delegatedSecret) delegatedSecret.lastUsed = Date.now(); },
+    clear() {
+      if (delegatedSecret?.bytes) delegatedSecret.bytes.fill(0);
+      delegatedSecret = null;
+    },
+    available() { return !!this.get(); }
+  };
   const storage = {
     get(key, fallback) { try { return sessionStorage.getItem(key) ?? fallback; } catch { return fallback; } },
     set(key, value) { try { sessionStorage.setItem(key, value); } catch { /* Storage may be disabled. */ } },
@@ -41,7 +66,7 @@
     'DRY RUN · READ-ONLY PREVIEW':'YALNIZ BAXIŞ','Change plan ready':'Dəyişiklik planı hazırdır','NO WRITE YET':'HƏLƏ TƏTBİQ EDİLMƏYİB',
     'BEFORE / AFTER DIFF':'DƏYƏRİN DƏYİŞMƏSİ','CURRENT':'ƏVVƏLKİ','DESIRED':'YENİ','Not configured':'Təyin edilməyib',
     'Link':'Əlaqə','Execution':'İcra hesabı','Rollback':'Geri qaytarma','Backup before write':'Dəyişiklikdən əvvəl ehtiyat nüsxə','Not requested':'Seçilməyib',
-    'GOVERNANCE':'TƏSDİQ','Change / Ticket ID':'Dəyişiklik nömrəsi','Reviewed / Approved by':'Təsdiqləyən istinad','Name or operator':'Ad, qeyd və ya istinad',
+    'GOVERNANCE':'TƏSDİQ','Change / Ticket ID':'Dəyişiklik nömrəsi','Reviewed / Approved by':'Təsdiqləyən istinad','Operator-entered approver reference (optional)':'Təsdiqləyən istinad (opsional)','Name or operator':'Ad, qeyd və ya istinad',
     'Impact reviewed and approved':'Planı və təsiri yoxlayıb təsdiqlədim','I reviewed the target, GPO, scope and potential precedence impact.':'Seçilmiş GPO-nu, hədəfi və prioritetin təsirini yoxladım.',
     'Confirm production impact':'Dəyişikliyin təsirini təsdiqləyin','Backup will be created before the GPO write.':'GPO dəyişməzdən əvvəl ehtiyat nüsxə yaradılacaq.',
     'Protected GPO confirmation':'Qorunan GPO təsdiqi','I explicitly approve changing this protected/default policy.':'Qorunan və ya standart siyasətin dəyişdirilməsini təsdiqləyirəm.',
@@ -133,6 +158,7 @@
         const error = new Error((storage.get('gr-lang','az')==='az'&&errors[data.code]) || data.message || `Request failed (HTTP ${response.status}).`);
         error.code = data.code; error.status = response.status; throw error;
       }
+      if (path.startsWith('/api/gpo/') && !path.endsWith('/disconnect')) ephemeralCredential.touch();
       return data;
     } catch (error) {
       if (controller.signal.aborted) {
@@ -153,8 +179,23 @@
       throw error;
     } finally { clearTimeout(timer); active.delete(pending); }
   }
+  async function reconnectDelegated() {
+    const credential = ephemeralCredential.get();
+    if (!credential) return null;
+    try {
+      const session = await request('/api/session', { timeout: 5000 });
+      const inventory = await request('/api/gpo/connect', { body: credential, csrfToken: session.csrfToken, timeout: 110000 });
+      credential.password = '';
+      const gpoSession = await request('/api/gpo/session', { timeout: 5000 });
+      return { session, inventory, gpoSession };
+    } catch (error) {
+      credential.password = '';
+      if (/AUTH|CREDENTIAL|LOGIN/.test(String(error?.code || ''))) ephemeralCredential.clear();
+      throw error;
+    }
+  }
   window.GpoClient = {
-    request, storage, localize,
+    request, storage, localize, ephemeralCredential, reconnectDelegated,
     progress() { return [...active].at(-1); },
     cancelReadOnly() { for (const p of active) if (p.cancelable) p.controller.abort(); }
   };

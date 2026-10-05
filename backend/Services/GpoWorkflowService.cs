@@ -7,19 +7,18 @@ using Microsoft.AspNetCore.DataProtection;
 
 namespace GpoRemediator.Services;
 
-public sealed class GpoWorkflowService(IConfiguration config,Store store,OperationGate gate,IDataProtectionProvider protection,ILogger<GpoWorkflowService> logger) : IDisposable
+public sealed class GpoWorkflowService(IConfiguration config,Store store,OperationGate gate,IDataProtectionProvider protection,IWindowsPowerShellExecutor executor) : IDisposable
 {
     private static readonly TimeSpan ConnectionIdleTimeout=TimeSpan.FromMinutes(30);
     private sealed record Connection(string Actor,string UserName,byte[] Password,GpoInventory Inventory,DateTimeOffset Expires);
     private readonly ConcurrentDictionary<string,Connection> connections=new();
     private readonly IDataProtector protector=protection.CreateProtector("GpoWorkflow.EphemeralLogin.v1");
-    private readonly WindowsPowerShellExecutor executor=new(logger);
     private bool Real=>!config.GetValue<bool>("LocalSetup")&&string.Equals(config["Mode"],"Windows",StringComparison.OrdinalIgnoreCase);
     private string Mode=>"WINDOWS";
     private void RequireReal(){if(!Real)throw new PolicyException("WINDOWS_MODE_REQUIRED","GPO discovery and remediation require Windows / AD mode. Setup mode cannot simulate domain operations.");}
     private string Domain=>config["Windows:Domain"]??"";
     private string Dc=>config["Windows:DomainController"]??"";
-    private object Configuration=>new{domain=Domain,domainController=Dc,backupPath=config["Windows:BackupPath"]};
+    private object Configuration=>new{domain=Domain,domainController=Dc,backupPath=config["Windows:BackupPath"],allowedHosts=AllowedHosts};
     private string[] ApprovedGpos=>config.GetSection("Windows:ApprovedGpoIds").Get<string[]>()??[];
     private string[] AuthorizedOus=>config.GetSection("Windows:AuthorizedOus").Get<string[]>()??[];
     private string[] AllowedHosts=>config.GetSection("Windows:AllowedHosts").Get<string[]>()??[];
@@ -115,14 +114,7 @@ public sealed class GpoWorkflowService(IConfiguration config,Store store,Operati
         var scope=c.Inventory.Scopes.SingleOrDefault(s=>string.Equals(s.Dn,selection.ScopeDn,StringComparison.OrdinalIgnoreCase));
         if(gpo is null||!gpo.Selectable||scope is null)throw new PolicyException("GPO_SELECTION_REQUIRED","Select an available GPO and scope from the discovered list.");
         if(mapping.DomainPolicySensitive && scope.Kind!="Domain") throw new PolicyException("PASSWORD_SCOPE_MISMATCH","Domain password and lockout policies require the domain root.");
-        var preview=await Run<GpoPreview>("gpoPreview",c,new{selection,mapping,allowedHosts=AllowedHosts},ct);
-        if(!AllowedHosts.Contains("*"))
-        {
-            var permitted=new HashSet<string>(AllowedHosts,StringComparer.OrdinalIgnoreCase);
-            var impact=preview.Impact;
-            if(impact is not null) impact=impact with{AffectedObjects=impact.AffectedObjects with{SampleHosts=impact.AffectedObjects.SampleHosts.Where(permitted.Contains).ToArray()}};
-            preview=preview with{RefreshComputers=preview.RefreshComputers.Where(permitted.Contains).ToArray(),Impact=impact};
-        }
+        var preview=await Run<GpoPreview>("gpoPreview",c,new{selection,mapping},ct);
         var plan=new GpoWorkflowPlan(Guid.NewGuid().ToString("N"),actor,c.Inventory.ExecutionUser,Mode,Domain,Dc,selection,preview,PolicyValues.Now(),PolicyValues.Hash(mapping),ConfigHash);
         store.Put("gpo_plans",plan.Id,plan);store.Audit("GPO_PLAN_PREPARED",actor,details:plan);
         return plan;
@@ -139,52 +131,64 @@ public sealed class GpoWorkflowService(IConfiguration config,Store store,Operati
         var plan=store.Require<GpoWorkflowPlan>("gpo_plans",id);AssertContext(plan,c,actor);
         var mapping=ProductionGpoMappings.Require(plan.Selection.Setting);
         if(!string.IsNullOrEmpty(plan.MappingHash) && !string.Equals(plan.MappingHash,PolicyValues.Hash(mapping),StringComparison.Ordinal)) throw new PolicyException("GPO_MAPPING_CHANGED","The production mapping changed after this plan was prepared. Generate a fresh preview.");
-        var previous=store.Get<GpoWorkflowRun>("gpo_runs",id);
-        if(operation=="apply"){
-            ProductionGpoMappings.Validate(plan.Selection);
-            GpoWorkflowRules.ValidateConsent(plan,consent);
-            if(previous is not null)return previous;
-            if(DateTimeOffset.UtcNow-DateTimeOffset.Parse(plan.CreatedAt)>TimeSpan.FromMinutes(10))throw new PolicyException("GPO_PLAN_EXPIRED","Prepare a fresh GPO plan.");
-        }else if(operation=="rollback"){
-            if(consent.Confirmation!="ROLLBACK")throw new PolicyException("CONFIRMATION_REQUIRED","Type ROLLBACK.");
-            if(previous is null)throw new PolicyException("NOT_FOUND","No execution exists for this plan.");
-            if(previous.Result.State=="ROLLED_BACK")return previous;
-            if(previous.Result.State=="NO_CHANGE")throw new PolicyException("ROLLBACK_NOT_AVAILABLE","No backup exists because this operation required no change.");
-        }else if(operation is not ("verify" or "refresh"))throw new PolicyException("OPERATION_DENIED","Unknown GPO operation.");
-        if(operation!="apply"&&previous is null)throw new PolicyException("NOT_FOUND","Apply has not been started.");
-        if(operation=="refresh" && previous is not null)
+        if(operation is not ("apply" or "rollback" or "verify" or "refresh"))
+            throw new PolicyException("OPERATION_DENIED","Unknown GPO operation.");
+        if(operation!="verify")
         {
-            // Do not trust the previous stored status before a disruptive endpoint refresh.
-            // Re-read the live GPO/link state first; this catches external GPMC edits between Verify and Refresh.
-            var live=await Run<GpoWorkflowResult>("gpoVerify",c,new{plan,mapping,previous=previous.Result,consent=previous.Approval},CancellationToken.None);
-            if(live.RefreshResults.Length==0 && previous.Result.RefreshResults.Length>0) live=live with{RefreshResults=previous.Result.RefreshResults};
-            previous=previous with{Result=live,UpdatedAt=PolicyValues.Now()};
-            store.Put("gpo_runs",id,previous,live.State);
-            if(!live.GpoPublished || !live.LinkVerified || live.State.Contains("DRIFT",StringComparison.OrdinalIgnoreCase) || live.State.Contains("MISMATCH",StringComparison.OrdinalIgnoreCase))
-                throw new PolicyException("GPO_DRIFT_DETECTED","Live GPO or link state no longer matches the requested state. Refresh was blocked; prepare a fresh remediation plan.");
+            if(!config.GetValue<bool>("Windows:EnableWrites"))throw new PolicyException("WRITES_DISABLED","Enable the production change gate first.");
+            GpoWorkflowRules.ValidateWriteScope(ApprovedGpos,AuthorizedOus);
         }
-        if(Real&&operation!="verify"&&!config.GetValue<bool>("Windows:EnableWrites"))throw new PolicyException("WRITES_DISABLED","Enable writes in Settings first.");
-        var resourceKey=plan.Selection.GpoId;
-        gate.BeginOperation(resourceKey,()=>{if(operation=="apply"&&store.Get<GpoWorkflowRun>("gpo_runs",id)is not null)throw new PolicyException("GPO_ALREADY_STARTED","This operation already exists. Refresh history.");});
-        var result=previous?.Result??new("APPLYING","Execution started; inspect backup after an interruption.",null,null,null,false,false,[],"PENDING");
-        var correlationId=previous?.CorrelationId??Guid.NewGuid().ToString("N");
-        var startedAt=previous?.StartedAt??PolicyValues.Now();
-        var run=new GpoWorkflowRun(id,plan,result with{State=operation.ToUpperInvariant()+"ING"},PolicyValues.Now(),operation=="apply"?consent:previous?.Approval,correlationId,startedAt);
-        try{
-            store.Put("gpo_runs",id,run,run.Result.State);store.Audit("GPO_"+operation.ToUpperInvariant()+"_STARTED",actor,jobId:id,controlId:plan.Selection.Setting,gpoId:plan.Selection.GpoId,details:new{id,correlationId,plan.ExecutionUser});
-            result=await Run<GpoWorkflowResult>("gpo"+char.ToUpperInvariant(operation[0])+operation[1..],c,new{plan,mapping,previous=previous?.Result,consent=operation=="apply"?consent:previous?.Approval},CancellationToken.None);
-            if(operation=="verify" && previous is not null && result.RefreshResults.Length==0 && previous.Result.RefreshResults.Length>0)
-                result=result with{RefreshResults=previous.Result.RefreshResults};
-            run=run with{Result=result,UpdatedAt=PolicyValues.Now()};
-        }catch(Exception ex){
-            // A transport/timeout failure can occur after a remote write began.
-            // Never label an unknown outcome as a safe failure.
-            var safe=ex is PolicyException pex && new[]{"GPO_BUSY","GPO_ALREADY_STARTED","GPO_PLAN_STALE","GPO_PLAN_EXPIRED","ROLLBACK_CONFLICT","ROLLBACK_NOT_AVAILABLE","PREFLIGHT_FAILED"}.Contains(pex.Code);
-            run=run with{Result=result with{State=safe?"FAILED_SAFE":"REVIEW_REQUIRED",Message=ex is PolicyException p?p.Code+": "+p.Message:"Execution interrupted. Inspect the DC backup/manifest before recovery."},UpdatedAt=PolicyValues.Now()};
+        // Read and validate the latest execution record only after claiming the GPO.
+        // Verification and refresh must not overwrite another operation's result.
+        var resourceKey=Guid.Parse(plan.Selection.GpoId).ToString("D");
+        gate.BeginOperation(resourceKey,()=>{});
+        try
+        {
+            var previous=store.Get<GpoWorkflowRun>("gpo_runs",id);
+            if(operation=="apply"){
+                ProductionGpoMappings.Validate(plan.Selection);
+                GpoWorkflowRules.ValidateConsent(plan,consent);
+                if(previous is not null)return previous;
+                if(DateTimeOffset.UtcNow-DateTimeOffset.Parse(plan.CreatedAt)>TimeSpan.FromMinutes(10))throw new PolicyException("GPO_PLAN_EXPIRED","Prepare a fresh GPO plan.");
+            }else if(operation=="rollback"){
+                if(consent.Confirmation!="ROLLBACK")throw new PolicyException("CONFIRMATION_REQUIRED","Type ROLLBACK.");
+                if(previous is null)throw new PolicyException("NOT_FOUND","No execution exists for this plan.");
+                if(previous.Result.State=="ROLLED_BACK")return previous;
+                if(previous.Result.State=="NO_CHANGE")throw new PolicyException("ROLLBACK_NOT_AVAILABLE","No backup exists because this operation required no change.");
+            }
+            if(operation!="apply"&&previous is null)throw new PolicyException("NOT_FOUND","Apply has not been started.");
+            if(operation=="refresh" && previous is not null)
+            {
+                // Do not trust the previous stored status before a disruptive endpoint refresh.
+                // Re-read the live GPO/link state first; this catches external GPMC edits between Verify and Refresh.
+                var live=await Run<GpoWorkflowResult>("gpoVerify",c,new{plan,mapping,previous=previous.Result,consent=previous.Approval},CancellationToken.None);
+                if(live.RefreshResults.Length==0 && previous.Result.RefreshResults.Length>0) live=live with{RefreshResults=previous.Result.RefreshResults};
+                previous=previous with{Result=live,UpdatedAt=PolicyValues.Now()};
+                store.Put("gpo_runs",id,previous,live.State);
+                if(!live.GpoPublished || !live.LinkVerified || live.State is not ("PUBLISHED" or "NO_CHANGE"))
+                    throw new PolicyException("GPO_DRIFT_DETECTED","Live GPO or link state no longer matches the requested state. Refresh was blocked; prepare a fresh remediation plan.");
+            }
+            var result=previous?.Result??new("APPLYING","Execution started; inspect backup after an interruption.",null,null,null,false,false,[],"PENDING");
+            var correlationId=previous?.CorrelationId??Guid.NewGuid().ToString("N");
+            var startedAt=previous?.StartedAt??PolicyValues.Now();
+            var run=new GpoWorkflowRun(id,plan,result with{State=operation.ToUpperInvariant()+"ING"},PolicyValues.Now(),operation=="apply"?consent:previous?.Approval,correlationId,startedAt);
+            try{
+                store.Put("gpo_runs",id,run,run.Result.State);store.Audit("GPO_"+operation.ToUpperInvariant()+"_STARTED",actor,jobId:id,controlId:plan.Selection.Setting,gpoId:plan.Selection.GpoId,details:new{id,correlationId,plan.ExecutionUser});
+                result=await Run<GpoWorkflowResult>("gpo"+char.ToUpperInvariant(operation[0])+operation[1..],c,new{plan,mapping,previous=previous?.Result,consent=operation=="apply"?consent:previous?.Approval},CancellationToken.None);
+                if(operation=="verify" && previous is not null && result.RefreshResults.Length==0 && previous.Result.RefreshResults.Length>0)
+                    result=result with{RefreshResults=previous.Result.RefreshResults};
+                run=run with{Result=result,UpdatedAt=PolicyValues.Now()};
+            }catch(Exception ex){
+                // A transport/timeout failure can occur after a remote write began.
+                // Never label an unknown outcome as a safe failure.
+                var safe=ex is PolicyException pex && new[]{"GPO_BUSY","GPO_CHANGED","ENVIRONMENT_NOT_READY","ROLLBACK_CONFLICT","ROLLBACK_NOT_AVAILABLE"}.Contains(pex.Code);
+                run=run with{Result=result with{State=safe?"FAILED_SAFE":"REVIEW_REQUIRED",Message=ex is PolicyException p?p.Code+": "+p.Message:"Execution interrupted. Inspect the DC backup/manifest before recovery."},UpdatedAt=PolicyValues.Now()};
+            }
+            finally{store.Put("gpo_runs",id,run,run.Result.State);}
+            store.Audit("GPO_EXECUTION_RESULT",actor,jobId:id,controlId:plan.Selection.Setting,gpoId:plan.Selection.GpoId,details:new{run,correlationId=run.CorrelationId});
+            return run;
         }
-        finally{store.Put("gpo_runs",id,run,run.Result.State);gate.EndOperation(resourceKey);}
-        store.Audit("GPO_EXECUTION_RESULT",actor,jobId:id,controlId:plan.Selection.Setting,gpoId:plan.Selection.GpoId,details:new{run,correlationId=run.CorrelationId});
-        return run;
+        finally{gate.EndOperation(resourceKey);}
     }
     public GpoEvidence Evidence(string id,string actor)
     {
@@ -192,42 +196,12 @@ public sealed class GpoWorkflowService(IConfiguration config,Store store,Operati
         if(!string.Equals(run.Plan.Actor,actor,StringComparison.OrdinalIgnoreCase)) throw new PolicyException("NOT_FOUND","Operation not found.");
         var persisted=store.Get<GpoEvidence>("gpo_evidence",id);
         if(persisted is not null) return persisted;
-        var body=new {
-            schemaVersion="1.0",
-            product="GPO Remediator",
-            benchmark="CIS v4.0.0",
-            operationId=run.Id,
-            generatedAt=run.UpdatedAt,
-            actor=run.Plan.Actor,
-            executionUser=run.Plan.ExecutionUser,
-            domain=run.Plan.Domain,
-            domainController=run.Plan.DomainController,
-            controlId=ProductionGpoMappings.Require(run.Plan.Selection.Setting).ControlId,
-            setting=run.Plan.Selection.Setting,
-            gpoId=run.Plan.Selection.GpoId,
-            gpoName=run.Plan.Preview.Gpo.Name,
-            scopeDn=run.Plan.Selection.ScopeDn,
-            beforeValue=run.Plan.Preview.PreviousValue,
-            desiredValue=ProductionGpoMappings.Require(run.Plan.Selection.Setting).DesiredDisplay(run.Plan.Selection),
-            state=run.Result.State,
-            backupId=run.Result.BackupId,
-            backupDirectory=run.Result.BackupDirectory,
-            effectiveStatus=run.Result.EffectiveStatus,
-            currentValue=run.Result.CurrentValue,
-            verification=run.Result.Verification,
-            endpointChecks=run.Result.EndpointChecks,
-            warnings=run.Plan.Preview.Warnings,
-            changeReference=run.Approval?.ChangeReference,
-            approvedBy=run.Approval?.ApprovedBy,
-            handler=ProductionGpoMappings.Require(run.Plan.Selection.Setting).Handler,
-            mappingSource=ProductionGpoMappings.Require(run.Plan.Selection.Setting).Source
-        };
-        var hash=PolicyValues.Hash(body);
-        var evidence=new GpoEvidence("1.0","GPO Remediator","CIS v4.0.0",run.Id,(string)body.generatedAt,run.Plan.Actor,
-            run.Plan.ExecutionUser,run.Plan.Domain,run.Plan.DomainController,(string)body.controlId,run.Plan.Selection.Setting,
+        var evidence=new GpoEvidence("1.1","GPO Remediator","CIS v4.0.0",run.Id,run.UpdatedAt,run.Plan.Actor,
+            run.Plan.ExecutionUser,run.Plan.Domain,run.Plan.DomainController,ProductionGpoMappings.Require(run.Plan.Selection.Setting).ControlId,run.Plan.Selection.Setting,
             run.Plan.Selection.GpoId,run.Plan.Preview.Gpo.Name,run.Plan.Selection.ScopeDn,run.Plan.Preview.PreviousValue,
             ProductionGpoMappings.Require(run.Plan.Selection.Setting).DesiredDisplay(run.Plan.Selection),run.Result.State,run.Result.BackupId,run.Result.BackupDirectory,run.Result.EffectiveStatus,
-            run.Result.Verification,run.Plan.Preview.Warnings,hash,run.Approval?.ChangeReference,run.Approval?.ApprovedBy,ProductionGpoMappings.Require(run.Plan.Selection.Setting).Handler,ProductionGpoMappings.Require(run.Plan.Selection.Setting).Source,run.Result.EndpointChecks,run.CorrelationId);
+            run.Result.Verification,run.Plan.Preview.Warnings,"",run.Approval?.ChangeReference,run.Approval?.ApprovedBy,ProductionGpoMappings.Require(run.Plan.Selection.Setting).Handler,ProductionGpoMappings.Require(run.Plan.Selection.Setting).Source,run.Result.EndpointChecks,run.CorrelationId,run.Result.CurrentValue);
+        evidence=evidence with{IntegrityHash=GpoWorkflowRules.EvidenceHash(evidence)};
         store.Put("gpo_evidence",id,evidence,"IMMUTABLE");
         return evidence;
     }

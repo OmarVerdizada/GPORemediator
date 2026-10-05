@@ -44,6 +44,7 @@ builder.Services.AddAuthorization();
 builder.Services.AddSingleton(new Store(dbPath));
 builder.Services.AddSingleton<OperationGate>();
 builder.Services.AddSingleton<GpoWorkflowService>();
+builder.Services.AddSingleton<IWindowsPowerShellExecutor,WindowsPowerShellExecutor>();
 var app=builder.Build();
 var store=app.Services.GetRequiredService<Store>();
 store.BindExecutionMode(mode);
@@ -298,6 +299,12 @@ app.MapPost("/api/setup/write-mode",async(WriteModeRequest request,HttpContext c
     if(!File.Exists(path)) throw new PolicyException("CONFIG_NOT_FOUND","Save the Windows configuration first.");
     var node=JsonNode.Parse(File.ReadAllText(path))?.AsObject()??throw new PolicyException("INVALID_CONFIG","The Windows configuration file is invalid JSON.");
     var windows=(node["Windows"]??node["windows"])?.AsObject()??throw new PolicyException("INVALID_CONFIG","The Windows configuration section is missing.");
+    if(request.Enable)
+    {
+        string[] Boundary(string name) => windows.FirstOrDefault(p=>p.Key.Equals(name,StringComparison.OrdinalIgnoreCase)).Value is JsonArray array
+            ? array.Select(v=>v?.GetValue<string>()??"").ToArray() : [];
+        GpoWorkflowRules.ValidateWriteScope(Boundary("ApprovedGpoIds"),Boundary("AuthorizedOus"));
+    }
     var writeKey=windows.Select(p=>p.Key).FirstOrDefault(k=>k.Equals("EnableWrites",StringComparison.OrdinalIgnoreCase))??"EnableWrites";
     windows[writeKey]=request.Enable;
     ConfigureService(request.AutoRestart,()=> { var temp=path+".tmp"; File.WriteAllText(temp,node.ToJsonString(new JsonSerializerOptions(JsonDefaults.Options){WriteIndented=true})); File.Move(temp,path,true);

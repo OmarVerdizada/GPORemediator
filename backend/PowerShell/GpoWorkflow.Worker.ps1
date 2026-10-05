@@ -100,7 +100,7 @@ function Get-ItemCurrent([string]$Id,$Map,$Item){
     switch([string]$Map.handler){
       {$_ -in @('SecurityTemplate')} {
         $path=Security-Path $Id;if(!(Test-Path -LiteralPath $path)){return $null};$raw=Get-TemplateEntry ([IO.File]::ReadAllText($path)) ([string]$Item.section) ([string]$Item.key)
-        if(([string]$Item.type -eq 'Principals')){return Normalize-Principals $raw};return $raw
+        if($null -eq $raw){return $null};if(([string]$Item.type -eq 'Principals')){return Normalize-Principals $raw};return $raw
       }
       {$_ -in @('Registry','RegistrySet')} {
         try{
@@ -110,7 +110,7 @@ function Get-ItemCurrent([string]$Id,$Map,$Item){
           # Missing policy data is a valid "not configured" state. Any other GroupPolicy/transport
           # failure must fail closed instead of being misreported as an absent setting.
           $fqid=[string]$_.FullyQualifiedErrorId
-          if($fqid -like 'UnableToRetrievePolicyRegistryItem,*'){return $null}
+          if($fqid -eq 'UnableToRetrievePolicyRegistryItem' -or $fqid -like 'UnableToRetrievePolicyRegistryItem,*'){return $null}
           Fail 'GPO_REGISTRY_READ_FAILED' ('Unable to read the current registry policy value for control '+[string]$Map.id+'.')
         }
       }
@@ -119,16 +119,14 @@ function Get-ItemCurrent([string]$Id,$Map,$Item){
         try{$rows=@(Get-Content -LiteralPath $path -Encoding UTF8|ConvertFrom-Csv)}catch{Fail 'AUDIT_POLICY_INVALID' 'Advanced-audit CSV could not be parsed.'}
         $matches=@($rows|Where-Object{[string]$_.'Subcategory GUID' -ieq [string]$Item.guid})
         if($matches.Count -gt 1){Fail 'AUDIT_POLICY_AMBIGUOUS' 'Duplicate advanced-audit subcategory rows exist in this GPO.'}
-        if($matches.Count -eq 0){return $null};return [string]$matches[0].'Inclusion Setting'
+        if($matches.Count -eq 0){return $null};return [string]$matches[0].'Setting Value'
       }
       default {Fail 'GPO_HANDLER_UNSUPPORTED' ('Unsupported mapping handler: '+[string]$Map.handler)}
     }
 }
 function Desired-Normalized($Map,$Item,$S){
-    # The persisted GPO representation is handler-specific. Advanced Audit CSV stores
-    # the human-readable inclusion state, while endpoint auditpol verification uses the
-    # numeric Setting Value mask separately in Endpoint-Expected.
-    if([string]$Map.handler -eq 'AdvancedAudit'){return [string]$Item.state}
+    # Numeric masks are authoritative and independent of the CSV display language.
+    if([string]$Map.handler -eq 'AdvancedAudit'){return [string]$Item.mask}
     $desired=Desired-Item $Map $Item $S
     if([string]$Map.handler -eq 'SecurityTemplate' -and [string]$Item.type -eq 'Principals'){return Normalize-Principals (Principals-Desired @($Item.value))}
     if(([string]$Item.type).ToUpperInvariant() -eq 'MULTISTRING'){return ((@($desired)|ForEach-Object{[string]$_}|Sort-Object)-join '|')}
@@ -142,6 +140,7 @@ function Numeric-Complies($Current,$Desired,[string]$Comparator){
 function Mapping-Matches([string]$Id,$Map,$S){
     foreach($item in Mapping-Items $Map){
       $cur=Get-ItemCurrent $Id $Map $item;$want=Desired-Normalized $Map $item $S
+      if($null -eq $cur){return $false}
       if([bool]$Map.allowValueOverride -and @(Mapping-Items $Map).Count -eq 1 -and ![string]::IsNullOrWhiteSpace([string]$Map.comparator)){if(!(Numeric-Complies $cur $want ([string]$Map.comparator))){return $false}}
       elseif([string]$cur -cne [string]$want){return $false}
     }
@@ -238,6 +237,13 @@ function Preview($S,$Map){
     $links=@();foreach($candidateScope in All-LinkScopes){if(Link $candidateScope.rawLinks $S.gpoId $candidateScope.dn){$links+=$candidateScope.dn}}
     $preflight=Selection-Preflight $S $Map;$impact=Impact-Details $S $Map $gpo $scope $links;$warnings=@('Changing this GPO affects all of its existing links, not only the selected link.',('Existing links: '+$(if($links.Count){$links -join '; '}else{'none'})),'Security filtering, WMI filtering, inheritance and precedence are analyzed but are never silently changed.','gpupdate scheduling does not by itself prove effective endpoint compliance.','A full GPO backup is created before any policy write; rollback is blocked after external changes.')+@($Map.warnings)
     foreach($c in @($impact.conflicts|Where-Object{$_.severity -eq 'HIGH'})){$warnings+=('High-impact conflict: '+$c.message)}
+    # Apply regenerates the preview on the DC. Use the same host boundary here
+    # so filtering cannot make a fresh plan reject its own refresh target list.
+    $allowed=@(Read-Field $cfg 'allowedHosts' @())
+    if($allowed -notcontains '*'){
+        $computers=@($computers|Where-Object{$allowed -contains $_})
+        $impact.affectedObjects.sampleHosts=@($impact.affectedObjects.sampleHosts|Where-Object{$allowed -contains $_})
+    }
     $contentMatches=Mapping-Matches $S.gpoId $Map $S;$linkMatches=$null -ne $existing -and $existing.enabled -and (!$S.firstLink -or $existing.order -eq 1);$desired=Mapping-Display $S.gpoId $Map $S $true
     return @{gpo=(Gpo-Choice $gpo);scope=$scope;previousValue=(Mapping-Display $S.gpoId $Map $S $false);desiredValue=$desired;noChange=($contentMatches -and $linkMatches);fingerprint=(Fingerprint $S.gpoId $scope.dn);scopeLinks=$raw;existingLink=$existing;refreshComputers=$computers;warnings=$warnings;impact=$impact;preflight=$preflight}
 }
@@ -254,7 +260,7 @@ function Write-Mapping($Plan,$Map){
     $s=$Plan.selection;if(Mapping-Matches $s.gpoId $Map $s){return $false}
     switch([string]$Map.handler){
       'SecurityTemplate' {$null=Assert-VersionSync $s.gpoId;$path=Security-Path $s.gpoId;$text=if(Test-Path -LiteralPath $path){[IO.File]::ReadAllText($path)}else{''};foreach($item in Mapping-Items $Map){$desired=Desired-Item $Map $item $s;if([string]$item.type -eq 'Principals'){$desired=Principals-Desired @($item.value)}elseif([string]$item.type -eq 'QuotedString'){$desired='"'+([string]$desired)+'"'};$text=Set-SecurityTemplateValue $text ([string]$item.section) ([string]$item.key) ([string]$desired)};Atomic-Text $path $text ([Text.Encoding]::Unicode);Bump-ComputerVersion $s.gpoId 'Security';return $true}
-      {$_ -in @('Registry','RegistrySet')} {foreach($item in Mapping-Items $Map){$current=Get-ItemCurrent $s.gpoId $Map $item;$desired=Desired-Normalized $Map $item $s;if([string]$current -ceq [string]$desired){continue};$value=Desired-Item $Map $item $s;$type=Registry-Type ([string]$item.type);if($type -eq 'DWord'){$value=[int64]$value}elseif($type -eq 'QWord'){$value=[int64]$value}elseif($type -eq 'MultiString'){$value=[string[]]@($value)}else{$value=[string]$value};Set-GPRegistryValue -Guid ([guid]$s.gpoId) -Key ([string]$item.key) -ValueName ([string]$item.name) -Type $type -Value $value -Domain $cfg.domain -Server $cfg.domainController|Out-Null};return $true}
+      {$_ -in @('Registry','RegistrySet')} {foreach($item in Mapping-Items $Map){$current=Get-ItemCurrent $s.gpoId $Map $item;$desired=Desired-Normalized $Map $item $s;if($null -ne $current -and [string]$current -ceq [string]$desired){continue};$value=Desired-Item $Map $item $s;$type=Registry-Type ([string]$item.type);if($type -eq 'DWord'){$value=[int64]$value}elseif($type -eq 'QWord'){$value=[int64]$value}elseif($type -eq 'MultiString'){$value=[string[]]@($value)}else{$value=[string]$value};Set-GPRegistryValue -Guid ([guid]$s.gpoId) -Key ([string]$item.key) -ValueName ([string]$item.name) -Type $type -Value $value -Domain $cfg.domain -Server $cfg.domainController|Out-Null};return $true}
       'AdvancedAudit' {$null=Assert-VersionSync $s.gpoId;$path=Audit-Path $s.gpoId;$lines=New-Object 'System.Collections.Generic.List[string]';if(Test-Path -LiteralPath $path){$lines.AddRange([string[]](Get-Content -LiteralPath $path -Encoding UTF8))}else{$lines.Add('Machine Name,Policy Target,Subcategory,Subcategory GUID,Inclusion Setting,Exclusion Setting,Setting Value')};foreach($item in Mapping-Items $Map){$guid=[string]$item.guid;$indices=@();for($i=1;$i -lt $lines.Count;$i++){if($lines[$i] -match [regex]::Escape($guid)){$indices+=$i}};if($indices.Count -gt 1){Fail 'AUDIT_POLICY_AMBIGUOUS' 'Duplicate advanced-audit subcategory rows exist in this GPO.'};$row=Audit-Row ([string]$item.name) $guid ([string]$item.state) ([int]$item.mask);if($indices.Count -eq 1){$lines[$indices[0]]=$row}else{$lines.Add($row)}};Atomic-Text $path (($lines -join "`r`n")+"`r`n") ([Text.UTF8Encoding]::new($false));Bump-ComputerVersion $s.gpoId 'Audit';return $true}
       default {Fail 'GPO_HANDLER_UNSUPPORTED' ('Unsupported mapping handler: '+[string]$Map.handler)}
     }
@@ -360,14 +366,14 @@ switch($Operation){
             if(Test-Path -LiteralPath (Join-Path $directory 'manifest.json')){Fail 'GPO_ALREADY_STARTED' 'A durable execution manifest already exists. Verify or recover; do not replay Apply.'}
             $fresh=Preview $s $map;if(!$fresh.preflight.ready){Fail 'ENVIRONMENT_NOT_READY' 'Required environment preflight checks must pass before Apply.'}
             if($fresh.fingerprint -cne $plan.preview.fingerprint -or (@($fresh.refreshComputers)-join '|') -cne (@($plan.preview.refreshComputers)-join '|')){Fail 'GPO_CHANGED' 'GPO, links or refresh targets changed after preview. Prepare a new plan.'}
-            if([bool]$fresh.noChange){$v=Verify-Published $plan $map $true;return Result 'NO_CHANGE' 'The GPO value and selected link already match or exceed the requested compliant state. No backup or write was created.' $null $v @()}
+            if([bool]$fresh.noChange){$v=Verify-Published $plan $map $true;$state=if($v.published -and $v.linked){'NO_CHANGE'}else{'VERIFY_MISMATCH'};return Result $state 'No policy write was required. Live content, link and AD/SYSVOL versions were checked; inspect the verification result before claiming publication.' $null $v @()}
             $manifest=[ordered]@{plan=$plan;mappingId=[string]$map.id;mappingSource=[string]$map.source;approval=$Data.consent;backupId=$null;directory=$directory;preFingerprint=$fresh.fingerprint;postFingerprint=$null;phase='BACKUP_STARTED';beforeContent=(Get-NormalizedGpoContentFingerprint (Gpo-Folder $s.gpoId));beforeExtensions=[string](Gpo-Ad $s.gpoId).gPCMachineExtensionNames};Save-Manifest $manifest $directory
             $backup=Backup-GPO -Guid ([guid]$s.gpoId) -Path $directory -Domain $cfg.domain -Server $cfg.domainController -Comment ('GpoRemediator '+$plan.id)
             $manifest.backupId=$backup.Id.ToString();$manifest.phase='BACKED_UP';Save-Manifest $manifest $directory
             if((Fingerprint $s.gpoId $s.scopeDn) -cne $plan.preview.fingerprint){Fail 'GPO_CHANGED' 'GPO changed during backup; no policy write started.'}
             $manifest.phase='WRITING';Save-Manifest $manifest $directory;$null=Write-Mapping $plan $map
             if($null -eq $fresh.existingLink){$p=@{Guid=[guid]$s.gpoId;Target=$s.scopeDn;Domain=$cfg.domain;Server=$cfg.domainController;LinkEnabled='Yes'};if($s.firstLink){$p.Order=1};New-GPLink @p|Out-Null}else{$p=@{Guid=[guid]$s.gpoId;Target=$s.scopeDn;Domain=$cfg.domain;Server=$cfg.domainController;LinkEnabled='Yes'};if($s.firstLink){$p.Order=1};Set-GPLink @p|Out-Null}
-            $v=Verify-Published $plan $map $false;$manifest.postFingerprint=Fingerprint $s.gpoId $s.scopeDn;$manifest.phase='PUBLISHED';Save-Manifest $manifest $directory
+            $v=Verify-Published $plan $map $false;$manifest.postFingerprint=Fingerprint $s.gpoId $s.scopeDn;$manifest.phase=if(!$v.published -or !$v.linked){'VERIFY_MISMATCH'}else{'PUBLISHED'};Save-Manifest $manifest $directory
             # Do not force endpoint refresh as a side effect of Apply. Publication and refresh are
             # intentionally separate operator decisions so the change result is visible first.
             $state=if(!$v.published -or !$v.linked){'VERIFY_MISMATCH'}else{'PUBLISHED'};return Result $state 'GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.' $manifest $v @()
@@ -390,7 +396,7 @@ switch($Operation){
             return Result $state $message $null $v @()
         }
         $manifest=Get-Content -LiteralPath (Join-Path $directory 'manifest.json') -Raw|ConvertFrom-Json
-        if([string]$manifest.phase -in @('ROLLED_BACK','ROLLBACK_REVIEW_REQUIRED','ROLLBACK_DRIFT_DETECTED')){
+        if([string]$manifest.phase -in @('ROLLING_BACK','ROLLED_BACK','ROLLBACK_REVIEW_REQUIRED','ROLLBACK_DRIFT_DETECTED')){
             $contentMatches=(Get-NormalizedGpoContentFingerprint (Gpo-Folder $plan.selection.gpoId)) -ceq [string]$manifest.beforeContent
             $extensionMatches=([string](Gpo-Ad $plan.selection.gpoId).gPCMachineExtensionNames -ceq [string]$manifest.beforeExtensions)
             $linkMatches=((Scope-Links $plan.selection.scopeDn) -ceq [string]$plan.preview.scopeLinks)
@@ -403,6 +409,10 @@ switch($Operation){
             $manifest.phase='ROLLBACK_DRIFT_DETECTED';Save-Manifest $manifest $directory
             return Result 'ROLLBACK_DRIFT_DETECTED' 'The GPO or selected link changed after rollback. The rollback record is preserved, but the current state no longer matches the pre-change snapshot.' $manifest $v @()
         }
+        if([string]$manifest.phase -in @('BACKUP_STARTED','BACKED_UP','FAILED_SAFE','WRITING','REVIEW_REQUIRED')){
+            $v=Verify-Published $plan $map $true
+            return Result 'REVIEW_REQUIRED' 'This execution did not record a completed publication. Live values were inspected, but partial writes and the retained backup/manifest require administrator review.' $manifest $v @()
+        }
         $v=Verify-Published $plan $map $true
         $state=if($v.published -and $v.linked){'PUBLISHED'}else{'DRIFT_DETECTED'}
         $message=if($state -eq 'DRIFT_DETECTED'){'Drift detected: the live GPO content or selected link changed after Apply. This operation is no longer compliant until it is remediated again.'}else{'Read-only verification completed against the live GPO, link, replication metadata and available endpoint evidence.'}
@@ -410,6 +420,8 @@ switch($Operation){
     }
     'gpoRefresh'{
         $plan=$Data.plan;$map=$Data.mapping;$directory=Run-Directory $plan;$manifest=$null;if(Test-Path -LiteralPath (Join-Path $directory 'manifest.json')){$manifest=Get-Content -LiteralPath (Join-Path $directory 'manifest.json') -Raw|ConvertFrom-Json}
+        if($manifest -and [string]$manifest.phase -notin @('PUBLISHED','VERIFY_MISMATCH')){Fail 'REFRESH_REVIEW_REQUIRED' 'Refresh requires a completed publication manifest. Verify the interrupted or rolled-back execution first.'}
+        if(!$manifest -and [string](Read-Field $Data.previous 'state' '') -ne 'NO_CHANGE'){Fail 'REFRESH_REVIEW_REQUIRED' 'No completed publication or no-change execution is available for refresh.'}
         $before=Verify-Published $plan $map $false;if(!$before.published -or !$before.linked){return Result 'DRIFT_DETECTED' 'gpupdate was blocked because the live GPO content or link no longer matches the requested state. Re-verify and remediate the drift first.' $manifest $before @()}
         $computers=@($plan.preview.refreshComputers|Where-Object{$_}|Sort-Object -Unique)
         if(!$computers.Count){return Result 'REFRESH_NOT_CONFIGURED' 'No gpupdate targets were selected in the plan. Generate a new plan and choose PDC emulator or selected-scope computers before Apply.' $manifest $before @()}

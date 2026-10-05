@@ -137,7 +137,7 @@ $script:releaseReady = Test-VerifiedReleaseArchive
           <Grid>
             <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="12"/><ColumnDefinition Width="170"/><ColumnDefinition Width="10"/><ColumnDefinition Width="*"/><ColumnDefinition Width="10"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="8"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
             <StackPanel Orientation="Horizontal" VerticalAlignment="Center"><Ellipse Width="7" Height="7" Fill="#2DD4BF" Margin="0,0,8,0"/><TextBlock Text="LIVE DIAGNOSTICS" Foreground="#AFC3D3" FontSize="9" FontWeight="Bold" VerticalAlignment="Center"/></StackPanel>
-            <ComboBox Grid.Column="2" Name="LogSource" SelectedIndex="0"><ComboBoxItem Content="bootstrap.log"/><ComboBoxItem Content="windows-startup-error.log"/><ComboBoxItem Content="server-error.log"/><ComboBoxItem Content="server.log"/><ComboBoxItem Content="preflight.log"/><ComboBoxItem Content="panel-error.log"/></ComboBox>
+            <ComboBox Grid.Column="2" Name="LogSource" SelectedIndex="0"><ComboBoxItem Content="bootstrap.log"/><ComboBoxItem Content="windows-startup-error.log"/><ComboBoxItem Content="server-error.log"/><ComboBoxItem Content="server.log"/><ComboBoxItem Content="preflight.log"/><ComboBoxItem Content="startup-diagnosis.json"/><ComboBoxItem Content="panel-error.log"/></ComboBox>
             <TextBox Grid.Column="4" Name="LogFilter" Style="{StaticResource FilterBox}" ToolTip="Filter visible log lines"/>
             <Button Grid.Column="6" Name="CopyLog" Content="Copy" Style="{StaticResource BaseButton}" Height="34" Margin="0" Padding="12,0"/>
             <Button Grid.Column="8" Name="ClearFilter" Content="Clear" Style="{StaticResource BaseButton}" Height="34" Margin="0" Padding="12,0"/>
@@ -275,7 +275,8 @@ function Refresh-Panel {
     $ui.Start.IsEnabled = !$service -and !$launching -and !$pending -and ([bool]$runtime.ready -or $script:releaseReady)
     $ui.Open.IsEnabled = [bool]$service -and $service.ready -ne $false
     $ui.Stop.IsEnabled = [bool]$service -and !$pending
-    $ui.Restart.IsEnabled = $ui.Stop.IsEnabled
+    $configReady = [bool]$config.exists -and $null -ne $config.cfg -and [string]$config.state -notin @('Incomplete','Invalid config','First setup')
+    $ui.Restart.IsEnabled = $ui.Stop.IsEnabled -and (!$service -or [string]$service.mode -ne 'Setup' -or $configReady)
     $ui.Preflight.IsEnabled = [bool]$config.exists -and !$pending
     $ui.Repair.IsEnabled = !$service -and !$launching -and !$pending -and $script:releaseReady
 
@@ -292,7 +293,7 @@ function Refresh-Panel {
         elseif ($service.ready -eq $false) { $ui.Status.Text = 'Service is preparing'; Set-ServiceDot '#D97706' }
         elseif ($mode -eq 'Setup') {
             $ui.Status.Text = 'Configuration service is ready'; Set-ServiceDot '#2563EB'
-            $ui.Message.Text = if ($service.startupIssue) { 'Windows mode needs attention: ' + [string]$service.startupIssue } else { 'Configuration mode is active. If Domain/DC are saved, click Start Windows / AD. The 3.0 launcher owns the handoff and will stop the configuration process before starting Windows / AD.' }
+            $ui.Message.Text = if ($service.startupIssue) { 'Windows startup diagnosis: ' + [string]$service.startupIssue + ' Open startup-diagnosis.json for the captured local backend failure.' } elseif(!$configReady) { 'Configuration mode is active. Complete Domain, writable DC and operator settings before promotion to Windows / AD.' } else { 'Configuration is ready. Click Start Windows / AD; the launcher performs one controlled Setup-to-Windows handoff.' }
         } else {
             $ui.Status.Text = 'Service is healthy'; Set-ServiceDot '#16A34A'
             $ui.Message.Text = 'Windows / Active Directory mode is running. Use AD preflight for transport diagnostics or open the browser workspace.'
@@ -309,7 +310,7 @@ function Refresh-Panel {
     }
 
     if ($script:launcher -and $script:launcher.HasExited) {
-        if ($script:launcher.ExitCode -ne 0 -and !$service) { $ui.Message.Text='Startup did not complete. Open windows-startup-error.log and bootstrap.log for the preserved Windows failure. Runtime repair is package-only and does not require .NET SDK.'; Set-ServiceDot '#DC2626' }
+        if ($script:launcher.ExitCode -ne 0 -and !$service) { $ui.Message.Text='Startup did not complete. Open startup-diagnosis.json first, then windows-startup-error.log/server-error.log. AD transport is checked separately by AD preflight; it is not assumed to be the startup cause.'; Set-ServiceDot '#DC2626' }
         $script:launcher=$null; $script:runtimeStateCache=$null; $script:runtimeStateChecked=[DateTime]::MinValue
     }
 

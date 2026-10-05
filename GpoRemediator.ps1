@@ -1,4 +1,4 @@
-param(
+﻿param(
     [ValidateSet('Auto','Setup','Windows')]
     [string]$Mode = 'Auto',
     [ValidateRange(1024,65535)]
@@ -24,16 +24,17 @@ $restartMarker = Join-Path $workRoot 'restart.request.json'
 $stopMarker = Join-Path $workRoot 'stop.request.json'
 $logFile = Join-Path $workRoot 'bootstrap.log'
 $windowsFailureLog = Join-Path $workRoot 'windows-startup-error.log'
+$startupDiagnosisFile = Join-Path $workRoot 'startup-diagnosis.json'
 $runtimeRoot = Join-Path $PSScriptRoot 'runtime'
 $runtime = Join-Path $runtimeRoot 'GpoRemediator.exe'
 $runtimeMarker = Join-Path $runtimeRoot 'production-backend-v4.ready'
 $runtimeInstallManifest = Join-Path $runtimeRoot 'runtime-install.json'
 $runtimeArchive = Join-Path $PSScriptRoot 'release\GpoRemediator-runtime-win-x64.zip'
 $runtimeArchiveHash = $runtimeArchive + '.sha256'
-$releaseVersion = '3.1.1'
-# 3.1.1 keeps the 3.0 durable schema and the plan-bound production authorization model; this release fixes frontend interaction/state handling without changing the durable backend schema.
-# 3.0.0 intentionally starts a clean state database to remove legacy Setup/Windows mode metadata from pre-3.0 builds. Older databases are left untouched in ProgramData for manual archival/review.
-$stateSchemaVersion = '3.0.0'
+$releaseVersion = '3.1.3'
+# 3.1.2 keeps the 3.0 durable schema. It hardens startup recovery, removes the Setup->Windows restart race, and makes early backend failures self-diagnosing.
+# 3.1.2 intentionally uses fresh Setup/Windows state databases so incompatible serialized records from earlier preview builds cannot crash startup. Older databases are left untouched in ProgramData for archival/review.
+$stateSchemaVersion = '3.1.2'
 $windowsDb = Join-Path $dataRoot ('windows-'+$stateSchemaVersion+'.db')
 $setupDb = Join-Path $dataRoot ('setup-'+$stateSchemaVersion+'.db')
 $activeConfig = Join-Path $workRoot 'appsettings.Active.json'
@@ -42,6 +43,7 @@ $ownsLauncher = $false
 $script:startupIssue = ''
 $script:dbRecoveryUsed = $false
 $script:runtimeRecoveryAttempts = 0
+$script:runtimePackageRecoveryUsed = $false
 
 function Write-Log([string]$Message,[ConsoleColor]$Color=[ConsoleColor]::Gray) {
     $line='[{0}] {1}' -f (Get-Date -Format 'yyyy-MM-dd HH:mm:ss'),$Message
@@ -84,7 +86,7 @@ function Clear-TransientState {
     Get-ChildItem -LiteralPath $workRoot -Directory -ErrorAction SilentlyContinue |
         Where-Object { $_.Name -match '^runtime-(install|old)-[a-f0-9]{32}$' } |
         Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
-    foreach($name in @('bootstrap.log','server.log','server-error.log','windows-startup-error.log','preflight.log','panel-error.log')) { Trim-Log (Join-Path $workRoot $name) }
+    foreach($name in @('bootstrap.log','server.log','server-error.log','windows-startup-error.log','preflight.log','panel-error.log','startup-diagnosis.json')) { Trim-Log (Join-Path $workRoot $name) }
 }
 
 function Test-ReleaseArchive {
@@ -97,7 +99,12 @@ function Test-ReleaseArchive {
 }
 
 function Test-RuntimeInstalled {
-    if(!(Test-Path -LiteralPath $runtime) -or !(Test-Path -LiteralPath $runtimeMarker)){ return $false }
+    $required=@(
+        'GpoRemediator.exe','GpoRemediator.dll','GpoRemediator.deps.json','GpoRemediator.runtimeconfig.json',
+        'appsettings.json','production-backend-v4.ready',
+        'PowerShell\Invoke-GpoWorkflow.ps1','PowerShell\GpoWorkflow.Worker.ps1','PowerShell\SecurityTemplate.psm1'
+    )
+    foreach($name in $required){ if(!(Test-Path -LiteralPath (Join-Path $runtimeRoot $name))){ return $false } }
     if(!(Test-Path -LiteralPath $runtimeInstallManifest)){ return $false }
     try {
         $manifest=Get-Content -LiteralPath $runtimeInstallManifest -Raw -Encoding UTF8 | ConvertFrom-Json
@@ -114,7 +121,7 @@ function Install-Runtime {
     New-Item -ItemType Directory -Path $stage -Force | Out-Null
     try {
         Expand-Archive -LiteralPath $runtimeArchive -DestinationPath $stage -Force
-        foreach($required in @('GpoRemediator.exe','appsettings.json','production-backend-v4.ready','PowerShell\Invoke-GpoWorkflow.ps1','PowerShell\GpoWorkflow.Worker.ps1')) {
+        foreach($required in @('GpoRemediator.exe','GpoRemediator.dll','GpoRemediator.deps.json','GpoRemediator.runtimeconfig.json','appsettings.json','production-backend-v4.ready','PowerShell\Invoke-GpoWorkflow.ps1','PowerShell\GpoWorkflow.Worker.ps1','PowerShell\SecurityTemplate.psm1')) {
             if(!(Test-Path -LiteralPath (Join-Path $stage $required))){ throw "Runtime archive is incomplete: $required is missing." }
         }
         @{ archiveSha256=$expected; installedAt=[DateTimeOffset]::UtcNow.ToString('o'); package='production-win-x64' } |
@@ -328,21 +335,58 @@ function Resolve-RunMode([string]$Requested) {
     return 'Setup'
 }
 
+function Get-StartupFailureCategory([string]$Details) {
+    $text=[string]$Details
+    if($text -match 'Another GPO Remediator process is already using this database'){ return 'DATABASE_LOCK_OWNER' }
+    if($text -match 'address already in use|failed to bind|Only one usage of each socket address|Local port .+ already'){ return 'PORT_IN_USE' }
+    if($text -match 'database disk image is malformed|SQLite Error|SQLiteException|no such column|no such table|database is locked|execution mode does not match|malformed database|schema|Store\.List|Store\.RecoverInterrupted|gpo_runs|could not be converted to.+GpoRemediator|JsonException.+GpoRemediator\.Domain'){ return 'DATABASE' }
+    if($text -match 'Access.+denied|UnauthorizedAccessException|permission denied'){ return 'STATE_ACCESS' }
+    if($text -match 'invalid JSON|configuration file|appsettings|Configuration\.Json'){ return 'CONFIGURATION' }
+    if($text -match 'Negotiate|authentication initialization|SSPI'){ return 'WINDOWS_AUTH' }
+    if($text -match 'hostfxr|hostpolicy|coreclr|BadImageFormat|DllNotFound|FileNotFoundException|Could not load file or assembly|entry point|0xc0000135|0xc000007b'){ return 'RUNTIME_PACKAGE' }
+    if($text -match 'readiness timeout'){ return 'READINESS_TIMEOUT' }
+    if($text -match 'process exited with code'){ return 'PROCESS_EXIT' }
+    return 'UNKNOWN'
+}
+
+function Save-StartupDiagnosis([string]$Details,[string]$RunMode='Windows') {
+    try {
+        $category=Get-StartupFailureCategory $Details
+        $safe=([string]$Details) -replace '(?i)(password|passwd|pwd|secret|token)(\s*[:=]\s*)[^\s,;]+','$1$2[REDACTED]'
+        if($safe.Length -gt 12000){ $safe=$safe.Substring($safe.Length-12000) }
+        [ordered]@{
+            timestamp=[DateTimeOffset]::UtcNow.ToString('o')
+            mode=$RunMode
+            category=$category
+            summary=(Get-SafeStartupIssue $Details)
+            details=$safe
+            windowsErrorLog=$windowsFailureLog
+            serverErrorLog=(Join-Path $workRoot 'server-error.log')
+            serverLog=(Join-Path $workRoot 'server.log')
+        } | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath $startupDiagnosisFile -Encoding UTF8
+    } catch { }
+}
+
 function Save-WindowsStartupFailure([string]$Details) {
     $header='[{0}] WINDOWS startup failure' -f (Get-Date -Format 'yyyy-MM-dd HH:mm:ss')
     @($header,$Details,'') | Add-Content -LiteralPath $windowsFailureLog -Encoding UTF8
     Trim-Log $windowsFailureLog
+    Save-StartupDiagnosis $Details 'Windows'
 }
 
 function Get-SafeStartupIssue([string]$Details) {
-    $text=[string]$Details
-    if($text -match 'Another GPO Remediator process is already using this database'){ return 'A previous GPO Remediator process still owns the local database.' }
-    if($text -match 'address already in use|failed to bind|Only one usage of each socket address'){ return "Local port $Port is already in use." }
-    if($text -match 'database disk image is malformed|SQLite Error|no such column|no such table|database is locked|schema'){ return 'The durable Windows state database needs recovery. The launcher will preserve it and retry with a clean store.' }
-    if($text -match 'Access.+denied|UnauthorizedAccessException'){ return 'The backend could not access protected ProgramData state.' }
-    if($text -match 'JSON|configuration|appsettings'){ return 'The saved Windows configuration could not be loaded.' }
-    if($text -match 'Negotiate|authentication'){ return 'Windows authentication initialization failed.' }
-    return 'Windows backend exited before readiness. The exact failure was preserved in windows-startup-error.log.'
+    switch(Get-StartupFailureCategory $Details){
+        'DATABASE_LOCK_OWNER' { return 'A previous GPO Remediator process still owns the local database. The launcher will stop stale product processes before retrying.' }
+        'PORT_IN_USE' { return "Local port $Port is already in use by another application." }
+        'DATABASE' { return 'The durable Windows state database reported a SQLite/schema failure. It will be preserved before one clean-store retry.' }
+        'STATE_ACCESS' { return 'The backend could not access protected ProgramData state. Run the launcher under an account that can access the GpoRemediator ProgramData folders.' }
+        'CONFIGURATION' { return 'The saved Windows configuration could not be loaded. The launcher preserves invalid JSON and rebuilds only a canonical read-only configuration.' }
+        'WINDOWS_AUTH' { return 'Windows Integrated Authentication could not initialize. This is a local backend/authentication startup failure, not a Kerberos/WinRM readiness result.' }
+        'RUNTIME_PACKAGE' { return 'The installed self-contained backend runtime is incomplete or could not load. The verified local runtime package will be reinstalled once automatically.' }
+        'READINESS_TIMEOUT' { return 'The local backend process stayed alive but did not expose its loopback readiness endpoint in time. Review server-error.log and server.log.' }
+        'PROCESS_EXIT' { return 'The local backend process exited before readiness. The verified runtime package will be repaired once before Setup recovery is used.' }
+        default { return 'The local Windows backend failed before its readiness endpoint became available. The exact failure is preserved in startup-diagnosis.json and windows-startup-error.log.' }
+    }
 }
 
 function Backup-WindowsDatabaseForRecovery {
@@ -575,6 +619,19 @@ try {
             try { $requested=[string](Get-Content -LiteralPath $restartMarker -Raw -Encoding UTF8 | ConvertFrom-Json).mode } catch { $requested='Windows' }
             Remove-Item -LiteralPath $restartMarker -Force -ErrorAction SilentlyContinue
             if($requested -notin @('Windows','Setup')){ $requested='Windows' }
+            # Setup's backend restart endpoint naturally writes a Setup marker before the Control
+            # Center can promote it to Windows. The launcher is authoritative: when a complete
+            # canonical Windows configuration exists, a restart from a healthy Setup session is
+            # always a promotion, even if the short-lived marker still says Setup.
+            if($nextMode -eq 'Setup' -and $requested -eq 'Setup'){
+                try {
+                    $candidate=Get-Content -LiteralPath $localConfig -Raw -Encoding UTF8 | ConvertFrom-Json
+                    if($candidate -and [string]$candidate.Mode -eq 'Windows' -and $candidate.Windows -and $candidate.Windows.Domain -and $candidate.Windows.DomainController){
+                        $requested='Windows'
+                        Write-Log 'Resolved Setup restart marker race: complete Windows configuration is present, so restart is promoted to WINDOWS / AD.' Cyan
+                    }
+                } catch { }
+            }
             Write-Log ('UI requested restart into '+$requested+' mode.') Yellow
             $nextMode=$requested
             if($requested -eq 'Windows'){ $script:startupIssue=''; $setupRecoveryUsed=$false }
@@ -603,15 +660,35 @@ try {
         }
         if($result.FailedEarly -and $nextMode -eq 'Windows'){
             $details=[string]$result.Details
-            $looksLikeStateCorruption = $details -match 'SQLite|database disk image|database is locked|no such column|no such table|schema|JsonException|System\.Text\.Json|deserialize|could not be converted|execution mode does not match|database'
-            # The durable store is isolated from legacy pre-2.4 databases. Before Windows mode has ever reached readiness,
-            # preserve a failed bootstrap database and perform one clean retry. The old file is moved
-            # to Recovery rather than deleted, so diagnostics/evidence remain available.
-            $shouldTryDbRecovery = !$script:dbRecoveryUsed -and (Test-Path -LiteralPath $windowsDb) -and ($looksLikeStateCorruption -or [int64](Get-Item -LiteralPath $windowsDb).Length -lt 33554432)
+            $category=Get-StartupFailureCategory $details
+
+            # A damaged/stale extracted runtime is far more common than an AD transport problem at
+            # this stage: the health endpoint is local and does not contact the DC. Reinstall the
+            # cryptographically verified package once, then retry Windows before falling back.
+            if(!$script:runtimePackageRecoveryUsed -and $category -in @('RUNTIME_PACKAGE','PROCESS_EXIT','UNKNOWN')){
+                $script:runtimePackageRecoveryUsed=$true
+                try {
+                    Write-Log ('Early Windows backend failure classified as '+$category+'. Reinstalling the verified self-contained runtime once before recovery mode.') Yellow
+                    Install-Runtime
+                    $script:startupIssue='Verified runtime was reinstalled after an early backend startup failure. Windows mode retry is in progress.'
+                    Start-Sleep -Milliseconds 500
+                    $nextMode='Windows'
+                    continue
+                } catch {
+                    Save-WindowsStartupFailure ('Automatic runtime reinstall failed: '+$_.Exception.Message)
+                    Write-Log ('Automatic runtime reinstall failed: '+$_.Exception.Message) Red
+                }
+            }
+
+            $looksLikeStateCorruption = ($category -in @('DATABASE','DATABASE_LOCK_OWNER')) -and ($details -match 'SQLite|database disk image|database is locked|no such column|no such table|schema|execution mode does not match|malformed database|Store\.List|Store\.RecoverInterrupted|gpo_runs|could not be converted to.+GpoRemediator|JsonException.+GpoRemediator\.Domain')
+            # Never rotate a healthy small/new database merely because another startup component
+            # failed. Database recovery is allowed only when the captured error actually identifies
+            # SQLite/schema state as the failure source.
+            $shouldTryDbRecovery = !$script:dbRecoveryUsed -and (Test-Path -LiteralPath $windowsDb) -and $looksLikeStateCorruption
             if($shouldTryDbRecovery){
                 $script:dbRecoveryUsed=$true
                 if(Backup-WindowsDatabaseForRecovery){
-                    $script:startupIssue='Previous local Windows state was preserved and a clean database retry is in progress.'
+                    $script:startupIssue='The failed Windows database was preserved and a clean database retry is in progress.'
                     Start-Sleep -Milliseconds 500
                     $nextMode='Windows'
                     continue
@@ -619,7 +696,7 @@ try {
             }
             if(!$setupRecoveryUsed){
                 $setupRecoveryUsed=$true
-                Write-Log ('Opening safe Setup recovery. '+$script:startupIssue) Yellow
+                Write-Log ('Opening safe Setup recovery after local backend startup failure. '+$script:startupIssue) Yellow
                 $nextMode='Setup'
                 Start-Sleep -Milliseconds 500
                 continue

@@ -9,6 +9,7 @@ const root = path.resolve(__dirname, '../frontend/dist');
 const mappings = JSON.parse(fs.readFileSync(path.resolve(__dirname, '../backend/data/gpo-production-mappings.json'))).mappings;
 for(const mapping of mappings)mapping.operationalImpact=mapping.domainPolicySensitive?'HIGH':mapping.requiresRestart?'HIGH':mapping.requiresGpUpdate?'MEDIUM':'LOW';
 const inventory = { domain:'example.test',domainController:'dc.example.test',executionUser:'TEST\\operator',gpos:[{id:'gpo-1',name:'Test policy',protected:false,selectable:true}],scopes:[{dn:'DC=example,DC=test',name:'Domain',kind:'Domain'}] };
+let writesEnabled=false,processId=100,connectCount=0,previewCount=0,writeGateRestarts=0;
 let mode='WINDOWS',connected=false,connectionExpired=false,readinessFails=false,hangConnect=false,catalogFails=false,history=[],plan,requests=[],previewBody,loginBody,setupBody,writeModeBody;
 const server=http.createServer(async(req,res)=>{
   const url=new URL(req.url,'http://localhost').pathname;
@@ -17,29 +18,29 @@ const server=http.createServer(async(req,res)=>{
     requests.push(url);
     let raw='';for await(const chunk of req)raw+=chunk;
     const body=raw?JSON.parse(raw):null;
-    if(url==='/api/session')return reply({mode,role:'Administrator',operator:'TEST\\operator',csrfToken:'fixture',setupRequired:false});
-    if(url==='/api/service')return reply({mode,writesEnabled:mode==='WINDOWS',managed:false});
+    if(url==='/api/session')return reply({mode,role:'Administrator',operator:'TEST\\operator',csrfToken:'fixture-'+processId,setupRequired:false});
+    if(url==='/api/service')return reply({mode,writesEnabled:mode==='WINDOWS'&&writesEnabled,managed:true,processId});
     if(url==='/api/setup/config'&&body){setupBody=body;return reply({saved:true,restartScheduled:false});}
     if(url==='/api/setup/config')return reply({exists:true,domain:'example.test',domainController:'dc.example.test',allowedOperators:['TEST\\operator'],backupPath:'C:\\Backups'});
-    if(url==='/api/setup/write-mode'&&body){writeModeBody=body;return reply({saved:true,restartScheduled:false});}
+    if(url==='/api/setup/write-mode'&&body){writeModeBody=body;if(body.enable){writesEnabled=true;connected=false;processId++;writeGateRestarts++;}return reply({saved:true,restartScheduled:body.autoRestart});}
     if(url==='/api/setup/discover')return reply({domain:'example.test',operator:'TEST\\operator'});
     if(mode==='SETUP')return reply({code:'WINDOWS_MODE_REQUIRED',message:'Setup only'},409);
     if(url==='/api/gpo/settings')return reply(mappings);
     if(url==='/api/gpo/history')return reply(history);
     if(url==='/api/audit')return reply({integrityValid:true,pageSize:500,events:[{id:1,event:'GPO_EXECUTION_RESULT',operator:'TEST\\operator',jobId:'plan-1',controlId:'1.1.3',gpoId:'gpo-1',details:'{}',createdAt:new Date().toISOString(),previousHash:'GENESIS',hash:'abcdef0123456789abcdef0123456789'}]});
-    if(url==='/api/gpo/connect'){loginBody=body;if(hangConnect)return;connected=true;return reply(inventory);}
+    if(url==='/api/gpo/connect'){loginBody=body;connectCount++;if(hangConnect)return;connected=true;return reply(inventory);}
     if(url==='/api/gpo/inventory')return connected&&!connectionExpired?reply(inventory):reply({code:'GPO_LOGIN_REQUIRED',message:'Connect again'},409);
     if(url==='/api/gpo/session')return connected&&!connectionExpired?reply({connected:true,executionUser:inventory.executionUser,expiresAt:new Date(Date.now()+30*60000).toISOString(),idleTimeoutMinutes:30}):reply({code:'GPO_LOGIN_REQUIRED',message:'Connect again'},409);
     if(url==='/api/gpo/readiness')return connectionExpired?reply({code:'GPO_LOGIN_REQUIRED',message:'Connect again'},409):readinessFails?reply({code:'WINDOWS_TIMEOUT',message:'Readiness timeout'},409):reply({ready:true,checks:[{id:'session',label:'Kerberos / WinRM session',state:'PASS',message:'Authenticated remote session'},{id:'backup',label:'Backup repository',state:'PASS',message:'Backup directory is writable'}]});
     if(url==='/api/gpo/plan-1/evidence')return reply({operationId:plan.id,integrityHash:'fixture-hash'});
     if(url==='/api/gpo/preview'){
-      previewBody=body;
+      previewBody=body;previewCount++;
       plan={id:'plan-1',selection:body,executionUser:inventory.executionUser,preview:{gpo:inventory.gpos[0],scope:inventory.scopes[0],previousValue:'0',desiredValue:String(body.value),warnings:[],refreshComputers:[]}};
       return reply(plan);
     }
     if(url==='/api/gpo/plan-1/replan'){plan={...plan,id:'plan-2'};return reply(plan);}
     if(/^\/api\/gpo\/plan-1\/(apply|verify|rollback|refresh)$/.test(url)){
-      assert.equal(req.headers['x-csrf-token'],'fixture');
+      assert.equal(req.headers['x-csrf-token'],'fixture-'+processId);
       if(url.endsWith('/apply')){assert.equal(body.confirmation,'APPLY');assert.equal(body.changeReference,'CHG-1');}
       const result={state:url.endsWith('/rollback')?'ROLLED_BACK':url.endsWith('/verify')?'VERIFIED':url.endsWith('/refresh')?'REFRESH_SCHEDULED':'PUBLISHED',message:'Fixture operation completed',gpoPublished:true,linkVerified:true,backupId:'backup-1',refreshResults:[],effectiveStatus:'VERIFIED_ON_SAMPLE',verification:{replicationConverged:true,replicationWarnings:[]},endpointChecks:[{hostname:'server01.example.com',state:'VERIFIED'}]};
       history=[{id:plan.id,plan,result}];return reply(history[0]);
@@ -89,6 +90,13 @@ const server=http.createServer(async(req,res)=>{
     await page.locator('[name="value"]').fill('2');await page.locator('[name="value"]').press('Tab');
     assert.equal(await page.locator('[name="value"]').inputValue(),'2');
     await page.locator('#gpo-selection .primary-action').click();await idle();assert.equal(previewBody.value,2);
+    const beforeConnect=connectCount,beforePreview=previewCount;
+    await page.locator('[data-enable-write]').click();await idle();
+    assert.equal(writeGateRestarts,1,'Write authorization must restart exactly once');
+    assert.equal(connectCount,beforeConnect+1,'Credential must reconnect once from tab memory');
+    assert.equal(previewCount,beforePreview+1,'Restart must generate a fresh final preview');
+    assert.equal(await page.locator('#gpo-apply').count(),0,'New preview must require renewed review');
+    assert.equal(await page.evaluate(()=>[...Object.values(sessionStorage),...Object.values(localStorage)].some(x=>x.includes('fixture-only'))),false,'Password persisted in browser storage');
     await page.locator('#approval-ref').fill('CHG-1');await page.locator('#approval-by').fill('Reviewer');await page.locator('#approval-ok').check();
     await page.locator('#gpo-apply [name="impact"]').check();await page.locator('#gpo-apply [name="confirmation"]').fill('APPLY');await page.locator('#gpo-apply button').click();await idle();
     const downloadPromise=page.waitForEvent('download');await page.locator('[data-evidence]').click();const download=await downloadPromise;assert.match(download.suggestedFilename(),/gpo-evidence/);await idle();

@@ -2,11 +2,17 @@ $ErrorActionPreference = 'Stop'
 Set-Location -LiteralPath $PSScriptRoot
 . (Join-Path $PSScriptRoot 'scripts\Tooling.ps1')
 $dotnet = Find-Dotnet
+function Assert-BuildPath([string]$Path) {
+    $base=[IO.Path]::GetFullPath($PSScriptRoot).TrimEnd('\')+'\'
+    $full=[IO.Path]::GetFullPath($Path)
+    if(!$full.StartsWith($base,[StringComparison]::OrdinalIgnoreCase)){throw "Build path escapes workspace: $full"}
+}
 
 # Frontend is dependency-free at build time. Keep source canonical and copy it
 # deterministically to dist before publishing the backend.
 $frontendSource = Join-Path $PSScriptRoot 'frontend\source'
 $frontendDist = Join-Path $PSScriptRoot 'frontend\dist'
+Assert-BuildPath $frontendDist
 if (!(Test-Path -LiteralPath (Join-Path $frontendSource 'index.html'))) {
     throw 'frontend\source is missing. The packaged static UI is required.'
 }
@@ -35,6 +41,8 @@ Invoke-RestoreWithRetry
 # half-updated production runtime behind.
 $runtime = Join-Path $PSScriptRoot 'runtime'
 $stage = Join-Path $PSScriptRoot ('work\runtime-build-' + [guid]::NewGuid().ToString('N'))
+Assert-BuildPath $runtime
+Assert-BuildPath $stage
 New-Item -ItemType Directory -Path $stage -Force | Out-Null
 try {
     Write-Host 'Publishing self-contained Windows x64 backend...' -ForegroundColor Cyan
@@ -51,6 +59,7 @@ try {
     # Swap only after a complete publish. Preserve the previous runtime as a
     # temporary fallback until the new directory is in place, then delete it.
     $old = Join-Path $PSScriptRoot ('work\runtime-old-' + [guid]::NewGuid().ToString('N'))
+    Assert-BuildPath $old
     if (Test-Path -LiteralPath $runtime) { Move-Item -LiteralPath $runtime -Destination $old }
     try {
         Move-Item -LiteralPath $stage -Destination $runtime

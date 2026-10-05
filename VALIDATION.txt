@@ -1,47 +1,28 @@
-GPO Remediator 3.1.1 — validation summary
+GPO Remediator 3.1.3 - workflow repair validation
+Validation date: 2026-10-05 (Windows development host)
 
-Static/package validation completed in the build environment:
+PASS: Test.ps1 (all eight stages), the packaged backend browser smoke test,
+and scripts/Validate-ProductionPackage.py. Backend build: zero warnings/errors.
 
-PASS  Frontend JavaScript syntax (workspace.js, automation.js, client.js)
-PASS  Frontend JSON parse (benchmark-v4.json)
-PASS  Frontend stylesheet brace balance
-PASS  Control Center XAML XML parse
-PASS  Frontend asset cache/version references: 3.1.1
-PASS  GPO picker modal classes and handlers present
-PASS  Direct Windows / AD promotion action present
-PASS  Launcher Setup -> Windows config-change watcher present
-PASS  Launcher owns controlled process termination during mode handoff
-PASS  Clean 3.1.1 Setup/Windows database names configured
-PASS  Web UI RBAC normalization retained
-PASS  Delegated execution identity remains separate from Web UI roles
-PASS  Managed write-gate restart/loop guard retained
-PASS  Explicit GPO + AD scope write authorization retained
-PASS  Readiness chain includes Kerberos/WinRM/AD/SYSVOL/GPMC
-PASS  Windows Time warning is non-blocking when required checks pass
-PASS  Backup-before-write worker payload present
-PASS  Post-write read-back and verification worker payload present
-PASS  Runtime SHA-256 manifest matches the packaged runtime archive
-PASS  Required runtime files present
-PASS  CIS catalog count = 405
-PASS  CIS Automated = 401
-PASS  CIS Manual/Unspecified = 4
+Coverage:
+- .NET backend build with warnings treated as errors.
+- 11 backend invariants, including service concurrency, replay protection,
+  interrupted-run recovery, write authorization and exported evidence integrity.
+- 405 CIS mappings: 401 writable and four manual/read-only.
+- Isolated SecurityTemplate, Registry, RegistrySet and AdvancedAudit transactions.
+- Full backup, idempotency, host allowlists, missing versus empty values,
+  numeric audit masks, partial writes, interrupted rollback and manifest mismatch.
+- Recovery startup with malformed saved configuration in an isolated directory.
+- Browser fixtures for one authorization restart, memory-only credential recovery,
+  fresh final preview, renewed approval, apply/verify/rollback and UI errors.
+- Packaged Windows backend in isolated Setup mode with a real Edge browser.
+- Source/dist and source/runtime fingerprints and runtime ZIP SHA-256.
 
-Runtime archive SHA-256:
-9DE1231856ED74F0F71F3AC27D5EB8DBEEA7DF1ED121BF42F777EFC13BB8CDD0
+Browser regression environment: bundled Playwright 1.62.1 and installed Edge.
+The repository's pinned Playwright 1.55.0 could not be downloaded because the
+npm registry connection was reset; the installed browser test runtime was used.
 
-Important limitation:
-The existing verified .NET backend executable was not recompiled in this Linux build environment. The 3.1.1 changes are in launcher lifecycle management, frontend workflow/layout, configuration normalization, and the packaged PowerShell GPO execution chain. Final acceptance must still be performed on the real Windows/AD environment with a disposable test GPO and test OU.
-
-3.1.1 PLAN-BOUND AUTHORIZATION
-- Wildcard discovery remains fail-closed for writes: PASS
-- Selected preview GPO auto-narrows ApprovedGpoIds: PASS
-- Selected preview scope auto-narrows AuthorizedOus: PASS
-- Settings no longer requests manual GUID/OU for normal remediation: PASS
-- Settings wildcard gate redirects to remediation planning: PASS
-
-3.1.1 interaction checks:
-PASS - benchmark rule/domain/subsection handlers execute before backend busy guard
-PASS - busy overlay pointer-events do not block catalog navigation
-PASS - Settings close clears root inert and aria-hidden state
-PASS - Setup mode no longer auto-opens Settings over Benchmark
-PASS - frontend JavaScript syntax
+No live Active Directory/GPO changes were performed in these tests.
+Real Kerberos/WinRM/GPMC/SYSVOL permissions, publication, replication,
+gpupdate scheduling and effective endpoint convergence must be verified in a
+controlled Windows domain using PRODUCTION-TEST-CHECKLIST.md.

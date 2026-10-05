@@ -1,4 +1,4 @@
-function Get-RemediatorService {
+﻿function Get-RemediatorService {
     $statePath=Join-Path $env:ProgramData 'GpoRemediator\State\service.json'
     if(!(Test-Path -LiteralPath $statePath)){ return $null }
     try {
@@ -21,6 +21,17 @@ function Invoke-RemediatorServiceAction {
     if(!$state){ throw 'No running GPO Remediator service was found.' }
     $work=Join-Path $env:ProgramData 'GpoRemediator\State'
     $stopMarker=Join-Path $work 'stop.request.json'
+    if($Action -eq 'restart' -and [string]$state.mode -eq 'Setup'){
+        $configPath=Join-Path $env:ProgramData 'GpoRemediator\Config\appsettings.Local.json'
+        try {
+            $cfg=Get-Content -LiteralPath $configPath -Raw -Encoding UTF8 | ConvertFrom-Json
+            if(!$cfg -or [string]$cfg.Mode -ne 'Windows' -or !$cfg.Windows -or [string]::IsNullOrWhiteSpace([string]$cfg.Windows.Domain) -or [string]::IsNullOrWhiteSpace([string]$cfg.Windows.DomainController) -or @($cfg.Windows.AllowedOperators).Count -lt 1){
+                throw 'Domain, writable DC and at least one operator must be saved before Windows / AD promotion.'
+            }
+        } catch {
+            throw ('Windows / AD promotion is blocked because the saved configuration is incomplete or invalid: '+$_.Exception.Message)
+        }
+    }
     if($Action -eq 'stop'){
         @{requestedAt=[DateTimeOffset]::UtcNow.ToString('o');requestedBy=[Security.Principal.WindowsIdentity]::GetCurrent().Name} |
             ConvertTo-Json | Set-Content -LiteralPath $stopMarker -Encoding UTF8

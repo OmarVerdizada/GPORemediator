@@ -1,19 +1,11 @@
-GPO Remediator 3.1.1
+GPO Remediator 3.1.3 - workflow repair
 
-Operational recovery release
+See RELEASE-NOTES-WORKFLOW-REPAIR.md for the repaired remediation chain.
+The self-contained backend/runtime archive is rebuilt from the current source.
+Startup recovery and tab-memory delegated-session continuity are included.
+No credentials are persisted to browser storage or configuration files.
 
-- Adds launcher-owned Setup -> Windows/AD handoff. Saving a valid canonical Domain/DC configuration now promotes the healthy Setup service even when the packaged backend does not terminate itself.
-- Adds a direct “Windows / AD-ni başlat” recovery action in the web UI. It reuses the saved configuration, performs one transition, waits for the new Windows process, and reports the preserved startup issue instead of returning the operator to a silent loop.
-- Uses fresh windows-3.1.1.db and setup-3.1.1.db stores to isolate the release from legacy mode/schema state. Older ProgramData databases are not deleted.
-- Replaces the cramped in-card GPO dropdown with a full modal selector with search by name/GUID, protected/selectable badges, current selection state, and responsive layout.
-- Keeps delegated credentials in memory only. Web UI RBAC remains separate from the delegated AD execution account.
-- Keeps read-only discovery separate from production write authorization. Change gate still narrows wildcard discovery scope to the selected preview GPO + AD scope before enabling writes.
-- Keeps Backup -> Apply -> Link -> read-back -> Verify and rollback safety behavior unchanged.
-
-This package does not recompile the existing verified .NET backend binary. Launcher lifecycle, frontend workflow, and packaged PowerShell worker logic remain the change surface.
-
-3.1.1 plan-bound scope authorization:
-- Wildcard remains safe for discovery.
-- Operator no longer enters production GPO GUID/OU manually.
-- Remediation preview automatically narrows the durable allowlist to the selected GPO + AD scope before enabling the change gate.
-- Settings redirects wildcard write enablement to the remediation workflow instead of showing a disabled gate.
+Apply always requires a fresh plan, explicit production authorization and approval.
+Interrupted writes and rollbacks remain subject to administrator review.
+Read-back, replication and effective endpoint compliance are tracked separately.
+Real Windows domain acceptance remains required before production rollout.

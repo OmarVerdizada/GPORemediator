@@ -88,7 +88,7 @@ security=(ROOT/'backend'/'PowerShell'/'SecurityTemplate.psm1').read_text(encodin
 executor=(ROOT/'backend'/'Infrastructure'/'WindowsPowerShellExecutor.cs').read_text(encoding='utf-8-sig')
 check('{F3CCC681-B74C-4060-9F26-CD84525DCA2A}' in security, 'Advanced Audit CSE GUID missing')
 check('{0F3F3735-573D-9804-99E4-AB2A69BA5FD4}' in security, 'Advanced Audit tool extension GUID missing')
-check("if([string]$Map.handler -eq 'AdvancedAudit'){return [string]$Item.state}" in worker, 'Advanced Audit persisted-state comparison missing')
+check("if([string]$Map.handler -eq 'AdvancedAudit'){return [string]$Item.mask}" in worker, 'Advanced Audit numeric persisted-mask comparison missing')
 check("[string]$item.mask" in worker, 'Advanced Audit endpoint mask verification missing')
 check("UnableToRetrievePolicyRegistryItem" in worker and "GPO_REGISTRY_READ_FAILED" in worker, 'Registry policy read must distinguish absent values from read failures')
 check('Invoke-PasswordPilot.ps1' not in executor and 'Invoke-PolicyOperation.ps1' not in executor, 'Legacy Windows executor surface is still reachable')
@@ -114,6 +114,8 @@ for name in ('index.html','client.js','workspace.js','workspace.css','product-v2
 # Runtime/test state and environment-specific secrets/configuration must never ship.
 for pattern in ('*.db','*.db-wal','*.db-shm','*.log'):
     for found in ROOT.rglob(pattern):
+        if any(part in {'.git','work','.tools','node_modules','bin','obj'} for part in found.relative_to(ROOT).parts):
+            continue  # Generated developer artifacts are excluded from the release.
         # runtime/framework files are DLL/JSON, so any match here is product state.
         check(False, f'shipped runtime state artifact: {found.relative_to(ROOT)}')
 check(not (ROOT/'backend'/'appsettings.Local.json').exists(), 'shipped environment-specific appsettings.Local.json')

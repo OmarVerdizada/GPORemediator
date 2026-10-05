@@ -10,6 +10,7 @@ assert.equal(ui.classify(base).compliant,true,'fully verified publication must b
 assert.equal(ui.classify({result:{...base.result,effectiveStatus:'ENDPOINT_VERIFICATION_PENDING'}}).compliant,false,'publication alone must not be reported as compliant');
 assert.equal(ui.classify({result:{...base.result,verification:{replicationConverged:false}}}).replication,'pending');
 assert.equal(ui.classify({result:{...base.result,state:'REVIEW_REQUIRED'}}).attention,true);
+assert.equal(ui.classify({result:{...base.result,state:'NO_CHANGE',gpoPublished:false}}).compliant,false,'no-change label must not override failed publication read-back');
 assert.equal(ui.workflowStep({run:base}),6);
 assert.equal(ui.workflowStep({plan:{},approvalReviewed:false}),3);
 assert.equal(ui.workflowStep({plan:{},approvalReviewed:true}),4);

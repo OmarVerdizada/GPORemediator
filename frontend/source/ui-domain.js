@@ -5,7 +5,7 @@
   const effectiveVerified = value => /^(VERIFIED_ON_SAMPLE|DOMAIN_VALUE_MATCHES_ON_SELECTED_DC)$/.test(upper(value));
   function classify(run) {
     const result = run?.result || {};
-    const publication = result.gpoPublished || upper(result.state) === 'NO_CHANGE' ? 'published' : bad(result.state) ? 'failed' : 'pending';
+    const publication = result.gpoPublished === true ? 'published' : bad(result.state) ? 'failed' : 'pending';
     const replication = result.verification?.replicationConverged ? 'converged' : (result.verification ? 'pending' : 'not_checked');
     const effective = effectiveVerified(result.effectiveStatus) ? 'verified' : bad(result.effectiveStatus) ? 'failed' : 'pending';
     const attention = bad(result.state) || publication === 'failed' || effective === 'failed';

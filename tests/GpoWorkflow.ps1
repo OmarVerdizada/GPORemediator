@@ -43,6 +43,21 @@ function Restore-GPO {param($BackupId,$Path,$Domain,$Server)
   foreach($key in $b.files.Keys){[IO.File]::WriteAllBytes($key,$b.files[$key])}
   $script:extensions=$b.extensions;$script:version=0;$script:changed=$script:changed.AddSeconds(1);$script:writes++
 }
+# Registry cmdlets persist policy data into the fixture GPO so full backups/fingerprints cover it.
+function Get-GPRegistryValue {param($Guid,$Key,$ValueName,$Domain,$Server,$ErrorAction)
+  $path=Join-Path $script:folder 'registry-fixture.json';$data=if(Test-Path $path){Get-Content $path -Raw|ConvertFrom-Json}else{[pscustomobject]@{}}
+  $property=$data.PSObject.Properties[$Key+'|'+$ValueName]
+  if(!$property){$errorRecord=New-Object Management.Automation.ErrorRecord ([Exception]::new('Not configured')),'UnableToRetrievePolicyRegistryItem',([Management.Automation.ErrorCategory]::ObjectNotFound),$ValueName;throw $errorRecord}
+  return [pscustomobject]@{Value=$property.Value}
+}
+function Set-GPRegistryValue {param($Guid,$Key,$ValueName,$Type,$Value,$Domain,$Server)
+  if($ValueName -eq 'FailWrite'){throw 'Injected second registry write failure'}
+  $path=Join-Path $script:folder 'registry-fixture.json';$data=if(Test-Path $path){Get-Content $path -Raw|ConvertFrom-Json}else{[pscustomobject]@{}}
+  $data|Add-Member NoteProperty ($Key+'|'+$ValueName) $Value -Force
+  [IO.File]::WriteAllText($path,($data|ConvertTo-Json -Depth 20))
+  $script:version++;$script:changed=$script:changed.AddSeconds(1);$script:writes++
+  [IO.File]::WriteAllText((Join-Path $script:folder 'GPT.INI'),("[General]`r`nVersion="+$script:version+"`r`n"))
+}
 function New-GPLink {param($Guid,$Target,$Domain,$Server,$LinkEnabled,$Order=1) Check ($script:backups.Count -gt 0) 'Link before backup';$script:links[$Target]=[pscustomobject]@{GpoId=$Guid;Order=$Order;Enabled=($LinkEnabled -eq 'Yes');Enforced=$false};$script:writes++ }
 function Set-GPLink {param($Guid,$Target,$Domain,$Server,$LinkEnabled,$Order,$Enforced) $l=$script:links[$Target];$l.Enabled=$LinkEnabled -eq 'Yes';if($Order){$l.Order=$Order};if($Enforced){$l.Enforced=$Enforced -eq 'Yes'};$script:writes++ }
 function Remove-GPLink {param($Guid,$Target,$Domain,$Server,$Confirm) $script:links.Remove($Target);$script:writes++ }
@@ -52,7 +67,7 @@ function Resolve-DnsName {param($Name,$Type,$ErrorAction) return [pscustomobject
 function Get-ADReplicationPartnerMetadata {param($Target,$Scope,$ErrorAction) return @() }
 $worker=Join-Path $PSScriptRoot '../backend/PowerShell/GpoWorkflow.Worker.ps1'
 $module=Get-Content (Join-Path $PSScriptRoot '../backend/PowerShell/SecurityTemplate.psm1') -Raw
-$cfg=[pscustomobject]@{domain='example.com';domainController=($env:COMPUTERNAME+'.example.com');backupPath=(Join-Path $script:fixture 'backups')}
+$cfg=[pscustomobject]@{domain='example.com';domainController=($env:COMPUTERNAME+'.example.com');backupPath=(Join-Path $script:fixture 'backups');allowedHosts=@('*')}
 function Invoke-Worker($Operation,$Data){if(!$Data.ContainsKey('consent')){$Data.consent=$null};$result=& ([scriptblock]::Create([IO.File]::ReadAllText($worker))) -Operation $Operation -Configuration $cfg -Data $Data -SecurityModule $module;return ($result|ConvertTo-Json -Depth 40|ConvertFrom-Json)}
 $inventory=Invoke-Worker 'gpoInventory' @{}
 Check ($inventory.gpos.Count -eq 1 -and $script:writes -eq 0) 'Inventory wrote or failed'
@@ -87,12 +102,123 @@ Check ([IO.File]::ReadAllText((Join-Path $infDir 'GptTmpl.inf')) -match 'Minimum
 $script:links[$script:domainDn]=[pscustomobject]@{GpoId=$script:gpoId;Order=1;Enabled=$false;Enforced=$false}
 $preview=Invoke-Worker 'gpoPreview' @{selection=$selection;mapping=$mapping};$plan.id=[guid]::NewGuid().ToString('N');$plan.preview=$preview;$script:refreshFails=$true
 $partial=Invoke-Worker 'gpoApply' @{plan=$plan;mapping=$mapping;previous=$null}
+Check ((Get-Content (Join-Path $partial.backupDirectory 'manifest.json') -Raw|ConvertFrom-Json).phase -eq $partial.state) 'Manifest publication state differs from result'
 Check ($partial.state -eq 'PUBLISHED' -and $partial.gpoPublished) 'Apply should publish without running gpupdate'
 $refreshPartial=Invoke-Worker 'gpoRefresh' @{plan=$plan;mapping=$mapping;previous=$partial}
 Check ($refreshPartial.state -eq 'REFRESH_PARTIAL' -and $refreshPartial.gpoPublished -and $refreshPartial.refreshResults[0].state -eq 'FAILED') 'Explicit refresh failure obscured successful GPO write'
 $rolled=Invoke-Worker 'gpoRollback' @{plan=$plan;mapping=$mapping;previous=$partial}
 Check ($rolled.state -eq 'ROLLED_BACK' -and !$script:links[$script:domainDn].Enabled) 'Existing disabled link was not restored'
-Write-Host 'PASS: real GPO worker with AD doubles - discovery, preview, INF/CSE/version writes, backup, link creation, explicit force refresh, independent verification, replay, stale rollback, existing-link restore and refresh failure.'
+# A restricted host boundary must be identical in Preview and Apply.
+$cfg.allowedHosts=@('test-pc.example.com');$selection.refresh='Scope'
+$preview=Invoke-Worker 'gpoPreview' @{selection=$selection;mapping=$mapping}
+Check ($preview.refreshComputers.Count -eq 1) 'Allowed scope host omitted'
+$plan.id=[guid]::NewGuid().ToString('N');$plan.preview=$preview
+$allowed=Invoke-Worker 'gpoApply' @{plan=$plan;mapping=$mapping;previous=$null}
+Check ($allowed.state -eq 'PUBLISHED') 'Restricted host plan rejected its own refreshed preview'
+Invoke-Worker 'gpoRollback' @{plan=$plan;mapping=$mapping;previous=$allowed}|Out-Null
+$cfg.allowedHosts=@();$selection.refresh='Pdc'
+$preview=Invoke-Worker 'gpoPreview' @{selection=$selection;mapping=$mapping}
+Check ($preview.refreshComputers.Count -eq 0 -and $preview.impact.affectedObjects.sampleHosts.Count -eq 0) 'Empty host allowlist permits endpoint probes'
+$plan.id=[guid]::NewGuid().ToString('N');$plan.preview=$preview
+$restricted=Invoke-Worker 'gpoApply' @{plan=$plan;mapping=$mapping;previous=$null}
+Check ($restricted.state -eq 'PUBLISHED') 'Empty host boundary rejected a valid policy write'
+
+# Interrupted publication must not become success simply because one value matches.
+$manifestPath=Join-Path $restricted.backupDirectory 'manifest.json'
+$manifest=Get-Content $manifestPath -Raw|ConvertFrom-Json
+$manifest.phase='WRITING';$manifest|ConvertTo-Json -Depth 50|Set-Content $manifestPath -Encoding UTF8
+$interrupted=Invoke-Worker 'gpoVerify' @{plan=$plan;mapping=$mapping;previous=$restricted}
+Check ($interrupted.state -eq 'REVIEW_REQUIRED') 'Partial execution promoted to published'
+try{Invoke-Worker 'gpoRefresh' @{plan=$plan;mapping=$mapping;previous=$interrupted}|Out-Null;throw 'Interrupted refresh accepted'}catch{if($_.Exception.Message -notlike 'REFRESH_REVIEW_REQUIRED*'){throw}}
+
+# A crash after recording rollback intent retains rollback semantics on Verify.
+$manifest.phase='ROLLING_BACK';$manifest|ConvertTo-Json -Depth 50|Set-Content $manifestPath -Encoding UTF8
+$interruptedRollback=Invoke-Worker 'gpoVerify' @{plan=$plan;mapping=$mapping;previous=$restricted}
+Check ($interruptedRollback.state -eq 'ROLLBACK_DRIFT_DETECTED') 'Interrupted rollback promoted to publication'
+$manifest.phase='PUBLISHED';$manifest|ConvertTo-Json -Depth 50|Set-Content $manifestPath -Encoding UTF8
+Invoke-Worker 'gpoRollback' @{plan=$plan;mapping=$mapping;previous=$restricted}|Out-Null
+
+# Missing user-right assignments differ from an explicitly configured empty list.
+$selection.setting='2.2.test';$selection.value=0;$selection.refresh='None'
+$mapping.id='2.2.test';$mapping.controlId='2.2.test';$mapping.domainPolicySensitive=$false;$mapping.allowValueOverride=$false
+$mapping.items=@([pscustomobject]@{section='Privilege Rights';key='SeDenyInteractiveLogonRight';name=$null;type='Principals';value=@();guid=$null;state=$null;mask=$null})
+$preview=Invoke-Worker 'gpoPreview' @{selection=$selection;mapping=$mapping}
+Check (!$preview.noChange -and $null -eq $preview.previousValue) 'Missing empty assignment treated as configured'
+$plan.id=[guid]::NewGuid().ToString('N');$plan.preview=$preview
+$emptyRights=Invoke-Worker 'gpoApply' @{plan=$plan;mapping=$mapping;previous=$null}
+Check ($emptyRights.state -eq 'PUBLISHED') 'Empty user-right assignment not published'
+$preview=Invoke-Worker 'gpoPreview' @{selection=$selection;mapping=$mapping}
+Check ($preview.noChange -and $preview.previousValue -eq '') 'Explicit empty rights are not idempotent'
+Invoke-Worker 'gpoRollback' @{plan=$plan;mapping=$mapping;previous=$emptyRights}|Out-Null
+
+# Advanced audit uses numeric masks, preserves other subcategories and rolls back.
+$auditDir=Join-Path $script:folder 'Machine/Microsoft/Windows NT/Audit'
+$null=New-Item -ItemType Directory -Path $auditDir -Force
+$auditPath=Join-Path $auditDir 'audit.csv'
+[IO.File]::WriteAllText($auditPath,"Machine Name,Policy Target,Subcategory,Subcategory GUID,Inclusion Setting,Exclusion Setting,Setting Value`r`n,System,Test,{0CCE9215-69AE-11D9-BED3-505054503030},Success,,0`r`n,System,Other,{0CCE9216-69AE-11D9-BED3-505054503030},Failure,,2`r`n")
+$selection.setting='17.test';$mapping.id='17.test';$mapping.controlId='17.test';$mapping.handler='AdvancedAudit'
+$mapping.items=@([pscustomobject]@{section=$null;key=$null;name='Test';type='Audit';value=@();guid='{0CCE9215-69AE-11D9-BED3-505054503030}';state='Success';mask=1})
+$preview=Invoke-Worker 'gpoPreview' @{selection=$selection;mapping=$mapping}
+Check (!$preview.noChange) 'Incorrect numeric audit mask treated as compliant display text'
+$plan.id=[guid]::NewGuid().ToString('N');$plan.preview=$preview
+$audit=Invoke-Worker 'gpoApply' @{plan=$plan;mapping=$mapping;previous=$null}
+Check ($audit.state -eq 'PUBLISHED') 'Advanced audit write/CSE/version failed'
+Check ((Get-Content $auditPath -Raw) -match 'Other.*Failure,,2') 'Unrelated audit subcategory changed'
+$preview=Invoke-Worker 'gpoPreview' @{selection=$selection;mapping=$mapping}
+Check ($preview.noChange) 'Advanced audit mapping is not idempotent'
+Invoke-Worker 'gpoRollback' @{plan=$plan;mapping=$mapping;previous=$audit}|Out-Null
+
+# Registry and RegistrySet preserve unrelated values and support empty strings/multiple writes.
+$registryKey='HKLM\Software\Policies\Fixture';$selection.setting='18.test';$mapping.id='18.test';$mapping.controlId='18.test';$mapping.handler='Registry';$mapping.domainPolicySensitive=$false
+$mapping.items=@([pscustomobject]@{section=$null;key=$registryKey;name='EmptyValue';type='String';value=@('');guid=$null;state=$null;mask=$null})
+$preview=Invoke-Worker 'gpoPreview' @{selection=$selection;mapping=$mapping}
+Check (!$preview.noChange) 'Missing registry string treated as a configured empty string'
+$plan.id=[guid]::NewGuid().ToString('N');$plan.preview=$preview
+$registry=Invoke-Worker 'gpoApply' @{plan=$plan;mapping=$mapping;previous=$null}
+Check ($registry.state -eq 'PUBLISHED') 'Registry empty string was not published'
+$preview=Invoke-Worker 'gpoPreview' @{selection=$selection;mapping=$mapping}
+Check ($preview.noChange) 'Registry empty string is not idempotent'
+Invoke-Worker 'gpoRollback' @{plan=$plan;mapping=$mapping;previous=$registry}|Out-Null
+
+$mapping.handler='RegistrySet'
+$mapping.items=@(
+ [pscustomobject]@{section=$null;key=$registryKey;name='First';type='DWord';value=@('1');guid=$null;state=$null;mask=$null},
+ [pscustomobject]@{section=$null;key=$registryKey;name='Second';type='MultiString';value=@('alpha','beta');guid=$null;state=$null;mask=$null})
+$preview=Invoke-Worker 'gpoPreview' @{selection=$selection;mapping=$mapping};$plan.id=[guid]::NewGuid().ToString('N');$plan.preview=$preview
+$registrySet=Invoke-Worker 'gpoApply' @{plan=$plan;mapping=$mapping;previous=$null}
+Check ($registrySet.state -eq 'PUBLISHED') 'RegistrySet did not publish both values'
+$preview=Invoke-Worker 'gpoPreview' @{selection=$selection;mapping=$mapping}
+Check ($preview.noChange) 'RegistrySet is not idempotent'
+Invoke-Worker 'gpoRollback' @{plan=$plan;mapping=$mapping;previous=$registrySet}|Out-Null
+
+# Failure after the first registry write preserves an ambiguous manifest; Apply is never replayed.
+$mapping.items[1].name='FailWrite'
+$preview=Invoke-Worker 'gpoPreview' @{selection=$selection;mapping=$mapping};$plan.id=[guid]::NewGuid().ToString('N');$plan.preview=$preview
+$partialWrite=Invoke-Worker 'gpoApply' @{plan=$plan;mapping=$mapping;previous=$null}
+Check ($partialWrite.state -eq 'REVIEW_REQUIRED' -and $partialWrite.backupId -and !$partialWrite.postFingerprint) 'Partial RegistrySet write lost its backup or uncertainty'
+$checkedPartial=Invoke-Worker 'gpoVerify' @{plan=$plan;mapping=$mapping;previous=$partialWrite}
+Check ($checkedPartial.state -eq 'REVIEW_REQUIRED') 'Partial RegistrySet write was promoted to success'
+try{Invoke-Worker 'gpoApply' @{plan=$plan;mapping=$mapping;previous=$null}|Out-Null;throw 'Partial write replay accepted'}catch{if($_.Exception.Message -notlike 'GPO_ALREADY_STARTED*'){throw}}
+try{Invoke-Worker 'gpoRollback' @{plan=$plan;mapping=$mapping;previous=$partialWrite}|Out-Null;throw 'Unknown-version rollback accepted'}catch{if($_.Exception.Message -notlike 'ROLLBACK_VERSION_UNKNOWN*'){throw}}
+# Manual fixture recovery emulates administrator review before the remaining independent case.
+Restore-GPO -BackupId ([guid]$partialWrite.backupId) -Path $partialWrite.backupDirectory -Domain $cfg.domain -Server $cfg.domainController
+
+# Simulate immediate read-back failure after a write: manifest must record it too.
+$selection.setting='1.1.4';$selection.value=14;$mapping.id='1.1.4';$mapping.controlId='1.1.4';$mapping.handler='SecurityTemplate';$mapping.domainPolicySensitive=$true;$mapping.allowValueOverride=$true
+$mapping.items=@([pscustomobject]@{section='System Access';key='MinimumPasswordLength';name=$null;type='Integer';value=@('14');guid=$null;state=$null;mask=$null})
+$preview=Invoke-Worker 'gpoPreview' @{selection=$selection;mapping=$mapping};$plan.id=[guid]::NewGuid().ToString('N');$plan.preview=$preview
+$originalSet=(Get-Item Function:Set-ADObject).ScriptBlock
+function Set-ADObject {param($Identity,$Server,$Replace) $script:version=$Replace.versionNumber+1;$script:extensions=$Replace.gPCMachineExtensionNames;$script:changed=$script:changed.AddSeconds(1);$script:writes++}
+$mismatch=Invoke-Worker 'gpoApply' @{plan=$plan;mapping=$mapping;previous=$null}
+Check ($mismatch.state -eq 'VERIFY_MISMATCH') 'Immediate version mismatch hidden'
+Check ((Get-Content (Join-Path $mismatch.backupDirectory 'manifest.json') -Raw|ConvertFrom-Json).phase -eq 'VERIFY_MISMATCH') 'Manifest falsely records publication after read-back mismatch'
+Set-Item Function:Set-ADObject $originalSet
+$preview=Invoke-Worker 'gpoPreview' @{selection=$selection;mapping=$mapping}
+$plan.id=[guid]::NewGuid().ToString('N');$plan.preview=$preview;$beforeWrites=$script:writes
+$noChangeMismatch=Invoke-Worker 'gpoApply' @{plan=$plan;mapping=$mapping;previous=$null}
+Check ($noChangeMismatch.state -eq 'VERIFY_MISMATCH' -and !$noChangeMismatch.gpoPublished -and $script:writes -eq $beforeWrites) 'No-change path hid an AD/SYSVOL version mismatch'
+Write-Host 'PASS: isolated GPO transactions across SecurityTemplate, Registry, RegistrySet and AdvancedAudit; backup/rollback, host boundaries, idempotency, partial writes, replay, interrupted recovery and manifest read-back mismatch.'
 } finally {
+    if (!$script:fixture.StartsWith([IO.Path]::GetFullPath([IO.Path]::GetTempPath()),[StringComparison]::OrdinalIgnoreCase)) { throw 'Test cleanup path escape' }
     if (Test-Path -LiteralPath $script:fixture) { Remove-Item -LiteralPath $script:fixture -Recurse -Force }
 }

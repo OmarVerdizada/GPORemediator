@@ -12,7 +12,9 @@ Run `powershell.exe -NoProfile -ExecutionPolicy Bypass -File Test.ps1` for a cur
 
 Developer browser tests require Node.js and Playwright (not required to run the product):
 
-- `node tests/Frontend.cjs`: isolated HTTP fixtures for initialization, setup, all control tabs, connection errors, cancellation/timeouts, numeric preview, apply/verify/rollback and history filtering. No real domain changes.
+- `node tests/Frontend.cjs`: isolated HTTP fixtures for initialization, setup, all control tabs, connection errors, cancellation/timeouts, numeric preview, one managed write-gate restart, memory-only reconnection, fresh final preview, renewed approval, apply/verify/rollback and history filtering. No real domain changes.
 - After `Build-Portable.ps1`, `node tests/Frontend.Live.cjs`: the packaged executable and a real browser in isolated Setup mode with a temporary database. Does not save the host configuration or contact AD.
 
 Both browser tests use installed Edge by default; set `PLAYWRIGHT_CHANNEL` to select another installed Playwright browser channel. Provide Playwright through the development environment's module search path.
+
+The worker transaction suite covers all four handlers with AD/GroupPolicy doubles and temporary policy files. It exercises host allowlists, explicit empty values, numeric audit masks, idempotency, partial multi-setting writes, replay rejection, interrupted publication/rollback, and manifest read-back mismatches. The service invariants exercise concurrent Verify/Rollback and maintenance exclusion, ambiguous refresh rejection, wildcard write denial, and reproducible evidence hashes.

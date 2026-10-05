@@ -58,7 +58,7 @@ public sealed class Store : IDisposable
         lock(gate)
         {
             var recovered=0;
-            foreach(var run in List<GpoWorkflowRun>("gpo_runs").Where(r=>r.Result.State.EndsWith("ING",StringComparison.OrdinalIgnoreCase)))
+            foreach(var run in List<GpoWorkflowRun>("gpo_runs").Where(r=>GpoWorkflowRules.IsActive(r.Result.State)))
             {
                 var result=run.Result with
                 {
@@ -91,7 +91,7 @@ public sealed class Store : IDisposable
     {
         lock(gate)
         {
-            using var command=Command("SELECT COUNT(*) FROM gpo_runs WHERE state LIKE '%ING'");
+            using var command=Command("SELECT COUNT(*) FROM gpo_runs WHERE UPPER(state) IN ('APPLYING','VERIFYING','REFRESHING','ROLLBACKING','ROLLING_BACK')");
             return Convert.ToInt32(command.ExecuteScalar());
         }
     }

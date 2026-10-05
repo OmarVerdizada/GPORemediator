@@ -1,4 +1,4 @@
-﻿# Credentials arrive through private stdin from the local-only backend, never command arguments or files.
+# Credentials arrive through private stdin from the local-only backend, never command arguments or files.
 $ErrorActionPreference='Stop'
 $ProgressPreference='SilentlyContinue'
 $WarningPreference='SilentlyContinue'
@@ -14,6 +14,7 @@ try {
     if([string]$cfg.domainController -notmatch '^[a-zA-Z0-9][a-zA-Z0-9.-]+$' -or -not ([string]$cfg.domainController).EndsWith('.'+[string]$cfg.domain,[StringComparison]::OrdinalIgnoreCase)){throw 'DC_REQUIRED|Save the exact domain and writable DC first.'}
     $remoteTimeout=if([string]$request.operation -in @('gpoApply','gpoRollback','gpoRefresh')){900000}elseif([string]$request.operation -in @('gpoPreview','gpoVerify')){540000}else{300000}
     $options=@{ComputerName=[string]$cfg.domainController;Authentication='Kerberos';SessionOption=(New-PSSessionOption -OpenTimeout 15000 -OperationTimeout $remoteTimeout)}
+    if([string]::IsNullOrWhiteSpace([string]$request.payload.credential.userName) -or [string]::IsNullOrEmpty([string]$request.payload.credential.password)){throw 'DELEGATED_CREDENTIAL_REQUIRED|Supply explicit delegated credentials for every GPO operation.'}
     if($request.payload.credential.userName){
         $secure=ConvertTo-SecureString -String $request.payload.credential.password -AsPlainText -Force
         $credential=[Management.Automation.PSCredential]::new([string]$request.payload.credential.userName,$secure)
