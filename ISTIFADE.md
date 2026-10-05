@@ -1,4 +1,4 @@
-﻿# Sadə istifadə qaydası
+# Sadə istifadə qaydası
 
 1. `GpoRemediator.cmd` faylını açın. İlk build lazım olsa avtomatik edilir.
 2. Sazlamalarda **Domen**, **Domen kontrolleri** və aşkarlanan Windows hesabını yoxlayın. **Saxla və yenidən başlat** seçin.
@@ -21,4 +21,4 @@ Git checkout-da `git pull --ff-only` işlədin və tətbiqi `GpoRemediator.cmd` 
 - Hazırlıq yoxlaması uğursuzdursa, həmin yoxlamanın nəticəsinə baxın. Ehtiyat nüsxə qovluğu seçilmiş DC üzərində olmalıdır.
 - Uzun sorğuda mərhələ və vaxt göstərilir. Yalnız oxuma sorğusunda gözləməni dayandırmaq olar. Tətbiq zamanı əlaqə itərsə, yenidən tətbiqdən əvvəl Əməliyyatlarda nəticəni yoxlayın.
 
-Account Policy qaydaları domenin kökünə və Default Domain Policy-yə tətbiq edilir. Real domen sınağını `PRODUCTION-TEST-CHECKLIST.md` üzrə test mühitində aparın. Domen və kompüterlərdə faktiki tətbiq ayrıca yoxlanılır; gözləyən nəticə uğurlu nəticə deyil.
+Account Policy qaydaları domenin kökünə və Default Domain Policy-yə tətbiq edilir. Production əməliyyatlarını `PRODUCTION-OPERATIONS.md` üzrə aparın. Domen və kompüterlərdə faktiki tətbiq ayrıca yoxlanılır; gözləyən nəticə uğurlu nəticə deyil.

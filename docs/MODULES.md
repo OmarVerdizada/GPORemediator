@@ -8,6 +8,6 @@ GPO Remediator uses a single production workflow.
 4. `backend/PowerShell/Invoke-GpoWorkflow.ps1` transports the request to the pinned writable DC over Kerberos/WinRM.
 5. `backend/PowerShell/GpoWorkflow.Worker.ps1` performs live AD/GPO discovery, preview, Backup-GPO, write, link, verification, gpupdate scheduling and rollback.
 6. `backend/PowerShell/SecurityTemplate.psm1` safely edits security-template content used by mapped CIS controls.
-7. `backend/Infrastructure/Store.cs` stores only ephemeral local operation state while the service is running; normal stop removes it.
+7. `backend/Infrastructure/Store.cs` stores durable GPO plans, execution records, evidence and append-only audit data.
 
 The production application exposes only the Windows GPO workflow; obsolete Password Pilot, adapter-registry and general-purpose PowerShell execution surfaces are not included.

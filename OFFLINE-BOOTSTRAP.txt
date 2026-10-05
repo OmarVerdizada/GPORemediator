@@ -5,4 +5,4 @@ GPO Remediator - offline/bootstrap notes
 3. A rebuild is a developer/release operation and requires an approved .NET 8 SDK plus the backend's restored NuGet packages. The production launcher never downloads or provisions build tools.
 4. Real AD/GPO execution requires Kerberos PowerShell remoting to the configured writable DC. The selected DC must have the ActiveDirectory and GroupPolicy PowerShell modules/GPMC feature. The local management host does not auto-install or require RSAT for the production workflow.
 5. The web UI is local-only on http://127.0.0.1:5080 in this release. No HTTPS certificate is required while it remains loopback-only.
-6. Use PRODUCTION-TEST-CHECKLIST.md before any production rollout.
+6. Use PRODUCTION-OPERATIONS.md before any production rollout.

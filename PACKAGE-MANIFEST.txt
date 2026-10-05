@@ -16,7 +16,7 @@ Documentation:
 - README.md
 - RELEASE.txt
 - CONNECTION-TROUBLESHOOTING.md
-- PRODUCTION-TEST-CHECKLIST.md
+- PRODUCTION-OPERATIONS.md
 - VALIDATION.txt
 
 Persistent runtime state is intentionally outside the release folder under C:\ProgramData\GpoRemediator.

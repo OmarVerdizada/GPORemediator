@@ -4,7 +4,7 @@ GPO Remediator is a local-only Windows management application. The browser UI bi
 
 ## Runtime path
 
-`GpoRemediator.cmd` launches the PowerShell bootstrapper. A matching packaged runtime is reused. If the backend source generation changed or repair is requested, the launcher performs one controlled .NET 8 publish and writes a source fingerprint plus the production runtime marker. Normal starts do not rebuild or download dependencies.
+`GpoRemediator.cmd` launches the PowerShell bootstrapper. A matching packaged runtime is reused. If the backend source generation changed or repair is requested, the launcher verifies and installs the bundled self-contained runtime archive with its source fingerprint and production marker. Normal starts do not rebuild or download dependencies.
 
 The ASP.NET Core service enforces loopback access, Windows authentication in real mode, an operator allowlist, CSRF/origin checks, a write-mode gate and one process-level privileged-operation gate. Real GPO work is delegated only to the bundled production workflow.
 
@@ -12,7 +12,7 @@ The ASP.NET Core service enforces loopback access, Windows authentication in rea
 
 The management application opens a Kerberos PowerShell remoting session to the configured writable domain controller. The selected DC must provide the ActiveDirectory and GroupPolicy PowerShell modules. The local management host does not need RSAT for the production GPO workflow.
 
-Browser input never selects arbitrary scripts or commands. The only Windows executor entry points are inventory, readiness, preview, apply, rollback and verify. Credentials are passed through redirected stdin into a short-lived encrypted in-memory session and are never persisted.
+Browser input never selects arbitrary scripts or commands. The only Windows executor entry points are inventory, readiness, preview, apply, rollback, verify and refresh. Credentials are passed through redirected stdin into a short-lived encrypted in-memory session and are never persisted.
 
 ## Remediation model
 

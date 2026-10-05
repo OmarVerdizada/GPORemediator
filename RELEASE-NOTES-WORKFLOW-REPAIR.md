@@ -1,6 +1,6 @@
 # GPO workflow repair
 
-The complete connect, preview, authorization restart, approval, backup, apply, link, verify, refresh and rollback chain has been repaired and regression tested.
+The complete connect, preview, authorization restart, approval, backup, apply, link, verify, refresh and rollback chain has been repaired.
 
 - Keep the supplied 3.1.2 startup recovery and 3.1.3 tab-memory credential recovery fixes.
 - Invalidate the old preview during authorization restart and require review of the new final preview. Surface connection/preview failures without repeatedly reconnecting.
@@ -14,4 +14,4 @@ The complete connect, preview, authorization restart, approval, backup, apply, l
 - Export schema 1.1 evidence with current read-back values and a reproducible hash covering correlation information.
 - Remove duplicate host filtering, redundant validation branches and repeated ignore entries. Rebuild the self-contained runtime and its checksum.
 
-Real-domain publication, cross-DC replication and effective endpoint compliance still require the controlled lab acceptance sequence in `PRODUCTION-TEST-CHECKLIST.md`.
+Real-domain publication, cross-DC replication and effective endpoint compliance still require the live publication and verification procedure in `PRODUCTION-OPERATIONS.md`.

@@ -7,7 +7,7 @@ using Microsoft.AspNetCore.DataProtection;
 
 namespace GpoRemediator.Services;
 
-public sealed class GpoWorkflowService(IConfiguration config,Store store,OperationGate gate,IDataProtectionProvider protection,IWindowsPowerShellExecutor executor) : IDisposable
+public sealed class GpoWorkflowService(IConfiguration config,Store store,OperationGate gate,IDataProtectionProvider protection,WindowsPowerShellExecutor executor) : IDisposable
 {
     private static readonly TimeSpan ConnectionIdleTimeout=TimeSpan.FromMinutes(30);
     private sealed record Connection(string Actor,string UserName,byte[] Password,GpoInventory Inventory,DateTimeOffset Expires);
@@ -15,7 +15,7 @@ public sealed class GpoWorkflowService(IConfiguration config,Store store,Operati
     private readonly IDataProtector protector=protection.CreateProtector("GpoWorkflow.EphemeralLogin.v1");
     private bool Real=>!config.GetValue<bool>("LocalSetup")&&string.Equals(config["Mode"],"Windows",StringComparison.OrdinalIgnoreCase);
     private string Mode=>"WINDOWS";
-    private void RequireReal(){if(!Real)throw new PolicyException("WINDOWS_MODE_REQUIRED","GPO discovery and remediation require Windows / AD mode. Setup mode cannot simulate domain operations.");}
+    private void RequireReal(){if(!Real)throw new PolicyException("WINDOWS_MODE_REQUIRED","GPO discovery and remediation require Windows / AD mode. Setup mode is configuration-only.");}
     private string Domain=>config["Windows:Domain"]??"";
     private string Dc=>config["Windows:DomainController"]??"";
     private object Configuration=>new{domain=Domain,domainController=Dc,backupPath=config["Windows:BackupPath"],allowedHosts=AllowedHosts};

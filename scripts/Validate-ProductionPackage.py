@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 from __future__ import annotations
-import hashlib, json, re, sys
+import hashlib, json, re, sys, zipfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -82,7 +82,7 @@ account_ids={x['id'] for x in mappings if x.get('domainPolicySensitive')}
 check(account_ids=={'1.1.1','1.1.3','1.1.4','1.1.5','1.1.6','1.2.1','1.2.2','1.2.3','1.2.4'}, f'domain policy control set changed: {sorted(account_ids)}')
 
 
-# Production worker contracts that are easy to regress without a Windows lab.
+# Production worker and packaging contracts.
 worker=(ROOT/'backend'/'PowerShell'/'GpoWorkflow.Worker.ps1').read_text(encoding='utf-8-sig')
 security=(ROOT/'backend'/'PowerShell'/'SecurityTemplate.psm1').read_text(encoding='utf-8-sig')
 executor=(ROOT/'backend'/'Infrastructure'/'WindowsPowerShellExecutor.cs').read_text(encoding='utf-8-sig')
@@ -92,7 +92,6 @@ check("if([string]$Map.handler -eq 'AdvancedAudit'){return [string]$Item.mask}" 
 check("[string]$item.mask" in worker, 'Advanced Audit endpoint mask verification missing')
 check("UnableToRetrievePolicyRegistryItem" in worker and "GPO_REGISTRY_READ_FAILED" in worker, 'Registry policy read must distinguish absent values from read failures')
 check('Invoke-PasswordPilot.ps1' not in executor and 'Invoke-PolicyOperation.ps1' not in executor, 'Legacy Windows executor surface is still reachable')
-check(not (ROOT/'backend'/'PowerShell'/'Test-SecurityTemplate.ps1').exists(), 'stale legacy PowerShell test remains in production source')
 
 check('\"gpoRefresh\"' in executor, 'gpoRefresh is not allowed by the Windows PowerShell executor')
 check('ROLLBACK_DRIFT_DETECTED' in worker and "'ROLLBACK_DRIFT_DETECTED'" in worker and "Read-Field" in worker, 'rollback-aware verification/result-safety contract missing')
@@ -102,7 +101,6 @@ check('production-backend-v4.ready' in (ROOT/'Control-Panel.ps1').read_text(enco
 program=(ROOT/'backend'/'Program.cs').read_text(encoding='utf-8-sig')
 check('PersistKeysToFileSystem' in program and 'CommonApplicationData' in program, 'data-protection keys must persist under protected ProgramData state')
 check('760000' in (ROOT/'frontend'/'source'/'client.js').read_text(encoding='utf-8-sig') and '/refresh$' in (ROOT/'frontend'/'source'/'client.js').read_text(encoding='utf-8-sig'), 'frontend gpupdate timeout contract missing')
-check('PolicyValues.Equal' not in (ROOT/'tests'/'InvariantTests'/'Program.cs').read_text(encoding='utf-8-sig') and 'AdapterRegistry' not in (ROOT/'tests'/'InvariantTests'/'Program.cs').read_text(encoding='utf-8-sig'), 'stale legacy invariant tests remain')
 
 # Frontend/dist must be byte-for-byte synchronized for operator UI assets we own.
 for name in ('index.html','client.js','workspace.js','workspace.css','product-v2.css','benchmark-v4.json','automation.js','automation.css'):
@@ -111,7 +109,7 @@ for name in ('index.html','client.js','workspace.js','workspace.css','product-v2
         check(a.exists() and b.exists(), f'{name}: source/dist missing')
         if a.exists() and b.exists(): check(a.read_bytes()==b.read_bytes(), f'{name}: source/dist mismatch')
 
-# Runtime/test state and environment-specific secrets/configuration must never ship.
+# Runtime state and environment-specific secrets/configuration must never ship.
 for pattern in ('*.db','*.db-wal','*.db-shm','*.log'):
     for found in ROOT.rglob(pattern):
         if any(part in {'.git','work','.tools','node_modules','bin','obj'} for part in found.relative_to(ROOT).parts):
@@ -119,6 +117,17 @@ for pattern in ('*.db','*.db-wal','*.db-shm','*.log'):
         # runtime/framework files are DLL/JSON, so any match here is product state.
         check(False, f'shipped runtime state artifact: {found.relative_to(ROOT)}')
 check(not (ROOT/'backend'/'appsettings.Local.json').exists(), 'shipped environment-specific appsettings.Local.json')
+
+# A production checkout and runtime payload must not contain development scenarios.
+check(not (ROOT/'tests').exists() and not (ROOT/'Test.ps1').exists(), 'development scenarios remain in the production tree')
+archive=ROOT/'release'/'GpoRemediator-runtime-win-x64.zip'
+if archive.exists():
+    manifest=Path(str(archive)+'.sha256')
+    check(manifest.exists(), 'runtime SHA-256 manifest missing')
+    if manifest.exists():
+        check(hashlib.sha256(archive.read_bytes()).hexdigest().upper()==manifest.read_text().strip().upper(), 'runtime archive checksum mismatch')
+    with zipfile.ZipFile(archive) as payload:
+        check(not any(n.lower().endswith('.pdb') or any(p.lower() in {'tests','node_modules'} for p in Path(n).parts) for n in payload.namelist()), 'development artifacts remain in the runtime archive')
 
 if errors:
     print('PRODUCTION PACKAGE VALIDATION: FAIL')

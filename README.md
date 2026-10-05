@@ -95,7 +95,7 @@ The management host must be domain-connected and use AD DNS. The selected DC mus
 
 Windows Time is checked and shown in readiness. If Kerberos/WinRM authentication is already working but the selected DC reports `Free-running System Clock` or `Local CMOS Clock`, 3.1.2 reports a visible **WARN** rather than incorrectly treating that condition alone as proof that the GPO path is unusable. Configure a trusted PDC/NTP source before broad production rollout.
 
-See `CONNECTION-TROUBLESHOOTING.md` for commands and `PRODUCTION-TEST-CHECKLIST.md` for final acceptance testing.
+See `CONNECTION-TROUBLESHOOTING.md` for commands and `PRODUCTION-OPERATIONS.md` for production operation and recovery.
 
 ## Plan-bound production authorization (3.1.3)
 

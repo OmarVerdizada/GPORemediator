@@ -44,7 +44,7 @@ builder.Services.AddAuthorization();
 builder.Services.AddSingleton(new Store(dbPath));
 builder.Services.AddSingleton<OperationGate>();
 builder.Services.AddSingleton<GpoWorkflowService>();
-builder.Services.AddSingleton<IWindowsPowerShellExecutor,WindowsPowerShellExecutor>();
+builder.Services.AddSingleton<WindowsPowerShellExecutor>();
 var app=builder.Build();
 var store=app.Services.GetRequiredService<Store>();
 store.BindExecutionMode(mode);

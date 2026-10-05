@@ -101,12 +101,4 @@ function Get-NormalizedGpoContentFingerprint {
     } finally { $sha.Dispose() }
 }
 
-function Get-AdWindowsProfile {
-    param([int]$UserAccountControl,[string]$OperatingSystem)
-    if (($UserAccountControl -band 8192) -ne 0) { return 'DomainController' }
-    if ($OperatingSystem -match '^Windows Server ') { return 'MemberServer' }
-    if ($OperatingSystem -match '^Windows ') { return 'Workstation' }
-    throw 'TARGET_OS_UNKNOWN|AD does not identify a supported Windows operating system. Correct AD inventory before proceeding.'
-}
-
-Export-ModuleMember -Function Get-TemplateEntry, Set-TemplateEntry, Set-SecurityTemplateValue, Add-SecurityExtension, Add-AuditExtension, Get-NextComputerVersion, Get-NormalizedGpoContentFingerprint, Get-AdWindowsProfile
+Export-ModuleMember -Function Get-TemplateEntry, Set-TemplateEntry, Set-SecurityTemplateValue, Add-SecurityExtension, Add-AuditExtension, Get-NextComputerVersion, Get-NormalizedGpoContentFingerprint

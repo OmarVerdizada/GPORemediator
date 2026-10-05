@@ -34,7 +34,7 @@ No new product feature was added in this backend pass. The work hardens the exis
 ## Bootstrap
 - Normal startup does not rebuild or download SDK once this backend generation has been built.
 - Local management host no longer auto-installs RSAT; GroupPolicy/ActiveDirectory modules are validated on the pinned writable DC where the worker executes.
-- If Windows configuration/startup fails, launcher opens safe Setup mode; there is no simulation fallback.
+- If Windows configuration/startup fails, launcher opens safe Setup mode; only configuration operations are permitted until Windows startup succeeds.
 
 ## Remaining work
-The source release intentionally omits the stale pre-production runtime so the first Windows start must publish this exact backend generation once. After that, only environment-specific acceptance remains: compile/publish on Windows if this source generation has not been built yet, then execute `PRODUCTION-TEST-CHECKLIST.md` against a disposable domain test GPO/OU before production rollout.
+The release includes the self-contained Windows runtime. Production startup verifies and installs the local archive without compiling source or provisioning a toolchain. Follow `PRODUCTION-OPERATIONS.md` for publication, verification and recovery.

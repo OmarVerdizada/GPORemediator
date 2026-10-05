@@ -10,7 +10,7 @@ public sealed class Store : IDisposable
 {
     private readonly SqliteConnection db;
     private readonly object gate = new();
-    private static readonly HashSet<string> Tables = ["controls", "targets", "findings", "analyses", "previews", "jobs", "backups", "password_plans", "password_jobs", "gpo_plans", "gpo_runs", "gpo_evidence"];
+    private static readonly HashSet<string> Tables = ["gpo_plans", "gpo_runs", "gpo_evidence"];
     public Store(string path)
     {
         if (path != ":memory:") Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(path))!);
@@ -21,13 +21,9 @@ public sealed class Store : IDisposable
         foreach (var table in Tables)
             Execute($"CREATE TABLE IF NOT EXISTS {table}(id TEXT PRIMARY KEY, state TEXT, data TEXT NOT NULL, updated_at TEXT NOT NULL);");
         Execute("""
-            CREATE TABLE IF NOT EXISTS steps(id INTEGER PRIMARY KEY AUTOINCREMENT,job_id TEXT NOT NULL REFERENCES jobs(id),state TEXT NOT NULL,message TEXT NOT NULL,created_at TEXT NOT NULL);
-            CREATE INDEX IF NOT EXISTS ix_steps_job ON steps(job_id,id);
-            CREATE TABLE IF NOT EXISTS verifications(id INTEGER PRIMARY KEY AUTOINCREMENT,job_id TEXT NOT NULL REFERENCES jobs(id),stage TEXT NOT NULL,result TEXT NOT NULL,created_at TEXT NOT NULL);
             CREATE TABLE IF NOT EXISTS audit(id INTEGER PRIMARY KEY AUTOINCREMENT,event TEXT NOT NULL,operator TEXT NOT NULL,job_id TEXT,control_id TEXT,gpo_id TEXT,details TEXT NOT NULL,created_at TEXT NOT NULL,previous_hash TEXT NOT NULL,hash TEXT NOT NULL);
             CREATE TRIGGER IF NOT EXISTS audit_no_update BEFORE UPDATE ON audit BEGIN SELECT RAISE(ABORT,'Audit events are append-only'); END;
             CREATE TRIGGER IF NOT EXISTS audit_no_delete BEFORE DELETE ON audit BEGIN SELECT RAISE(ABORT,'Audit events are append-only'); END;
-            CREATE INDEX IF NOT EXISTS ix_jobs_state ON jobs(state);
             CREATE INDEX IF NOT EXISTS ix_gpo_runs_state_updated ON gpo_runs(state,updated_at DESC);
             CREATE INDEX IF NOT EXISTS ix_audit_operator_created ON audit(operator,created_at DESC);
             """);
@@ -104,22 +100,6 @@ public sealed class Store : IDisposable
             while(reader.Read()) items.Add(JsonDefaults.Deserialize<GpoWorkflowRun>(reader.GetString(0)));
             return items.ToArray();
         }
-    }
-    public void Step(string jobId, string state, string message) => Execute("INSERT INTO steps(job_id,state,message,created_at) VALUES($j,$s,$m,$a)",
-        ("$j", jobId), ("$s", state), ("$m", Redactor.Clean(message)), ("$a", PolicyValues.Now()));
-    public RemediationStep[] Steps(string jobId)
-    {
-        lock (gate) { using var command = Command("SELECT id,job_id,state,message,created_at FROM steps WHERE job_id=$j ORDER BY id", ("$j", jobId));
-            using var reader = command.ExecuteReader(); var list = new List<RemediationStep>();
-            while (reader.Read()) list.Add(new(reader.GetInt64(0),reader.GetString(1),reader.GetString(2),reader.GetString(3),reader.GetString(4))); return list.ToArray(); }
-    }
-    public void Verification(string jobId, string stage, VerificationResult result) => Execute(
-        "INSERT INTO verifications(job_id,stage,result,created_at) VALUES($j,$s,$r,$a)", ("$j", jobId), ("$s", stage), ("$r", JsonDefaults.Serialize(result)), ("$a", PolicyValues.Now()));
-    public object[] Verifications(string jobId)
-    {
-        lock (gate) { using var command = Command("SELECT stage,result,created_at FROM verifications WHERE job_id=$j ORDER BY id", ("$j", jobId));
-            using var reader = command.ExecuteReader(); var list = new List<object>();
-            while(reader.Read()) list.Add(new { stage=reader.GetString(0), result=JsonDefaults.Deserialize<VerificationResult>(reader.GetString(1)), createdAt=reader.GetString(2) }); return list.ToArray(); }
     }
     public void Audit(string eventName, string operatorName, string? jobId = null, string? controlId = null, string? gpoId = null, object? details = null)
     {

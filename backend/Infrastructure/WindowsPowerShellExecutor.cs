@@ -6,12 +6,7 @@ using GpoRemediator.Domain;
 namespace GpoRemediator.Infrastructure;
 
 // Fixed bundled scripts only. Optional GPO credentials travel over redirected stdin, never argv or logs.
-public interface IWindowsPowerShellExecutor
-{
-    Task<T> RunAsync<T>(string operation, object configuration, object payload, CancellationToken ct);
-}
-
-public sealed class WindowsPowerShellExecutor(ILogger<WindowsPowerShellExecutor> logger) : IWindowsPowerShellExecutor
+public sealed class WindowsPowerShellExecutor(ILogger<WindowsPowerShellExecutor> logger)
 {
     public async Task<T> RunAsync<T>(string operation, object configuration, object payload, CancellationToken ct)
     {
