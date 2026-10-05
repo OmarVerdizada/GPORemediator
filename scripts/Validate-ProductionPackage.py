@@ -103,7 +103,7 @@ check('PersistKeysToFileSystem' in program and 'CommonApplicationData' in progra
 check('760000' in (ROOT/'frontend'/'source'/'client.js').read_text(encoding='utf-8-sig') and '/refresh$' in (ROOT/'frontend'/'source'/'client.js').read_text(encoding='utf-8-sig'), 'frontend gpupdate timeout contract missing')
 
 # Frontend/dist must be byte-for-byte synchronized for operator UI assets we own.
-for name in ('index.html','client.js','workspace.js','workspace.css','product-v2.css','benchmark-v4.json','automation.js','automation.css'):
+for name in (p.name for p in (ROOT/'frontend'/'source').iterdir() if p.is_file()):
     a=ROOT/'frontend'/'source'/name; b=ROOT/'frontend'/'dist'/name
     if a.exists() or b.exists():
         check(a.exists() and b.exists(), f'{name}: source/dist missing')
