@@ -1,6 +1,6 @@
-GPO Remediator 3.3.1 - product workspace
+GPO Remediator 3.4.0 - product workspace
 
-See RELEASE-NOTES-RECIPES-3.3.1.md for the frontend design improvements.
+See RELEASE-NOTES-STUDIO-3.4.0.md for the frontend design improvements.
 The self-contained backend/runtime archive is rebuilt from the current source.
 Startup recovery and tab-memory delegated-session continuity are included.
 No credentials are persisted to browser storage or configuration files.
