@@ -1,8 +1,4 @@
-# GPO Remediator 3.4.1
-
-A warmer teal workspace simplifies the catalog with three clear summary tiles, collapsible advanced filters and a compact view menu. See `RELEASE-NOTES-FRIENDLY-3.4.1.md`.
-
-The operator workspace now uses a compact environment dashboard, a section navigator, implementation-status filters and a paginated responsive control table. See `RELEASE-NOTES-STUDIO-3.4.0.md`.
+# GPO Remediator 3.3.1
 
 The new Recipes view lists all controls in numeric order with descriptions, recommended states, automation support and recorded implementation status, even without a domain connection. See `RELEASE-NOTES-RECIPES-3.3.1.md`.
 
