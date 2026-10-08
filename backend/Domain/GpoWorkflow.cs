@@ -33,8 +33,8 @@ public record GpoPreview(GpoChoice Gpo, GpoScope Scope, string? PreviousValue, s
     GpoImpactDetails? Impact = null, GpoEnvironmentStatus? Preflight = null, string? DesiredValue = null, bool NoChange = false);
 
 public record GpoWorkflowPlan(string Id, string Actor, string ExecutionUser, string Mode, string Domain, string DomainController,
-    GpoSelection Selection, GpoPreview Preview, string CreatedAt, string? MappingHash = null, string? ConfigHash = null);
-public record GpoConsent(string Confirmation, bool AcknowledgeImpact = false, bool AcknowledgeProtected = false, string? ChangeReference = null, string? ApprovedBy = null);
+    GpoSelection Selection, GpoPreview Preview, string CreatedAt, string? MappingHash = null, string? ConfigHash = null, bool WriteAuthorized = false);
+public record GpoConsent(string Confirmation, bool AcknowledgeImpact = false, bool AcknowledgeProtected = false, string? ChangeReference = null, string? ApprovedBy = null, string? Refresh = null);
 public record GpoRefreshResult(string Computer, string State, string Message);
 public record GpoWorkflowResult(string State, string Message, string? BackupId, string? BackupDirectory, string? PostFingerprint,
     bool GpoPublished, bool LinkVerified, GpoRefreshResult[] RefreshResults, string EffectiveStatus,
@@ -61,6 +61,18 @@ public static class GpoWorkflowRules
             gpos.Any(x => !Guid.TryParse(x, out _)) ||
             scopes.Any(x => string.IsNullOrWhiteSpace(x) || x.Contains('*')))
             throw new PolicyException("WRITE_SCOPE_UNRESTRICTED", "Authorize explicit GPO GUIDs and OU/domain DNs before enabling production writes.");
+    }
+
+    public static bool IsWriteAuthorized(string[] gpos, string[] scopes, GpoSelection selection)
+    {
+        var gpoAllowed=Guid.TryParse(selection.GpoId,out var selected) && gpos.Any(x=>Guid.TryParse(x,out var allowed)&&allowed==selected);
+        var scopeAllowed=scopes.Any(x=>string.Equals(x,selection.ScopeDn,StringComparison.OrdinalIgnoreCase)||selection.ScopeDn.EndsWith(","+x,StringComparison.OrdinalIgnoreCase));
+        return gpoAllowed&&scopeAllowed;
+    }
+    public static void ValidateWriteSelection(string[] gpos, string[] scopes, GpoSelection selection)
+    {
+        if(!IsWriteAuthorized(gpos,scopes,selection))
+            throw new PolicyException("GPO_WRITE_NOT_AUTHORIZED","This GPO or scope is outside the current change boundary. Authorize this plan before Apply, Rollback or Refresh.");
     }
 
     public static void ValidateConsent(GpoWorkflowPlan plan, GpoConsent consent)

@@ -25,10 +25,9 @@ public sealed class GpoWorkflowService(IConfiguration config,Store store,Operati
     private string ConfigHash=>PolicyValues.Hash(new{domain=Domain,dc=Dc,backupPath=config["Windows:BackupPath"],approvedGpos=ApprovedGpos,authorizedOus=AuthorizedOus,allowedHosts=AllowedHosts});
     private GpoInventory Authorize(GpoInventory source)
     {
-        var allGpos=ApprovedGpos.Contains("*"); var allScopes=AuthorizedOus.Contains("*");
-        var gpos=source.Gpos.Where(g=>allGpos||ApprovedGpos.Any(id=>string.Equals(id.Trim('{','}'),g.Id.Trim('{','}'),StringComparison.OrdinalIgnoreCase))).ToArray();
-        var scopes=source.Scopes.Where(s=>allScopes||AuthorizedOus.Any(dn=>string.Equals(s.Dn,dn,StringComparison.OrdinalIgnoreCase)||s.Dn.EndsWith(","+dn,StringComparison.OrdinalIgnoreCase))).ToArray();
-        return source with{Gpos=gpos,Scopes=scopes};
+        // Discovery/preview are read-only under the delegated account. A saved
+        // write boundary must not hide the rest of the domain inventory.
+        return source;
     }
     private Timer? cleanup;
     private void Expire()
@@ -115,7 +114,7 @@ public sealed class GpoWorkflowService(IConfiguration config,Store store,Operati
         if(gpo is null||!gpo.Selectable||scope is null)throw new PolicyException("GPO_SELECTION_REQUIRED","Select an available GPO and scope from the discovered list.");
         if(mapping.DomainPolicySensitive && scope.Kind!="Domain") throw new PolicyException("PASSWORD_SCOPE_MISMATCH","Domain password and lockout policies require the domain root.");
         var preview=await Run<GpoPreview>("gpoPreview",c,new{selection,mapping},ct);
-        var plan=new GpoWorkflowPlan(Guid.NewGuid().ToString("N"),actor,c.Inventory.ExecutionUser,Mode,Domain,Dc,selection,preview,PolicyValues.Now(),PolicyValues.Hash(mapping),ConfigHash);
+        var plan=new GpoWorkflowPlan(Guid.NewGuid().ToString("N"),actor,c.Inventory.ExecutionUser,Mode,Domain,Dc,selection,preview,PolicyValues.Now(),PolicyValues.Hash(mapping),ConfigHash,GpoWorkflowRules.IsWriteAuthorized(ApprovedGpos,AuthorizedOus,selection));
         store.Put("gpo_plans",plan.Id,plan);store.Audit("GPO_PLAN_PREPARED",actor,details:plan);
         return plan;
     }
@@ -133,10 +132,13 @@ public sealed class GpoWorkflowService(IConfiguration config,Store store,Operati
         if(!string.IsNullOrEmpty(plan.MappingHash) && !string.Equals(plan.MappingHash,PolicyValues.Hash(mapping),StringComparison.Ordinal)) throw new PolicyException("GPO_MAPPING_CHANGED","The production mapping changed after this plan was prepared. Generate a fresh preview.");
         if(operation is not ("apply" or "rollback" or "verify" or "refresh"))
             throw new PolicyException("OPERATION_DENIED","Unknown GPO operation.");
+        if(operation=="refresh" && consent.Refresh is not (null or "Pdc" or "Scope"))
+            throw new PolicyException("GPO_OPTIONS_INVALID","Choose PDC or scope computers for policy refresh.");
         if(operation!="verify")
         {
             if(!config.GetValue<bool>("Windows:EnableWrites"))throw new PolicyException("WRITES_DISABLED","Enable the production change gate first.");
             GpoWorkflowRules.ValidateWriteScope(ApprovedGpos,AuthorizedOus);
+            GpoWorkflowRules.ValidateWriteSelection(ApprovedGpos,AuthorizedOus,plan.Selection);
         }
         // Read and validate the latest execution record only after claiming the GPO.
         // Verification and refresh must not overwrite another operation's result.
@@ -165,7 +167,7 @@ public sealed class GpoWorkflowService(IConfiguration config,Store store,Operati
                 if(live.RefreshResults.Length==0 && previous.Result.RefreshResults.Length>0) live=live with{RefreshResults=previous.Result.RefreshResults};
                 previous=previous with{Result=live,UpdatedAt=PolicyValues.Now()};
                 store.Put("gpo_runs",id,previous,live.State);
-                if(!live.GpoPublished || !live.LinkVerified || live.State is not ("PUBLISHED" or "NO_CHANGE"))
+                if(live.State != "ROLLED_BACK" && (!live.GpoPublished || !live.LinkVerified || live.State is not ("PUBLISHED" or "NO_CHANGE")))
                     throw new PolicyException("GPO_DRIFT_DETECTED","Live GPO or link state no longer matches the requested state. Refresh was blocked; prepare a fresh remediation plan.");
             }
             var result=previous?.Result??new("APPLYING","Execution started; inspect backup after an interruption.",null,null,null,false,false,[],"PENDING");
@@ -174,7 +176,7 @@ public sealed class GpoWorkflowService(IConfiguration config,Store store,Operati
             var run=new GpoWorkflowRun(id,plan,result with{State=operation.ToUpperInvariant()+"ING"},PolicyValues.Now(),operation=="apply"?consent:previous?.Approval,correlationId,startedAt);
             try{
                 store.Put("gpo_runs",id,run,run.Result.State);store.Audit("GPO_"+operation.ToUpperInvariant()+"_STARTED",actor,jobId:id,controlId:plan.Selection.Setting,gpoId:plan.Selection.GpoId,details:new{id,correlationId,plan.ExecutionUser});
-                result=await Run<GpoWorkflowResult>("gpo"+char.ToUpperInvariant(operation[0])+operation[1..],c,new{plan,mapping,previous=previous?.Result,consent=operation=="apply"?consent:previous?.Approval},CancellationToken.None);
+                result=await Run<GpoWorkflowResult>("gpo"+char.ToUpperInvariant(operation[0])+operation[1..],c,new{plan,mapping,previous=previous?.Result,refresh=operation=="refresh"?consent.Refresh:null,consent=operation=="apply"?consent:previous?.Approval},CancellationToken.None);
                 if(operation=="verify" && previous is not null && result.RefreshResults.Length==0 && previous.Result.RefreshResults.Length>0)
                     result=result with{RefreshResults=previous.Result.RefreshResults};
                 run=run with{Result=result,UpdatedAt=PolicyValues.Now()};
