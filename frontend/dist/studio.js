@@ -23,6 +23,10 @@
     const sections=s.catalog.sections.filter(x=>!x.parentId&&s.catalog.rules.some(r=>r.id.startsWith(x.id+'.')));
     return `<nav class="studio-sections" aria-label="${text(s,'Benchmark bölmələri','Benchmark sections')}"><div class="studio-section-title">${text(s,'BÖLMƏLƏR','SECTIONS')}</div><button data-catalog-section="" aria-pressed="${!s.catalogSection}"><span>${text(s,'Bütün qaydalar','All controls')}</span><b>${s.catalog.rules.length}</b></button>${sections.map(x=>`<button data-catalog-section="${esc(x.id)}" aria-pressed="${s.catalogSection===x.id}"><span><i>${esc(x.id)}</i>${esc(x.title)}</span><b>${s.catalog.rules.filter(r=>r.id.startsWith(x.id+'.')).length}</b></button>`).join('')}</nav>`;
   }
+  function summary(s) {
+    const rules=s.catalog.rules;
+    return `<section class="friendly-summary" aria-label="${text(s,'Kataloq xülasəsi','Catalog summary')}">${[[rules.length,text(s,'Bütün qaydalar','All controls'),'total'],[rules.filter(r=>r.implementation==='live').length,text(s,'Avtomatik tətbiqə hazır','Ready for automation'),'ready'],[rules.filter(r=>r.implementation==='manual').length,text(s,'Əl ilə yoxlanılır','Reviewed manually'),'manual']].map(([count,label,tone])=>`<div class="${tone}"><span>${label}</span><strong>${count}</strong></div>`).join('')}</section>`;
+  }
   function filters(s) {
     const options=(items,value)=>items.map(([v,label])=>`<option value="${v}" ${v===value?'selected':''}>${label}</option>`).join('');
     return `<div class="studio-status-filters"><label>${text(s,'İcra dəstəyi','Execution support')}<select id="catalog-support">${options([['ALL',text(s,'Bütün dəstək növləri','All support types')],['live',text(s,'Avtomatlaşdırma hazır','Automation ready')],['manual',text(s,'Əl ilə yoxlama','Manual review')],['unavailable',text(s,'Mapping mövcud deyil','Mapping unavailable')]],s.catalogSupport)}</select></label><label>${text(s,'Son tətbiq qeydi','Last implementation record')}<select id="catalog-status">${options([['ALL',text(s,'Bütün statuslar','All statuses')],['unknown',text(s,'Yoxlanmayıb','Not assessed')],['verified',text(s,'Tətbiq təsdiqlənib','Implementation verified')],['attention',text(s,'Yoxlama tələb edir','Needs review')],['pending',text(s,'İcra / təsdiq gözlənilir','In progress / pending')],['rolledback',text(s,'Geri qaytarılıb','Rolled back')]],s.catalogStatus)}</select></label><span>${text(s,'Statuslar qeydə alınmış əməliyyatları göstərir.','Statuses reflect recorded operations.')}</span></div>`;
@@ -35,5 +39,5 @@
   function loading(s) {
     return `<section class="studio-loading" role="status"><span class="studio-breadcrumb">GPO Remediator</span><h1>${text(s,'İş sahəsi açılır','Opening workspace')}</h1><p>${text(s,'Benchmark kataloqu yüklənir…','Loading benchmark catalog…')}</p><div class="studio-skeleton" aria-hidden="true"></div><div class="studio-skeleton" aria-hidden="true"></div><div class="studio-skeleton" aria-hidden="true"></div></section>`;
   }
-  window.GpoStudio=Object.freeze({header,navigation,filters,table,matches,statusKey,ordered,loading});
+  window.GpoStudio=Object.freeze({header,navigation,summary,filters,table,matches,statusKey,ordered,loading});
 })();
