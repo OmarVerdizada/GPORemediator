@@ -1,4 +1,6 @@
-# GPO Remediator 3.3.0
+# GPO Remediator 3.3.1
+
+The new Recipes view lists all controls in numeric order with descriptions, recommended states, automation support and recorded implementation status, even without a domain connection. See `RELEASE-NOTES-RECIPES-3.3.1.md`.
 
 The redesigned frontend has a current-environment dashboard, clearer catalog statistics, consistent controls and refined mobile/dark layouts. See `RELEASE-NOTES-DESIGN-3.3.0.md`.
 
