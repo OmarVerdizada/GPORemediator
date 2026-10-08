@@ -1,4 +1,6 @@
-# GPO Remediator 3.1.3
+# GPO Remediator 3.2.0
+
+The product workspace now includes an actionable dashboard, recent controls, catalog hierarchy/list views, filtered CSV export, operation detail panels, notification access and an AZ/EN field guide. Operations refresh from recorded server state while being viewed. PowerShell transport uses bounded output buffers, aligned timeouts and structured input validation; rejected stop requests no longer terminate an active operation. See `RELEASE-NOTES-PRODUCT-3.2.0.md`.
 
 > **3.1.3 workflow maintenance:** The delegated execution account is now entered once per active browser workflow, survives the single managed change-gate restart through memory-only tab recovery, and the final preview is automatically regenerated after restart so the first Apply cannot use a stale pre-authorization plan. The password is never written to browser storage or disk.
 >

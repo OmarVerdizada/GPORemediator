@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.NetworkInformation;
 using System.Security.Principal;
+using System.Security.Claims;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
@@ -26,6 +27,9 @@ var real=configuredMode.Equals("Windows",StringComparison.OrdinalIgnoreCase);
 var setup=configuredMode.Equals("Setup",StringComparison.OrdinalIgnoreCase);
 var mode=real?"WINDOWS":"SETUP";
 var setupOwner=OperatingSystem.IsWindows()?(WindowsIdentity.GetCurrent().Name??""):Environment.UserName;
+// The desktop console runs as its launcher owner. Windows authentication is
+// optional for installations that deliberately require per-browser identities.
+var windowsOperatorAuth=string.Equals(builder.Configuration["OperatorAuthentication"],"Windows",StringComparison.OrdinalIgnoreCase);
 var programData=Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData);
 var dataRoot=Path.Combine(programData,"GpoRemediator","Data");
 Directory.CreateDirectory(dataRoot);
@@ -85,7 +89,13 @@ app.Use(async(context,next)=>
     catch(JsonException) { context.Response.StatusCode=400; await context.Response.WriteAsJsonAsync(new{code="INVALID_JSON",message="Request must contain valid typed JSON."}); }
     catch(Exception ex) { app.Logger.LogError(ex,"Request {CorrelationId} failed for {Method} {Path}",context.Items["CorrelationId"],context.Request.Method,context.Request.Path); context.Response.StatusCode=500; await context.Response.WriteAsJsonAsync(new{code="INTERNAL_ERROR",correlationId=context.Items["CorrelationId"],message="The operation could not complete. Review the protected diagnostic log with this correlation ID."}); }
 });
-app.UseAuthentication(); app.UseAuthorization();
+if(windowsOperatorAuth) app.UseAuthentication();
+else app.Use(async(context,next)=>
+{
+    context.User=new ClaimsPrincipal(new ClaimsIdentity([new Claim(ClaimTypes.Name,setupOwner)],"LocalLauncher"));
+    await next(context);
+});
+app.UseAuthorization();
 app.Use(async(context,next)=>
 {
     if(!context.Request.Path.StartsWithSegments("/api/v1/health"))
@@ -193,7 +203,7 @@ SetupConfigView CurrentSetupConfig()
 }
 app.MapGet("/api/v1/health/live",()=>Results.Ok(new{status="live",version="1.0"}));
 app.MapGet("/api/v1/health/ready",()=>Results.Ok(new{status="ready",mode,database=true}));
-app.MapGet("/api/session",(HttpContext context,IAntiforgery csrf)=>new {mode,@operator=Operator(context),role=Role(context),csrfToken=csrf.GetAndStoreTokens(context).RequestToken,identityStrategy=real?"Authenticated Windows operator plus explicit delegated execution identity":"Authenticated launcher identity",realModeEnabled=real,setupRequired=localSetup});
+app.MapGet("/api/session",(HttpContext context,IAntiforgery csrf)=>new {mode,@operator=Operator(context),role=Role(context),csrfToken=csrf.GetAndStoreTokens(context).RequestToken,identityStrategy=windowsOperatorAuth?"Authenticated Windows operator plus explicit delegated execution identity":"Local launcher owner plus explicit delegated execution identity",realModeEnabled=real,setupRequired=localSetup});
 app.MapGet("/api/service",(OperationGate gate)=>new {
     mode, processId=Environment.ProcessId, stopping=gate.Maintenance,
     managed=builder.Configuration.GetValue<bool>("LauncherManaged"),

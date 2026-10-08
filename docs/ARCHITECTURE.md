@@ -6,7 +6,7 @@ GPO Remediator is a local-only Windows management application. The browser UI bi
 
 `GpoRemediator.cmd` launches the PowerShell bootstrapper. A matching packaged runtime is reused. If the backend source generation changed or repair is requested, the launcher verifies and installs the bundled self-contained runtime archive with its source fingerprint and production marker. Normal starts do not rebuild or download dependencies.
 
-The ASP.NET Core service enforces loopback access, Windows authentication in real mode, an operator allowlist, CSRF/origin checks, a write-mode gate and one process-level privileged-operation gate. Real GPO work is delegated only to the bundled production workflow.
+The ASP.NET Core service enforces loopback access, an operator allowlist, CSRF/origin checks, a write-mode gate and one process-level privileged-operation gate. The desktop console defaults to `OperatorAuthentication: LocalLauncher`: local browser requests use the Windows identity that launched the backend, without a browser Windows Security prompt. Local users with access to the console share that operator identity; installations requiring separate browser identities can select `OperatorAuthentication: Windows` to retain Negotiate authentication. Explicit delegated credentials are still required for AD execution. Real GPO work is delegated only to the bundled production workflow.
 
 ## AD execution boundary
 

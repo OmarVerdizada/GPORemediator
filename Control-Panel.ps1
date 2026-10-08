@@ -86,6 +86,7 @@ $script:releaseReady = Test-VerifiedReleaseArchive
 
         <StackPanel Grid.Row="6">
           <Button Name="Repair" Content="Reinstall verified runtime" Style="{StaticResource SideButton}"/>
+          <Button Name="CopyStatus" Content="Copy service summary" Style="{StaticResource SideButton}"/>
           <Button Name="Logs" Content="Open diagnostics folder" Style="{StaticResource SideButton}" Margin="0"/>
           <TextBlock Text="No SDK is required for normal startup or runtime repair." Foreground="#A4ADCD" FontSize="10" TextWrapping="Wrap" Margin="2,10,2,0"/>
         </StackPanel>
@@ -342,6 +343,14 @@ function Refresh-Panel {
 
 $ui.Start.Add_Click({ try { $script:autoOpen=$true; $script:openedForLaunch=$false; Start-Launcher -Mode 'Auto'; $ui.Message.Text='Starting the verified local package. The browser opens automatically when readiness passes.'; Refresh-Panel } catch { $ui.Message.Text=$_.Exception.Message } })
 $ui.Open.Add_Click({ Open-Product })
+$window.FindName('CopyStatus').Add_Click({
+    try {
+        $service=Get-RemediatorService
+        $summary=[ordered]@{product='GPO Remediator';capturedAt=[DateTimeOffset]::Now.ToString('o');running=[bool]$service;mode=if($service){[string]$service.mode}else{'Stopped'};url=if($service){[string]$service.url}else{"http://127.0.0.1:$Port"};releaseArchiveVerified=[bool]$script:releaseReady;configurationPresent=(Test-Path -LiteralPath $localConfig);processId=if($service){[int]$service.processId}else{$null}}
+        [Windows.Clipboard]::SetText(($summary | ConvertTo-Json))
+        $ui.Message.Text='Service summary copied. This summary contains no credentials or configuration contents.'
+    } catch { $ui.Message.Text='Could not copy the service summary: '+$_.Exception.Message }
+})
 $ui.Stop.Add_Click({ Request-ServiceAction 'stop' })
 $ui.Restart.Add_Click({ Request-ServiceAction 'restart' })
 $ui.Preflight.Add_Click({ Start-AdPreflight; Refresh-Panel })

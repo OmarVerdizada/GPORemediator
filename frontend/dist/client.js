@@ -156,7 +156,9 @@
       }
       if (!response.ok) {
         const error = new Error((storage.get('gr-lang','az')==='az'&&errors[data.code]) || data.message || `Request failed (HTTP ${response.status}).`);
-        error.code = data.code; error.status = response.status; throw error;
+        error.code = data.code; error.status = response.status;
+        error.correlationId = data.correlationId || response.headers.get('X-Correlation-ID');
+        throw error;
       }
       if (path.startsWith('/api/gpo/') && !path.endsWith('/disconnect')) ephemeralCredential.touch();
       return data;
@@ -179,7 +181,12 @@
       throw error;
     } finally { clearTimeout(timer); active.delete(pending); }
   }
-  async function reconnectDelegated() {
+  let reconnectPending = null;
+  function reconnectDelegated() {
+    if (!reconnectPending) reconnectPending = restoreDelegated().finally(() => { reconnectPending = null; });
+    return reconnectPending;
+  }
+  async function restoreDelegated() {
     const credential = ephemeralCredential.get();
     if (!credential) return null;
     try {

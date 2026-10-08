@@ -32,17 +32,21 @@ function Invoke-RemediatorServiceAction {
             throw ('Windows / AD promotion is blocked because the saved configuration is incomplete or invalid: '+$_.Exception.Message)
         }
     }
-    if($Action -eq 'stop'){
-        @{requestedAt=[DateTimeOffset]::UtcNow.ToString('o');requestedBy=[Security.Principal.WindowsIdentity]::GetCurrent().Name} |
-            ConvertTo-Json | Set-Content -LiteralPath $stopMarker -Encoding UTF8
-    }
     $baseUrl=([string]$state.url).TrimEnd('/')
+    $serviceUri=$null
+    if(![Uri]::TryCreate($baseUrl,[UriKind]::Absolute,[ref]$serviceUri) -or !$serviceUri.IsLoopback -or $serviceUri.Scheme -notin @('http','https') -or $serviceUri.UserInfo){throw 'Service state contains an invalid local URL. No credentials were sent.'}
     try {
         $session=Invoke-WebRequest -UseBasicParsing -UseDefaultCredentials -Uri ($baseUrl+'/api/session') -SessionVariable web -TimeoutSec 8
         $token=($session.Content | ConvertFrom-Json).csrfToken
         $headers=@{'X-CSRF-Token'=[string]$token;'Origin'=$baseUrl}
         $result=Invoke-WebRequest -UseBasicParsing -UseDefaultCredentials -Uri ($baseUrl+'/api/service/'+$Action) -WebSession $web -Headers $headers -Method Post -ContentType 'application/json' -Body '{}' -TimeoutSec 8
         $parsed=$result.Content | ConvertFrom-Json
+        if($Action -eq 'stop'){
+            # Write only after acceptance. A busy/denied API response must never
+            # leave a marker that makes the launcher terminate an active job.
+            @{requestedAt=[DateTimeOffset]::UtcNow.ToString('o');requestedBy=[Security.Principal.WindowsIdentity]::GetCurrent().Name} |
+                ConvertTo-Json | Set-Content -LiteralPath $stopMarker -Encoding UTF8
+        }
         # The backend's generic restart endpoint preserves the current mode. In recovery Setup mode
         # the operator expects Restart to promote a valid saved configuration into Windows / AD mode.
         # Overwrite the launcher marker after the API accepted the restart so the handoff is explicit.
@@ -53,7 +57,10 @@ function Invoke-RemediatorServiceAction {
         }
     } catch {
         if($Action -eq 'restart'){ throw }
+        if($_.Exception.Response -and [int]$_.Exception.Response.StatusCode -ge 400 -and [int]$_.Exception.Response.StatusCode -lt 500){throw}
         # A dead/unresponsive backend must not keep the old launcher alive forever.
+        @{requestedAt=[DateTimeOffset]::UtcNow.ToString('o');source='UnreachableBackendStop'} |
+            ConvertTo-Json | Set-Content -LiteralPath $stopMarker -Encoding UTF8
         try {
             $p=Get-Process -Id ([int]$state.processId) -ErrorAction Stop
             if($p.ProcessName -ieq 'GpoRemediator'){ Stop-Process -Id $p.Id -Force -ErrorAction Stop }
