@@ -1,6 +1,6 @@
-GPO Remediator 3.2.1 - product workspace
+GPO Remediator 3.3.0 - product workspace
 
-See RELEASE-NOTES-WORKFLOW-3.2.1.md for the product workspace and PowerShell improvements.
+See RELEASE-NOTES-DESIGN-3.3.0.md for the frontend design improvements.
 The self-contained backend/runtime archive is rebuilt from the current source.
 Startup recovery and tab-memory delegated-session continuity are included.
 No credentials are persisted to browser storage or configuration files.

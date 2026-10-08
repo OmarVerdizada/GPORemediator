@@ -1,4 +1,6 @@
-# GPO Remediator 3.2.1
+# GPO Remediator 3.3.0
+
+The redesigned frontend has a current-environment dashboard, clearer catalog statistics, consistent controls and refined mobile/dark layouts. See `RELEASE-NOTES-DESIGN-3.3.0.md`.
 
 The product workspace now includes an actionable dashboard, recent controls, catalog hierarchy/list views, filtered CSV export, operation detail panels, notification access and an AZ/EN field guide. Operations refresh from recorded server state while being viewed. PowerShell transport uses bounded output buffers, aligned timeouts and structured input validation; rejected stop requests no longer terminate an active operation. See `RELEASE-NOTES-PRODUCT-3.2.0.md` for product improvements and `RELEASE-NOTES-WORKFLOW-3.2.1.md` for discovery, preview and rollback refresh fixes.
 
