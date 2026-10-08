@@ -222,3 +222,17 @@ input:focus, select:focus, textarea:focus {border-color:var(--accent2)!important
 .recipe-offline ol {padding-left:20px}
 @media(max-width:900px) {.recipe-coverage{grid-template-columns:1fr;gap:20px}}
 @media(max-width:700px) {.recipe-coverage,.recipe-card,.recipe-offline{padding:18px}.recipe-card header{gap:10px}.recipe-card h3{font-size:13px;margin-right:0}.recipe-card footer{flex-direction:column;align-items:stretch;gap:12px}.recipe-card footer button{min-height:44px}.product-view-switch button{padding:8px!important}}
+
+/* Collapsible benchmark domains retain the 3.3.1 workspace. */
+.ent-domain{--domain-color:#4361ee;--domain-soft:#edf1ff;border-left:3px solid var(--domain-color)}
+.domain-tone-1{--domain-color:#8b5cf6;--domain-soft:#f2edff}.domain-tone-2{--domain-color:#0891b2;--domain-soft:#e8f8fc}.domain-tone-3{--domain-color:#d97706;--domain-soft:#fff6e5}.domain-tone-4{--domain-color:#0d9477;--domain-soft:#e7f7f1}.domain-tone-5{--domain-color:#c24175;--domain-soft:#fcecf3}.domain-tone-6{--domain-color:#52709e;--domain-soft:#edf2fa}
+.command-domain-stack .ent-domain .domain-icon{background:var(--domain-soft);color:var(--domain-color);border:1px solid color-mix(in srgb,var(--domain-color) 20%,var(--line));font-size:23px}
+.ent-domain .domain-kicker{color:var(--domain-color)}.ent-domain .domain-progress i{background:var(--domain-color)}
+.ent-domain-head:focus-visible{outline:2px solid var(--domain-color);outline-offset:-4px}
+.recipe-list .recipe-domain{margin:0}.recipe-domain .ent-domain-body{padding:0 20px 20px;display:grid;gap:14px;background:var(--surface2)}
+.recipe-domain .recipe-section{margin:16px 0 0}.recipe-domain .recipe-card{margin:0}.domain-empty{padding:20px;margin:0;color:var(--muted);font-size:13px}
+[data-theme="dark"] .command-domain-stack .ent-domain .domain-icon{background:color-mix(in srgb,var(--domain-color) 18%,var(--surface));color:color-mix(in srgb,var(--domain-color) 55%,white)}
+[data-theme="dark"] .ent-domain .domain-kicker{color:color-mix(in srgb,var(--domain-color) 55%,white)}
+@media(max-width:700px){.recipe-domain .ent-domain-body{padding:0 12px 12px}.ent-domain .domain-title strong{overflow-wrap:anywhere}}
+
+.ent-domain.open{border-left-color:var(--domain-color)}

@@ -1,4 +1,4 @@
-GPO Remediator 3.3.1 — production package
+GPO Remediator 3.3.2 — production package
 
 Top-level runtime/operator files:
 - GpoRemediator.cmd

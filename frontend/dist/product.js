@@ -50,13 +50,27 @@
     const checked=rules.filter(r=>controlStatus(s,r).run).length;
     return `<section class="recipe-coverage"><div><span class="product-eyebrow">${text(s,'BENCHMARK ƏHATƏSİ','BENCHMARK COVERAGE')}</span><h2>${text(s,'Bütün qaydalar, bir baxışda','Every control at a glance')}</h2><p>${text(s,'Kataloq GPO bağlantısı olmadan da açıqdır. Tətbiq statusları son qeydə alınmış əməliyyata əsaslanır; domen üzrə audit balı deyil.','The catalog is available without a GPO connection. Implementation statuses reflect the last recorded operation, not a domain audit score.')}</p><a href="#/benchmark">${text(s,'Qaydaları nəzərdən keçir','Browse controls')} →</a></div><dl>${[[rules.length,text(s,'Ümumi qayda','Total controls')],[ready,text(s,'Avtomatlaşdırma hazır','Automation ready')],[manual,text(s,'Əl ilə yoxlama','Manual review')],[rules.length-checked,text(s,'Yoxlanmayıb','Not assessed')]].map(([n,label])=>`<div><dd>${n}</dd><dt>${label}</dt></div>`).join('')}</dl></section>`;
   }
-  function recipes(s, rules) {
+  function recipeCards(s, rules) {
     let section='';
     return [...rules].sort((a,b)=>a.id.localeCompare(b.id,undefined,{numeric:true})).map(rule=>{
       const group=s.catalog.sections.find(x=>x.id===rule.sectionId),status=controlStatus(s,rule);
       const heading=section!==rule.sectionId?`<h2 class="recipe-section">${esc(rule.sectionId)} <span>${esc(group?.title||'')}</span></h2>`:'';section=rule.sectionId;
       const support=rule.implementation==='live'?text(s,'Avtomatlaşdırma hazır','Automation ready'):rule.implementation==='manual'?text(s,'Əl ilə yoxlama','Manual review'):text(s,'Mapping mövcud deyil','Mapping unavailable');
       return `${heading}<article class="recipe-card"><header><span class="recipe-number">${esc(rule.id)}</span><div><h3><button data-rule="${esc(rule.id)}">${esc(rule.title)}</button></h3><div class="recipe-tags"><span>${esc(rule.level)}</span><span class="${rule.implementation==='live'?'good':'unknown'}">${support}</span><span class="${status.tone}">${status.label}</span></div></div><button class="fav-mini ${s.favorites.has(rule.id)?'active':''}" data-favorite="${esc(rule.id)}" aria-label="${text(s,'Seçilmiş statusunu dəyiş','Toggle favorite')}">${s.favorites.has(rule.id)?'★':'☆'}</button></header><p class="recipe-description">${esc(rule.description||text(s,'İzah əlavə edilməyib.','No description available.'))}</p><details><summary>${text(s,'Tam izahı oxu','Read full description')}</summary><p>${esc(rule.description||'—')}</p></details><footer><div><small>${text(s,'TÖVSİYƏ OLUNAN VƏZİYYƏT','RECOMMENDED STATE')}</small><strong>${esc(rule.recommended||text(s,'Benchmark izahına baxın','See benchmark description'))}</strong>${status.run?`<small>${text(s,'Son qeyd','Last record')}: ${date(status.run.updatedAt,s.lang)} · ${esc(status.run.plan?.preview?.gpo?.name||'GPO')}</small>`:''}</div><button data-rule="${esc(rule.id)}">${text(s,'Qaydanı aç','Open control')} →</button></footer></article>`;
+    }).join('');
+  }
+  const domainSymbols={'1':'⌾','2':'◇','3':'▤','4':'♧','5':'⚙','6':'⊞','7':'▱','8':'⇄','9':'◫','10':'◎','11':'⌁','12':'⚿','13':'⊘','14':'⊕','15':'◈','16':'⛨','17':'≋','18':'▦','19':'◉'};
+  function domainHeader(s, domain, rules, open) {
+    const ready=rules.filter(r=>r.implementation==='live').length;
+    return `<button type="button" class="ent-domain-head" data-domain="${esc(domain.id)}" aria-expanded="${open}" aria-controls="catalog-domain-${esc(domain.id)}"><span class="domain-icon" aria-hidden="true">${domainSymbols[domain.id]||'◆'}</span><span class="domain-title"><span class="domain-kicker">${text(s,'DOMEN','DOMAIN')} ${esc(domain.id)}</span><strong>${esc(domain.title)}</strong><small>${rules.length} ${text(s,'qayda','controls')} · ${ready} ${text(s,'avtomatlaşdırma hazır','automation ready')}</small></span><span class="domain-counter"><i>L1</i><b>${rules.filter(r=>r.level==='L1').length}</b></span><span class="domain-counter"><i>L2</i><b>${rules.filter(r=>r.level==='L2').length}</b></span><span class="domain-progress" aria-hidden="true"><i style="width:${Math.round(ready/Math.max(1,rules.length)*100)}%"></i></span><span class="domain-chevron" aria-hidden="true">${open?'−':'+'}</span></button>`;
+  }
+  function recipes(s, rules) {
+    const filtered=!!s.query||s.level!=='ALL'||s.automation!=='ALL'||s.savedView!=='ALL';
+    return s.catalog.sections.filter(d=>!d.parentId).sort((a,b)=>a.id.localeCompare(b.id,undefined,{numeric:true})).map(domain=>{
+      const matching=rules.filter(r=>r.id.startsWith(domain.id+'.'));
+      if(filtered&&!matching.length)return '';
+      const open=!!s.expandedTop?.has(domain.id);
+      return `<section class="ent-domain recipe-domain domain-tone-${(Number(domain.id)-1)%7} ${open?'open':''}">${domainHeader(s,domain,matching,open)}${open?`<div id="catalog-domain-${esc(domain.id)}" class="ent-domain-body">${matching.length?recipeCards(s,matching):`<p class="domain-empty">${text(s,'Bu domen üçün benchmark-da qayda yoxdur.','The benchmark contains no controls for this domain.')}</p>`}</div>`:''}</section>`;
     }).join('');
   }
   function disconnectedControl(s, rule) {
@@ -93,5 +107,5 @@
     const cell=value=>'"'+String(value??'').replace(/^[=+@-]/,"'$&").replaceAll('"','""')+'"';
     return '\uFEFF'+[['Control','Title','Level','Automation','Implementation','Recommended'],...rules.map(r=>[r.id,r.title,r.level,r.automation,r.implementation,r.recommended])].map(row=>row.map(cell).join(',')).join('\r\n');
   }
-  window.GpoProduct=Object.freeze({dashboard,coverage,recipes,controlStatus,disconnectedControl,catalogTools,inspector,help,remember,sortedRuns,active,csv,date});
+  window.GpoProduct=Object.freeze({dashboard,coverage,recipes,domainHeader,controlStatus,disconnectedControl,catalogTools,inspector,help,remember,sortedRuns,active,csv,date});
 })();

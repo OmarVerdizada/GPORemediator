@@ -1,4 +1,4 @@
-# GPO Remediator 3.3.1
+# GPO Remediator 3.3.2
 
 The new Recipes view lists all controls in numeric order with descriptions, recommended states, automation support and recorded implementation status, even without a domain connection. See `RELEASE-NOTES-RECIPES-3.3.1.md`.
 
