@@ -1,6 +1,6 @@
-# GPO Remediator 3.5.0
+# GPO Remediator 3.5.1
 
-The 3.5.0 design system preserves the blue workspace while adding collapsible navigation, two-column domains, an appearance menu, accessible form feedback, compact operation tables, recorded timelines, audit-chain diagnostics and responsive mobile navigation. See `RELEASE-NOTES-SYSTEM-3.5.0.md`.
+The 3.5.1 workspace adds neutral graphite surfaces, local Geist fonts, comfortable/compact density, three accent palettes, a control-by-control evidence map and accessible GUID/DN/hash copy actions. It builds on the existing navigation, operation tables, audit diagnostics and mobile layouts. See `RELEASE-NOTES-PREMIUM-3.5.1.md`.
 
 The new Recipes view lists all controls in numeric order with descriptions, recommended states, automation support and recorded implementation status, even without a domain connection. See `RELEASE-NOTES-RECIPES-3.3.1.md`.
 
@@ -123,7 +123,7 @@ Settings therefore keeps wildcard discovery read-only and directs production aut
 
 ## Frontend development
 
-Edit `frontend/source/styles/tokens.css` for theme colors, typography, spacing and radii. Component sources live in `frontend/source/styles/`; `scripts/Build-Styles.cjs` compiles them deterministically into the single served `app.css`, retaining selector order and removing exact duplicate blocks. New styles do not use `!important`. Node.js with built-in modules is required only for this developer build step; there are no npm packages or remote runtime assets. `Build-Portable.ps1` compiles CSS before source/dist synchronization.
+Edit `frontend/source/styles/tokens.css` for theme colors, typography, spacing and radii. Component sources live in `frontend/source/styles/`; `premium.css` defines material, density and accent variants. `premium.js` renders the recorded control map, compact header and copy actions. The unmodified local font files in `frontend/source/fonts/` include their upstream revision and SIL Open Font License. `scripts/Build-Styles.cjs` compiles styles deterministically into the single served `app.css`, retaining selector order and removing exact duplicate blocks. New styles do not use `!important`. Node.js with built-in modules is required only for this developer build step; there are no npm packages or remote runtime assets. `Build-Portable.ps1` compiles CSS before source/dist synchronization.
 
 Shared render components are in `components.js`, preferences in `preferences.js`, catalog rendering in `catalog-view.js`, control/plan rendering in `control-view.js`, and operations/audit rendering in `operation-view.js`. Authentication, mutation guards and API orchestration remain in `workspace.js`. Imported CIS titles, recommendations and descriptions retain the benchmark's English source text; product navigation, labels, guidance and status vocabulary support AZ/EN.
 

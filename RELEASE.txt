@@ -1,6 +1,6 @@
-GPO Remediator 3.5.0 - consistent operator design system
+GPO Remediator 3.5.1 - graphite premium workspace
 
-See RELEASE-NOTES-SYSTEM-3.5.0.md for UI changes and validation.
+See RELEASE-NOTES-PREMIUM-3.5.1.md for UI changes and validation.
 The self-contained backend/runtime archive is rebuilt from current source.
 The frontend ships offline with one compiled stylesheet and local SVG icons.
 No credentials are persisted in browser storage or configuration files.

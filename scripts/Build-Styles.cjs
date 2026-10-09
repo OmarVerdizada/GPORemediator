@@ -1,7 +1,7 @@
 /* Deterministic offline CSS build. Preserves selector order and specificity. */
 const fs=require('node:fs'),path=require('node:path');
 const root=path.join(__dirname,'../frontend/source'),dir=path.join(root,'styles');
-const files=['tokens.css','settings.css','layout.css','command.css','console.css','product.css','screens.css','components.css'];
+const files=['tokens.css','settings.css','layout.css','command.css','console.css','product.css','screens.css','components.css','premium.css'];
 function blocks(css){let result=[],start=0,depth=0,quote='',comment=false;for(let i=0;i<css.length;i++){const c=css[i],next=css[i+1];if(comment){if(c==='*'&&next==='/'){comment=false;i++;}continue;}if(quote){if(c==='\\'){i++;continue;}if(c===quote)quote='';continue;}if(c==='/'&&next==='*'){comment=true;i++;continue;}if(c==='"'||c==="'"){quote=c;continue;}if(c==='{')depth++;if(c==='}') {depth--;if(depth===0){result.push(css.slice(start,i+1).trim());start=i+1;}}}if(depth!==0||quote||comment)throw Error('Unbalanced CSS');if(css.slice(start).trim())result.push(css.slice(start).trim());return result;}
 const chunks=files.flatMap(name=>blocks(fs.readFileSync(path.join(dir,name),'utf8')));
 // Exact duplicated blocks can safely retain the last occurrence. No reordering,
