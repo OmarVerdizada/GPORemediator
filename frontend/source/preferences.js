@@ -15,8 +15,8 @@
   }
   validate.sequence=0;
   function decorate(root){
-    for(const b of root.querySelectorAll('button:not(.ent-domain-head,.ent-sub-head,.ent-rule,.nav-link,.product-step,.product-recent,.graph-node,.pr-cell,.pr-map-heading,.pr-copy)')){
-      b.classList.add('ds-button');b.classList.toggle('ds-danger',b.matches('.danger-action,.danger,[data-confirm-run]'));b.classList.toggle('ds-primary',b.matches('.primary,.primary-inline,.primary-action,.gr-auto-btn.primary,[data-preview-submit]'));if(!b.classList.contains('ds-primary')&&!b.classList.contains('ds-danger'))b.classList.add('ds-secondary');
+    for(const b of root.querySelectorAll('button:not(.ent-domain-head,.ent-sub-head,.ent-rule,.nav-link,.product-step,.product-recent,.graph-node,.pr-cell,.pr-map-heading,.pr-copy,.gpo-option,.gpo-picker-trigger,.ds-activity-row)')){
+      b.classList.add('ds-button');b.classList.toggle('ds-danger',b.matches('.ds-danger,.danger-action,.danger,[data-confirm-run]'));b.classList.toggle('ds-primary',b.matches('.primary,.primary-inline,.primary-action,.gr-auto-btn.primary,[data-preview-submit]'));if(!b.classList.contains('ds-primary')&&!b.classList.contains('ds-danger'))b.classList.add('ds-secondary');
     }
   }
   function install(s,render,installNav){

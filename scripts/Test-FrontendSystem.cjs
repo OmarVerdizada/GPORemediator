@@ -18,6 +18,15 @@ assert.equal((ui.timeline(s,{result:{state:'NO_CHANGE'}}).match(/class="done"/g)
 assert.equal((ui.timeline(s,incomplete).match(/class="done"/g)||[]).length,2);
 assert.ok(ui.operations(s,s.history).includes('&lt;bad&gt;'));
 assert.ok(!ui.operations(s,s.history).includes('<bad>'));
+const recoverable={...incomplete,result:{state:'PUBLISHED',backupId:'backup-<id>'}};
+assert.ok(ui.operations(s,[recoverable]).includes('Rollback'));
+assert.ok(ui.recovery(s,recoverable).includes('data-rollback="&lt;unsafe&gt;"'));
+assert.ok(ui.recovery(s,recoverable).includes('backup-&lt;id&gt;'));
+for(const state of ['NO_CHANGE','ROLLED_BACK','ROLLBACK_DRIFT_DETECTED','APPLYING','ROLLBACKING','VERIFYING','REFRESHING']){
+ assert.ok(!ui.recovery(s,{...recoverable,result:{...recoverable.result,state}}).includes('<form'),state);
+}
+assert.ok(!ui.recovery(s,incomplete).includes('<form'));
+assert.ok(ui.recovery(s,{...recoverable,result:{...recoverable.result,state:'REVIEW_REQUIRED'}}).includes('<form'));
 assert.ok(ui.domainEvidence(s).includes('Not assessed'));
 s.audit={integrityValid:false,firstInvalidEventId:2,events:[{id:2,hash:'<bad>'}]};
 assert.ok(ui.auditChain(s).includes('First invalid event: #2'));
