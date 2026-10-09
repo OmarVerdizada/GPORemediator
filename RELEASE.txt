@@ -1,11 +1,8 @@
-GPO Remediator 3.3.2 - product workspace
+GPO Remediator 3.5.0 - consistent operator design system
 
-See RELEASE-NOTES-DOMAINS-3.3.2.md for the frontend design improvements.
-The self-contained backend/runtime archive is rebuilt from the current source.
-Startup recovery and tab-memory delegated-session continuity are included.
-No credentials are persisted to browser storage or configuration files.
-
-Apply always requires a fresh plan, explicit production authorization and approval.
-Interrupted writes and rollbacks remain subject to administrator review.
-Read-back, replication and effective endpoint compliance are tracked separately.
-Real Windows domain acceptance remains required before production rollout.
+See RELEASE-NOTES-SYSTEM-3.5.0.md for UI changes and validation.
+The self-contained backend/runtime archive is rebuilt from current source.
+The frontend ships offline with one compiled stylesheet and local SVG icons.
+No credentials are persisted in browser storage or configuration files.
+Apply and Rollback retain production authorization, impact acknowledgements and explicit confirmation.
+Recorded results, publication, replication and effective policy remain distinct.

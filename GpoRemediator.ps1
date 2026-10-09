@@ -34,7 +34,7 @@ $runtimeMarker = Join-Path $runtimeRoot 'production-backend-v4.ready'
 $runtimeInstallManifest = Join-Path $runtimeRoot 'runtime-install.json'
 $runtimeArchive = Join-Path $PSScriptRoot 'release\GpoRemediator-runtime-win-x64.zip'
 $runtimeArchiveHash = $runtimeArchive + '.sha256'
-$releaseVersion = '3.3.2'
+$releaseVersion = '3.5.0'
 # 3.1.2 keeps the 3.0 durable schema. It hardens startup recovery, removes the Setup->Windows restart race, and makes early backend failures self-diagnosing.
 # 3.1.2 intentionally uses fresh Setup/Windows state databases so incompatible serialized records from earlier preview builds cannot crash startup. Older databases are left untouched in ProgramData for archival/review.
 $stateSchemaVersion = '3.1.2'

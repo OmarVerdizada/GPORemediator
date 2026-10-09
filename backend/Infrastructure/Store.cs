@@ -120,12 +120,13 @@ public sealed class Store : IDisposable
             using var r=command.ExecuteReader(); var list=new List<AuditEvent>();
             while(r.Read()) list.Add(new(r.GetInt64(0),r.GetString(1),r.GetString(2),r.IsDBNull(3)?null:r.GetString(3),r.IsDBNull(4)?null:r.GetString(4),r.IsDBNull(5)?null:r.GetString(5),r.GetString(6),r.GetString(7),r.GetString(8),r.GetString(9))); return list.ToArray(); }
     }
-    public bool AuditIntegrity()
+    public (bool Valid, long? FirstInvalidEventId) AuditIntegrityReport()
     {
         string previous="GENESIS";
         foreach(var e in AuditEvents()) { var hash=PolicyValues.Hash(new {eventName=e.Event,operatorName=e.Operator,jobId=e.JobId,controlId=e.ControlId,gpoId=e.GpoId,details=e.Details,at=e.CreatedAt,previous});
-            if(e.PreviousHash!=previous || e.Hash!=hash) return false; previous=e.Hash; } return true;
+            if(e.PreviousHash!=previous || e.Hash!=hash) return (false,e.Id); previous=e.Hash; } return (true,null);
     }
+    public bool AuditIntegrity() => AuditIntegrityReport().Valid;
     public void Dispose() => db.Dispose();
 }
 

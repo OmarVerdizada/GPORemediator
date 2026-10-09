@@ -322,7 +322,7 @@ app.MapPost("/api/setup/write-mode",async(WriteModeRequest request,HttpContext c
     },lifetime);
     return new{saved=true,enableWrites=request.Enable,restartRequired=true,restartScheduled=request.AutoRestart};
 });
-app.MapGet("/api/audit",()=>new{events=store.AuditEvents(500).Reverse(),integrityValid=store.AuditIntegrity(),pageSize=500});
+app.MapGet("/api/audit",()=>{var report=store.AuditIntegrityReport();return new{events=store.AuditEvents(500).Reverse(),integrityValid=report.Valid,firstInvalidEventId=report.FirstInvalidEventId,pageSize=500};});
 app.MapGet("/api/settings",(HttpContext context)=>new
 {
     mode,identityStrategy=real?"Windows Integrated Authentication plus short-lived delegated GPO execution credentials":"Configuration only",@operator=Operator(context),

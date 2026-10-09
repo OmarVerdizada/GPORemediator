@@ -3,7 +3,7 @@ const assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('nod
 const window={GpoClient:{storage:{get:()=> '[]',set:()=>{}}}};
 const context=vm.createContext({window,Date,JSON,String,Number,Boolean});
 const source=path.join(__dirname,'../frontend/source');
-for(const name of ['ui-domain.js','product.js'])vm.runInContext(fs.readFileSync(path.join(source,name),'utf8'),context);
+for(const name of ['ui-domain.js','components.js','product.js'])vm.runInContext(fs.readFileSync(path.join(source,name),'utf8'),context);
 const product=window.GpoProduct,rule={id:'1.2.1',implementation:'live'};
 const s={lang:'en',history:[],favorites:new Set(),query:"",level:"ALL",automation:"ALL",savedView:"ALL",expandedTop:new Set(["1"]),catalog:{rules:[rule],sections:[{id:"1",title:"Accounts"}]}};
 assert.equal(product.controlStatus(s,rule).label,'Not assessed');

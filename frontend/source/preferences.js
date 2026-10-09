@@ -1,0 +1,31 @@
+(() => {
+  'use strict';
+  const storage=window.GpoClient.storage,ui=window.GpoComponents;
+  const preference=(key,fallback)=>storage.get(key,fallback);
+  function apply(s){
+    const root=document.documentElement,theme=s.theme==='system'?(matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'):s.theme;
+    root.dataset.grTheme=theme;root.dataset.sidebarCollapsed=preference('gr-sidebar-collapsed','false');root.dataset.largeText=preference('gr-large-text','false');root.dataset.contrast=preference('gr-high-contrast','false');storage.set('gr-theme',s.theme);
+  }
+  function menu(s){const text=(az,en)=>ui.text(s,az,en);return `<details class="ds-preferences"><summary aria-label="${text('Görünüş və kömək','Appearance and help')}">${ui.icon('settings')}<span>${text('Görünüş','Appearance')}</span></summary><div class="ds-preferences-panel"><label>${text('Tema','Theme')}<select data-preference="theme" aria-label="${text('Tema seçimi','Theme selection')}">${[['system',text('Sistem','System')],['light',text('Açıq','Light')],['dark',text('Tünd','Dark')]].map(([v,l])=>`<option value="${v}" ${s.theme===v?'selected':''}>${l}</option>`).join('')}</select></label><label>${text('Dil','Language')}<select data-preference="language" aria-label="${text('Dil seçimi','Language selection')}"><option value="az" ${s.lang==='az'?'selected':''}>Azərbaycan dili</option><option value="en" ${s.lang==='en'?'selected':''}>English</option></select></label><label class="ds-checkbox"><input type="checkbox" data-preference="large-text" ${preference('gr-large-text','false')==='true'?'checked':''}>${text('Böyük mətn','Large text')}</label><label class="ds-checkbox"><input type="checkbox" data-preference="high-contrast" ${preference('gr-high-contrast','false')==='true'?'checked':''}>${text('Yüksək kontrast','High contrast')}</label><button data-product-action="help">${ui.icon('help')}${text('Bələdçi və qısayollar','Guide and shortcuts')}</button></div></details>`;}
+  function validate(input,s){
+    if(!input?.willValidate)return;const id=input.dataset.errorId||(input.dataset.errorId='field-error-'+(++validate.sequence)),existing=document.getElementById(id);
+    if(input.validity.valid){input.removeAttribute('aria-invalid');existing?.remove();input.setAttribute('aria-describedby',(input.getAttribute('aria-describedby')||'').split(' ').filter(x=>x&&x!==id).join(' '));return;}
+    input.setAttribute('aria-invalid','true');let error=existing;if(!error){error=document.createElement('span');error.id=id;error.className='ds-field-error';error.setAttribute('role','status');input.insertAdjacentElement('afterend',error);input.setAttribute('aria-describedby',[(input.getAttribute('aria-describedby')||''),id].filter(Boolean).join(' '));}
+    const text=(az,en)=>ui.text(s,az,en);error.textContent=input.validity.valueMissing?text('Bu sahəni doldurun.','Complete this field.'):input.validity.patternMismatch?text('Təsdiq mətnini göstərildiyi kimi daxil edin.','Enter the confirmation text exactly as shown.'):input.validity.rangeOverflow?text('Dəyər maksimum '+input.max+' olmalıdır.','Maximum value is '+input.max+'.'):input.validity.rangeUnderflow?text('Dəyər minimum '+input.min+' olmalıdır.','Minimum value is '+input.min+'.'):text('Düzgün dəyər daxil edin.','Enter a valid value.');
+  }
+  validate.sequence=0;
+  function decorate(root){
+    for(const b of root.querySelectorAll('button:not(.ent-domain-head,.ent-sub-head,.ent-rule,.nav-link,.product-step,.product-recent,.graph-node)')){
+      b.classList.add('ds-button');b.classList.toggle('ds-danger',b.matches('.danger-action,.danger,[data-confirm-run]'));b.classList.toggle('ds-primary',b.matches('.primary,.primary-inline,.primary-action,.gr-auto-btn.primary,[data-preview-submit]'));if(!b.classList.contains('ds-primary')&&!b.classList.contains('ds-danger'))b.classList.add('ds-secondary');
+    }
+  }
+  function install(s,render,installNav){
+    if(document.querySelector('.ds-sidebar-toggle'))return;
+    const toggle=document.createElement('button');toggle.className='ds-sidebar-toggle';toggle.innerHTML=ui.icon('panel');toggle.addEventListener('click',()=>{storage.set('gr-sidebar-collapsed',preference('gr-sidebar-collapsed','false')==='true'?'false':'true');apply(s);update();});document.querySelector('.brand-lockup').insertAdjacentElement('afterend',toggle);
+    const update=()=>{toggle.setAttribute('aria-label',ui.text(s,'Yan paneli yığ / aç','Collapse / expand sidebar'));toggle.setAttribute('aria-expanded',preference('gr-sidebar-collapsed','false')!=='true');};update();
+    document.addEventListener('change',e=>{const key=e.target.dataset.preference;if(!key)return;if(key==='theme')s.theme=e.target.value;if(key==='language'){s.lang=e.target.value;window.GpoI18n.setLanguage(s.lang);storage.set('gr-lang',s.lang);installNav(document.querySelector('.sidebar nav'));}if(key==='large-text'||key==='high-contrast')storage.set('gr-'+key,String(e.target.checked));apply(s);render();update();});
+    document.addEventListener('invalid',e=>validate(e.target,s),true);document.addEventListener('input',e=>{if(e.target.hasAttribute('aria-invalid'))validate(e.target,s);});
+    matchMedia('(prefers-color-scheme: dark)').addEventListener('change',()=>{if(s.theme==='system')apply(s);});
+  }
+  window.GpoPreferences=Object.freeze({apply,menu,decorate,install,validate});
+})();

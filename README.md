@@ -1,4 +1,6 @@
-# GPO Remediator 3.3.2
+# GPO Remediator 3.5.0
+
+The 3.5.0 design system preserves the blue workspace while adding collapsible navigation, two-column domains, an appearance menu, accessible form feedback, compact operation tables, recorded timelines, audit-chain diagnostics and responsive mobile navigation. See `RELEASE-NOTES-SYSTEM-3.5.0.md`.
 
 The new Recipes view lists all controls in numeric order with descriptions, recommended states, automation support and recorded implementation status, even without a domain connection. See `RELEASE-NOTES-RECIPES-3.3.1.md`.
 
@@ -118,3 +120,11 @@ The default `*` entries are intentionally discovery-only. Operators do not need 
 7. Review the final plan once, enter the change/ticket approval, and Apply. If the page was reloaded/closed, the memory-only credential is intentionally gone and the account is requested once again before the final preview is regenerated.
 
 Settings therefore keeps wildcard discovery read-only and directs production authorization back to the remediation plan instead of asking the operator to enter GUID/OU values manually.
+
+## Frontend development
+
+Edit `frontend/source/styles/tokens.css` for theme colors, typography, spacing and radii. Component sources live in `frontend/source/styles/`; `scripts/Build-Styles.cjs` compiles them deterministically into the single served `app.css`, retaining selector order and removing exact duplicate blocks. New styles do not use `!important`. Node.js with built-in modules is required only for this developer build step; there are no npm packages or remote runtime assets. `Build-Portable.ps1` compiles CSS before source/dist synchronization.
+
+Shared render components are in `components.js`, preferences in `preferences.js`, catalog rendering in `catalog-view.js`, control/plan rendering in `control-view.js`, and operations/audit rendering in `operation-view.js`. Authentication, mutation guards and API orchestration remain in `workspace.js`. Imported CIS titles, recommendations and descriptions retain the benchmark's English source text; product navigation, labels, guidance and status vocabulary support AZ/EN.
+
+Run `node scripts/Test-FrontendSystem.cjs`, `node scripts/Test-RecipeWorkspace.cjs`, and `node scripts/Build-Styles.cjs --check` before packaging. Recorded outcomes and automation coverage are not a domain compliance score. Stage animation never invents backup/write/verification completion.

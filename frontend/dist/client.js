@@ -33,6 +33,9 @@
     favorites() { try { const value = JSON.parse(this.get('gr-favorites', '[]')); return Array.isArray(value) ? value.filter(x => typeof x === 'string') : []; } catch { return []; } }
   };
   const words = {
+    'LIVE CHANGE RESULT':'CANLI DƏYİŞİKLİK NƏTİCƏSİ','REQUESTED':'İSTƏNİLƏN','LIVE GPO VALUE':'CANLI GPO DƏYƏRİ','GPO CONFIGURATION':'GPO KONFİQURASİYASI','GPO LINK':'GPO ƏLAQƏSİ','MISMATCH':'UYĞUN DEYİL','NOT VERIFIED':'TƏSDİQLƏNMƏYİB','EFFECTIVE POLICY':'FAKTİKİ SİYASƏT','STAGE 1':'MƏRHƏLƏ 1','STAGE 2':'MƏRHƏLƏ 2','STAGE 3':'MƏRHƏLƏ 3','STAGE 4':'MƏRHƏLƏ 4','STAGE 5':'MƏRHƏLƏ 5','Requested value':'İstənilən dəyər','Evidence is generated from the latest recorded operation for this control.':'Hesabat bu qaydanın son qeydə alınmış əməliyyatından hazırlanır.','Every status below is calculated from the live GPO/link state. A previous successful run is not treated as current truth.':'Aşağıdakı statuslar canlı GPO və əlaqə yoxlamasına əsaslanır. Əvvəlki uğurlu əməliyyat cari vəziyyətin təsdiqi sayılmır.','CATALOG COVERAGE':'KATALOQ ƏHATƏSİ','OPERATION JOURNAL':'ƏMƏLİYYAT JURNALI','READY':'HAZIR','AUTO':'AVTOMATİK','CONTROL PLANE':'İDARƏETMƏ MÜHİTİ','WORKSPACE':'İŞ SAHƏSİ','Runs read-only AD/GPO readiness checks':'AD və GPO hazırlığını yalnız baxış rejimində yoxlayır','Clears delegated credentials from memory':'Qoşulma hesabının məlumatlarını yaddaşdan silir','Reads live GPO, link, replication metadata and endpoint evidence again':'Canlı GPO, əlaqə, replikasiya və kompüter sübutlarını yenidən yoxlayır','Schedules gpupdate /force on selected targets':'Seçilmiş hədəflər üçün gpupdate /force planlaşdırır',
+    'Existing link':'Mövcud əlaqə','New link':'Yeni əlaqə','Reference only; not identity proof':'Yalnız istinad; şəxsiyyət təsdiqi deyil','PRODUCTION CHANGE GATE':'DƏYİŞİKLİK İCAZƏSİ','Automated':'Avtomatlaşdırılan','Manual':'Əl ilə','Level filter':'Səviyyə filtri','Automation filter':'İcra növü filtri','Preview and post-change verification are still required.':'Əvvəlcədən plan və dəyişiklikdən sonra yoxlama tələb olunur.','BEFORE':'ƏVVƏL','EXPECTED':'GÖZLƏNİLƏN','Approved':'Təsdiqlənib','Applied':'Tətbiq edilib','Remediate again':'Yenidən planla','Evidence':'Sübut','NOTIFICATION CENTER':'BİLDİRİŞLƏR','Attention & status':'Diqqət və vəziyyət','Search controls or actions…':'Qayda və əmrləri axtarın…','CONTROLS':'QAYDALAR','NAVIGATION':'NAVİQASİYA','ACTIONS':'ƏMƏLİYYATLAR','Open Dashboard':'İdarə panelini aç','Open Benchmark':'Benchmark-i aç','Open Operations':'Əməliyyatları aç','Show Favorites':'Seçilmişləri göstər','Refresh environment':'Mühiti yenilə',
+
     'Main navigation':'Əsas menyu','Security operations':'Təhlükəsizlik idarəetməsi',
     'Loading application data':'Məlumatlar yüklənir','Processing request':'Sorğu icra olunur','Please keep this window open.':'Pəncərəni açıq saxlayın.','Stop waiting':'Gözləməyi dayandır',
     'Overview':'Ümumi məlumat','Remediation':'Dəyişiklik','Impact':'Təsir','Verification':'Yoxlama','Audit':'Tarixçə',
@@ -64,7 +67,7 @@
     'DRY RUN / WHAT-IF':'DƏYİŞİKLİK PLANI','No read-only plan generated yet.':'Plan hələ hazırlanmayıb.','Select a GPO and target, then generate a plan. The preview performs no domain write.':'GPO və hədəfi seçin, sonra planı hazırlayın. Bu mərhələdə siyasət dəyişmir.',
     'Before/after diff':'Əvvəlki və yeni dəyər','Link intent':'Tətbiq hədəfi','Warning aggregation':'Xəbərdarlıqlar','Rollback context':'Geri qaytarma',
     'DRY RUN · READ-ONLY PREVIEW':'YALNIZ BAXIŞ','Change plan ready':'Dəyişiklik planı hazırdır','NO WRITE YET':'HƏLƏ TƏTBİQ EDİLMƏYİB',
-    'BEFORE / AFTER DIFF':'DƏYƏRİN DƏYİŞMƏSİ','CURRENT':'ƏVVƏLKİ','DESIRED':'YENİ','Not configured':'Təyin edilməyib',
+    'BEFORE / AFTER DIFF':'DƏYƏRİN DƏYİŞMƏSİ','CURRENT':'CARİ','DESIRED':'YENİ','Not configured':'Təyin edilməyib',
     'Link':'Əlaqə','Execution':'İcra hesabı','Rollback':'Geri qaytarma','Backup before write':'Dəyişiklikdən əvvəl ehtiyat nüsxə','Not requested':'Seçilməyib',
     'GOVERNANCE':'TƏSDİQ','Change / Ticket ID':'Dəyişiklik nömrəsi','Reviewed / Approved by':'Təsdiqləyən istinad','Operator-entered approver reference (optional)':'Təsdiqləyən istinad (opsional)','Name or operator':'Ad, qeyd və ya istinad',
     'Impact reviewed and approved':'Planı və təsiri yoxlayıb təsdiqlədim','I reviewed the target, GPO, scope and potential precedence impact.':'Seçilmiş GPO-nu, hədəfi və prioritetin təsirini yoxladım.',
@@ -101,7 +104,7 @@
     if (language !== 'az' || !root) return;
     const walker=document.createTreeWalker(root,NodeFilter.SHOW_TEXT);
     while(walker.nextNode()) {const node=walker.currentNode,key=node.nodeValue.trim();if(words[key])node.nodeValue=node.nodeValue.replace(key,words[key]);}
-    for(const input of root.querySelectorAll('[placeholder]'))if(words[input.placeholder])input.placeholder=words[input.placeholder];
+    for(const element of root.querySelectorAll('[placeholder],[title],[aria-label]'))for(const attr of ['placeholder','title','aria-label']){const value=element.getAttribute(attr);if(words[value])element.setAttribute(attr,words[value]);}
   }
   const errors = {
     INVALID_OPERATOR_ALLOWLIST:'Hesabı DOMEN\\istifadəçi formasında yazın və ya aşkarlanan Windows hesabını seçin.',

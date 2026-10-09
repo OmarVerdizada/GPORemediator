@@ -38,3 +38,16 @@ foreach(var mapping in ProductionGpoMappings.Settings){
 }
 Check(cases==401*6&&manual==4,"Catalog coverage incomplete");
 Console.WriteLine($"PASS {cases} control/refresh/priority combinations; {manual} controls block automatic writes");
+
+using(var auditStore=new Store(":memory:")) {
+    Check(auditStore.AuditIntegrityReport().Valid,"Empty audit chain invalid");
+    auditStore.Audit("test-first","EXAMPLE\\Operator");auditStore.Audit("test-second","EXAMPLE\\Operator");
+    Check(auditStore.AuditIntegrityReport().Valid,"Valid audit chain rejected");
+    var auditDb=(Microsoft.Data.Sqlite.SqliteConnection)typeof(Store).GetField("db",BindingFlags.Instance|BindingFlags.NonPublic)!.GetValue(auditStore)!;
+    using var tamper=auditDb.CreateCommand();tamper.CommandText="UPDATE audit SET details='tampered' WHERE id=2";
+    try { tamper.ExecuteNonQuery();throw new Exception("Append-only audit accepted an update"); } catch(Microsoft.Data.Sqlite.SqliteException e) { Check(e.SqliteErrorCode==19,"Unexpected SQLite failure"); }
+    // Corrupted appended row in an isolated in-memory database; no domain or production data.
+    tamper.CommandText="INSERT INTO audit(event,operator,job_id,control_id,gpo_id,details,created_at,previous_hash,hash) SELECT event,operator,job_id,control_id,gpo_id,details,created_at,hash,'invalid-hash' FROM audit WHERE id=2";tamper.ExecuteNonQuery();
+    var report=auditStore.AuditIntegrityReport();Check(!report.Valid&&report.FirstInvalidEventId==3,"Audit mismatch location not reported");
+    Console.WriteLine("PASS audit integrity: empty chain, valid chain and first tampered event");
+}
