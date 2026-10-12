@@ -1,4 +1,6 @@
-# GPO Remediator 3.7.1
+# GPO Remediator 3.7.2
+
+3.7.2 adds a dashboard remediation summary: 405 controls, 401 automatic GPO mappings and four guided controls with direct links and execution/management-source explanations.
 
 3.7.1 provides offline AZ/EN remediation guides for the four blocked controls, with local/central policy paths, read commands, guarded operator-run Defender backup/apply/rollback examples and honest verification limits. The catalog remains 401 automatic GPO mappings plus four guided controls. See [guided procedures and execution boundaries](docs/GUIDED-REMEDIATION.md).
 

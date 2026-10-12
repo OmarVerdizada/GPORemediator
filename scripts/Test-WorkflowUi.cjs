@@ -63,6 +63,11 @@ const server=http.createServer(async(req,res)=>{
   assert.ok((await page.locator('.wf-summary').textContent()).includes('NOT_CHECKED'));
   await page.setViewportSize({width:390,height:844});await page.evaluate(()=>{document.activeElement?.blur();window.scrollTo(0,0);});await page.waitForTimeout(350);await page.screenshot({path:path.join(screens,'workflow-scan-mobile.png'),fullPage:true});assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));
   const beforeGuideRequests=requests.length;
+  await page.locator('a[href="#/dashboard"]').first().click();const summary=page.locator('[data-dashboard-remediation]');await summary.waitFor();
+  assert.equal(await summary.locator('[data-remediation-total]').textContent(),'405');assert.equal(await summary.locator('[data-remediation-auto]').textContent(),'401');assert.equal(await summary.locator('[data-remediation-guided]').textContent(),'4');
+  assert.equal(await summary.locator('[data-rule]').count(),4);assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));
+  await summary.screenshot({path:path.join(screens,'dashboard-remediation-mobile.png')});await page.setViewportSize({width:1440,height:1000});await summary.screenshot({path:path.join(screens,'dashboard-remediation-desktop.png')});
+  await summary.locator('[data-rule="1.2.3"]').click();await page.locator('[data-remediation-guide="1.2.3"]').waitFor();await page.setViewportSize({width:390,height:844});
   for(const id of ['1.2.3','2.3.11.6','18.10.43.10.1','18.10.43.10.2']){
    await page.locator('a[href="#/benchmark"]').first().click();await page.locator('#catalog-search').fill(id);await page.waitForTimeout(350);
    if(!await page.locator(`[data-rule="${id}"]`).count())await page.locator('[data-domain]').first().click();
