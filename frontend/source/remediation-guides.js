@@ -1,0 +1,90 @@
+/* Guided procedures only. Rendering/copying never submits or executes a command. */
+(() => {'use strict';
+const pair=(az,en)=>({az,en});
+const securityRead=`$ErrorActionPreference = 'Stop'
+$guideExport = Join-Path $env:TEMP ('security-review-' + [guid]::NewGuid().ToString('N') + '.inf')
+secedit.exe /export /mergedpolicy /cfg $guideExport /areas SECURITYPOLICY /quiet
+if ($LASTEXITCODE -ne 0) { throw 'Security policy export failed' }
+Get-Content -LiteralPath $guideExport | Select-String 'AllowAdministratorLockout|LockoutBadCount|LockoutDuration|ResetLockoutCount|ForceLogoffWhenHourExpire'
+Write-Output ('Review export: ' + $guideExport)`;
+const contextRead=`Get-CimInstance Win32_OperatingSystem | Select-Object Caption, Version, BuildNumber
+Get-CimInstance Win32_ComputerSystem | Select-Object Name, Domain, DomainRole
+whoami.exe
+gpresult.exe /scope computer /r`;
+const definitions={
+ '1.2.3':{
+  mode:pair('Lokal təhlükəsizlik siyasəti · idarəli manual tətbiq','Local security policy · guided manual change'),
+  desired:'Allow Administrator account lockout = Enabled',
+  intent:pair('Built-in lokal Administrator hesabının uğursuz şəbəkə girişlərindən sonra kilidlənməsinə imkan verir. Adı dəyişdirilmiş həmin daxili hesaba da aiddir.','Allows the built-in local Administrator account to be locked after failed network sign-ins, including when that built-in account was renamed.'),
+  checks:pair('Windows versiyası/yeniləmələri bu parametrə dəstək verməlidir. Lockout threshold sıfırdan böyük olmalı, duration və reset intervalı birlikdə nəzərdən keçirilməlidir. Alternativ administrator və konsol girişini əvvəl yoxlayın. DC-ni ayrıca domain siyasəti dəyişikliyi kimi qiymətləndirin.','Check Windows/update support. Review a nonzero lockout threshold, duration and reset interval together. Confirm alternate administrator and console access first. Treat a DC as a separate domain-policy change.'),
+  procedure:pair('Hədəf kompüterdə elevated PowerShell açın, aşağıdakı yoxlama/export əmrlərini işlədin. secpol.msc → Account Policies → Account Lockout Policy → Allow Administrator account lockout → Enabled. Parametr görünmürsə tətbiqi dayandırın; registry dəyəri uydurmayın. Domain/Intune idarə edirsə dəyişiklik həmin idarəetmə mənbəsində edilməlidir.','On the target, open elevated PowerShell and run the review/export commands. Open secpol.msc → Account Policies → Account Lockout Policy → Allow Administrator account lockout → Enabled. Stop if the setting is unavailable; do not invent a registry value. If domain/Intune policy owns it, change the authoritative management source.'),
+  verify:pair('Yenidən export edin və Enabled vəziyyətini lokal siyasət ekranında təsdiqləyin. Export-da açarın olmaması Disabled demək deyil: nəticə naməlumdur. Şəbəkə lockout davranışını ayrıca test hesabı/laboratoriyada yoxlayın; production Administrator hesabını test üçün kilidləməyin. Konsol girişinin qaydası şəbəkə girişindən fərqlidir.','Export again and confirm Enabled in the local policy UI. A missing export key means unknown, not Disabled. Test network-lockout behavior in a lab with a dedicated account; do not deliberately lock the production Administrator. Console and network sign-ins have different behavior.'),
+  rollback:pair('Əvvəl lokal parametrin Defined/Not defined vəziyyətini və əlaqəli üç lockout dəyərini qeyd edin. Bərpada yalnız dəyişdirdiyiniz parametrləri əvvəlki vəziyyətə qaytarın. Merged export-u bütöv import etməyin: başqa siyasətləri də dəyişə bilər.','Record the original Defined/Not defined state and the three related lockout values. Restore only changed settings to their original state. Do not import the entire merged export; it can alter unrelated policies.'),
+  caveat:pair('Bu, bütün Administrator qrup üzvlərini eyni qaydada idarə edən ümumi switch deyil. Uğursuz cəhdlərlə uzaqdan admin girişinin müvəqqəti bloklanması mümkündür.','This is not a general switch for every Administrators-group member. Failed attempts can temporarily deny remote administrator access.'),
+  read:securityRead,apply:'secpol.msc',sources:[['Microsoft KB5020282','https://support.microsoft.com/en-us/topic/kb5020282-account-lockout-available-for-built-in-local-administrators-bce45c4d-f28d-43ad-b6fe-70156cb2dc00']]
+ },
+ '2.3.11.6':{
+  mode:pair('Lokal təhlükəsizlik siyasəti · idarəli manual tətbiq','Local security policy · guided manual change'),
+  desired:'Network security: Force logoff when logon hours expire = Enabled',
+  intent:pair('Hesabın icazəli giriş saatları bitdikdə SMB/fayl paylaşımı sessiyalarının dayandırılmasını idarə edir. Windows masaüstü və RDP sessiyasından ümumi çıxış əmri deyil.','Controls SMB/file-share disconnection when account logon hours expire. It is not a general Windows-desktop or RDP sign-out command.'),
+  checks:pair('Hesabın giriş saatlarını, SMB istifadə edən tətbiqləri və serverin lokal/domain rolunu yoxlayın. Administrator hesabları üçün davranışı ümumiləşdirməyin. DC üzərində lokal dəyişiklik domain siyasətinə təsir edə bilər; bu proseduru DC-də tətbiq etməyin.','Review account logon hours, SMB-dependent applications and local/domain role. Do not generalize the behavior to administrator accounts. A local change on a DC can affect domain policy; do not apply this local procedure on a DC.'),
+  procedure:pair('Member server/workstation-da elevated sessiyada əvvəl export edin. secpol.msc → Local Policies → Security Options → Network security: Force logoff when logon hours expire → Enabled. Domain hesabları üçün authoritative domain account policy-ni nəzərdən keçirin. Bu control-un Security Template açarı ForceLogoffWhenHourExpire-dir; EnableForcedLogOff başqa əlaqəli siyasətdir.','On a member server/workstation, export before changing. Open secpol.msc → Local Policies → Security Options → Network security: Force logoff when logon hours expire → Enabled. Review authoritative domain account policy for domain accounts. Its Security Template key is ForceLogoffWhenHourExpire; EnableForcedLogOff is a different related policy.'),
+  verify:pair('Lokal siyasətdə Enabled və export-da ForceLogoffWhenHourExpire nəticəsini yoxlayın. Giriş saatı məhdud test hesabı və SMB sessiyası ilə laboratoriyada davranışı təsdiqləyin. Tək registry oxunuşu və ya RDP sessiyasının açıq qalması nəticəni sübut etmir.','Confirm Enabled in local policy and inspect ForceLogoffWhenHourExpire in the export. Validate behavior in a lab using restricted logon hours and an SMB session. A registry read alone, or an RDP session staying open, does not prove the result.'),
+  rollback:pair('Əvvəlki Defined/Not defined və Enabled/Disabled vəziyyətini saxlayın. Yalnız bu parametrin əvvəlki vəziyyətini qaytarın; tam təhlükəsizlik export-unu kor-koranə import etməyin. Kəsilmiş SMB bağlantısı rollback ilə avtomatik geri açılmır.','Record the original Defined/Not defined and Enabled/Disabled state. Restore only this setting, not the entire security export. Rollback does not automatically reconnect terminated SMB sessions.'),
+  caveat:pair('Açıq fayl paylaşımı sessiyaları kəsilə və proqramlar xəta ala bilər. Giriş saatı məhdudiyyəti yoxdursa faktiki davranış testi mənalı deyil.','Open file-share sessions can be interrupted and applications can fail. A behavior test requires configured logon-hour restrictions.'),
+  read:securityRead,apply:'secpol.msc',sources:[['Microsoft: Force logoff','https://learn.microsoft.com/en-us/previous-versions/windows/it-pro/windows-10/security/threat-protection/security-policy-settings/network-security-force-logoff-when-logon-hours-expire'],['Microsoft: Security Template format','https://learn.microsoft.com/en-us/troubleshoot/windows-server/group-policy/reset-user-rights-in-default-domain-group-policy']]
+ }
+};
+function defender(id,property,desired,oobe){
+ const value=desired?'$true':'$false';
+ const read=`Get-Command Set-MpPreference -ErrorAction Stop | Select-Object -ExpandProperty Parameters | Select-Object -ExpandProperty Keys | Where-Object { $_ -eq '${property}' }
+Get-MpPreference -ErrorAction Stop | Select-Object ${property}
+Get-MpComputerStatus -ErrorAction Stop | Select-Object AMRunningMode, AntivirusEnabled, RealTimeProtectionEnabled, IoavProtectionEnabled, IsTamperProtected`;
+ const apply=`$ErrorActionPreference = 'Stop'
+$guideRole = (Get-CimInstance Win32_ComputerSystem).DomainRole
+if ($guideRole -ge 4) { throw 'This guided endpoint procedure excludes domain controllers' }
+if (-not (Get-Command Set-MpPreference).Parameters.ContainsKey('${property}')) { throw 'Unsupported Defender parameter' }
+$guideBefore = (Get-MpPreference).${property}
+if ($guideBefore -isnot [bool]) { throw 'Previous value is unknown; stop' }
+$guideStatus = Get-MpComputerStatus
+if ($guideStatus.AntivirusEnabled -ne $true -or $guideStatus.AMRunningMode -ne 'Normal') { throw 'Defender is not active in Normal mode; review management first' }
+if ($guideStatus.IsTamperProtected -eq $true) { throw 'Tamper Protection is enabled; use the approved management channel' }
+$guideBackupPath = Join-Path $env:LOCALAPPDATA ('remediation-${id}-' + [guid]::NewGuid().ToString('N') + '.json')
+[pscustomobject]@{ Control='${id}'; Computer=$env:COMPUTERNAME; Property='${property}'; Previous=$guideBefore; Applied=${value}; CapturedAt=(Get-Date).ToUniversalTime().ToString('o') } | ConvertTo-Json | Set-Content -LiteralPath $guideBackupPath -Encoding UTF8
+Write-Output ('Backup: ' + $guideBackupPath)
+Set-MpPreference -${property} ${value} -ErrorAction Stop
+if ((Get-MpPreference).${property} -ne ${value}) { throw 'Change not confirmed; inspect policy ownership and protection' }
+Get-MpPreference | Select-Object ${property}`;
+ const rollback=`$ErrorActionPreference = 'Stop'
+# Replace with the exact backup path printed before Apply.
+$guideBackupPath = 'C:\\REPLACE_WITH_EXACT_BACKUP_PATH.json'
+$guideBackup = Get-Content -LiteralPath $guideBackupPath -Raw | ConvertFrom-Json
+if ($guideBackup.Control -ne '${id}' -or $guideBackup.Property -ne '${property}' -or $guideBackup.Computer -ne $env:COMPUTERNAME -or $guideBackup.Previous -isnot [bool] -or $guideBackup.Applied -isnot [bool] -or $guideBackup.Applied -ne ${value}) { throw 'Backup does not match this control/endpoint' }
+if ((Get-CimInstance Win32_ComputerSystem).DomainRole -ge 4) { throw 'Domain controller excluded' }
+$guideCurrent = (Get-MpPreference -ErrorAction Stop).${property}
+if ($guideCurrent -ne $guideBackup.Applied) { throw 'Current value changed; review drift before rollback' }
+if ((Get-MpComputerStatus -ErrorAction Stop).IsTamperProtected -eq $true) { throw 'Use approved management; do not disable Tamper Protection' }
+Set-MpPreference -${property} $guideBackup.Previous -ErrorAction Stop
+if ((Get-MpPreference).${property} -ne $guideBackup.Previous) { throw 'Rollback not confirmed' }
+Get-MpPreference | Select-Object ${property}`;
+ return {
+  mode:pair('Endpoint PowerShell · operatorun icra etdiyi prosedur','Endpoint PowerShell · operator-run procedure'),desired:`${property} = ${desired?'True':'False'}`,
+  intent:oobe?pair('Windows-un ilkin quraşdırılması (OOBE) zamanı Defender real-time qorunmasını və Security Intelligence yeniləmələrini aktivləşdirir.','Enables Defender real-time protection and Security Intelligence updates during Windows initial setup (OOBE).'):pair('Defender-in yüklənmiş fayl və əlavələr üçün IOAV yoxlamasını aktivləşdirir. DisableIOAVProtection=False qorunmanın aktiv olması deməkdir.','Enables Defender IOAV checking for downloads and attachments. DisableIOAVProtection=False means protection is enabled.'),
+  checks:pair('Yalnız seçilmiş endpoint-də elevated PowerShell istifadə edin. OS/Defender parametr dəstəyini, Normal iş rejimini və GPO/Intune idarəetməsini yoxlayın. Mərkəzi siyasət idarə edirsə orada dəyişin. Tamper Protection-u söndürməyin. Bu nümunə DC-ləri və qorunan/passive Defender rejimini bloklayır.','Use elevated PowerShell on the selected endpoint. Check OS/Defender parameter support, Normal mode and GPO/Intune ownership. Change centrally managed settings at their source. Do not disable Tamper Protection. This example blocks DCs and protected/passive Defender modes.'),
+  procedure:pair('Əvvəl read-only yoxlamanı edin. Təsdiqdən sonra backup + tətbiq blokunu ayrıca işlədin və çap olunan JSON backup yolunu saxlayın. Əmr yalnız bu parametrə toxunur. Product əmri sizin yerinizə icra etmir.','Run the read-only checks first. After approval, run the backup + apply block separately and retain the printed JSON backup path. Only this parameter is changed. The product does not execute the command for you.'),
+  verify:oobe?pair('Get-MpPreference ilə True vəziyyətini oxuyun. Bu yalnız konfiqurasiya sübutudur; artıq quraşdırılmış endpoint OOBE davranışını sübut etmir. Faktiki davranış üçün təmiz VM/ilkin quraşdırma sınağı lazımdır.','Read True with Get-MpPreference. This proves configuration only; an installed endpoint does not prove OOBE behavior. Use a clean VM/initial-setup test for behavior.'):pair('DisableIOAVProtection=False və Get-MpComputerStatus nəticəsində AntivirusEnabled, RealTimeProtectionEnabled, IoavProtectionEnabled vəziyyətlərini ayrıca yoxlayın. Parametrin düzgün olması hər faylın təhlükəsiz olduğunu sübut etmir.','Check DisableIOAVProtection=False and independently inspect AntivirusEnabled, RealTimeProtectionEnabled and IoavProtectionEnabled. Correct configuration does not prove every file is safe.'),
+  rollback:pair('Yalnız bu endpoint üçün yaradılmış, operatorun saxladığı JSON backup-dan istifadə edin. Yol placeholder-ini dəyişin. Bərpa bloku endpoint/control uyğunluğunu və cari dəyərin Apply-dan sonra dəyişmədiyini yoxlayır; yalnız əvvəlki Boolean dəyəri qaytarır. JSON publisher-imzalı deyil, etibarlı yerdə saxlayın.','Use only the operator-held JSON backup created for this endpoint and replace the path placeholder. Restore validates endpoint/control and checks the current value still matches Apply; only the previous Boolean is restored. The JSON is not publisher-signed; keep it trusted.'),
+  caveat:pair('GPO/Intune sonradan lokal dəyəri yenidən yaza bilər. gpupdate /force bu endpoint prosedurunun hissəsi deyil. Nəticə avtomatik olaraq product tarixçəsinə və compliance hesabatına yazılmır.','GPO/Intune can later overwrite local values. gpupdate /force is not part of this endpoint procedure. Results are not automatically recorded as product history or compliance evidence.'),
+  read,apply,restore:rollback,sources:[['Microsoft: Set-MpPreference','https://learn.microsoft.com/en-us/powershell/module/defender/set-mppreference'],['Microsoft: Defender CSP','https://learn.microsoft.com/en-us/windows/client-management/mdm/defender-csp']]
+ };
+}
+definitions['18.10.43.10.1']=defender('18.10.43.10.1','OobeEnableRtpAndSigUpdate',true,true);
+definitions['18.10.43.10.2']=defender('18.10.43.10.2','DisableIOAVProtection',false,false);
+const get=id=>Object.hasOwn(definitions,id)?definitions[id]:null;
+function render(id,{state,esc,say}){
+ const g=get(id);if(!g)return '';const text=p=>p[state.lang==='az'?'az':'en'];
+ const code=(label,value,kind)=>`<section class="content-card guide-command" data-guide-command="${kind}"><div class="card-title-row"><h3>${label}</h3><button type="button" data-copy-value="${esc(value)}">${say('Kopyala','Copy')}</button></div><pre tabindex="0"><code>${esc(value)}</code></pre></section>`;
+ return `<div class="guided-remediation" data-remediation-guide="${esc(id)}"><section class="content-card"><span class="card-kicker">GUIDED REMEDIATION · ${esc(id)}</span><h2>${esc(text(g.mode))}</h2><p class="guide-boundary">${say('Bu səhifə təlimatdır. Baxmaq və kopyalamaq heç bir AD/GPO/endpoint əməliyyatı başlatmır; avtomatik Apply bağlıdır.','This page provides instructions. Viewing or copying starts no AD/GPO/endpoint operation; automatic Apply remains blocked.')}</p><p>${esc(text(g.intent))}</p><p><strong>${say('Hədəf vəziyyət','Desired state')}:</strong> ${esc(g.desired)}</p><p>${esc(text(g.caveat))}</p></section><section class="content-card"><h3>1 · ${say('İlkin yoxlama','Preflight')}</h3><p>${esc(text(g.checks))}</p></section>${code(say('Hədəf və siyasət mənbəyi · read-only','Target and policy ownership · read-only'),contextRead,'context')}${code(say('Cari vəziyyət · read-only','Current state · read-only'),g.read,'read')}<section class="content-card"><h3>2 · ${say('Tətbiq yolu','Remediation procedure')}</h3><p>${esc(text(g.procedure))}</p></section>${code(g.restore?say('Backup + tətbiq · sistemi dəyişir','Backup + apply · changes the system'):say('Lokal siyasət redaktorunu aç','Open local policy editor'),g.apply,'apply')}<section class="content-card"><h3>3 · ${say('Nəticəni yoxla','Verify result')}</h3><p>${esc(text(g.verify))}</p><h3>4 · ${say('Bərpa yolu','Recovery procedure')}</h3><p>${esc(text(g.rollback))}</p></section>${g.restore?code(say('Rollback · əvvəlki dəyəri qaytarır','Rollback · restores previous value'),g.restore,'rollback'):''}<section class="content-card"><h3>${say('Arxada nə baş verir?','What happens behind the scenes?')}</h3><p>${say('Product yalnız lokal guide-i göstərir. Endpoint əmrlərini operator hədəfdə icra edir; server avtomatik credential göndərmir, WinRM açmır, backup/refresh/job yaratmır. Mərkəzi GPO seçilərsə onu ayrıca GPMC-də idarə edin. Təlimatı oxumaq nəticəni compliant etmir.','The product only renders the local guide. The operator runs endpoint commands on the target; the server does not send credentials, open WinRM or create backup/refresh/jobs. Manage a central GPO separately in GPMC if chosen. Reading instructions does not establish compliance.')}</p><h3>${say('Rəsmi mənbələr','Official sources')}</h3><ul>${g.sources.map(([label,url])=>`<li><a href="${esc(url)}" target="_blank" rel="noopener noreferrer">${esc(label)}</a></li>`).join('')}</ul></section></div>`;
+}
+window.GpoRemediationGuides=Object.freeze({get,render,ids:Object.freeze(Object.keys(definitions))});
+})();

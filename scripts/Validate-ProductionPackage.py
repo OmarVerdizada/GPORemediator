@@ -39,8 +39,8 @@ check(mapping_doc['meta'].get('totalUnique')==405, 'mapping meta.totalUnique != 
 
 handlers={'SecurityTemplate','Registry','RegistrySet','AdvancedAudit'}
 check(all(x.get('handler') in handlers for x in mappings), 'unapproved handler found')
-check(sum(x['handler']=='Registry' for x in mappings)==325, 'Registry count changed')
-check(sum(x['handler']=='SecurityTemplate' for x in mappings)==48, 'SecurityTemplate count changed')
+check(sum(x['handler']=='Registry' for x in mappings)==324, 'Registry count changed')
+check(sum(x['handler']=='SecurityTemplate' for x in mappings)==49, 'SecurityTemplate count changed')
 check(sum(x['handler']=='AdvancedAudit' for x in mappings)==27, 'AdvancedAudit count changed')
 check(sum(x['handler']=='RegistrySet' for x in mappings)==5, 'RegistrySet count changed')
 
@@ -79,7 +79,9 @@ for m in mappings:
 
 # Explicit Account Policy safety contract.
 account_ids={x['id'] for x in mappings if x.get('domainPolicySensitive')}
-check(account_ids=={'1.1.1','1.1.3','1.1.4','1.1.5','1.1.6','1.2.1','1.2.2','1.2.3','1.2.4'}, f'domain policy control set changed: {sorted(account_ids)}')
+check(account_ids=={'1.1.1','1.1.3','1.1.4','1.1.5','1.1.6','1.2.1','1.2.2','1.2.4'}, f'domain policy control set changed: {sorted(account_ids)}')
+check(by_id['1.2.3']['recommended']=='Enabled.' and by_id['1.2.3']['scope']=='Computer', 'Local Administrator lockout metadata must remain distinct from reset interval/domain account policy')
+check(by_id['2.3.11.6']['handler']=='SecurityTemplate' and by_id['2.3.11.6']['items'][0]['key']=='ForceLogoffWhenHourExpire', 'Force logoff must use its security-template setting')
 
 
 # Production worker and packaging contracts.

@@ -1,4 +1,6 @@
-# GPO Remediator 3.7.0
+# GPO Remediator 3.7.1
+
+3.7.1 provides offline AZ/EN remediation guides for the four blocked controls, with local/central policy paths, read commands, guarded operator-run Defender backup/apply/rollback examples and honest verification limits. The catalog remains 401 automatic GPO mappings plus four guided controls. See [guided procedures and execution boundaries](docs/GUIDED-REMEDIATION.md).
 
 3.7.0 adds server-managed operations, live observed phases, read-only scans, reviewed batches, verified pilot promotion, scheduled checks, recovery and HTML/print-to-PDF reports. See [workflow release notes](RELEASE-NOTES-WORKFLOWS-3.7.0.md) for use and limits.
 

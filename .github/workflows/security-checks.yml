@@ -47,6 +47,8 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           node scripts/Test-RecipeWorkspace.cjs
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          node scripts/Test-GuidedRemediation.cjs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           npm install --no-save --ignore-scripts playwright@1.62.1
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $env:PLAYWRIGHT_CHANNEL='msedge'

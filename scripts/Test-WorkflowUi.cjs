@@ -62,6 +62,21 @@ const server=http.createServer(async(req,res)=>{
   await page.locator('.wf-summary').waitFor();assert.equal(requests.find(r=>r.path.endsWith('/scan')).body.controls.length,405);assert.equal(await page.locator('.wf-table img').count(),0);
   assert.ok((await page.locator('.wf-summary').textContent()).includes('NOT_CHECKED'));
   await page.setViewportSize({width:390,height:844});await page.evaluate(()=>{document.activeElement?.blur();window.scrollTo(0,0);});await page.waitForTimeout(350);await page.screenshot({path:path.join(screens,'workflow-scan-mobile.png'),fullPage:true});assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));
-  assert.deepEqual(errors,[]);console.log('Workflow UI: PASS (batch review/explicit approval/cancel, pilot request, server stages, browser reopen, recovery anchor request, 405-control read-only scan, unknown results, escaping and mobile layout).');
+  const beforeGuideRequests=requests.length;
+  for(const id of ['1.2.3','2.3.11.6','18.10.43.10.1','18.10.43.10.2']){
+   await page.locator('a[href="#/benchmark"]').first().click();await page.locator('#catalog-search').fill(id);await page.waitForTimeout(350);
+   if(!await page.locator(`[data-rule="${id}"]`).count())await page.locator('[data-domain]').first().click();
+   await page.locator(`[data-rule="${id}"]`).first().click();await page.locator(`[data-remediation-guide="${id}"]`).waitFor();
+   await page.locator('[data-tab="remediation"]').click();assert.equal(await page.locator('#gpo-selection,#gpo-apply,[data-enable-write]').count(),0);
+   assert.ok(await page.locator('[data-guide-command=read] pre').count());
+   await page.locator('[data-tab="verification"]').click();assert.equal(await page.locator('[data-verify]').count(),0);
+   assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));
+  }
+  const readBlock=page.locator('[data-guide-command=read]');const expectedCopy=await readBlock.locator('[data-copy-value]').getAttribute('data-copy-value');
+  await page.evaluate(()=>Object.defineProperty(navigator,'clipboard',{configurable:true,value:{writeText:async text=>{window.guideCopied=text;}}}));
+  await readBlock.locator('[data-copy-value]').click();assert.equal(await page.evaluate(()=>window.guideCopied),expectedCopy);
+  await page.evaluate(()=>{document.activeElement?.blur();window.scrollTo(0,0);});await page.screenshot({path:path.join(screens,'guided-remediation-mobile.png'),fullPage:false});
+  assert.equal(requests.length,beforeGuideRequests,'Viewing guide must not submit operations');
+  assert.deepEqual(errors,[]);console.log('Workflow UI: PASS (batch review/approval/cancel, server stages/reopen/recovery, scan, escaping, mobile and all four guided controls without writes).');
  }finally{await browser.close();await new Promise(r=>server.close(r));}
 })().catch(e=>{console.error(e);process.exitCode=1;});

@@ -294,8 +294,8 @@
           ]
         }
       ],
-      "recommended": "15 or more minute(s).",
-      "scope": "Domain",
+      "recommended": "Enabled.",
+      "scope": "Computer",
       "requiresInput": false,
       "inputType": null,
       "inputLabel": null,
@@ -306,12 +306,11 @@
       "suggested": 1,
       "unit": "enabled",
       "comparator": "==",
-      "domainPolicySensitive": true,
+      "domainPolicySensitive": false,
       "requiresGpUpdate": true,
       "requiresRestart": false,
       "warnings": [
-        "Domain user password/lockout policy must be written to Default Domain Policy and linked at the domain root.",
-        "This CIS recipe contains benchmark notes/cautions or environment-specific exceptions. Review the imported benchmark description and application dependencies before Apply."
+        "Applies to the built-in local Administrator; review OS/update support and all account-lockout settings. Guided only; automatic writes remain blocked."
       ],
       "source": "operator CIS v4.0.0 + validated Windows policy mapping"
     },
@@ -3516,12 +3515,12 @@
       "category": "2.3.11",
       "level": "L1",
       "automation": "Manual",
-      "handler": "Registry",
+      "handler": "SecurityTemplate",
       "items": [
         {
-          "key": "HKLM\\SYSTEM\\CurrentControlSet\\Services\\LanManServer\\Parameters",
-          "name": "EnableForcedLogOff",
-          "type": "DWORD",
+          "section": "System Access",
+          "key": "ForceLogoffWhenHourExpire",
+          "type": "Integer",
           "value": [
             "1"
           ]
@@ -3542,7 +3541,9 @@
       "domainPolicySensitive": false,
       "requiresGpUpdate": true,
       "requiresRestart": false,
-      "warnings": [],
+      "warnings": [
+        "SMB logon-hours behavior; this is not a desktop/RDP sign-out command. Review local/domain account policy and do not apply a local procedure to a DC. Guided only; automatic writes remain blocked."
+      ],
       "source": "operator CIS v4.0.0 + validated Windows policy mapping"
     },
     {

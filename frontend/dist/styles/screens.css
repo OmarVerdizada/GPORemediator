@@ -266,3 +266,4 @@ input:focus, select:focus, textarea:focus {border-color:var(--color-primary-hove
 
 
 .wf-check{display:flex;align-items:center;gap:12px;flex:1;min-width:0}
+.guided-remediation{display:grid;gap:18px;min-width:0}.guided-remediation .content-card{min-width:0}.guided-remediation p{line-height:1.8;overflow-wrap:anywhere}.guide-boundary{padding:14px 18px;border-left:3px solid var(--color-primary);background:var(--color-surface-subtle);line-height:1.7}.guide-command pre{max-width:100%;overflow:auto;white-space:pre;font-size:12px;line-height:1.8;padding:16px;background:var(--color-surface-subtle);border:1px solid var(--color-border);border-radius:8px}.guide-command .card-title-row{gap:12px;flex-wrap:wrap}.guide-command h3{margin:0}.guided-remediation a{overflow-wrap:anywhere}
