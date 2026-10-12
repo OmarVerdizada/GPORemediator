@@ -12,15 +12,20 @@ public sealed class OperationGate(Store store)
     private readonly object gate = new();
     private bool maintenance;
     private readonly HashSet<string> operations = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string,string> reservations = new(StringComparer.OrdinalIgnoreCase);
+
+    public void Reserve(string resourceKey,string owner){lock(gate){if(maintenance||reservations.ContainsKey(resourceKey)||operations.Contains(resourceKey))throw new PolicyException("GPO_OPERATION_BUSY","This GPO is already reserved by another workflow.");reservations.Add(resourceKey,owner);}}
+    public void Release(string resourceKey,string owner){lock(gate){if(reservations.GetValueOrDefault(resourceKey)==owner)reservations.Remove(resourceKey);}}
 
     public bool Maintenance { get { lock (gate) return maintenance; } }
     public bool OperationActive { get { lock (gate) return operations.Count>0; } }
 
-    public void BeginOperation(string resourceKey,Action action)
+    public void BeginOperation(string resourceKey,Action action,string? owner=null)
     {
         lock (gate)
         {
             if (maintenance) throw new PolicyException("SERVICE_STOPPING", "The service is stopping, restarting, or saving configuration.");
+            if(reservations.TryGetValue(resourceKey,out var reserved)&&reserved!=owner)throw new PolicyException("GPO_OPERATION_BUSY","This GPO is reserved by a server workflow.");
             if (!operations.Add(resourceKey)) throw new PolicyException("GPO_OPERATION_BUSY", "Another privileged operation is active for this GPO. Wait for it to finish.");
             try { action(); }
             catch { operations.Remove(resourceKey); throw; }
@@ -37,7 +42,7 @@ public sealed class OperationGate(Store store)
         lock (gate)
         {
             if (maintenance) throw new PolicyException("SERVICE_STOPPING", "The service is already stopping, restarting, or saving configuration.");
-            if (operations.Count>0 || store.List<GpoWorkflowRun>("gpo_runs").Any(r => GpoWorkflowRules.IsActive(r.Result.State)))
+            if (operations.Count>0 || reservations.Count>0 || store.List<GpoWorkflowRun>("gpo_runs").Any(r => GpoWorkflowRules.IsActive(r.Result.State)))
                 throw new PolicyException("GPO_OPERATION_BUSY", "A GPO operation is active. Wait for it to finish before changing service state or configuration.");
             maintenance = true;
             try { action(); }

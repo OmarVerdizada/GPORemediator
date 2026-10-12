@@ -1,5 +1,11 @@
 # Production architecture
 
+## Server-owned workflows (3.7.0)
+
+`WorkspaceWorkflows` is a hosted coordinator backed by SQLite workflow and batch records and a bounded in-memory channel. `/api/workflows/*` returns an accepted job that can be inspected after the browser closes. Production endpoint role metadata and CSRF checks protect submission; delegated sessions and write/scope checks also run in the execution service. Per-GPO reservations prevent local writes from interleaving across batch steps. Later batch plans are freshly previewed and must match the preceding fingerprint and reviewed control values before execution. A whole-batch restore uses the first snapshot and validates the last completed write fingerprint.
+
+Worker phase messages are streamed through a bounded parser and persisted with server-observed timestamps. Read-only scan uses preview operations; scheduled verification runs independently of the queue. Durable records contain approvals and results, not connection tokens. On service restart, privileged work is marked for review and is never replayed. See [3.7.0 operation rules and limits](../RELEASE-NOTES-WORKFLOWS-3.7.0.md).
+
 GPO Remediator is a local-only Windows management application. The browser UI binds to `127.0.0.1`; it does not expose a LAN listener and does not require an HTTPS certificate in this release.
 
 ## Runtime path

@@ -42,7 +42,9 @@ public record GpoWorkflowResult(string State, string Message, string? BackupId, 
     bool GpoPublished, bool LinkVerified, GpoRefreshResult[] RefreshResults, string EffectiveStatus,
     GpoVerificationDetails? Verification = null, GpoEndpointCheck[]? EndpointChecks = null, string? CurrentValue = null);
 public record GpoWorkflowRun(string Id, GpoWorkflowPlan Plan, GpoWorkflowResult Result, string UpdatedAt, GpoConsent? Approval = null,
-    string? CorrelationId = null, string? StartedAt = null);
+    string? CorrelationId = null, string? StartedAt = null, GpoStage[]? Stages = null);
+public record GpoStage(string Phase, string StartedAt, string? FinishedAt = null);
+public record GpoRollbackAnchor(GpoWorkflowPlan Plan, string PostFingerprint);
 
 public record GpoEvidence(string SchemaVersion, string Product, string Benchmark, string OperationId, string GeneratedAt,
     string Actor, string ExecutionUser, string Domain, string DomainController, string ControlId, string Setting,

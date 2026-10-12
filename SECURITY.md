@@ -1,6 +1,8 @@
 # Security boundary
 
-Version 3.6.0 is a security-hardening release, not a security certification or independent penetration-test report.
+Version 3.7.0 preserves the 3.6.0 security hardening and adds server-owned workflows. It is not a security certification or independent penetration-test report.
+
+Workflow submission requires the same Windows roles, origin, JSON and identity-bound antiforgery controls as individual operations. Workflow reads and reports are restricted to the submitting operator. Delegated connection tokens stay in the bounded in-memory queue; durable records contain approvals and results only. Restart never replays a write. Batch steps recheck live fingerprints and values, reserve the GPO against local interleaved mutations, and stop remaining writes/refresh on an ambiguous result. Whole-batch restore requires separate approval and a validated final fingerprint. Reports encode untrusted fields and contain no executable scripts or external assets. JSON hashes detect alteration relative to their payload; they do not establish publisher authenticity. Read-only scans and endpoint samples must not be interpreted as a complete compliance or security assessment.
 
 ## Operator and execution identities
 

@@ -1,4 +1,6 @@
-# GPO Remediator 3.6.0
+# GPO Remediator 3.7.0
+
+3.7.0 adds server-managed operations, live observed phases, read-only scans, reviewed batches, verified pilot promotion, scheduled checks, recovery and HTML/print-to-PDF reports. See [workflow release notes](RELEASE-NOTES-WORKFLOWS-3.7.0.md) for use and limits.
 
 3.6.0 hardens the local operator boundary: mandatory Windows authentication, explicit endpoint roles, private Windows state/runtime permissions, DPAPI-protected keys, bounded delegated logins and compiled UI/script integrity checks. The self-contained runtime now uses .NET 10. See [security requirements and limitations](SECURITY.md) and [upgrade notes](RELEASE-NOTES-SECURITY-3.6.0.md). This release also fixes the refresh endpoint so the selected PDC/scope target reaches the worker.
 

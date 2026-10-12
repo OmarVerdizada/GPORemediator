@@ -6,7 +6,7 @@ fs.mkdirSync(screens,{recursive:true});
 const gpos=[{id:'6ac1786c-016f-11d2-945f-00c04fb984f9',name:'Default Domain Controllers Policy',protected:true,selectable:true},{id:'31b2f340-016d-11d2-945f-00c04fb984f9',name:'Default Domain Policy',protected:true,selectable:true}];
 const run={id:'recovery-test',startedAt:'2026-10-06T08:00:00Z',updatedAt:'2026-10-09T08:00:34Z',plan:{selection:{setting:'1.1.4',gpoId:gpos[0].id,scopeDn:'DC=test,DC=local'},preview:{gpo:gpos[0],scope:{dn:'DC=test,DC=local'},previousValue:0,desiredValue:14},executionUser:'TEST\\operator'},result:{state:'PUBLISHED',backupId:'test-backup-id',gpoPublished:true,linkVerified:true}};
 const inventory={gpos,scopes:[{dn:'DC=test,DC=local',name:'test.local',kind:'Domain'}],domain:'test.local'};
-let writes=[],refreshRequests=[],rollbackState='ROLLED_BACK',refreshFailure=false;
+let writes=[],refreshRequests=[],rollbackState='ROLLED_BACK',refreshFailure=false,workflowJobs=[];
 const server=http.createServer(async(req,res)=>{
  let body='';for await(const chunk of req)body+=chunk;
  const payload=body?JSON.parse(body):{};
@@ -20,6 +20,18 @@ const server=http.createServer(async(req,res)=>{
   else if(url.pathname==='/api/gpo/inventory')data=inventory;
   else if(url.pathname==='/api/gpo/session')data={connected:true};
   else if(url.pathname==='/api/gpo/readiness')data={ready:true,checks:[]};
+  else if(url.pathname==='/api/workflows')data=workflowJobs;
+  else if(url.pathname==='/api/batches')data=[];
+  else if(url.pathname.startsWith('/api/workflows/')&&req.method==='POST'){
+   const action=url.pathname.split('/').pop();let review=false;
+   if(action==='rollback'){writes.push('/api/gpo/recovery-test/rollback');run.result.state=rollbackState;run.result.message='Rollback recorded';review=rollbackState!=='ROLLED_BACK';}
+   if((action==='refresh'||action==='rollback'&&rollbackState==='ROLLED_BACK')&&payload.refresh!=='None'){
+    writes.push('/api/gpo/recovery-test/refresh');refreshRequests.push({refresh:payload.refresh});
+    if(refreshFailure){review=true;run.result.message='gpupdate /force needs review';}
+    else{run.result.refreshResults=[{computer:'authorized.test.local',state:'SCHEDULED',message:'gpupdate /force scheduled'}];run.result.message='gpupdate /force scheduled';}
+   }
+   data={id:payload.requestId,action,state:review?'NEEDS_REVIEW':'COMPLETED',message:run.result.message,planIds:payload.planIds,completedIds:payload.planIds,createdAt:new Date().toISOString()};workflowJobs=[data];res.statusCode=202;
+  }
   else if(url.pathname.endsWith('/rollback')){writes.push(url.pathname);run.result.state=rollbackState;run.result.message='Rollback recorded';data=run;}
   else if(url.pathname.endsWith('/refresh')){
    writes.push(url.pathname);refreshRequests.push(payload);

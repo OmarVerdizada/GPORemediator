@@ -30,6 +30,8 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           dotnet run --project scripts/WorkflowRegression -c Release
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          dotnet run --project scripts/WorkspaceRegression -c Release
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Windows PowerShell security and mapping regressions
         shell: powershell
         run: |
@@ -49,4 +51,6 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $env:PLAYWRIGHT_CHANNEL='msedge'
           node scripts/Test-RecoveryUi.cjs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          node scripts/Test-WorkflowUi.cjs
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

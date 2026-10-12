@@ -7,7 +7,7 @@ using Microsoft.AspNetCore.DataProtection;
 
 namespace GpoRemediator.Services;
 
-public sealed class GpoWorkflowService(IConfiguration config,Store store,OperationGate gate,IDataProtectionProvider protection,WindowsPowerShellExecutor executor) : IDisposable
+public sealed class GpoWorkflowService(IConfiguration config,Store store,OperationGate gate,IDataProtectionProvider protection,WindowsPowerShellExecutor executor) : IDisposable, IWorkflowOperations
 {
     private static readonly TimeSpan ConnectionIdleTimeout=TimeSpan.FromMinutes(30);
     private sealed record Connection(string Actor,string UserName,byte[] Password,GpoInventory Inventory,DateTimeOffset Expires,DateTimeOffset Created);
@@ -19,7 +19,7 @@ public sealed class GpoWorkflowService(IConfiguration config,Store store,Operati
     private void RequireReal(){if(!Real)throw new PolicyException("WINDOWS_MODE_REQUIRED","GPO discovery and remediation require Windows / AD mode. Setup mode is configuration-only.");}
     private string Domain=>config["Windows:Domain"]??"";
     private string Dc=>config["Windows:DomainController"]??"";
-    private object Configuration { get { OperatorSecurity.ValidateHosts(AllowedHosts,Domain);return new{domain=Domain,domainController=Dc,backupPath=config["Windows:BackupPath"],allowedHosts=AllowedHosts}; } }
+    private object Configuration { get { OperatorSecurity.ValidateHosts(AllowedHosts,Domain);return new{domain=Domain,domainController=Dc,backupPath=config["Windows:BackupPath"],allowedHosts=AllowedHosts,emitProgress=true}; } }
     private string[] ApprovedGpos=>config.GetSection("Windows:ApprovedGpoIds").Get<string[]>()??[];
     private string[] AuthorizedOus=>config.GetSection("Windows:AuthorizedOus").Get<string[]>()??[];
     private string[] AllowedHosts=>config.GetSection("Windows:AllowedHosts").Get<string[]>()??[];
@@ -73,14 +73,15 @@ public sealed class GpoWorkflowService(IConfiguration config,Store store,Operati
         connections.TryUpdate(token,refreshed,c);
         return refreshed;
     }
-    private async Task<T> Run<T>(string op,Connection c,object data,CancellationToken ct)
+    private async Task<T> Run<T>(string op,Connection c,object data,CancellationToken ct,Action<string>? progress=null)
     {
         // Decryption exists only for this subprocess invocation. No request/payload logging.
         var bytes=protector.Unprotect(c.Password);
-        try{return await executor.RunAsync<T>(op,Configuration,new{credential=new{userName=c.UserName,password=Encoding.UTF8.GetString(bytes)},data},ct);}
+        try{return await executor.RunAsync<T>(op,Configuration,new{credential=new{userName=c.UserName,password=Encoding.UTF8.GetString(bytes)},data},ct,progress);}
         finally{CryptographicOperations.ZeroMemory(bytes);}
     }
     public GpoInventory Inventory(string token,string actor)=>Get(token,actor).Inventory;
+    public void ValidateConnection(string token,string actor){RequireReal();Get(token,actor);}
 
     public object SessionStatus(string token,string actor)
     {
@@ -130,9 +131,28 @@ public sealed class GpoWorkflowService(IConfiguration config,Store store,Operati
     {
         if(!string.Equals(p.Actor,actor,StringComparison.OrdinalIgnoreCase)||p.Mode!=Mode||p.Domain!=Domain||p.DomainController!=Dc||!string.Equals(p.ExecutionUser,c.Inventory.ExecutionUser,StringComparison.OrdinalIgnoreCase)||!string.Equals(p.ConfigHash,ConfigHash,StringComparison.Ordinal))throw new PolicyException("GPO_PLAN_CONTEXT","Reconnect with the same execution account and unchanged authorization configuration, then prepare a new plan.");
     }
-    public async Task<GpoWorkflowRun> ExecuteAsync(string id,string operation,GpoConsent consent,string token,string actor)
+    public GpoWorkflowPlan ValidateSubmission(string id,string operation,GpoConsent consent,string token,string actor)
+    {
+        RequireReal();var plan=store.Require<GpoWorkflowPlan>("gpo_plans",id);AssertContext(plan,Get(token,actor),actor);
+        if(operation!="verify"){
+            if(!config.GetValue<bool>("Windows:EnableWrites"))throw new PolicyException("WRITES_DISABLED","Enable the production change gate first.");
+            GpoWorkflowRules.ValidateWriteScope(ApprovedGpos,AuthorizedOus);GpoWorkflowRules.ValidateWriteSelection(ApprovedGpos,AuthorizedOus,plan.Selection);
+        }
+        if(operation=="apply"){
+            GpoWorkflowRules.ValidateConsent(plan,consent);ProductionGpoMappings.Validate(plan.Selection);
+            if(DateTimeOffset.UtcNow-DateTimeOffset.Parse(plan.CreatedAt)>TimeSpan.FromMinutes(10))throw new PolicyException("GPO_PLAN_EXPIRED","Prepare a fresh plan.");
+            if(store.Get<GpoWorkflowRun>("gpo_runs",id) is not null)throw new PolicyException("GPO_ALREADY_STARTED","This plan already has an execution; inspect it instead of replaying Apply.");
+        }else{
+            var run=store.Require<GpoWorkflowRun>("gpo_runs",id);
+            if(operation=="rollback"&&(consent.Confirmation!="ROLLBACK"||string.IsNullOrEmpty(run.Result.BackupId)))throw new PolicyException("ROLLBACK_NOT_AVAILABLE","Type ROLLBACK and select an operation with a completed backup.");
+        }
+        return plan;
+    }
+    public async Task<GpoWorkflowRun> ExecuteAsync(string id,string operation,GpoConsent consent,string token,string actor,string? workflowId=null,GpoRollbackAnchor? rollbackAnchor=null)
     {
         RequireReal();
+        if(operation=="rollback"&&rollbackAnchor is null&&store.List<WorkflowJob>("workflow_jobs").Any(job=>job.Action=="apply"&&job.PlanIds.Length>1&&job.CompletedIds.Contains(id)))
+            throw new PolicyException("BATCH_RECOVERY_REQUIRED","Use the Workflow center batch recovery action to restore the first full-GPO snapshot safely.");
         var c=Get(token,actor);
         var plan=store.Require<GpoWorkflowPlan>("gpo_plans",id);AssertContext(plan,c,actor);
         var mapping=ProductionGpoMappings.Require(plan.Selection.Setting);
@@ -150,7 +170,7 @@ public sealed class GpoWorkflowService(IConfiguration config,Store store,Operati
         // Read and validate the latest execution record only after claiming the GPO.
         // Verification and refresh must not overwrite another operation's result.
         var resourceKey=Guid.Parse(plan.Selection.GpoId).ToString("D");
-        gate.BeginOperation(resourceKey,()=>{});
+        gate.BeginOperation(resourceKey,()=>{},workflowId);
         try
         {
             var previous=store.Get<GpoWorkflowRun>("gpo_runs",id);
@@ -183,7 +203,15 @@ public sealed class GpoWorkflowService(IConfiguration config,Store store,Operati
             var run=new GpoWorkflowRun(id,plan,result with{State=operation.ToUpperInvariant()+"ING"},PolicyValues.Now(),operation=="apply"?consent:previous?.Approval,correlationId,startedAt);
             try{
                 store.Put("gpo_runs",id,run,run.Result.State);store.Audit("GPO_"+operation.ToUpperInvariant()+"_STARTED",actor,jobId:id,controlId:plan.Selection.Setting,gpoId:plan.Selection.GpoId,details:new{id,correlationId,plan.ExecutionUser});
-                result=await Run<GpoWorkflowResult>("gpo"+char.ToUpperInvariant(operation[0])+operation[1..],c,new{plan,mapping,previous=previous?.Result,refresh=operation=="refresh"?consent.Refresh:null,consent=operation=="apply"?consent:previous?.Approval},CancellationToken.None);
+                var stages=(previous?.Stages??[]).ToList();
+                var initialStageCount=stages.Count;
+                void Progress(string phase){
+                    var now=PolicyValues.Now();if(stages.Count>initialStageCount&&stages[^1].FinishedAt is null)stages[^1]=stages[^1] with{FinishedAt=now};
+                    stages.Add(new(phase,now));run=run with{Stages=stages.ToArray(),UpdatedAt=now};store.Put("gpo_runs",id,run,run.Result.State);
+                }
+                Progress(operation.ToUpperInvariant()+"_STARTED");
+                result=await Run<GpoWorkflowResult>("gpo"+char.ToUpperInvariant(operation[0])+operation[1..],c,new{plan,mapping,previous=previous?.Result,refresh=operation=="refresh"?consent.Refresh:null,consent=operation=="apply"?consent:previous?.Approval,rollbackAnchor},CancellationToken.None,Progress);
+                if(stages.Count>0){stages[^1]=stages[^1] with{FinishedAt=PolicyValues.Now()};run=run with{Stages=stages.ToArray()};}
                 if(operation=="verify" && previous is not null && result.RefreshResults.Length==0 && previous.Result.RefreshResults.Length>0)
                     result=result with{RefreshResults=previous.Result.RefreshResults};
                 run=run with{Result=result,UpdatedAt=PolicyValues.Now()};

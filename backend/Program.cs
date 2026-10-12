@@ -61,6 +61,10 @@ builder.Services.AddRateLimiter(OperatorSecurity.ConfigureLoginRateLimit);
 builder.Services.AddSingleton(new Store(dbPath));
 builder.Services.AddSingleton<OperationGate>();
 builder.Services.AddSingleton<GpoWorkflowService>();
+builder.Services.AddSingleton<IWorkflowOperations>(sp=>sp.GetRequiredService<GpoWorkflowService>());
+builder.Services.AddSingleton<WorkspaceWorkflows>();
+builder.Services.AddSingleton(TimeProvider.System);
+builder.Services.AddHostedService(sp=>sp.GetRequiredService<WorkspaceWorkflows>());
 builder.Services.AddSingleton<WindowsPowerShellExecutor>();
 var app=builder.Build();
 var store=app.Services.GetRequiredService<Store>();
@@ -312,6 +316,7 @@ app.MapGet("/api/settings",(HttpContext context)=>new
     safetyPipeline=new[]{"server-authoritative CIS mapping","environment and selection preflight","stale-plan fingerprint check","exclusive per-GPO lock","full Backup-GPO before writes","idempotent mapping write","link read-back","AD/SYSVOL version verification","optional bounded gpupdate scheduling","conflict-aware full snapshot rollback","append-only hash-chained audit and evidence"}
 });
 BundledAssets.MapFrontend(app);
+WorkspaceEndpoints.MapWorkspace(app);
 await app.RunAsync();
 
 public partial class Program { }

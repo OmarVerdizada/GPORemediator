@@ -96,6 +96,34 @@ $script:failRefresh=$true
 $result=& ([scriptblock]::Create($refreshBlock.Extent.Text.TrimStart('{').TrimEnd('}')))
 Assert-Test ($result.state -eq 'ROLLED_BACK' -and $result.refreshResults[0].state -eq 'FAILED') 'Scheduling failure was hidden or erased rollback state'
 Write-Output 'PASS rollback scope refresh and per-host scheduling failure reporting'
+
+# Exercise the actual full-snapshot rollback branch with a server-owned batch anchor.
+$rollbackBlock=$switchAst.Clauses|Where-Object{$_.Item1.Extent.Text -eq "'gpoRollback'"}|ForEach-Object{$_.Item2}
+$script:batchFirst=Join-Path $sandbox 'batch-first';$script:batchLast=Join-Path $sandbox 'batch-last'
+$null=New-Item -ItemType Directory -Path $script:batchFirst,$script:batchLast -Force
+$plan=[pscustomobject]@{id='batch-first';selection=[pscustomobject]@{gpoId='31b2f340-016d-11d2-945f-00c04fb984f9';scopeDn='OU=Pilot,DC=example,DC=local'};preview=[pscustomobject]@{scopeLinks='old links';existingLink=$null}}
+$anchorPlan=[pscustomobject]@{id='batch-last';selection=$plan.selection}
+function Run-Directory {param($Plan) if($Plan.id -eq 'batch-last'){return $script:batchLast};return $script:batchFirst}
+$firstManifest=@{phase='PUBLISHED';postFingerprint='batch-first';backupId='22222222-2222-2222-2222-222222222222';beforeContent=$content;beforeExtensions='security';directory=$script:batchFirst}
+$firstManifest|ConvertTo-Json -Depth 5|Set-Content (Join-Path $script:batchFirst 'manifest.json')
+@{phase='PUBLISHED';postFingerprint='batch-last'}|ConvertTo-Json|Set-Content (Join-Path $script:batchLast 'manifest.json')
+$script:currentFingerprint='batch-last';$script:restoreCalls=0
+function Fingerprint {param($Id,$ScopeDn) return $script:currentFingerprint}
+function Restore-GPO {param($BackupId,$Path,$Domain,$Server) $script:restoreCalls++;[IO.File]::WriteAllText((Join-Path $script:folder 'policy.txt'),'restored snapshot')}
+function Remove-GPLink {param($Guid,$Target,$Domain,$Server,[switch]$Confirm)}
+$Data=[pscustomobject]@{plan=$plan;mapping=@{};rollbackAnchor=$null}
+try{$null=& ([scriptblock]::Create($rollbackBlock.Extent.Text.TrimStart('{').TrimEnd('}')));throw 'Unanchored old snapshot was accepted'}catch{if($_.Exception.Message -notlike 'ROLLBACK_CONFLICT*'){throw}}
+Assert-Test ($script:restoreCalls -eq 0) 'Old individual snapshot overwrote later batch changes'
+$Data.rollbackAnchor=[pscustomobject]@{plan=$anchorPlan;postFingerprint='batch-last'}
+$cfg|Add-Member -NotePropertyName emitProgress -NotePropertyValue $true -Force
+$events=@(& ([scriptblock]::Create($rollbackBlock.Extent.Text.TrimStart('{').TrimEnd('}'))))
+$result=$events[-1]
+Assert-Test ($result.state -eq 'ROLLED_BACK' -and $script:restoreCalls -eq 1) 'Anchored batch did not restore the first full snapshot'
+Assert-Test (@($events|Where-Object{$_.PSObject.Properties['gpoStage']}).Count -eq 3) 'Worker did not stream actual restore stages'
+$script:currentFingerprint='external edit'
+try{$null=& ([scriptblock]::Create($rollbackBlock.Extent.Text.TrimStart('{').TrimEnd('}')));throw 'Batch rollback drift was accepted'}catch{if($_.Exception.Message -notlike 'ROLLBACK_CONFLICT*'){throw}}
+Assert-Test ($script:restoreCalls -eq 1) 'Drift caused another restore'
+Write-Output 'PASS batch rollback: first snapshot, final publication anchor, external drift rejection and streamed restore stages'
 if($ReportPath){$parent=Split-Path ([IO.Path]::GetFullPath($ReportPath)) -Parent;$null=New-Item -ItemType Directory -Force -Path $parent;$report|ConvertTo-Json -Depth 8|Set-Content -LiteralPath $ReportPath -Encoding UTF8}
 $failures=@($report|Where-Object{$_.state -eq 'FAIL'})
 $report|ForEach-Object{[pscustomobject]$_}|Group-Object handler|ForEach-Object{Write-Output ($_.Name+': '+$_.Count+' controls')}

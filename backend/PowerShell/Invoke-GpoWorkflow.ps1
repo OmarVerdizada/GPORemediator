@@ -27,12 +27,17 @@ try {
     }
     $request.payload.credential.password=$null
     $stage='connection'
+    [Console]::Out.WriteLine('GPO_STAGE:CONNECTING')
     $session=New-PSSession @options
     $stage=[string]$request.operation
     # Both script texts come exclusively from the installed, bundled product; browser data is passed as arguments.
     $worker=[IO.File]::ReadAllText((Join-Path $PSScriptRoot 'GpoWorkflow.Worker.ps1'))
     $module=[IO.File]::ReadAllText((Join-Path $PSScriptRoot 'SecurityTemplate.psm1'))
-    $data=Invoke-Command -Session $session -ScriptBlock ([scriptblock]::Create($worker)) -ArgumentList ([string]$request.operation),$cfg,$request.payload.data,$module
+    $data=$null
+    Invoke-Command -Session $session -ScriptBlock ([scriptblock]::Create($worker)) -ArgumentList ([string]$request.operation),$cfg,$request.payload.data,$module | ForEach-Object {
+        if($_.PSObject.Properties['gpoStage']){[Console]::Out.WriteLine('GPO_STAGE:'+([string]$_.gpoStage))}
+        else{$data=$_}
+    }
     [Console]::Out.Write((@{ok=$true;data=$data;durationMs=$clock.ElapsedMilliseconds} | ConvertTo-Json -Depth 50 -Compress))
 } catch {
     $message=[string]$_.Exception.Message

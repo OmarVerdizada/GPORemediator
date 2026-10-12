@@ -8,7 +8,7 @@ namespace GpoRemediator.Infrastructure;
 // Fixed bundled scripts only. Optional GPO credentials travel over redirected stdin, never argv or logs.
 public sealed class WindowsPowerShellExecutor(ILogger<WindowsPowerShellExecutor> logger)
 {
-    public async Task<T> RunAsync<T>(string operation, object configuration, object payload, CancellationToken ct)
+    public async Task<T> RunAsync<T>(string operation, object configuration, object payload, CancellationToken ct,Action<string>? progress=null)
     {
         if (!OperatingSystem.IsWindows()) throw new PolicyException("WINDOWS_REQUIRED", "Real execution requires a domain-connected Windows management host.");
         var gpo = new[] {"gpoInventory","gpoReadiness","gpoPreview","gpoApply","gpoRollback","gpoVerify","gpoRefresh"}.Contains(operation);
@@ -43,7 +43,7 @@ public sealed class WindowsPowerShellExecutor(ILogger<WindowsPowerShellExecutor>
         {
             process.Start();
             started=true;
-            var stdout = ReadOutputAsync(process.StandardOutput,8_000_000,timeout.Token);
+            var stdout = ReadOutputAsync(process.StandardOutput,8_000_000,timeout.Token,progress);
             var stderr = DrainAsync(process.StandardError,timeout.Token);
             await process.StandardInput.WriteAsync(JsonDefaults.Serialize(new { operation, configuration, payload }).AsMemory(), timeout.Token);
             process.StandardInput.Close();
@@ -89,14 +89,22 @@ public sealed class WindowsPowerShellExecutor(ILogger<WindowsPowerShellExecutor>
             if(started&&!process.HasExited) { try { process.Kill(entireProcessTree:true); } catch(InvalidOperationException) { } }
         }
     }
-    private static async Task<string> ReadOutputAsync(StreamReader reader,int limit,CancellationToken ct)
+    internal static async Task<string> ReadOutputAsync(StreamReader reader,int limit,CancellationToken ct,Action<string>? progress=null)
     {
-        var output=new StringBuilder();var buffer=new char[4096];bool exceeded=false;int read;
-        while((read=await reader.ReadAsync(buffer.AsMemory(),ct))>0)
-        {
-            if(output.Length+read<=limit&&!exceeded)output.Append(buffer,0,read);
-            else exceeded=true; // Continue draining to avoid blocking the child on a full pipe.
+        var output=new StringBuilder();var pending=new StringBuilder();var buffer=new char[4096];bool exceeded=false;int read,total=0;
+        void Line(){
+            var line=pending.ToString().TrimEnd('\r');pending.Clear();
+            if(line.StartsWith("GPO_STAGE:",StringComparison.Ordinal)){
+                var phase=line[10..];
+                if(phase.Length<=64&&System.Text.RegularExpressions.Regex.IsMatch(phase,"^[A-Z_]+$"))progress?.Invoke(phase);
+            }else output.Append(line);
         }
+        while((read=await reader.ReadAsync(buffer.AsMemory(),ct))>0){
+            if(total>limit-read){exceeded=true;pending.Clear();continue;}
+            total+=read;if(exceeded)continue;
+            for(var i=0;i<read;i++){if(buffer[i]=='\n')Line();else pending.Append(buffer[i]);}
+        }
+        if(!exceeded&&pending.Length>0)Line();
         if(exceeded)throw new PolicyException("RESPONSE_TOO_LARGE","Windows operation returned too much data; narrow the authorized scope.");
         return output.ToString();
     }
