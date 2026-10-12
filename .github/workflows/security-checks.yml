@@ -1,0 +1,52 @@
+name: Security and regression checks
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4
+        with:
+          dotnet-version: '10.0.x'
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '24'
+      - name: Build and check dependencies
+        shell: pwsh
+        run: |
+          dotnet build backend/GpoRemediator.csproj -c Release
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          dotnet list backend/GpoRemediator.csproj package --vulnerable --include-transitive --format json | Set-Content dependency-audit.json
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $audit=Get-Content dependency-audit.json -Raw | ConvertFrom-Json
+          $vulnerable=@(foreach($project in $audit.projects){foreach($framework in $project.frameworks){@($framework.topLevelPackages)+@($framework.transitivePackages) | Where-Object { $_ -and $_.vulnerabilities }}})
+          if ($audit.problems -or !$audit.projects -or $vulnerable.Count -gt 0) { throw 'Dependency audit requires review' }
+      - name: Server security and workflow regressions
+        shell: pwsh
+        run: |
+          dotnet run --project scripts/SecurityRegression -c Release
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          dotnet run --project scripts/WorkflowRegression -c Release
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Windows PowerShell security and mapping regressions
+        shell: powershell
+        run: |
+          ./scripts/Test-SecurityFiles.ps1
+          ./scripts/Test-RuntimeIntegrity.ps1
+          ./scripts/Test-GpoMappings.ps1
+      - name: Frontend regressions
+        shell: pwsh
+        run: |
+          node scripts/Build-Styles.cjs --check
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          node scripts/Test-FrontendSystem.cjs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          node scripts/Test-RecipeWorkspace.cjs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          npm install --no-save --ignore-scripts playwright@1.62.1
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $env:PLAYWRIGHT_CHANNEL='msedge'
+          node scripts/Test-RecoveryUi.cjs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

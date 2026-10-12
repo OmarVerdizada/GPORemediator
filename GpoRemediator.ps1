@@ -14,6 +14,7 @@ $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
 Set-Location -LiteralPath $PSScriptRoot
 . (Join-Path $PSScriptRoot 'scripts\ServiceControl.ps1')
+. (Join-Path $PSScriptRoot 'scripts\Secure-Files.ps1')
 
 $stateRoot = Join-Path $env:ProgramData 'GpoRemediator'
 $workRoot = Join-Path $stateRoot 'State'
@@ -34,7 +35,7 @@ $runtimeMarker = Join-Path $runtimeRoot 'production-backend-v4.ready'
 $runtimeInstallManifest = Join-Path $runtimeRoot 'runtime-install.json'
 $runtimeArchive = Join-Path $PSScriptRoot 'release\GpoRemediator-runtime-win-x64.zip'
 $runtimeArchiveHash = $runtimeArchive + '.sha256'
-$releaseVersion = '3.5.1'
+$releaseVersion = '3.6.0'
 # 3.1.2 keeps the 3.0 durable schema. It hardens startup recovery, removes the Setup->Windows restart race, and makes early backend failures self-diagnosing.
 # 3.1.2 intentionally uses fresh Setup/Windows state databases so incompatible serialized records from earlier preview builds cannot crash startup. Older databases are left untouched in ProgramData for archival/review.
 $stateSchemaVersion = '3.1.2'
@@ -55,22 +56,8 @@ function Write-Log([string]$Message,[ConsoleColor]$Color=[ConsoleColor]::Gray) {
 }
 
 function Initialize-SecureState {
-    foreach($path in @($stateRoot,$workRoot,$configRoot,$dataRoot,$backupRoot,$recoveryRoot)) {
-        New-Item -ItemType Directory -Force -Path $path | Out-Null
-        try {
-            $item=Get-Item -LiteralPath $path
-            $acl=$item.GetAccessControl([Security.AccessControl.AccessControlSections]::Access)
-            $acl.SetAccessRuleProtection($true,$false)
-            foreach($rule in @(
-                (New-Object Security.AccessControl.FileSystemAccessRule('SYSTEM','FullControl','ContainerInherit,ObjectInherit','None','Allow')),
-                (New-Object Security.AccessControl.FileSystemAccessRule('BUILTIN\Administrators','FullControl','ContainerInherit,ObjectInherit','None','Allow')),
-                (New-Object Security.AccessControl.FileSystemAccessRule([Security.Principal.WindowsIdentity]::GetCurrent().Name,'FullControl','ContainerInherit,ObjectInherit','None','Allow'))
-            )) { $acl.AddAccessRule($rule) | Out-Null }
-            $item.SetAccessControl($acl)
-        } catch {
-            # The launcher can still continue when ACL hardening is already enforced by a parent policy.
-        }
-    }
+    Initialize-ProtectedDirectory -Path $stateRoot
+    foreach($path in @($workRoot,$configRoot,$dataRoot,$backupRoot,$recoveryRoot)) { Initialize-ProtectedDirectory -Path $path }
 }
 
 function Trim-Log([string]$Path,[int]$MaxBytes=3145728,[int]$TailLines=1800) {
@@ -101,6 +88,33 @@ function Test-ReleaseArchive {
     } catch { return $false }
 }
 
+function Test-RuntimeFileIntegrity {
+    if(!(Test-ReleaseArchive)){return $false}
+    Add-Type -AssemblyName System.IO.Compression.FileSystem
+    $zip=[IO.Compression.ZipFile]::OpenRead($runtimeArchive)
+    try {
+        $expectedFiles=[Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+        $null=$expectedFiles.Add('runtime-install.json')
+        foreach($entry in $zip.Entries){
+            if(!$entry.Name){continue}
+            $relative=$entry.FullName.Replace('/','\')
+            if([IO.Path]::IsPathRooted($relative) -or @($relative.Split('\')) -contains '..'){return $false}
+            if(!$expectedFiles.Add($relative)){return $false}
+            $file=Join-Path $runtimeRoot $relative
+            if(!(Test-Path -LiteralPath $file -PathType Leaf)){return $false}
+            if(((Get-Item -LiteralPath $file -Force).Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0){return $false}
+            $sha=[Security.Cryptography.SHA256]::Create();$stream=$entry.Open()
+            try{$expected=[BitConverter]::ToString($sha.ComputeHash($stream)).Replace('-','')}finally{$stream.Dispose();$sha.Dispose()}
+            if((Get-FileHash -LiteralPath $file -Algorithm SHA256).Hash -cne $expected){return $false}
+        }
+        foreach($file in @(Get-ChildItem -LiteralPath $runtimeRoot -Recurse -File -Force)){
+            $relative=$file.FullName.Substring($runtimeRoot.TrimEnd('\').Length).TrimStart('\')
+            if(!$expectedFiles.Contains($relative)){return $false}
+        }
+        return $true
+    }finally{$zip.Dispose()}
+}
+
 function Test-RuntimeInstalled {
     $required=@(
         'GpoRemediator.exe','GpoRemediator.dll','GpoRemediator.deps.json','GpoRemediator.runtimeconfig.json',
@@ -109,6 +123,7 @@ function Test-RuntimeInstalled {
     )
     foreach($name in $required){ if(!(Test-Path -LiteralPath (Join-Path $runtimeRoot $name))){ return $false } }
     if(!(Test-Path -LiteralPath $runtimeInstallManifest)){ return $false }
+    if(!(Test-RuntimeFileIntegrity)){return $false}
     try {
         $manifest=Get-Content -LiteralPath $runtimeInstallManifest -Raw -Encoding UTF8 | ConvertFrom-Json
         $expected=(Get-Content -LiteralPath $runtimeArchiveHash -Raw -Encoding ASCII).Trim().ToUpperInvariant()
@@ -138,6 +153,7 @@ function Install-Runtime {
             if(Test-Path -LiteralPath $old){ Move-Item -LiteralPath $old -Destination $runtimeRoot -Force }
             throw
         }
+        Initialize-ProtectedDirectory -Path $runtimeRoot
         Write-Log 'Verified self-contained runtime installed. No SDK, Node.js, build cache, or internet download was used.' Green
     } finally {
         Remove-Item -LiteralPath $stage -Recurse -Force -ErrorAction SilentlyContinue
@@ -146,6 +162,7 @@ function Install-Runtime {
 
 function Ensure-Runtime {
     if($Repair){ Write-Log 'Runtime repair requested.' Yellow; Install-Runtime; return }
+    if(Test-Path -LiteralPath $runtimeRoot){Initialize-ProtectedDirectory -Path $runtimeRoot}
     if(Test-RuntimeInstalled){ Write-Log 'Verified packaged runtime is ready.'; return }
     Install-Runtime
 }
@@ -172,22 +189,20 @@ function Save-CanonicalConfig([string]$Domain,[string]$Dc,[object]$Existing=$nul
     $operators=if($win){Convert-ToStringArray $win.AllowedOperators}else{@()}
     if($operators.Count -eq 0 -and $identity -match '\\'){$operators=@($identity)}
     $roles=if($win -and $win.Roles){$win.Roles}else{$null}
-    # Web UI RBAC is intentionally separate from the delegated AD execution identity.
-    # Older packages could persist the same Windows account in several role arrays which the
-    # backend correctly rejects as ambiguous. Normalize legacy state deterministically on every
-    # launcher start: AllowedOperators are Administrators; the remaining roles are mutually exclusive.
-    $admins=@($operators | Sort-Object -Unique)
-    $adminSet=@{}; foreach($a in $admins){$adminSet[$a.ToLowerInvariant()]=$true}
-    $remediators=@(); foreach($a in $(if($roles){Convert-ToStringArray $roles.Remediators}else{@()})){if(!$adminSet.ContainsKey($a.ToLowerInvariant())){$remediators+=$a}}
-    $remediators=@($remediators | Sort-Object -Unique); $remSet=@{}; foreach($a in $remediators){$remSet[$a.ToLowerInvariant()]=$true}
-    $auditors=@(); foreach($a in $(if($roles){Convert-ToStringArray $roles.Auditors}else{@()})){if(!$adminSet.ContainsKey($a.ToLowerInvariant()) -and !$remSet.ContainsKey($a.ToLowerInvariant())){$auditors+=$a}}
-    $auditors=@($auditors | Sort-Object -Unique); $auditSet=@{}; foreach($a in $auditors){$auditSet[$a.ToLowerInvariant()]=$true}
-    $viewers=@(); foreach($a in $(if($roles){Convert-ToStringArray $roles.Viewers}else{@()})){if(!$adminSet.ContainsKey($a.ToLowerInvariant()) -and !$remSet.ContainsKey($a.ToLowerInvariant()) -and !$auditSet.ContainsKey($a.ToLowerInvariant())){$viewers+=$a}}
-    $viewers=@($viewers | Sort-Object -Unique)
+    # Use explicit roles. Never resolve conflicting membership by granting a stronger role.
+    $admins=@($(if($roles){Convert-ToStringArray $roles.Administrators}else{$identity}) | Sort-Object -Unique)
+    $operators=@($admins)
+    $remediators=@($(if($roles){Convert-ToStringArray $roles.Remediators}else{@()}) | Sort-Object -Unique)
+    $auditors=@($(if($roles){Convert-ToStringArray $roles.Auditors}else{@()}) | Sort-Object -Unique)
+    $viewers=@($(if($roles){Convert-ToStringArray $roles.Viewers}else{@()}) | Sort-Object -Unique)
+    $members=@($admins)+@($remediators)+@($auditors)+@($viewers)
+    $duplicate=$members | Group-Object { $_.ToLowerInvariant() } | Where-Object Count -gt 1 | Select-Object -First 1
+    if($duplicate){throw 'The configuration assigns one Windows account to multiple roles. Correct the role lists in recovery Setup mode.'}
     $writes=$false
-    if($win -and $null -ne $win.EnableWrites){$writes=[bool]$win.EnableWrites}
+    if($win -and $Existing.SecurityVersion -eq 1 -and $null -ne $win.EnableWrites){$writes=[bool]$win.EnableWrites}
     $canonical=[ordered]@{
         Mode='Windows'
+        SecurityVersion=1
         Urls="http://127.0.0.1:$Port"
         Windows=[ordered]@{
             Workflow='GpoRemediation'

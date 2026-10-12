@@ -1,4 +1,6 @@
-# GPO Remediator 3.5.1
+# GPO Remediator 3.6.0
+
+3.6.0 hardens the local operator boundary: mandatory Windows authentication, explicit endpoint roles, private Windows state/runtime permissions, DPAPI-protected keys, bounded delegated logins and compiled UI/script integrity checks. The self-contained runtime now uses .NET 10. See [security requirements and limitations](SECURITY.md) and [upgrade notes](RELEASE-NOTES-SECURITY-3.6.0.md). This release also fixes the refresh endpoint so the selected PDC/scope target reaches the worker.
 
 The 3.5.1 workspace adds neutral graphite surfaces, local Geist fonts, comfortable/compact density, three accent palettes, a control-by-control evidence map and accessible GUID/DN/hash copy actions. It builds on the existing navigation, operation tables, audit diagnostics and mobile layouts. See `RELEASE-NOTES-PREMIUM-3.5.1.md`.
 
@@ -76,7 +78,7 @@ Web UI identity and execution identity are separate:
 - **Web UI Administrator / Remediator / Auditor / Viewer** = Windows account used to open and authorize the console.
 - **Delegated execution account** = the domain account entered on Dashboard for Kerberos/WinRM/GPO execution. Its password stays in memory and it is never automatically written into the UI role lists.
 
-Legacy configurations that accidentally list one Web UI account in several roles are normalized on launcher startup with precedence `Administrator → Remediator → Auditor → Viewer`.
+Each Web UI account must belong to exactly one explicit role. Conflicting membership is rejected. Legacy `AllowedOperators` entries do not implicitly grant Administrator access. Windows authentication is mandatory in both AD mode and recovery Setup; Setup is restricted to the Windows identity that launched the service. Browsers may prompt for that Windows account.
 
 ## GPO workflow
 
@@ -122,6 +124,8 @@ The default `*` entries are intentionally discovery-only. Operators do not need 
 Settings therefore keeps wildcard discovery read-only and directs production authorization back to the remediation plan instead of asking the operator to enter GUID/OU values manually.
 
 ## Frontend development
+
+The backend serves embedded frontend resources. After changing frontend source, rebuild with `Build-Portable.ps1` using the .NET 10 SDK and Node.js; copying files beside the EXE does not update the served UI. The runtime source fingerprint covers both frontend and backend content.
 
 Edit `frontend/source/styles/tokens.css` for theme colors, typography, spacing and radii. Component sources live in `frontend/source/styles/`; `premium.css` defines material, density and accent variants. `premium.js` renders the recorded control map, compact header and copy actions. The unmodified local font files in `frontend/source/fonts/` include their upstream revision and SIL Open Font License. `scripts/Build-Styles.cjs` compiles styles deterministically into the single served `app.css`, retaining selector order and removing exact duplicate blocks. New styles do not use `!important`. Node.js with built-in modules is required only for this developer build step; there are no npm packages or remote runtime assets. `Build-Portable.ps1` compiles CSS before source/dist synchronization.
 

@@ -10,7 +10,8 @@ namespace GpoRemediator.Services;
 public sealed class GpoWorkflowService(IConfiguration config,Store store,OperationGate gate,IDataProtectionProvider protection,WindowsPowerShellExecutor executor) : IDisposable
 {
     private static readonly TimeSpan ConnectionIdleTimeout=TimeSpan.FromMinutes(30);
-    private sealed record Connection(string Actor,string UserName,byte[] Password,GpoInventory Inventory,DateTimeOffset Expires);
+    private sealed record Connection(string Actor,string UserName,byte[] Password,GpoInventory Inventory,DateTimeOffset Expires,DateTimeOffset Created);
+    private readonly SemaphoreSlim loginSlots=new(4,4);
     private readonly ConcurrentDictionary<string,Connection> connections=new();
     private readonly IDataProtector protector=protection.CreateProtector("GpoWorkflow.EphemeralLogin.v1");
     private bool Real=>!config.GetValue<bool>("LocalSetup")&&string.Equals(config["Mode"],"Windows",StringComparison.OrdinalIgnoreCase);
@@ -18,7 +19,7 @@ public sealed class GpoWorkflowService(IConfiguration config,Store store,Operati
     private void RequireReal(){if(!Real)throw new PolicyException("WINDOWS_MODE_REQUIRED","GPO discovery and remediation require Windows / AD mode. Setup mode is configuration-only.");}
     private string Domain=>config["Windows:Domain"]??"";
     private string Dc=>config["Windows:DomainController"]??"";
-    private object Configuration=>new{domain=Domain,domainController=Dc,backupPath=config["Windows:BackupPath"],allowedHosts=AllowedHosts};
+    private object Configuration { get { OperatorSecurity.ValidateHosts(AllowedHosts,Domain);return new{domain=Domain,domainController=Dc,backupPath=config["Windows:BackupPath"],allowedHosts=AllowedHosts}; } }
     private string[] ApprovedGpos=>config.GetSection("Windows:ApprovedGpoIds").Get<string[]>()??[];
     private string[] AuthorizedOus=>config.GetSection("Windows:AuthorizedOus").Get<string[]>()??[];
     private string[] AllowedHosts=>config.GetSection("Windows:AllowedHosts").Get<string[]>()??[];
@@ -32,7 +33,7 @@ public sealed class GpoWorkflowService(IConfiguration config,Store store,Operati
     private Timer? cleanup;
     private void Expire()
     {
-        foreach(var pair in connections.Where(x=>x.Value.Expires<=DateTimeOffset.UtcNow)) Disconnect(pair.Key);
+        foreach(var pair in connections.Where(x=>x.Value.Expires<=DateTimeOffset.UtcNow||x.Value.Created.AddHours(8)<=DateTimeOffset.UtcNow)) Disconnect(pair.Key);
     }
     public async Task<(string Token,GpoInventory Inventory)> ConnectAsync(GpoLoginRequest request,string actor,CancellationToken ct)
     {
@@ -40,8 +41,9 @@ public sealed class GpoWorkflowService(IConfiguration config,Store store,Operati
         RequireReal();
         request.UserName=WindowsAccount.Normalize(request.UserName);
         if(connections.Count>=32) throw new PolicyException("GPO_CONNECTION_LIMIT","Too many active GPO sessions. Disconnect unused sessions or wait for the 30-minute idle timeout.");
-        if(request.UserName.Length>256||request.Password.Length>1024||request.UserName.IndexOfAny(['\r','\n','\0'])>=0) throw new PolicyException("CREDENTIAL_FORMAT","Invalid login fields.");
+        if(request.Password is null||request.UserName.Length>256||request.Password.Length>1024||request.UserName.IndexOfAny(['\r','\n','\0'])>=0) throw new PolicyException("CREDENTIAL_FORMAT","Invalid login fields.");
         if(string.IsNullOrWhiteSpace(request.UserName)||string.IsNullOrEmpty(request.Password)) throw new PolicyException("DELEGATED_CREDENTIAL_REQUIRED","Supply an explicit delegated DOMAIN\\user credential. The backend service identity is never used for GPO execution.");
+        if(!await loginSlots.WaitAsync(0,ct))throw new PolicyException("GPO_CONNECTION_LIMIT","Too many concurrent connection attempts. Retry later.");
         GpoInventory inventory;
         try {
             inventory=Authorize(await executor.RunAsync<GpoInventory>("gpoInventory",Configuration,new{credential=new{userName=request.UserName,password=request.Password}},ct));
@@ -49,11 +51,14 @@ public sealed class GpoWorkflowService(IConfiguration config,Store store,Operati
             byte[] encrypted;
             try{encrypted=protector.Protect(bytes);}finally{CryptographicOperations.ZeroMemory(bytes);}
             var token=Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
-            connections[token]=new(actor,request.UserName,encrypted,inventory,DateTimeOffset.UtcNow.Add(ConnectionIdleTimeout));
+            lock(connections){
+                if(connections.Count>=32){CryptographicOperations.ZeroMemory(encrypted);throw new PolicyException("GPO_CONNECTION_LIMIT","Too many active GPO sessions.");}
+                connections[token]=new(actor,request.UserName,encrypted,inventory,DateTimeOffset.UtcNow.Add(ConnectionIdleTimeout),DateTimeOffset.UtcNow);
+            }
             lock(connections) cleanup??=new Timer(_=>Expire(),null,TimeSpan.FromMinutes(1),TimeSpan.FromMinutes(1));
             store.Audit("GPO_CONNECTED",actor,details:new{inventory.ExecutionUser,mode=Mode,gpoCount=inventory.Gpos.Length});
             return(token,inventory);
-        } finally {request.Password="";}
+        } finally {request.Password="";loginSlots.Release();}
     }
     // Called by a periodic callback installed at first use; secrets are also removed on access and disconnect.
     public void CleanupExpired()=>Expire();
@@ -62,7 +67,9 @@ public sealed class GpoWorkflowService(IConfiguration config,Store store,Operati
     {
         Expire();
         if(!connections.TryGetValue(token,out var c)||!string.Equals(c.Actor,actor,StringComparison.OrdinalIgnoreCase))throw new PolicyException("GPO_LOGIN_REQUIRED","Connect again. The temporary GPO connection expired or the service restarted.");
-        var refreshed=c with{Expires=DateTimeOffset.UtcNow.Add(ConnectionIdleTimeout)};
+        var idleExpiry=DateTimeOffset.UtcNow.Add(ConnectionIdleTimeout);
+        var absoluteExpiry=c.Created.AddHours(8);
+        var refreshed=c with{Expires=idleExpiry<absoluteExpiry?idleExpiry:absoluteExpiry};
         connections.TryUpdate(token,refreshed,c);
         return refreshed;
     }
@@ -132,7 +139,7 @@ public sealed class GpoWorkflowService(IConfiguration config,Store store,Operati
         if(!string.IsNullOrEmpty(plan.MappingHash) && !string.Equals(plan.MappingHash,PolicyValues.Hash(mapping),StringComparison.Ordinal)) throw new PolicyException("GPO_MAPPING_CHANGED","The production mapping changed after this plan was prepared. Generate a fresh preview.");
         if(operation is not ("apply" or "rollback" or "verify" or "refresh"))
             throw new PolicyException("OPERATION_DENIED","Unknown GPO operation.");
-        if(operation=="refresh" && consent.Refresh is not (null or "Pdc" or "Scope"))
+        if(operation=="refresh" && consent.Refresh is not ("Pdc" or "Scope"))
             throw new PolicyException("GPO_OPTIONS_INVALID","Choose PDC or scope computers for policy refresh.");
         if(operation!="verify")
         {

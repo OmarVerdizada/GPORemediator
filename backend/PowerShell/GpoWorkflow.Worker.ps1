@@ -353,7 +353,7 @@ function Refresh-Targets([string]$Strategy,[string]$ScopeDn){
         default {Fail 'GPO_OPTIONS_INVALID' 'Choose PDC or scope computers.'}
     }
     $allowed=@(Read-Field $cfg 'allowedHosts' @())
-    return @($targets|Where-Object{$_ -and ($allowed -contains '*' -or $allowed -contains $_)}|Sort-Object -Unique)
+    return @($targets|Where-Object{$_ -and ($allowed -contains $_)}|Sort-Object -Unique)
 }
 function Run-Directory($Plan){if($Plan.id -notmatch '^[a-f0-9]{32}$' -or $Plan.domain -ine $cfg.domain -or $Plan.domainController -ine $cfg.domainController){Fail 'PLAN_CONTEXT_CHANGED' 'Plan context does not match the selected DC/domain.'};$root=[IO.Path]::GetFullPath([string]$cfg.backupPath);if($root -notmatch '^[A-Za-z]:\\'){Fail 'BACKUP_PATH_INVALID' 'A local backup path on the selected DC is required.'};return Join-Path $root ('GpoWorkflow\'+$Plan.id)}
 function Save-Manifest($Manifest,[string]$Directory){Atomic-Text (Join-Path $Directory 'manifest.json') ($Manifest|ConvertTo-Json -Depth 50) ([Text.UTF8Encoding]::new($false))}

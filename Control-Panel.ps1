@@ -13,7 +13,9 @@ $runtimeExe = Join-Path $projectRoot 'runtime\GpoRemediator.exe'
 $runtimeMarker = Join-Path $projectRoot 'runtime\production-backend-v4.ready'
 $releaseArchive = Join-Path $projectRoot 'release\GpoRemediator-runtime-win-x64.zip'
 $releaseHash = $releaseArchive + '.sha256'
-New-Item -ItemType Directory -Path $work -Force | Out-Null
+. (Join-Path $PSScriptRoot 'scripts\Secure-Files.ps1')
+Initialize-ProtectedDirectory -Path $stateRoot
+Initialize-ProtectedDirectory -Path $work
 
 function Test-VerifiedReleaseArchive {
     try {

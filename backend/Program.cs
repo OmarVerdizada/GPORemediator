@@ -1,7 +1,7 @@
 using System.Net;
 using System.Net.NetworkInformation;
 using System.Security.Principal;
-using System.Security.Claims;
+using Microsoft.AspNetCore.RateLimiting;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
@@ -14,10 +14,16 @@ using Microsoft.AspNetCore.Authentication.Negotiate;
 using Microsoft.AspNetCore.DataProtection;
 
 var builder=WebApplication.CreateBuilder(args);
+if(!OperatingSystem.IsWindows())throw new PlatformNotSupportedException("GPO Remediator requires Windows.");
+var protectedStateRoot=Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),"GpoRemediator");
+PrivateFiles.ProtectDirectory(protectedStateRoot);
+foreach(var name in new[]{"Config","State","Data","Backups","Recovery"})PrivateFiles.ProtectTree(Path.Combine(protectedStateRoot,name));
 // Recovery setup must remain reachable even when the saved JSON or HTTPS configuration is broken.
 builder.Configuration.AddEnvironmentVariables().AddCommandLine(args);
 var localSetup=builder.Configuration.GetValue<bool>("LocalSetup");
-var localConfigPath=Path.GetFullPath(builder.Configuration["LocalConfigPath"]??Path.Combine(builder.Environment.ContentRootPath,"appsettings.Local.json"));
+var localConfigPath=Path.GetFullPath(builder.Configuration["LocalConfigPath"]??Path.Combine(protectedStateRoot,"Config","appsettings.Local.json"));
+if(!localConfigPath.StartsWith(Path.Combine(protectedStateRoot,"Config")+Path.DirectorySeparatorChar,StringComparison.OrdinalIgnoreCase))throw new InvalidOperationException("LocalConfigPath must be inside protected application Config.");
+if(File.Exists(localConfigPath)&&(File.GetAttributes(localConfigPath)&FileAttributes.ReparsePoint)!=0)throw new InvalidOperationException("Configuration file cannot be a symbolic link.");
 if(!localSetup) builder.Configuration.AddJsonFile(new Microsoft.Extensions.FileProviders.PhysicalFileProvider(Path.GetDirectoryName(localConfigPath)!),Path.GetFileName(localConfigPath),optional:true,reloadOnChange:false);
 builder.Configuration.AddEnvironmentVariables().AddCommandLine(args);
 if(localSetup) builder.Configuration["Mode"]="Setup";
@@ -27,24 +33,31 @@ var real=configuredMode.Equals("Windows",StringComparison.OrdinalIgnoreCase);
 var setup=configuredMode.Equals("Setup",StringComparison.OrdinalIgnoreCase);
 var mode=real?"WINDOWS":"SETUP";
 var setupOwner=OperatingSystem.IsWindows()?(WindowsIdentity.GetCurrent().Name??""):Environment.UserName;
-// The desktop console runs as its launcher owner. Windows authentication is
-// optional for installations that deliberately require per-browser identities.
-var windowsOperatorAuth=string.Equals(builder.Configuration["OperatorAuthentication"],"Windows",StringComparison.OrdinalIgnoreCase);
+// Authenticate the actual Windows caller; never impersonate the launcher owner.
+if(!OperatingSystem.IsWindows())throw new PlatformNotSupportedException("GPO Remediator requires Windows.");
+// Windows identity is mandatory, including recovery Setup.
 var programData=Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData);
 var dataRoot=Path.Combine(programData,"GpoRemediator","Data");
-Directory.CreateDirectory(dataRoot);
-var dbPath=builder.Configuration["DatabasePath"]??Path.Combine(dataRoot,real?"windows.db":"setup.db");
+PrivateFiles.ProtectTree(dataRoot);
+PrivateFiles.ProtectDirectory(Path.Combine(dataRoot,"Keys"));
+PrivateFiles.RetireUnencryptedKeys(Path.Combine(dataRoot,"Keys"),Path.Combine(protectedStateRoot,"Recovery","LegacyKeys"));
+PrivateFiles.RejectLinks(Path.GetDirectoryName(localConfigPath)!);
+var dbPath=Path.GetFullPath(builder.Configuration["DatabasePath"]??Path.Combine(dataRoot,real?"windows.db":"setup.db"));
+if(!dbPath.StartsWith(Path.GetFullPath(dataRoot)+Path.DirectorySeparatorChar,StringComparison.OrdinalIgnoreCase))throw new InvalidOperationException("DatabasePath must be inside protected application Data.");
+PrivateFiles.RejectLinks(Path.GetDirectoryName(dbPath)!);
+if(File.Exists(dbPath)&&(File.GetAttributes(dbPath)&FileAttributes.ReparsePoint)!=0)throw new InvalidOperationException("Database cannot be a file link.");
 // One worker per durable database. A second service must not replay or interleave privileged jobs.
 using var databaseLock=new Mutex(false,"Global\\GpoRemediator-"+PolicyValues.Hash(Path.GetFullPath(dbPath))[..24]);
 bool ownsLock;
 try { ownsLock=databaseLock.WaitOne(0); } catch(AbandonedMutexException) { ownsLock=true; }
 if(!ownsLock) throw new InvalidOperationException("Another GPO Remediator process is already using this database.");
-builder.WebHost.ConfigureKestrel(o=>o.Limits.MaxRequestBodySize=32*1024);
+builder.WebHost.ConfigureKestrel(o=>{o.AddServerHeader=false;o.Limits.MaxRequestBodySize=32*1024;o.Limits.RequestHeadersTimeout=TimeSpan.FromSeconds(15);});
 builder.Services.ConfigureHttpJsonOptions(o=>o.SerializerOptions.Converters.Add(new System.Text.Json.Serialization.JsonStringEnumConverter()));
 builder.Services.AddAntiforgery(o=> { o.HeaderName="X-CSRF-Token"; o.Cookie.Name="GpoRemediator.Csrf"; o.Cookie.HttpOnly=true; o.Cookie.SameSite=SameSiteMode.Strict; o.Cookie.SecurePolicy=CookieSecurePolicy.SameAsRequest; });
-builder.Services.AddDataProtection().PersistKeysToFileSystem(new DirectoryInfo(Path.Combine(dataRoot,"Keys"))).SetApplicationName("GpoRemediator");
+builder.Services.AddDataProtection().PersistKeysToFileSystem(new DirectoryInfo(Path.Combine(dataRoot,"Keys"))).SetApplicationName("GpoRemediator").ProtectKeysWithDpapi();
 builder.Services.AddAuthentication(NegotiateDefaults.AuthenticationScheme).AddNegotiate();
 builder.Services.AddAuthorization();
+builder.Services.AddRateLimiter(OperatorSecurity.ConfigureLoginRateLimit);
 builder.Services.AddSingleton(new Store(dbPath));
 builder.Services.AddSingleton<OperationGate>();
 builder.Services.AddSingleton<GpoWorkflowService>();
@@ -67,8 +80,7 @@ app.Use(async(context,next)=>
     if(context.Request.Path.StartsWithSegments("/api")) context.Response.Headers.CacheControl="no-store";
     try
     {
-        if(!IPAddress.IsLoopback(context.Connection.RemoteIpAddress??IPAddress.None) || !new[]{"localhost","127.0.0.1","::1"}.Contains(context.Request.Host.Host))
-            throw new PolicyException("LOOPBACK_ONLY","GPO Remediator is local-only in this release. Open it from localhost on the management server.");
+        RequestSecurity.RequireLoopback(context);
         await next(context);
     }
     catch(AntiforgeryValidationException) { context.Response.StatusCode=403; await context.Response.WriteAsJsonAsync(new{code="CSRF_INVALID",message="Refresh the session and retry the request with its anti-forgery token."}); }
@@ -76,7 +88,9 @@ app.Use(async(context,next)=>
     {
         context.Response.StatusCode=ex.Code switch {
             "NOT_FOUND"=>404,
-            "GPO_LOGIN_REQUIRED"=>401,
+            "GPO_LOGIN_REQUIRED" or "AUTHENTICATION_REQUIRED"=>401,
+            "CONTENT_TYPE_DENIED"=>415,
+            "GPO_CONNECTION_LIMIT"=>429,
             "LOOPBACK_ONLY" or "OPERATOR_DENIED" or "SETUP_OPERATOR_DENIED" or "ROLE_DENIED" or "ORIGIN_DENIED"=>403,
             "INVALID_REQUEST" or "INVALID_DOMAIN" or "INVALID_SCOPE_ALLOWLIST" or "INVALID_GPO_ALLOWLIST" or "INVALID_BACKUP_PATH"=>422,
             "GPO_OPERATION_BUSY" or "SERVICE_STOPPING"=>423,
@@ -87,23 +101,16 @@ app.Use(async(context,next)=>
     }
     catch(BadHttpRequestException) { context.Response.StatusCode=400; await context.Response.WriteAsJsonAsync(new{code="INVALID_REQUEST",message="The request format or values are invalid."}); }
     catch(JsonException) { context.Response.StatusCode=400; await context.Response.WriteAsJsonAsync(new{code="INVALID_JSON",message="Request must contain valid typed JSON."}); }
-    catch(Exception ex) { app.Logger.LogError(ex,"Request {CorrelationId} failed for {Method} {Path}",context.Items["CorrelationId"],context.Request.Method,context.Request.Path); context.Response.StatusCode=500; await context.Response.WriteAsJsonAsync(new{code="INTERNAL_ERROR",correlationId=context.Items["CorrelationId"],message="The operation could not complete. Review the protected diagnostic log with this correlation ID."}); }
+    catch(Exception ex) { app.Logger.LogError("Failure type {ExceptionType}",ex.GetType().Name); app.Logger.LogError("Request {CorrelationId} failed for {Method} {Path}",context.Items["CorrelationId"],context.Request.Method,context.Request.Path); context.Response.StatusCode=500; await context.Response.WriteAsJsonAsync(new{code="INTERNAL_ERROR",correlationId=context.Items["CorrelationId"],message="The operation could not complete. Review the protected diagnostic log with this correlation ID."}); }
 });
-if(windowsOperatorAuth) app.UseAuthentication();
-else app.Use(async(context,next)=>
-{
-    context.User=new ClaimsPrincipal(new ClaimsIdentity([new Claim(ClaimTypes.Name,setupOwner)],"LocalLauncher"));
-    await next(context);
-});
+app.UseAuthentication();
 app.UseAuthorization();
 app.Use(async(context,next)=>
 {
-    if(!context.Request.Path.StartsWithSegments("/api/v1/health"))
+    if(context.Request.Path.Value is not ("/api/v1/health/live" or "/api/v1/health/ready"))
     {
         if(context.User.Identity?.IsAuthenticated!=true) { await context.ChallengeAsync(); return; }
-        if(real && Role(context)=="Denied") throw new PolicyException("OPERATOR_DENIED","Your Windows identity has no configured GPO Remediator role.");
-        if(setup && !string.Equals(WindowsAccount.Normalize(context.User.Identity.Name??""),WindowsAccount.Normalize(setupOwner),StringComparison.OrdinalIgnoreCase))
-            throw new PolicyException("SETUP_OPERATOR_DENIED","Setup is restricted to the Windows identity that launched the service.");
+        OperatorSecurity.Authorize(context,builder.Configuration,real,setupOwner);
     }
     if(setup && context.Request.Path.StartsWithSegments("/api") &&
        !context.Request.Path.StartsWithSegments("/api/v1/health") &&
@@ -111,26 +118,14 @@ app.Use(async(context,next)=>
        !context.Request.Path.StartsWithSegments("/api/session") &&
        !context.Request.Path.StartsWithSegments("/api/service"))
         throw new PolicyException("WINDOWS_MODE_REQUIRED","Setup mode is configuration-only. Save the Windows / AD settings and restart into Windows mode for discovery, preview, apply, verify, rollback, or gpupdate.");
-    if(real && context.Request.Path.StartsWithSegments("/api"))
-    {
-        var path=context.Request.Path.Value??"";
-        if(path.StartsWith("/api/setup",StringComparison.OrdinalIgnoreCase)||path.StartsWith("/api/service",StringComparison.OrdinalIgnoreCase)) RequireRole(context,"Administrator");
-        else if(path.StartsWith("/api/audit",StringComparison.OrdinalIgnoreCase)) RequireRole(context,"Administrator","Auditor");
-        else if(path.EndsWith("/apply",StringComparison.OrdinalIgnoreCase)||path.EndsWith("/rollback",StringComparison.OrdinalIgnoreCase)||path.EndsWith("/refresh",StringComparison.OrdinalIgnoreCase)) RequireRole(context,"Administrator","Remediator");
-        else RequireRole(context,"Administrator","Remediator","Auditor","Viewer");
-    }
     if(context.Request.Path.StartsWithSegments("/api")&&!HttpMethods.IsGet(context.Request.Method)&&!HttpMethods.IsHead(context.Request.Method))
     {
-        var origin=context.Request.Headers.Origin.ToString();
-        var expected=$"{context.Request.Scheme}://{context.Request.Host}";
-        if(!string.Equals(origin,expected,StringComparison.OrdinalIgnoreCase)) throw new PolicyException("ORIGIN_DENIED","Mutation requests must come from this application's exact origin.");
-        await context.RequestServices.GetRequiredService<IAntiforgery>().ValidateRequestAsync(context);
-        var path=context.Request.Path.Value!;
-        if(real&&!builder.Configuration.GetValue<bool>("Windows:EnableWrites") && context.Request.Path.StartsWithSegments("/api/gpo") && (path.EndsWith("/apply")||path.EndsWith("/rollback")))
-            throw new PolicyException("WRITES_DISABLED","Enable writes in Settings before Apply or Rollback. Discovery, preview and verification remain read-only.");
+        await RequestSecurity.ValidateMutationAsync(context);
+        // The workflow service enforces the write gate for apply, rollback and refresh.
     }
     await next(context);
 });
+app.UseRateLimiter();
 string ErrorCategory(string code)=>code switch
 {
     var x when x.StartsWith("AUTH_",StringComparison.OrdinalIgnoreCase) || x.Contains("LOGIN",StringComparison.OrdinalIgnoreCase) || x.Contains("CREDENTIAL",StringComparison.OrdinalIgnoreCase) || x=="OPERATOR_DENIED" => "AUTH",
@@ -142,25 +137,9 @@ string ErrorCategory(string code)=>code switch
     _ => "GENERAL"
 };
 string Operator(HttpContext context)=>context.User.Identity?.Name??(setup?"SETUP\\local-configuration":"UNKNOWN");
-string Role(HttpContext context)
-{
-    if(setup) return "Administrator";
-    var actor=WindowsAccount.Normalize(context.User.Identity?.Name??"");
-    bool In(string key)=>(builder.Configuration.GetSection("Windows:Roles:"+key).Get<string[]>()??[]).Select(WindowsAccount.Normalize).Contains(actor,StringComparer.OrdinalIgnoreCase);
-    if(In("Administrators")) return "Administrator";
-    if(In("Remediators")) return "Remediator";
-    if(In("Auditors")) return "Auditor";
-    if(In("Viewers")) return "Viewer";
-    // Compatibility for configurations created before roles were introduced.
-    if((builder.Configuration.GetSection("Windows:AllowedOperators").Get<string[]>()??[]).Select(WindowsAccount.Normalize).Contains(actor,StringComparer.OrdinalIgnoreCase)) return "Administrator";
-    return "Denied";
-}
-void RequireRole(HttpContext context,params string[] roles)
-{
-    if(!roles.Contains(Role(context),StringComparer.OrdinalIgnoreCase)) throw new PolicyException("ROLE_DENIED","This action is not permitted for the authenticated operator role.");
-}
+string Role(HttpContext context)=>setup?"Administrator":OperatorSecurity.Role(builder.Configuration,Operator(context));
 bool ValidHostname(string value)=>!string.IsNullOrWhiteSpace(value)&&value.Length<=253&&Regex.IsMatch(value,@"^(?=.{1,253}$)(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)*[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?$");
-string[] CleanList(string[]? values)=>values?.Select(x=>x.Trim()).Where(x=>x.Length>0).Distinct(StringComparer.OrdinalIgnoreCase).ToArray()??[];
+string[] CleanList(string[]? values)=>values?.Select(x=>(x??"").Trim()).Where(x=>x.Length>0).Distinct(StringComparer.OrdinalIgnoreCase).ToArray()??[];
 string RestartMarkerPath()=>Path.Combine(programData,"GpoRemediator","State","restart.request.json");
 void ConfigureService(bool restart,Action save,IHostApplicationLifetime lifetime)
 {
@@ -203,7 +182,7 @@ SetupConfigView CurrentSetupConfig()
 }
 app.MapGet("/api/v1/health/live",()=>Results.Ok(new{status="live",version="1.0"}));
 app.MapGet("/api/v1/health/ready",()=>Results.Ok(new{status="ready",mode,database=true}));
-app.MapGet("/api/session",(HttpContext context,IAntiforgery csrf)=>new {mode,@operator=Operator(context),role=Role(context),csrfToken=csrf.GetAndStoreTokens(context).RequestToken,identityStrategy=windowsOperatorAuth?"Authenticated Windows operator plus explicit delegated execution identity":"Local launcher owner plus explicit delegated execution identity",realModeEnabled=real,setupRequired=localSetup});
+app.MapGet("/api/session",(HttpContext context,IAntiforgery csrf)=>new {mode,@operator=Operator(context),role=Role(context),csrfToken=csrf.GetAndStoreTokens(context).RequestToken,identityStrategy="Authenticated Windows operator plus explicit delegated execution identity",realModeEnabled=real,setupRequired=localSetup});
 app.MapGet("/api/service",(OperationGate gate)=>new {
     mode, processId=Environment.ProcessId, stopping=gate.Maintenance,
     managed=builder.Configuration.GetValue<bool>("LauncherManaged"),
@@ -220,19 +199,19 @@ app.MapPost("/api/service/{action}",(string action,HttpContext context,Operation
         else { var marker=RestartMarkerPath(); if(File.Exists(marker)) File.Delete(marker); _=Task.Run(async()=>{await Task.Delay(900);lifetime.StopApplication();}); }
     });
     return Results.Accepted(value:new{action,accepted=true});
-});
+}).WithMetadata(new OperatorAccess("Administrator"));
 string GpoToken(HttpContext context)=>context.Request.Cookies["GpoRemediator.GpoConnection"]??"";
 app.MapPost("/api/gpo/connect",async(GpoLoginRequest request,HttpContext context,GpoWorkflowService service,CancellationToken ct)=>{
     var connected=await service.ConnectAsync(request,Operator(context),ct);
     service.Disconnect(GpoToken(context));
     context.Response.Cookies.Append("GpoRemediator.GpoConnection",connected.Token,new CookieOptions{HttpOnly=true,Secure=context.Request.IsHttps,SameSite=SameSiteMode.Strict,Path="/api"});
     return connected.Inventory;
-});
-app.MapPost("/api/gpo/disconnect",(HttpContext context,GpoWorkflowService service)=>{service.Disconnect(GpoToken(context));context.Response.Cookies.Delete("GpoRemediator.GpoConnection",new CookieOptions{Path="/api"});return new{disconnected=true};});
+}).WithMetadata(new OperatorAccess("Administrator","Remediator","Auditor","Viewer")).RequireRateLimiting("delegated-login");
+app.MapPost("/api/gpo/disconnect",(HttpContext context,GpoWorkflowService service)=>{service.Disconnect(GpoToken(context));context.Response.Cookies.Delete("GpoRemediator.GpoConnection",new CookieOptions{Path="/api"});return new{disconnected=true};}).WithMetadata(new OperatorAccess("Administrator","Remediator","Auditor","Viewer"));
 app.MapGet("/api/gpo/inventory",(HttpContext context,GpoWorkflowService service)=>service.Inventory(GpoToken(context),Operator(context)));
 app.MapGet("/api/gpo/session",(HttpContext context,GpoWorkflowService service)=>service.SessionStatus(GpoToken(context),Operator(context)));
 app.MapGet("/api/gpo/readiness",async(HttpContext context,GpoWorkflowService service,CancellationToken ct)=>await service.ReadinessAsync(GpoToken(context),Operator(context),ct));
-app.MapPost("/api/gpo/discover",async(HttpContext context,GpoWorkflowService service,CancellationToken ct)=>await service.DiscoverAsync(GpoToken(context),Operator(context),ct));
+app.MapPost("/api/gpo/discover",async(HttpContext context,GpoWorkflowService service,CancellationToken ct)=>await service.DiscoverAsync(GpoToken(context),Operator(context),ct)).WithMetadata(new OperatorAccess("Administrator","Remediator","Auditor","Viewer"));
 app.MapGet("/api/gpo/settings",()=>ProductionGpoMappings.Settings.Select(x=>new {
     x.Id,x.ControlId,x.Title,x.Category,x.Level,x.Automation,x.Handler,x.Recommended,x.Scope,x.RequiresInput,x.InputType,x.InputLabel,x.InputDefault,
     x.AllowValueOverride,x.Minimum,x.Maximum,x.Suggested,x.Unit,x.Comparator,x.DomainPolicySensitive,x.RequiresGpUpdate,x.RequiresRestart,x.Warnings,x.Source,x.Writable,
@@ -242,12 +221,12 @@ app.MapGet("/api/gpo/settings",()=>ProductionGpoMappings.Settings.Select(x=>new 
 }));
 app.MapGet("/api/gpo/history",(HttpContext context,GpoWorkflowService service)=>service.History(Operator(context)));
 app.MapGet("/api/gpo/{id}/evidence",(string id,HttpContext context,GpoWorkflowService service)=>service.Evidence(id,Operator(context)));
-app.MapPost("/api/gpo/preview",async(GpoSelection request,HttpContext context,GpoWorkflowService service,CancellationToken ct)=>await service.PreviewAsync(GpoToken(context),Operator(context),request,ct));
-app.MapPost("/api/gpo/{id}/apply",async(string id,GpoConsent request,HttpContext context,GpoWorkflowService service)=>await service.ExecuteAsync(id,"apply",request,GpoToken(context),Operator(context)));
-app.MapPost("/api/gpo/{id}/rollback",async(string id,GpoConsent request,HttpContext context,GpoWorkflowService service)=>await service.ExecuteAsync(id,"rollback",request,GpoToken(context),Operator(context)));
-app.MapPost("/api/gpo/{id}/verify",async(string id,HttpContext context,GpoWorkflowService service)=>await service.ExecuteAsync(id,"verify",new(""),GpoToken(context),Operator(context)));
-app.MapPost("/api/gpo/{id}/refresh",async(string id,HttpContext context,GpoWorkflowService service)=>await service.ExecuteAsync(id,"refresh",new(""),GpoToken(context),Operator(context)));
-app.MapPost("/api/gpo/{id}/replan",async(string id,HttpContext context,GpoWorkflowService service,CancellationToken ct)=>await service.ReplanAsync(id,GpoToken(context),Operator(context),ct));
+app.MapPost("/api/gpo/preview",async(GpoSelection request,HttpContext context,GpoWorkflowService service,CancellationToken ct)=>await service.PreviewAsync(GpoToken(context),Operator(context),request,ct)).WithMetadata(new OperatorAccess("Administrator","Remediator","Auditor","Viewer"));
+app.MapPost("/api/gpo/{id}/apply",async(string id,GpoConsent request,HttpContext context,GpoWorkflowService service)=>await service.ExecuteAsync(id,"apply",request,GpoToken(context),Operator(context))).WithMetadata(new OperatorAccess("Administrator","Remediator"));
+app.MapPost("/api/gpo/{id}/rollback",async(string id,GpoConsent request,HttpContext context,GpoWorkflowService service)=>await service.ExecuteAsync(id,"rollback",request,GpoToken(context),Operator(context))).WithMetadata(new OperatorAccess("Administrator","Remediator"));
+app.MapPost("/api/gpo/{id}/verify",async(string id,HttpContext context,GpoWorkflowService service)=>await service.ExecuteAsync(id,"verify",new(""),GpoToken(context),Operator(context))).WithMetadata(new OperatorAccess("Administrator","Remediator","Auditor","Viewer"));
+GpoEndpoints.MapRefresh(app,async(id,consent,context)=>await context.RequestServices.GetRequiredService<GpoWorkflowService>().ExecuteAsync(id,"refresh",consent,GpoToken(context),Operator(context)));
+app.MapPost("/api/gpo/{id}/replan",async(string id,HttpContext context,GpoWorkflowService service,CancellationToken ct)=>await service.ReplanAsync(id,GpoToken(context),Operator(context),ct)).WithMetadata(new OperatorAccess("Administrator","Remediator","Auditor","Viewer"));
 app.MapGet("/api/setup/discover",() =>
 {
     if(!OperatingSystem.IsWindows()) throw new PolicyException("WINDOWS_REQUIRED","Automatic setup discovery is available only on Windows. Enter the domain and writable DC manually.");
@@ -261,8 +240,8 @@ app.MapGet("/api/setup/discover",() =>
     var identity=WindowsIdentity.GetCurrent().Name??"";
     if(string.IsNullOrWhiteSpace(identity)||!identity.Contains('\\')) warnings.Add("The current Windows identity is not a DOMAIN\\user identity; verify AllowedOperators manually.");
     return new {domain,domainController=dc,@operator=identity,backupPath=@"C:\ProgramData\GpoRemediator\Backups",warnings=warnings.ToArray()};
-});
-app.MapGet("/api/setup/config",()=>CurrentSetupConfig());
+}).WithMetadata(new OperatorAccess("Administrator"));
+app.MapGet("/api/setup/config",()=>CurrentSetupConfig()).WithMetadata(new OperatorAccess("Administrator"));
 app.MapPost("/api/setup/config",(SetupConfigRequest request,HttpContext context,IHostApplicationLifetime lifetime)=>
 {
     var localUrl=$"http://127.0.0.1:{context.Request.Host.Port??5080}";
@@ -271,6 +250,7 @@ app.MapPost("/api/setup/config",(SetupConfigRequest request,HttpContext context,
     if(!ValidHostname(domain)||!domain.Contains('.')||!ValidHostname(dc)||!dc.EndsWith("."+domain,StringComparison.OrdinalIgnoreCase)) throw new PolicyException("INVALID_DOMAIN","Domain and writable DC must be exact DNS names in the same domain.");
     var gpos=CleanList(request.ApprovedGpoIds); var ous=CleanList(request.AuthorizedOus); var hosts=CleanList(request.AllowedHosts); var operators=CleanList(request.AllowedOperators).Select(WindowsAccount.Normalize).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
     string[] Accounts(string[]? values)=>CleanList(values).Select(WindowsAccount.Normalize).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+    OperatorSecurity.ValidateHosts(hosts,domain);
     var remediators=Accounts(request.Remediators); var auditors=Accounts(request.Auditors); var viewers=Accounts(request.Viewers);
     if(gpos.Length==0||gpos.Any(x=>x!="*"&&!Guid.TryParse(x.Trim('{','}'),out _))) throw new PolicyException("INVALID_GPO_ALLOWLIST","Enter at least one approved GPO GUID, or an explicit * only when unrestricted GPO access is intended.");
     if(ous.Length==0||ous.Any(x=>x!="*"&&!(x.StartsWith("OU=",StringComparison.OrdinalIgnoreCase)||x.StartsWith("DC=",StringComparison.OrdinalIgnoreCase)))) throw new PolicyException("INVALID_SCOPE_ALLOWLIST","Enter at least one authorized OU/domain distinguished name, or an explicit * only when unrestricted scope access is intended.");
@@ -286,7 +266,7 @@ app.MapPost("/api/setup/config",(SetupConfigRequest request,HttpContext context,
     if(!backup.Equals(backupRoot,StringComparison.OrdinalIgnoreCase)&&!backup.StartsWith(backupRoot+Path.DirectorySeparatorChar,StringComparison.OrdinalIgnoreCase)) throw new PolicyException("INVALID_BACKUP_PATH",$"BackupPath must be {backupRoot} or one of its subdirectories.");
     var output=new
     {
-        Mode="Windows", Urls=localUrl,
+        Mode="Windows", Urls=localUrl,SecurityVersion=1,
         Windows=new{Workflow="GpoRemediation",EnableWrites=false,Domain=domain,DomainController=dc,ApprovedGpoIds=gpos,AuthorizedOus=ous,AllowedHosts=hosts,AllowedOperators=operators,Roles=new{Administrators=operators,Remediators=remediators,Auditors=auditors,Viewers=viewers},BackupPath=backup}
     };
     var path=localConfigPath; Directory.CreateDirectory(Path.GetDirectoryName(path)!); var temp=path+".tmp";
@@ -294,7 +274,7 @@ app.MapPost("/api/setup/config",(SetupConfigRequest request,HttpContext context,
     store.Audit("SETUP_CONFIG_SAVED",Operator(context),details:new{domain,domainController=dc,gpoCount=gpos.Length,ouCount=ous.Length,hostCount=hosts.Length,administratorCount=operators.Length,remediatorCount=remediators.Length,auditorCount=auditors.Length,viewerCount=viewers.Length,writes=false,autoRestart=request.AutoRestart});
     },lifetime);
     return new{saved=true,restartRequired=true,restartScheduled=request.AutoRestart,writesEnabled=false,path=localConfigPath};
-});
+}).WithMetadata(new OperatorAccess("Administrator"));
 app.MapPost("/api/setup/write-mode",async(WriteModeRequest request,HttpContext context,GpoWorkflowService gpo,IHostApplicationLifetime lifetime,CancellationToken ct)=>
 {
     if(!real) throw new PolicyException("WINDOWS_MODE_REQUIRED","Write mode can only be changed after the service has started in Windows mode.");
@@ -321,8 +301,8 @@ app.MapPost("/api/setup/write-mode",async(WriteModeRequest request,HttpContext c
     store.Audit(request.Enable?"WRITE_MODE_ENABLE_REQUESTED":"WRITE_MODE_DISABLE_REQUESTED",Operator(context),details:new{enabled=request.Enable,autoRestart=request.AutoRestart});
     },lifetime);
     return new{saved=true,enableWrites=request.Enable,restartRequired=true,restartScheduled=request.AutoRestart};
-});
-app.MapGet("/api/audit",()=>{var report=store.AuditIntegrityReport();return new{events=store.AuditEvents(500).Reverse(),integrityValid=report.Valid,firstInvalidEventId=report.FirstInvalidEventId,pageSize=500};});
+}).WithMetadata(new OperatorAccess("Administrator"));
+app.MapGet("/api/audit",()=>{var report=store.AuditIntegrityReport();return new{events=store.AuditEvents(500).Reverse(),integrityValid=report.Valid,firstInvalidEventId=report.FirstInvalidEventId,pageSize=500};}).WithMetadata(new OperatorAccess("Administrator","Auditor"));
 app.MapGet("/api/settings",(HttpContext context)=>new
 {
     mode,identityStrategy=real?"Windows Integrated Authentication plus short-lived delegated GPO execution credentials":"Configuration only",@operator=Operator(context),
@@ -331,17 +311,7 @@ app.MapGet("/api/settings",(HttpContext context)=>new
     productionRequirements=new[]{"Domain-connected Windows management host with Kerberos/WinRM access to a writable DC; AD/GroupPolicy modules are validated on that DC","Local-only HTTP on 127.0.0.1","Delegated or administrative authority to edit the selected GPO, its SYSVOL content where required, and the selected gPLink","Local Backup-GPO repository writable on the selected DC"},
     safetyPipeline=new[]{"server-authoritative CIS mapping","environment and selection preflight","stale-plan fingerprint check","exclusive per-GPO lock","full Backup-GPO before writes","idempotent mapping write","link read-back","AD/SYSVOL version verification","optional bounded gpupdate scheduling","conflict-aware full snapshot rollback","append-only hash-chained audit and evidence"}
 });
-var frontendPath=Path.GetFullPath(Path.Combine(builder.Environment.ContentRootPath,"..","frontend","dist"));
-if(Directory.Exists(frontendPath))
-{
-    var files=new Microsoft.Extensions.FileProviders.PhysicalFileProvider(frontendPath);
-    app.UseDefaultFiles(new DefaultFilesOptions{FileProvider=files});
-    app.UseStaticFiles(new StaticFileOptions{FileProvider=files,OnPrepareResponse=context=>{
-        var name=context.File.Name;
-        context.Context.Response.Headers.CacheControl=!name.Equals("index.html",StringComparison.OrdinalIgnoreCase)&&context.Context.Request.Query.ContainsKey("v")?"public,max-age=31536000,immutable":"no-cache";
-    }});
-    app.MapFallback(async context=> { if(context.Request.Path.StartsWithSegments("/api")) {context.Response.StatusCode=404; await context.Response.WriteAsJsonAsync(new{code="NOT_FOUND",message="API route does not exist."});} else { context.Response.ContentType="text/html; charset=utf-8"; context.Response.Headers.CacheControl="no-cache"; await context.Response.SendFileAsync(Path.Combine(frontendPath,"index.html")); } });
-}
+BundledAssets.MapFrontend(app);
 await app.RunAsync();
 
 public partial class Program { }

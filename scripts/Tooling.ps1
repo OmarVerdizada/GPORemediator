@@ -1,9 +1,9 @@
 function Find-Dotnet {
     $candidate = Get-Command dotnet.exe,dotnet -ErrorAction SilentlyContinue | Select-Object -First 1
     if ($candidate) {
-        try { if ((& $candidate.Source --list-sdks 2>$null) -match '^8\.') { return $candidate.Source } } catch { }
+        try { if ((& $candidate.Source --list-sdks 2>$null) -match '^10\.') { return $candidate.Source } } catch { }
     }
-    throw '.NET 8 SDK is required in the approved developer build environment. Production startup never installs a toolchain.'
+    throw '.NET 10 SDK is required in the approved developer build environment. Production startup never installs a toolchain.'
 }
 function Assert-Exit { if ($LASTEXITCODE -ne 0) { throw "Build command failed with exit code $LASTEXITCODE." } }
 
@@ -38,7 +38,10 @@ function Get-BackendSourceFingerprint {
         if ($relative -match '^data/') { return $_.Name -in @('benchmark.json','gpo-production-mappings.json') }
         return $_.Extension -in @('.cs','.csproj','.ps1','.psm1') -or $_.Name -eq 'appsettings.json'
     })
-    return (Get-FileSetFingerprint $files $backend)
+    $backendHash=Get-FileSetFingerprint $files $backend
+    $frontendHash=Get-FrontendSourceFingerprint
+    $sha=[Security.Cryptography.SHA256]::Create()
+    try{return [BitConverter]::ToString($sha.ComputeHash([Text.Encoding]::UTF8.GetBytes($backendHash+":"+$frontendHash))).Replace('-','')}finally{$sha.Dispose()}
 }
 
 function Get-FrontendSourceFingerprint {
