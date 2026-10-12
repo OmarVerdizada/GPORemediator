@@ -6,8 +6,10 @@ fs.mkdirSync(screens,{recursive:true});
 const gpos=[{id:'6ac1786c-016f-11d2-945f-00c04fb984f9',name:'Default Domain Controllers Policy',protected:true,selectable:true},{id:'31b2f340-016d-11d2-945f-00c04fb984f9',name:'Default Domain Policy',protected:true,selectable:true}];
 const run={id:'recovery-test',startedAt:'2026-10-06T08:00:00Z',updatedAt:'2026-10-09T08:00:34Z',plan:{selection:{setting:'1.1.4',gpoId:gpos[0].id,scopeDn:'DC=test,DC=local'},preview:{gpo:gpos[0],scope:{dn:'DC=test,DC=local'},previousValue:0,desiredValue:14},executionUser:'TEST\\operator'},result:{state:'PUBLISHED',backupId:'test-backup-id',gpoPublished:true,linkVerified:true}};
 const inventory={gpos,scopes:[{dn:'DC=test,DC=local',name:'test.local',kind:'Domain'}],domain:'test.local'};
-let writes=[];
-const server=http.createServer((req,res)=>{
+let writes=[],refreshRequests=[],rollbackState='ROLLED_BACK',refreshFailure=false;
+const server=http.createServer(async(req,res)=>{
+ let body='';for await(const chunk of req)body+=chunk;
+ const payload=body?JSON.parse(body):{};
  const url=new URL(req.url,'http://localhost');
  if(url.pathname.startsWith('/api/')){
   let data={};
@@ -18,7 +20,12 @@ const server=http.createServer((req,res)=>{
   else if(url.pathname==='/api/gpo/inventory')data=inventory;
   else if(url.pathname==='/api/gpo/session')data={connected:true};
   else if(url.pathname==='/api/gpo/readiness')data={ready:true,checks:[]};
-  else if(url.pathname.endsWith('/rollback')){writes.push(url.pathname);run.result.state='ROLLED_BACK';data=run;}
+  else if(url.pathname.endsWith('/rollback')){writes.push(url.pathname);run.result.state=rollbackState;run.result.message='Rollback recorded';data=run;}
+  else if(url.pathname.endsWith('/refresh')){
+   writes.push(url.pathname);refreshRequests.push(payload);
+   if(refreshFailure){res.statusCode=503;data={code:'REFRESH_TEST_FAILURE',message:'Refresh test failure'};}
+   else{run.result.refreshResults=[{computer:'authorized.test.local',state:'SCHEDULED',message:'gpupdate /force scheduled'}];run.result.message='gpupdate /force scheduled';data=run;}
+  }
   res.setHeader('Content-Type','application/json');res.end(JSON.stringify(data));return;
  }
  const file=path.join(root,url.pathname==='/'?'index.html':url.pathname);
@@ -55,6 +62,42 @@ const server=http.createServer((req,res)=>{
   assert.deepEqual(writes,['/api/gpo/recovery-test/rollback']);
   await page.locator('[data-ops-layout=cards]').click();
   assert.equal(await page.locator('[data-rollback]').count(),0,'Restored run cannot be restored again');
+  assert.equal(await page.locator('[data-gpupdate]').count(),1,'Restored card exposes one refresh action');
+  // Default refresh=None in the original plan must not hide recovery refresh.
+  await page.locator('[data-inspect]').first().click();
+  await page.locator('.product-drawer .ds-recovery [data-gpupdate]').click();
+  await page.locator('#refresh-target').selectOption('Scope');
+  await page.locator('[data-confirm-run]').click();
+  await page.locator('.busy-layer').waitFor({state:'detached'});
+  assert.deepEqual(refreshRequests,[{refresh:'Scope'}]);
+  await page.locator('[data-inspect]').first().click();
+  assert.ok((await page.locator('.product-drawer .ds-refresh-results').textContent()).includes('authorized.test.local'));
+  await page.locator('button[data-product-close]').click();
+  async function recoveryScenario(strategy,resultState='ROLLED_BACK',failRefresh=false){
+   run.result={state:'PUBLISHED',backupId:'test-backup-id',gpoPublished:true,linkVerified:true};
+   writes=[];refreshRequests=[];rollbackState=resultState;refreshFailure=failRefresh;
+   await page.reload();await page.locator('[data-rollback]').waitFor();
+   await page.locator('[data-rollback] input').fill('ROLLBACK');
+   await page.locator('[data-rollback] select').selectOption(strategy);
+   await page.locator('[data-rollback] button[type=submit]').click();
+   await page.locator('.confirm-dialog').waitFor();
+   assert.ok((await page.locator('.confirm-dialog').textContent()).includes('gpupdate /force'));
+   assert.equal(writes.length,0);
+   await page.locator('[data-confirm-run]').click();
+   await page.locator('.busy-layer').waitFor({state:'detached'});
+  }
+  for(const strategy of ['Scope','Pdc']){
+   await recoveryScenario(strategy);
+   assert.deepEqual(writes,['/api/gpo/recovery-test/rollback','/api/gpo/recovery-test/refresh']);
+   assert.deepEqual(refreshRequests,[{refresh:strategy}]);
+  }
+  await recoveryScenario('None');assert.deepEqual(writes,['/api/gpo/recovery-test/rollback']);
+  await recoveryScenario('Scope','ROLLBACK_REVIEW_REQUIRED');
+  assert.deepEqual(writes,['/api/gpo/recovery-test/rollback'],'Incomplete restore must not refresh');
+  await recoveryScenario('Scope','ROLLED_BACK',true);
+  assert.equal(run.result.state,'ROLLED_BACK','Refresh failure must preserve completed restore');
+  assert.ok((await page.locator('.ds-toast').textContent()).includes('gpupdate /force'));
+  refreshFailure=false;
   await page.goto(`http://127.0.0.1:${server.address().port}/#/benchmark`);
   await page.locator('[data-domain="1"]').click();
   const sub=page.locator('[data-subsection="1.1"]');if(await sub.count())await sub.click();
@@ -79,6 +122,6 @@ const server=http.createServer((req,res)=>{
   await page.screenshot({path:path.join(screens,'operations-mobile.png'),fullPage:true});
   assert.ok(await page.locator('.ds-activity').evaluate(el=>el.scrollWidth<=el.clientWidth));
   assert.deepEqual(errors,[]);
-  console.log('Recovery UI: PASS (desktop/mobile grid, search, empty state, rollback confirmation/cancel, correct API ID, restored state).');
+  console.log('Recovery UI: PASS (desktop/mobile, search, confirmation/cancel, optional Scope/PDC refresh after restore, incomplete restore blocked, refresh failure preserves restore, manual refresh).');
  }finally{await browser.close();server.close();}
 })().catch(e=>{console.error(e);server.close();process.exitCode=1;});

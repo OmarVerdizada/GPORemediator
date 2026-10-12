@@ -22,6 +22,9 @@ const recoverable={...incomplete,result:{state:'PUBLISHED',backupId:'backup-<id>
 assert.ok(ui.operations(s,[recoverable]).includes('Rollback'));
 assert.ok(ui.recovery(s,recoverable).includes('data-rollback="&lt;unsafe&gt;"'));
 assert.ok(ui.recovery(s,recoverable).includes('backup-&lt;id&gt;'));
+assert.ok(ui.recovery(s,recoverable).includes('name="refresh"'));
+assert.ok(ui.recovery(s,{...recoverable,result:{...recoverable.result,state:'ROLLED_BACK'}}).includes('data-gpupdate="&lt;unsafe&gt;"'));
+assert.ok(!ui.recovery(s,{...recoverable,result:{...recoverable.result,state:'ROLLBACK_DRIFT_DETECTED'}}).includes('data-gpupdate'));
 for(const state of ['NO_CHANGE','ROLLED_BACK','ROLLBACK_DRIFT_DETECTED','APPLYING','ROLLBACKING','VERIFYING','REFRESHING']){
  assert.ok(!ui.recovery(s,{...recoverable,result:{...recoverable.result,state}}).includes('<form'),state);
 }

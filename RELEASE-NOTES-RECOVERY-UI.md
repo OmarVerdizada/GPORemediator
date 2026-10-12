@@ -1,5 +1,13 @@
 # GPO selection, operation timeline and recovery repair
 
+## Rollback policy refresh
+
+The recovery form now offers `gpupdate /force` after rollback: choose PDC emulator or scope computers, or leave refresh disabled. The final confirmation includes the chosen target. After a successful `ROLLED_BACK` response, the UI calls the existing guarded refresh endpoint with the selected strategy. An incomplete restore never triggers refresh; a refresh error preserves the completed restore and explains that refresh could not be scheduled.
+
+Already restored operations expose a separate `gpupdate /force` button in the recovery panel, even when the original plan did not request refresh. Per-host scheduling results appear in that panel. The existing backend re-verifies restored content and links, limits refresh to authorized hosts, and schedules both user and computer policy refresh after rollback. Scheduling does not prove endpoint convergence.
+
+Browser regressions cover both target strategies, disabled refresh, cancellation, incomplete rollback, separate refresh after restore, and refresh failure without repeating or losing the restore.
+
 - GPO rows retain their grid layout when the shared button decorator runs. Names and GUIDs are readable, status badges align to the right, and small screens move badges beneath the name.
 - The search field uses one focus outline around the search container. The picker no longer reserves a large blank area for short inventories.
 - Operation timeline rows retain their grid layout, show the GPO name and status, and format long intervals as days/hours/minutes. Intervals explicitly describe start-to-last-update time rather than active execution time.
