@@ -14,6 +14,7 @@ function Initialize-ProtectedDirectory {
     $directory=Get-Item -LiteralPath $full -Force
     $principals=@([Security.Principal.WindowsIdentity]::GetCurrent().User,[Security.Principal.SecurityIdentifier]::new('S-1-5-18'),[Security.Principal.SecurityIdentifier]::new('S-1-5-32-544'))
     $acl=[Security.AccessControl.DirectorySecurity]::new()
+    $acl.SetOwner($principals[0])
     $acl.SetAccessRuleProtection($true,$false)
     foreach($sid in $principals){$acl.AddAccessRule([Security.AccessControl.FileSystemAccessRule]::new($sid,'FullControl','ContainerInherit,ObjectInherit','None','Allow'))}
     $directory.SetAccessControl($acl)
@@ -21,7 +22,7 @@ function Initialize-ProtectedDirectory {
         if(($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0){throw 'Protected application state contains a junction or symbolic link.'}
         if($item.PSIsContainer){Initialize-ProtectedDirectory -Path $item.FullName}
         else{
-            $fileAcl=[Security.AccessControl.FileSecurity]::new();$fileAcl.SetAccessRuleProtection($true,$false)
+            $fileAcl=[Security.AccessControl.FileSecurity]::new();$fileAcl.SetOwner($principals[0]);$fileAcl.SetAccessRuleProtection($true,$false)
             foreach($sid in $principals){$fileAcl.AddAccessRule([Security.AccessControl.FileSystemAccessRule]::new($sid,'FullControl','Allow'))}
             $item.SetAccessControl($fileAcl)
         }

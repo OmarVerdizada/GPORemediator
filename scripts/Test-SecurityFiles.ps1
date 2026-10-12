@@ -13,6 +13,7 @@ Initialize-ProtectedDirectory -Path $protected
 foreach($path in @($protected,(Join-Path $protected 'child'),$file)){
     $acl=(Get-Item -LiteralPath $path).GetAccessControl()
     if(!$acl.AreAccessRulesProtected){throw 'State inheritance was not disabled'}
+    if($acl.GetOwner([Security.Principal.SecurityIdentifier]).Value -ne [Security.Principal.WindowsIdentity]::GetCurrent().User.Value){throw 'Protected file owner differs from the launcher identity'}
     foreach($rule in $acl.Access){if($rule.IdentityReference.Translate([Security.Principal.SecurityIdentifier]).Value -eq 'S-1-1-0'){throw 'Explicit Everyone access survived'}}
 }
 $link=Join-Path $protected 'junction'

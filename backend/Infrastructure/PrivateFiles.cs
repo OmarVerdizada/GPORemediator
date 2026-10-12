@@ -37,7 +37,7 @@ public static class PrivateFiles
         var directory=Directory.CreateDirectory(path);
         var identity=WindowsIdentity.GetCurrent().User??throw new InvalidOperationException("Windows SID unavailable.");
         // Replace, rather than append to, a possibly unsafe existing DACL.
-        var acl=new DirectorySecurity();acl.SetAccessRuleProtection(true,false);
+        var acl=new DirectorySecurity();acl.SetOwner(identity);acl.SetAccessRuleProtection(true,false);
         foreach(var sid in new[]{identity,new SecurityIdentifier(WellKnownSidType.LocalSystemSid,null),new SecurityIdentifier(WellKnownSidType.BuiltinAdministratorsSid,null)}.Distinct())
             acl.AddAccessRule(new FileSystemAccessRule(sid,FileSystemRights.FullControl,InheritanceFlags.ContainerInherit|InheritanceFlags.ObjectInherit,PropagationFlags.None,AccessControlType.Allow));
         directory.SetAccessControl(acl);
@@ -51,7 +51,7 @@ public static class PrivateFiles
         foreach(var path in Directory.EnumerateFiles(root)){
             if((File.GetAttributes(path)&FileAttributes.ReparsePoint)!=0)throw new InvalidOperationException("Application state cannot use file links.");
             var identity=WindowsIdentity.GetCurrent().User??throw new InvalidOperationException("Windows SID unavailable.");
-            var acl=new FileSecurity();acl.SetAccessRuleProtection(true,false);
+            var acl=new FileSecurity();acl.SetOwner(identity);acl.SetAccessRuleProtection(true,false);
             foreach(var sid in new[]{identity,new SecurityIdentifier(WellKnownSidType.LocalSystemSid,null),new SecurityIdentifier(WellKnownSidType.BuiltinAdministratorsSid,null)}.Distinct())
                 acl.AddAccessRule(new FileSystemAccessRule(sid,FileSystemRights.FullControl,AccessControlType.Allow));
             new FileInfo(path).SetAccessControl(acl);
