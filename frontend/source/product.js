@@ -70,7 +70,7 @@
       const matching=rules.filter(r=>r.id.startsWith(domain.id+'.'));
       if(filtered&&!matching.length)return '';
       const open=!!s.expandedTop?.has(domain.id);
-      return `<section class="ent-domain recipe-domain domain-tone-${(Number(domain.id)-1)%7} ${open?'open':''}">${domainHeader(s,domain,matching,open)}${open?`<div id="catalog-domain-${esc(domain.id)}" class="ent-domain-body">${matching.length?recipeCards(s,matching):`<p class="domain-empty">${text(s,'Bu domen üçün benchmark-da qayda yoxdur.','The benchmark contains no controls for this domain.')}</p>`}</div>`:''}</section>`;
+      return `<section class="ent-domain recipe-domain domain-tone-${(Number(domain.id)-1)%7} ${open?'open':''}">${domainHeader(s,domain,matching,open)}${open?`<div id="catalog-domain-${esc(domain.id)}" class="ent-domain-body">${matching.length?recipeCards(s,matching):`${window.GpoDomainGuidance?.render(s,domain,esc,(az,en)=>text(s,az,en))||`<p class="domain-empty">${text(s,'Bu import edilmiş bölmədə ayrıca control yoxdur.','This imported category has no standalone controls.')}</p>`}`}</div>`:''}</section>`;
     }).join('');
   }
   function disconnectedControl(s, rule) {

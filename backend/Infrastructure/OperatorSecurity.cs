@@ -10,6 +10,7 @@ public static class OperatorSecurity
     public static void ConfigureLoginRateLimit(Microsoft.AspNetCore.RateLimiting.RateLimiterOptions options)
     {
         options.RejectionStatusCode=StatusCodes.Status429TooManyRequests;
+        options.AddPolicy("operator-confirmation",context=>System.Threading.RateLimiting.RateLimitPartition.GetFixedWindowLimiter(WindowsAccount.Normalize(context.User.Identity?.Name).ToUpperInvariant(),_=>new System.Threading.RateLimiting.FixedWindowRateLimiterOptions{PermitLimit=5,Window=TimeSpan.FromMinutes(1),QueueLimit=0,AutoReplenishment=true}));
         options.AddPolicy("delegated-login",context=>System.Threading.RateLimiting.RateLimitPartition.GetFixedWindowLimiter(WindowsAccount.Normalize(context.User.Identity?.Name).ToUpperInvariant(),_=>new System.Threading.RateLimiting.FixedWindowRateLimiterOptions{PermitLimit=5,Window=TimeSpan.FromMinutes(1),QueueLimit=0,AutoReplenishment=true}));
     }
     public static string Role(IConfiguration configuration, string actor)

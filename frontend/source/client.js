@@ -160,6 +160,7 @@
       if (!response.ok) {
         const error = new Error((storage.get('gr-lang','az')==='az'&&errors[data.code]) || data.message || `Request failed (HTTP ${response.status}).`);
         error.code = data.code; error.status = response.status;
+        if(data.code==='OPERATOR_CONFIRMATION_REQUIRED')window.GpoOperatorSignIn?.reconfirm();
         error.correlationId = data.correlationId || response.headers.get('X-Correlation-ID');
         throw error;
       }

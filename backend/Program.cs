@@ -64,6 +64,8 @@ builder.Services.AddSingleton<GpoWorkflowService>();
 builder.Services.AddSingleton<IWorkflowOperations>(sp=>sp.GetRequiredService<GpoWorkflowService>());
 builder.Services.AddSingleton<WorkspaceWorkflows>();
 builder.Services.AddSingleton(TimeProvider.System);
+builder.Services.AddSingleton<IOperatorPasswordVerifier,WindowsOperatorPasswordVerifier>();
+builder.Services.AddSingleton<OperatorConfirmation>();
 builder.Services.AddHostedService(sp=>sp.GetRequiredService<WorkspaceWorkflows>());
 builder.Services.AddSingleton<WindowsPowerShellExecutor>();
 var app=builder.Build();
@@ -95,7 +97,7 @@ app.Use(async(context,next)=>
             "GPO_LOGIN_REQUIRED" or "AUTHENTICATION_REQUIRED"=>401,
             "CONTENT_TYPE_DENIED"=>415,
             "GPO_CONNECTION_LIMIT"=>429,
-            "LOOPBACK_ONLY" or "OPERATOR_DENIED" or "SETUP_OPERATOR_DENIED" or "ROLE_DENIED" or "ORIGIN_DENIED"=>403,
+            "LOOPBACK_ONLY" or "OPERATOR_DENIED" or "SETUP_OPERATOR_DENIED" or "ROLE_DENIED" or "ORIGIN_DENIED" or "OPERATOR_CONFIRMATION_REQUIRED" or "OPERATOR_PASSWORD_INVALID"=>403,
             "INVALID_REQUEST" or "INVALID_DOMAIN" or "INVALID_SCOPE_ALLOWLIST" or "INVALID_GPO_ALLOWLIST" or "INVALID_BACKUP_PATH"=>422,
             "GPO_OPERATION_BUSY" or "SERVICE_STOPPING"=>423,
             "WINDOWS_TIMEOUT"=>504,
@@ -120,6 +122,7 @@ app.Use(async(context,next)=>
        !context.Request.Path.StartsWithSegments("/api/v1/health") &&
        !context.Request.Path.StartsWithSegments("/api/setup") &&
        !context.Request.Path.StartsWithSegments("/api/session") &&
+       !context.Request.Path.StartsWithSegments("/api/operator") &&
        !context.Request.Path.StartsWithSegments("/api/service"))
         throw new PolicyException("WINDOWS_MODE_REQUIRED","Setup mode is configuration-only. Save the Windows / AD settings and restart into Windows mode for discovery, preview, apply, verify, rollback, or gpupdate.");
     if(context.Request.Path.StartsWithSegments("/api")&&!HttpMethods.IsGet(context.Request.Method)&&!HttpMethods.IsHead(context.Request.Method))
@@ -127,6 +130,7 @@ app.Use(async(context,next)=>
         await RequestSecurity.ValidateMutationAsync(context);
         // The workflow service enforces the write gate for apply, rollback and refresh.
     }
+    app.Services.GetRequiredService<OperatorConfirmation>().Require(context);
     await next(context);
 });
 app.UseRateLimiter();
@@ -184,9 +188,10 @@ SetupConfigView CurrentSetupConfig()
     var rolesSection=section.GetSection("Roles");
     return new SetupConfigView(builder.Configuration["Urls"]??"http://127.0.0.1:5080",section["Domain"]??"",section["DomainController"]??"",section.GetSection("ApprovedGpoIds").Get<string[]>()??[],section.GetSection("AuthorizedOus").Get<string[]>()??[],section.GetSection("AllowedHosts").Get<string[]>()??[],operatorDefaults,section["BackupPath"]??@"C:\ProgramData\GpoRemediator\Backups",section.GetValue<bool>("EnableWrites"),localConfigPath,false,rolesSection.GetSection("Remediators").Get<string[]>()??[],rolesSection.GetSection("Auditors").Get<string[]>()??[],rolesSection.GetSection("Viewers").Get<string[]>()??[]);
 }
-app.MapGet("/api/v1/health/live",()=>Results.Ok(new{status="live",version="1.0"}));
-app.MapGet("/api/v1/health/ready",()=>Results.Ok(new{status="ready",mode,database=true}));
-app.MapGet("/api/session",(HttpContext context,IAntiforgery csrf)=>new {mode,@operator=Operator(context),role=Role(context),csrfToken=csrf.GetAndStoreTokens(context).RequestToken,identityStrategy="Authenticated Windows operator plus explicit delegated execution identity",realModeEnabled=real,setupRequired=localSetup});
+app.MapGet("/api/v1/health/live",()=>Results.Ok(new{status="live",version="1.0"})).WithMetadata(new OperatorBootstrap());
+app.MapGet("/api/v1/health/ready",()=>Results.Ok(new{status="ready",mode,database=true})).WithMetadata(new OperatorBootstrap());
+app.MapGet("/api/session",(HttpContext context,IAntiforgery csrf,OperatorConfirmation confirmation)=>new {mode,@operator=Operator(context),role=Role(context),csrfToken=csrf.GetAndStoreTokens(context).RequestToken,operatorConfirmationRequired=!confirmation.Confirmed(context),identityStrategy="Authenticated Windows operator plus startup password confirmation and explicit delegated execution identity",realModeEnabled=real,setupRequired=localSetup}).WithMetadata(new OperatorBootstrap());
+OperatorConfirmation.MapEndpoints(app);
 app.MapGet("/api/service",(OperationGate gate)=>new {
     mode, processId=Environment.ProcessId, stopping=gate.Maintenance,
     managed=builder.Configuration.GetValue<bool>("LauncherManaged"),

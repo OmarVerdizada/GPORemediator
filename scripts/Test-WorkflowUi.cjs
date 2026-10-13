@@ -3,15 +3,16 @@ const fs=require('node:fs'),path=require('node:path'),http=require('node:http'),
 const root=path.resolve(__dirname,'../frontend/source'),screens=path.resolve(__dirname,'../work/screens');fs.mkdirSync(screens,{recursive:true});
 const settings=JSON.parse(fs.readFileSync(path.resolve(__dirname,'../backend/data/gpo-production-mappings.json'),'utf8')).mappings;
 const inventory={domain:'test.local',domainController:'dc.test.local',executionUser:'TEST\\executor',gpos:[{id:'11111111-1111-1111-1111-111111111111',name:'Pilot policy',protected:false,selectable:true}],scopes:[{dn:'OU=Pilot,DC=test,DC=local',name:'Pilot',kind:'OU'},{dn:'OU=Production,DC=test,DC=local',name:'Production',kind:'OU'}]};
-const jobs=[],batches=[],history=[],requests=[];let serial=0,role='Administrator';
+const jobs=[],batches=[],history=[],requests=[];let serial=0,role='Administrator',boot=1,confirmations=0;
 function plan(selection){return {id:'plan-'+(++serial),actor:'TEST\\operator',executionUser:inventory.executionUser,domain:inventory.domain,domainController:inventory.domainController,selection,preview:{gpo:inventory.gpos[0],scope:inventory.scopes[0],previousValue:'Disabled',desiredValue:'Enabled',existingLink:{enabled:false,order:3,enforced:false},warnings:['Recorded warning'],impact:{affectedObjects:{computers:2}}}};}
 function job(action,payload){const j={id:'job-'+(++serial),action,state:'COMPLETED',planIds:payload.planIds||[],completedIds:payload.planIds||[],createdAt:new Date().toISOString(),updatedAt:new Date().toISOString(),message:'Recorded server result',refresh:payload.refresh||'None',verificationDelays:payload.verificationDelays||[]};jobs.unshift(j);return j;}
 const server=http.createServer(async(req,res)=>{
  const url=new URL(req.url,'http://localhost');let body='';for await(const part of req)body+=part;const payload=body?JSON.parse(body):{};
  if(url.pathname.startsWith('/api/')){
   let data={};res.setHeader('Content-Type','application/json');
-  if(req.method==='POST')requests.push({path:url.pathname,body:payload});
-  if(url.pathname==='/api/session')data={mode:'WINDOWS',role,csrfToken:'test'};
+  if(req.method==='POST'&&url.pathname!=='/api/operator/sign-in')requests.push({path:url.pathname,body:payload});
+  if(url.pathname==='/api/session')data={mode:'WINDOWS',role,operator:'TEST\\operator',csrfToken:'test',operatorConfirmationRequired:!String(req.headers.cookie).split('; ').includes('startup='+boot)};
+  else if(url.pathname==='/api/operator/sign-in'){if(payload.password!=='fixture-password'){res.statusCode=403;data={error:{code:'OPERATOR_PASSWORD_INVALID'}};}else{confirmations++;res.setHeader('Set-Cookie',`startup=${boot}; Path=/; HttpOnly; SameSite=Strict`);data={confirmed:true};}}
   else if(url.pathname==='/api/service')data={mode:'WINDOWS',writesEnabled:true,processId:1};
   else if(url.pathname==='/api/gpo/settings')data=settings;
   else if(url.pathname==='/api/gpo/history')data=history;
@@ -37,8 +38,13 @@ const server=http.createServer(async(req,res)=>{
 });
 (async()=>{await new Promise(r=>server.listen(0,'127.0.0.1',r));const browser=await chromium.launch({headless:true,...(process.env.PLAYWRIGHT_CHANNEL?{channel:process.env.PLAYWRIGHT_CHANNEL}:{})});const errors=[];
  try{
-  let page=await browser.newPage({viewport:{width:1440,height:1000}});page.on('pageerror',e=>errors.push(e.message));const url=`http://127.0.0.1:${server.address().port}/#/workspace`;
-  await page.goto(url);await page.locator('#wf-gpo option').waitFor({state:'attached'});await page.locator('#wf-pilot').check();
+  const context=await browser.newContext({viewport:{width:1440,height:1000}});let page=await context.newPage();page.on('pageerror',e=>errors.push(e.message));const url=`http://127.0.0.1:${server.address().port}/#/workspace`;
+  await page.goto(url);await page.locator('.operator-sign-in').waitFor();
+  await page.screenshot({path:path.join(screens,'operator-startup-sign-in.png')});
+  await page.locator('[name=password]').fill('wrong');await page.locator('.operator-sign-in button').click();await page.locator('.operator-sign-in-error:not(:empty)').waitFor();assert.equal(await page.locator('[name=password]').inputValue(),'');
+  await page.locator('[name=password]').fill('fixture-password');await page.locator('.operator-sign-in button').click();await page.locator('.operator-sign-in').waitFor({state:'detached'});
+  await page.reload();await page.locator('#wf-gpo option').waitFor({state:'attached'});assert.equal(await page.locator('.operator-sign-in').count(),0);assert.equal(confirmations,1);
+  await page.locator('#wf-gpo option').waitFor({state:'attached'});await page.locator('#wf-pilot').check();
   await page.locator('[data-wf-control="2.3.1.1"]').check();await page.locator('[data-wf-control="2.3.1.2"]').check();
   await page.locator('[data-wf-preview]').click();await page.locator('[data-wf-batch]').click();await page.locator('#wf-approve').waitFor();
   assert.equal(requests[0].body.batch.selections.length,2);assert.equal(requests[0].body.batch.pilot,true);
@@ -52,7 +58,7 @@ const server=http.createServer(async(req,res)=>{
   // The browser closes while the recorded server job remains running.
   await page.close();const applied=jobs.find(j=>j.action==='apply');applied.state='COMPLETED';applied.completedIds=[...applied.planIds];applied.currentOperationId=null;
   history.forEach(r=>{r.result={state:'PUBLISHED',backupId:'backup-'+r.id,backupDirectory:'protected backup',message:'Publication verified',gpoPublished:true,linkVerified:true,currentValue:'Enabled',effectiveStatus:'ENDPOINT_VERIFICATION_PENDING',refreshResults:[],verification:{replicationConverged:false}};r.stages[0].finishedAt=new Date().toISOString();});
-  page=await browser.newPage({viewport:{width:1440,height:1000}});page.on('pageerror',e=>errors.push(e.message));await page.goto(url);await page.locator('[data-wf-tab=jobs]').click();await page.locator(`[data-wf-job="${applied.id}"]`).waitFor();await page.locator(`[data-wf-job="${applied.id}"]`).click();
+  page=await context.newPage();page.on('pageerror',e=>errors.push(e.message));await page.goto(url);await page.locator('[data-wf-tab=jobs]').click();await page.locator(`[data-wf-job="${applied.id}"]`).waitFor();await page.locator(`[data-wf-job="${applied.id}"]`).click();
   assert.ok((await page.locator('#operator-modules').textContent()).includes('ENDPOINT_VERIFICATION_PENDING'));assert.ok(await page.locator(`a[href="/api/workflows/${applied.id}/report"]`).count());
   await page.evaluate(()=>{document.activeElement?.blur();window.scrollTo(0,0);});await page.waitForTimeout(350);await page.screenshot({path:path.join(screens,'workflow-recorded-stages.png'),fullPage:true});
   await page.locator('[data-wf-tab=recovery]').click();assert.ok((await page.locator('#operator-modules').textContent()).includes('backup-'));
@@ -67,7 +73,7 @@ const server=http.createServer(async(req,res)=>{
   assert.equal(await summary.locator('[data-remediation-total]').textContent(),'405');assert.equal(await summary.locator('[data-remediation-auto]').textContent(),'401');assert.equal(await summary.locator('[data-remediation-guided]').textContent(),'4');
   assert.equal(await summary.locator('[data-rule]').count(),4);assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));
   await summary.screenshot({path:path.join(screens,'dashboard-remediation-mobile.png')});await page.setViewportSize({width:1440,height:1000});await summary.screenshot({path:path.join(screens,'dashboard-remediation-desktop.png')});
-  await summary.locator('[data-rule="1.2.3"]').click();await page.locator('[data-remediation-guide="1.2.3"]').waitFor();await page.setViewportSize({width:390,height:844});
+  await summary.locator('summary').click();await summary.locator('[data-rule="1.2.3"]').click();await page.locator('[data-remediation-guide="1.2.3"]').waitFor();await page.setViewportSize({width:390,height:844});
   for(const id of ['1.2.3','2.3.11.6','18.10.43.10.1','18.10.43.10.2']){
    await page.locator('a[href="#/benchmark"]').first().click();await page.locator('#catalog-search').fill(id);await page.waitForTimeout(350);
    if(!await page.locator(`[data-rule="${id}"]`).count())await page.locator('[data-domain]').first().click();
@@ -82,6 +88,11 @@ const server=http.createServer(async(req,res)=>{
   await readBlock.locator('[data-copy-value]').click();assert.equal(await page.evaluate(()=>window.guideCopied),expectedCopy);
   await page.evaluate(()=>{document.activeElement?.blur();window.scrollTo(0,0);});await page.screenshot({path:path.join(screens,'guided-remediation-mobile.png'),fullPage:false});
   assert.equal(requests.length,beforeGuideRequests,'Viewing guide must not submit operations');
+  await page.setViewportSize({width:1440,height:1000});await page.locator('a[href="#/benchmark"]').first().click();await page.locator('#catalog-search').fill('');
+  await page.locator('[data-domain="7"]').click();await page.locator('[data-domain-guidance="7"]').waitFor();
+  assert.ok((await page.locator('[data-domain-guidance="7"]').textContent()).includes('405'));
+  await page.locator('[data-domain-guidance="7"]').screenshot({path:path.join(screens,'empty-domain-guidance.png')});
+  boot++;await page.reload();await page.locator('.operator-sign-in').waitFor();assert.equal(confirmations,1);
   assert.deepEqual(errors,[]);console.log('Workflow UI: PASS (batch review/approval/cancel, server stages/reopen/recovery, scan, escaping, mobile and all four guided controls without writes).');
  }finally{await browser.close();await new Promise(r=>server.close(r));}
 })().catch(e=>{console.error(e);process.exitCode=1;});
