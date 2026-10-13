@@ -78,7 +78,13 @@ try{
  });
  app.UseRateLimiter();
  app.MapGet("/api/session",(HttpContext ctx,IAntiforgery anti)=>new{token=anti.GetAndStoreTokens(ctx).RequestToken}).WithMetadata(new OperatorBootstrap());
- OperatorConfirmation.MapEndpoints(app);
+ OperatorConfirmation.MapEndpoints(app,(request,ctx,ct)=>{
+  // The injected AD adapter must succeed before either workspace access or connection is issued.
+  if(request.UserName!="TEST\\executor"||request.Password!="fixture-password")throw new PolicyException("OPERATOR_PASSWORD_INVALID","Rejected delegated credentials");
+  Check(ctx.User.Identity?.Name?.StartsWith("TEST\\")==true,"Delegated account replaced operator identity");
+  ctx.Response.Cookies.Append("GpoRemediator.GpoConnection","fixture-connection",new CookieOptions{HttpOnly=true,SameSite=SameSiteMode.Strict,Path="/api"});
+  return Task.CompletedTask;
+ });
  app.MapGet("/api/private",()=>Results.Ok());
  foreach(var action in new[]{"apply","rollback"})
   app.MapPost("/api/gpo/{id}/"+action,(GpoRefreshRequest request)=>new{refresh=request.Refresh}).WithMetadata(new OperatorAccess("Administrator","Remediator"));
@@ -94,10 +100,10 @@ try{
   using var response=await client.SendAsync(req);Check(response.IsSuccessStatusCode,"Session failed for "+actor);
   var session=((await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("token").GetString()!,response.Headers.GetValues("Set-Cookie").First().Split(';')[0]);
   if(!confirm)return session;
-  using var signed=await Post("/api/operator/sign-in",actor,session,json:"{\"password\":\"fixture-password\"}");
+  using var signed=await Post("/api/operator/sign-in",actor,session,json:"{\"password\":\"fixture-password\",\"userName\":\"TEST\\\\executor\"}");
   Check(signed.IsSuccessStatusCode,"Startup confirmation failed for "+actor);
-  var proofCookie=signed.Headers.GetValues("Set-Cookie").First();Check(proofCookie.Contains("httponly",StringComparison.OrdinalIgnoreCase)&&proofCookie.Contains("samesite=strict",StringComparison.OrdinalIgnoreCase),"Proof cookie missing protections");
-  return(session.Item1,session.Item2+"; "+signed.Headers.GetValues("Set-Cookie").First().Split(';')[0]);
+  var proofCookie=signed.Headers.GetValues("Set-Cookie").Single(x=>x.StartsWith(OperatorConfirmation.CookieName+"="));Check(proofCookie.Contains("httponly",StringComparison.OrdinalIgnoreCase)&&proofCookie.Contains("samesite=strict",StringComparison.OrdinalIgnoreCase),"Proof cookie missing protections");
+  return(session.Item1,session.Item2+"; "+string.Join("; ",signed.Headers.GetValues("Set-Cookie").Select(x=>x.Split(';')[0])));
  }
  async Task<HttpResponseMessage> Post(string route,string actor,(string Token,string Cookie) session,string? origin="http://localhost",bool token=true,string json="{\"refresh\":\"Scope\"}"){
   using var req=new HttpRequestMessage(HttpMethod.Post,route){Content=new StringContent(json,Encoding.UTF8,"application/json")};
@@ -111,15 +117,19 @@ try{
  }
  using(var response=await Private("TEST\\Admin",unconfirmed.Cookie))Check(response.StatusCode==HttpStatusCode.Forbidden,"Startup proof not required");
  using(var response=await Post("/api/operator/sign-in","TEST\\Admin",unconfirmed,json:"{\"password\":\"wrong\"}"))Check(response.StatusCode==HttpStatusCode.Forbidden,"Wrong password accepted");
- using(var response=await Post("/api/operator/sign-in","TEST\\Admin",unconfirmed,token:false,json:"{\"password\":\"fixture-password\"}"))Check(response.StatusCode==HttpStatusCode.Forbidden,"Startup CSRF bypass");
+ using(var response=await Post("/api/operator/sign-in","TEST\\Admin",unconfirmed,token:false,json:"{\"password\":\"fixture-password\",\"userName\":\"TEST\\\\executor\"}"))Check(response.StatusCode==HttpStatusCode.Forbidden,"Startup CSRF bypass");
  using(var response=await Post("/api/operator/sign-in","TEST\\Admin",unconfirmed,json:"{\"password\":\"fixture-password\",\"actor\":\"TEST\\\\Writer\"}"))Check(response.StatusCode==HttpStatusCode.BadRequest,"Alternate actor accepted");
  using(var response=await Post("/api/gpo/test/apply","TEST\\Admin",unconfirmed))Check(response.StatusCode==HttpStatusCode.Forbidden,"Write executed before startup confirmation");
  var confirmed=await Session("TEST\\Admin");
- Check(confirmed.Cookie.Contains(OperatorConfirmation.CookieName),"Proof cookie absent");
+ Check(confirmed.Cookie.Contains(OperatorConfirmation.CookieName)&&confirmed.Cookie.Contains("GpoRemediator.GpoConnection="),"Single sign-in did not issue both sessions");
  using(var response=await Private("TEST\\Admin",confirmed.Cookie))Check(response.IsSuccessStatusCode,"Refresh needs repeated confirmation");
  using(var response=await Private("TEST\\Writer",confirmed.Cookie))Check(response.StatusCode==HttpStatusCode.Forbidden,"Proof crossed Windows identity");
- using(var response=await Private("TEST\\Admin",confirmed.Cookie+"tampered"))Check(response.StatusCode==HttpStatusCode.Forbidden,"Tampered proof accepted");
+ using(var response=await Private("TEST\\Admin",confirmed.Cookie.Replace(OperatorConfirmation.CookieName+"=",OperatorConfirmation.CookieName+"=tampered")))Check(response.StatusCode==HttpStatusCode.Forbidden,"Tampered proof accepted");
  var restarted=new OperatorConfirmation(new FixturePasswordVerifier());
+ var setupContext=new DefaultHttpContext();setupContext.User=new ClaimsPrincipal(new ClaimsIdentity([new Claim(ClaimTypes.Name,"TEST\\Admin")],"Test"));
+ Reject(()=>restarted.SignIn(setupContext,new OperatorPassword("wrong")),"OPERATOR_PASSWORD_INVALID");
+ restarted.SignIn(setupContext,new OperatorPassword("fixture-password"));
+ Check(setupContext.Response.Headers.SetCookie.Any(x=>x?.StartsWith(OperatorConfirmation.CookieName+"=")==true),"Initial setup owner confirmation failed");
  var restartedContext=new DefaultHttpContext();restartedContext.User=new ClaimsPrincipal(new ClaimsIdentity([new Claim(ClaimTypes.Name,"TEST\\Admin")],"Test"));restartedContext.Request.Headers.Cookie=confirmed.Cookie;
  Check(!restarted.Confirmed(restartedContext),"Restart retained prior startup proof");
  foreach(var role in new[]{"Viewer","Auditor","Admin","Writer"}){

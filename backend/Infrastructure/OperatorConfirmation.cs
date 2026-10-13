@@ -9,7 +9,7 @@ namespace GpoRemediator.Infrastructure;
 
 public sealed record OperatorBootstrap;
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
-public sealed record OperatorPassword(string Password);
+public sealed record OperatorPassword(string Password,string? UserName=null) { public override string ToString()=>"[Operator login redacted]"; }
 public interface IOperatorPasswordVerifier { bool Verify(string actor,string password); }
 public sealed class WindowsOperatorPasswordVerifier : IOperatorPasswordVerifier
 {
@@ -52,6 +52,11 @@ public sealed class OperatorConfirmation(IOperatorPasswordVerifier verifier)
         if(!validating.Wait(0))throw new PolicyException("GPO_CONNECTION_LIMIT","Too many concurrent account confirmations.");
         try{if(!verifier.Verify(actor,password))throw new PolicyException("OPERATOR_PASSWORD_INVALID","Windows account confirmation failed. Check your password; repeated failures can lock the Windows account.");}
         finally{validating.Release();}
+        IssueProof(context);
+    }
+    private void IssueProof(HttpContext context){
+        if(context.User.Identity?.IsAuthenticated!=true)throw new PolicyException("AUTHENTICATION_REQUIRED","Windows authentication is required.");
+        var actor=Actor(context);
         var secret=Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
         lock(sync){
             foreach(var key in proofs.Where(x=>x.Value.Actor.Equals(actor,StringComparison.OrdinalIgnoreCase)).Select(x=>x.Key).ToArray())proofs.Remove(key);
@@ -60,9 +65,13 @@ public sealed class OperatorConfirmation(IOperatorPasswordVerifier verifier)
         }
         context.Response.Cookies.Append(CookieName,secret,new CookieOptions{HttpOnly=true,SameSite=SameSiteMode.Strict,Secure=context.Request.IsHttps,Path="/",MaxAge=TimeSpan.FromDays(365),IsEssential=true});
     }
-    public static void MapEndpoints(WebApplication app){
-        app.MapPost("/api/operator/sign-in",(OperatorPassword request,HttpContext context,OperatorConfirmation confirmation,Store store)=>{
-            confirmation.SignIn(context,request);store.Audit("OPERATOR_STARTUP_CONFIRMED",Actor(context));return Results.Ok(new{confirmed=true});
+    public static void MapEndpoints(WebApplication app,Func<OperatorPassword,HttpContext,CancellationToken,Task>? connect=null){
+        app.MapPost("/api/operator/sign-in",async(OperatorPassword request,HttpContext context,OperatorConfirmation confirmation,Store store,CancellationToken ct)=>{
+            // In AD mode one successful delegated connection proves the explicit startup login.
+            // Negotiate still identifies the operator and determines every application role.
+            if(connect is null)confirmation.SignIn(context,request);
+            else {await connect(request,context,ct);confirmation.IssueProof(context);}
+            store.Audit("OPERATOR_STARTUP_CONFIRMED",Actor(context));return Results.Ok(new{confirmed=true,connected=connect is not null});
         }).WithMetadata(new OperatorBootstrap(),new OperatorAccess("Administrator","Remediator","Auditor","Viewer")).RequireRateLimiting("operator-confirmation");
     }
 }

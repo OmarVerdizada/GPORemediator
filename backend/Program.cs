@@ -190,8 +190,13 @@ SetupConfigView CurrentSetupConfig()
 }
 app.MapGet("/api/v1/health/live",()=>Results.Ok(new{status="live",version="1.0"})).WithMetadata(new OperatorBootstrap());
 app.MapGet("/api/v1/health/ready",()=>Results.Ok(new{status="ready",mode,database=true})).WithMetadata(new OperatorBootstrap());
-app.MapGet("/api/session",(HttpContext context,IAntiforgery csrf,OperatorConfirmation confirmation)=>new {mode,@operator=Operator(context),role=Role(context),csrfToken=csrf.GetAndStoreTokens(context).RequestToken,operatorConfirmationRequired=!confirmation.Confirmed(context),identityStrategy="Authenticated Windows operator plus startup password confirmation and explicit delegated execution identity",realModeEnabled=real,setupRequired=localSetup}).WithMetadata(new OperatorBootstrap());
-OperatorConfirmation.MapEndpoints(app);
+app.MapGet("/api/session",(HttpContext context,IAntiforgery csrf,OperatorConfirmation confirmation)=>new {mode,@operator=Operator(context),role=Role(context),csrfToken=csrf.GetAndStoreTokens(context).RequestToken,operatorConfirmationRequired=!confirmation.Confirmed(context),domainSignIn=real,identityStrategy="Authenticated Windows operator with a single startup sign-in for delegated AD execution",realModeEnabled=real,setupRequired=localSetup}).WithMetadata(new OperatorBootstrap());
+OperatorConfirmation.MapEndpoints(app,real?async(request,context,ct)=>{
+    var service=context.RequestServices.GetRequiredService<GpoWorkflowService>();
+    var connected=await service.ConnectAsync(new GpoLoginRequest{UserName=request.UserName??"",Password=request.Password},Operator(context),ct);
+    service.Disconnect(GpoToken(context));
+    context.Response.Cookies.Append("GpoRemediator.GpoConnection",connected.Token,new CookieOptions{HttpOnly=true,Secure=context.Request.IsHttps,SameSite=SameSiteMode.Strict,Path="/api"});
+}:null);
 app.MapGet("/api/service",(OperationGate gate)=>new {
     mode, processId=Environment.ProcessId, stopping=gate.Maintenance,
     managed=builder.Configuration.GetValue<bool>("LauncherManaged"),
