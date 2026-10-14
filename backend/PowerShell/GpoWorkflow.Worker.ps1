@@ -104,7 +104,8 @@ function Get-ItemCurrent([string]$Id,$Map,$Item){
       }
       {$_ -in @('Registry','RegistrySet')} {
         try{
-          $v=(Get-GPRegistryValue -Guid ([guid]$Id) -Key ([string]$Item.key) -ValueName ([string]$Item.name) -Domain $cfg.domain -Server $cfg.domainController -ErrorAction Stop).Value
+          $entry=Get-GPRegistryValue -Guid ([guid]$Id) -Key ([string]$Item.key) -ValueName ([string]$Item.name) -Domain $cfg.domain -Server $cfg.domainController -ErrorAction Stop
+          $v=$entry.Value;if([string]$entry.Type -ine (Registry-Type ([string]$Item.type))){return ('<type mismatch: '+[string]$entry.Type+'> '+[string]$v)}
           if(([string]$Item.type).ToUpperInvariant() -eq 'MULTISTRING'){return ((@($v)|ForEach-Object{[string]$_}|Sort-Object)-join '|')};return [string]$v
         }catch{
           # Missing policy data is a valid "not configured" state. Any other GroupPolicy/transport
@@ -135,13 +136,20 @@ function Desired-Normalized($Map,$Item,$S){
 }
 function Numeric-Complies($Current,$Desired,[string]$Comparator){
     $c=0.0;$d=0.0;if(![double]::TryParse([string]$Current,[Globalization.NumberStyles]::Any,[Globalization.CultureInfo]::InvariantCulture,[ref]$c)){return $false};if(![double]::TryParse([string]$Desired,[Globalization.NumberStyles]::Any,[Globalization.CultureInfo]::InvariantCulture,[ref]$d)){return $false}
-    switch($Comparator){'>=' {return $c -ge $d}'<=' {return $c -le $d}'==' {return $c -eq $d}default{return $c -eq $d}}
+    switch($Comparator){'>=' {return $c -ge $d}'<=' {return $c -gt 0 -and $c -le $d}'==' {return $c -eq $d}default{return $c -eq $d}}
+}
+function Included-Value($Current,$Desired,[string]$Handler){
+    if($null -eq $Current){return $false}
+    if($Handler -eq 'AdvancedAudit'){$n=0;if(![int]::TryParse([string]$Current,[ref]$n) -or $n -lt 0 -or $n -gt 3){return $false};return ($n -band [int]$Desired) -eq [int]$Desired}
+    $currentSet=@(([string]$Current -split ',')|Where-Object{$_})
+    return @(([string]$Desired -split ',')|Where-Object{$_ -and $_ -notin $currentSet}).Count -eq 0
 }
 function Mapping-Matches([string]$Id,$Map,$S){
     foreach($item in Mapping-Items $Map){
       $cur=Get-ItemCurrent $Id $Map $item;$want=Desired-Normalized $Map $item $S
       if($null -eq $cur){return $false}
-      if([bool]$Map.allowValueOverride -and @(Mapping-Items $Map).Count -eq 1 -and ![string]::IsNullOrWhiteSpace([string]$Map.comparator)){if(!(Numeric-Complies $cur $want ([string]$Map.comparator))){return $false}}
+      if([string]$Map.comparator -eq 'includes'){if(!(Included-Value $cur $want ([string]$Map.handler))){return $false}}
+      elseif([bool]$Map.allowValueOverride -and @(Mapping-Items $Map).Count -eq 1 -and ![string]::IsNullOrWhiteSpace([string]$Map.comparator)){if(!(Numeric-Complies $cur $want ([string]$Map.comparator))){return $false}}
       elseif([string]$cur -cne [string]$want){return $false}
     }
     return $true
@@ -259,9 +267,9 @@ function Bump-ComputerVersion([string]$Id,[ValidateSet('Security','Audit')][stri
 function Write-Mapping($Plan,$Map){
     $s=$Plan.selection;if(Mapping-Matches $s.gpoId $Map $s){return $false}
     switch([string]$Map.handler){
-      'SecurityTemplate' {$null=Assert-VersionSync $s.gpoId;$path=Security-Path $s.gpoId;$text=if(Test-Path -LiteralPath $path){[IO.File]::ReadAllText($path)}else{''};foreach($item in Mapping-Items $Map){$desired=Desired-Item $Map $item $s;if([string]$item.type -eq 'Principals'){$desired=Principals-Desired @($item.value)}elseif([string]$item.type -eq 'QuotedString'){$desired='"'+([string]$desired)+'"'};$text=Set-SecurityTemplateValue $text ([string]$item.section) ([string]$item.key) ([string]$desired)};Atomic-Text $path $text ([Text.Encoding]::Unicode);Bump-ComputerVersion $s.gpoId 'Security';return $true}
+      'SecurityTemplate' {$null=Assert-VersionSync $s.gpoId;$path=Security-Path $s.gpoId;$text=if(Test-Path -LiteralPath $path){[IO.File]::ReadAllText($path)}else{''};foreach($item in Mapping-Items $Map){$desired=Desired-Item $Map $item $s;if([string]$item.type -eq 'Principals'){$values=@($item.value);if([string]$Map.comparator -eq 'includes'){$existing=Get-ItemCurrent $s.gpoId $Map $item;if($existing){$values+=@($existing -split ',')}};$desired=Principals-Desired @($values|Sort-Object -Unique)}elseif([string]$item.type -eq 'QuotedString'){$desired='"'+([string]$desired)+'"'};$text=Set-SecurityTemplateValue $text ([string]$item.section) ([string]$item.key) ([string]$desired)};Atomic-Text $path $text ([Text.Encoding]::Unicode);Bump-ComputerVersion $s.gpoId 'Security';return $true}
       {$_ -in @('Registry','RegistrySet')} {foreach($item in Mapping-Items $Map){$current=Get-ItemCurrent $s.gpoId $Map $item;$desired=Desired-Normalized $Map $item $s;if($null -ne $current -and [string]$current -ceq [string]$desired){continue};$value=Desired-Item $Map $item $s;$type=Registry-Type ([string]$item.type);if($type -eq 'DWord'){$value=[int64]$value}elseif($type -eq 'QWord'){$value=[int64]$value}elseif($type -eq 'MultiString'){$value=[string[]]@($value)}else{$value=[string]$value};Set-GPRegistryValue -Guid ([guid]$s.gpoId) -Key ([string]$item.key) -ValueName ([string]$item.name) -Type $type -Value $value -Domain $cfg.domain -Server $cfg.domainController|Out-Null};return $true}
-      'AdvancedAudit' {$null=Assert-VersionSync $s.gpoId;$path=Audit-Path $s.gpoId;$lines=New-Object 'System.Collections.Generic.List[string]';if(Test-Path -LiteralPath $path){$lines.AddRange([string[]](Get-Content -LiteralPath $path -Encoding UTF8))}else{$lines.Add('Machine Name,Policy Target,Subcategory,Subcategory GUID,Inclusion Setting,Exclusion Setting,Setting Value')};foreach($item in Mapping-Items $Map){$guid=[string]$item.guid;$indices=@();for($i=1;$i -lt $lines.Count;$i++){if($lines[$i] -match [regex]::Escape($guid)){$indices+=$i}};if($indices.Count -gt 1){Fail 'AUDIT_POLICY_AMBIGUOUS' 'Duplicate advanced-audit subcategory rows exist in this GPO.'};$row=Audit-Row ([string]$item.name) $guid ([string]$item.state) ([int]$item.mask);if($indices.Count -eq 1){$lines[$indices[0]]=$row}else{$lines.Add($row)}};Atomic-Text $path (($lines -join "`r`n")+"`r`n") ([Text.UTF8Encoding]::new($false));Bump-ComputerVersion $s.gpoId 'Audit';return $true}
+      'AdvancedAudit' {$null=Assert-VersionSync $s.gpoId;$path=Audit-Path $s.gpoId;$lines=New-Object 'System.Collections.Generic.List[string]';if(Test-Path -LiteralPath $path){$lines.AddRange([string[]](Get-Content -LiteralPath $path -Encoding UTF8))}else{$lines.Add('Machine Name,Policy Target,Subcategory,Subcategory GUID,Inclusion Setting,Exclusion Setting,Setting Value')};foreach($item in Mapping-Items $Map){$guid=[string]$item.guid;$indices=@();for($i=1;$i -lt $lines.Count;$i++){if($lines[$i] -match [regex]::Escape($guid)){$indices+=$i}};if($indices.Count -gt 1){Fail 'AUDIT_POLICY_AMBIGUOUS' 'Duplicate advanced-audit subcategory rows exist in this GPO.'};$mask=[int]$item.mask;if([string]$Map.comparator -eq 'includes'){$existing=Get-ItemCurrent $s.gpoId $Map $item;if($null -ne $existing){$n=0;if(![int]::TryParse([string]$existing,[ref]$n) -or $n -lt 0 -or $n -gt 3){Fail 'AUDIT_POLICY_INVALID' 'Existing audit mask is invalid.'};$mask=$mask -bor $n}};$auditState=switch($mask){0{'No Auditing'}1{'Success'}2{'Failure'}3{'Success and Failure'}};$row=Audit-Row ([string]$item.name) $guid $auditState $mask;if($indices.Count -eq 1){$lines[$indices[0]]=$row}else{$lines.Add($row)}};Atomic-Text $path (($lines -join "`r`n")+"`r`n") ([Text.UTF8Encoding]::new($false));Bump-ComputerVersion $s.gpoId 'Audit';return $true}
       default {Fail 'GPO_HANDLER_UNSUPPORTED' ('Unsupported mapping handler: '+[string]$Map.handler)}
     }
 }
@@ -294,33 +302,34 @@ function Verify-EffectiveSamples($Plan,$Map){
     $s=$Plan.selection;$checks=@()
     if([bool]$Map.domainPolicySensitive){return @()}
     if([string]$Map.scope -eq 'User'){return @(@{hostname='<user-scope>';state='PENDING';message='User-scoped effective policy requires a concrete user/session target. GPO publication is verified, but endpoint user RSoP is not inferred.';actualValue=$null})}
-    $hosts=@();if($Plan.preview.refreshComputers){$hosts+=@($Plan.preview.refreshComputers)};if($Plan.preview.impact -and $Plan.preview.impact.affectedObjects){$hosts+=@($Plan.preview.impact.affectedObjects.sampleHosts)};$hosts=@($hosts|Where-Object{$_}|Sort-Object -Unique|Select-Object -First 5)
+    $hosts=@();if($Plan.preview.impact -and $Plan.preview.impact.affectedObjects){$hosts+=@($Plan.preview.impact.affectedObjects.sampleHosts)};$allowed=@(Read-Field $cfg 'allowedHosts' @());$hosts=@($hosts|Where-Object{$_ -and $_ -in $allowed}|Sort-Object -Unique|Select-Object -First 5)
     if(!$hosts.Count){return @(@{hostname='<scope>';state='PENDING';message='No concrete endpoint is available for effective-policy verification in the selected scope.';actualValue=$null})}
     $expected=@(Endpoint-Expected $Map $s);$handler=[string]$Map.handler
     foreach($hostName in $hosts){
       try{
-        $probe=Invoke-Command -ComputerName $hostName -Authentication Kerberos -ArgumentList $handler,$expected -ScriptBlock {
-          param($Handler,$ExpectedItems)
+        $probe=Invoke-Command -ComputerName $hostName -Authentication Kerberos -ArgumentList $handler,$expected,([string]$Map.comparator) -ScriptBlock {
+          param($Handler,$ExpectedItems,$Comparator)
           $ErrorActionPreference='Stop'
           function Read-IniValue([string]$Text,[string]$Section,[string]$Key){$inside=$false;foreach($line in ($Text -split "`r?`n")){$t=$line.Trim();if($t -match '^\[(.+)\]$'){$inside=($Matches[1] -ieq $Section);continue};if($inside -and $t -match '^([^=]+)=(.*)$' -and $Matches[1].Trim() -ieq $Key){return $Matches[2].Trim()}};return $null}
-          function Normalize-Sids([string]$Raw){if($null -eq $Raw){return $null};$v=@();foreach($part in ($Raw -split ',')){if($part.Trim()){$v+=$part.Trim().TrimStart('*')}};return (($v|Sort-Object -Unique)-join ',')}
+          function Normalize-Sids([string]$Raw){if($null -eq $Raw){return $null};$v=@();foreach($part in ($Raw -split ',')){if($part.Trim()){$name=$part.Trim().TrimStart('*');if($name -notmatch '^S-\d-(?:\d+-){1,14}\d+$'){$name=([Security.Principal.NTAccount]$name).Translate([Security.Principal.SecurityIdentifier]).Value};$v+=$name}};return (($v|Sort-Object -Unique)-join ',')}
           $actual=@();$ok=$true
           if($Handler -in @('Registry','RegistrySet')){
-            foreach($item in @($ExpectedItems)){$key=[string]$item.key;if($key -notmatch '^HKLM\\'){return @{supported=$false;match=$false;actual='';message='Only computer-scope HKLM registry policies can be verified without a user session.'}};$path='Registry::HKEY_LOCAL_MACHINE\'+$key.Substring(5);try{$v=Get-ItemPropertyValue -LiteralPath $path -Name ([string]$item.name) -ErrorAction Stop}catch{if($_.FullyQualifiedErrorId -match 'ItemNotFound|PathNotFound|PropertyNotFound'){$v=$null}else{return @{supported=$false;match=$false;actual='';message='Registry policy could not be read because access or transport failed.'}}};if(([string]$item.type).ToUpperInvariant() -eq 'MULTISTRING'){$cur=if($null -eq $v){$null}else{((@($v)|ForEach-Object{[string]$_}|Sort-Object)-join '|')}}else{$cur=if($null -eq $v){$null}else{[string]$v}};$actual+=([string]$item.name+'='+$(if($null -eq $cur){'<not configured>'}else{$cur}));if([string]$cur -cne [string]$item.expected){$ok=$false}}
-            return @{supported=$true;match=$ok;actual=($actual -join '; ');message='Endpoint registry policy values were read directly.'}
+            foreach($item in @($ExpectedItems)){$key=[string]$item.key;if($key -notmatch '^HKLM\\'){return @{supported=$false;match=$false;actual='';message='Only computer-scope HKLM registry policies can be verified without a user session.'}};$path='Registry::HKEY_LOCAL_MACHINE\'+$key.Substring(5);try{$v=Get-ItemPropertyValue -LiteralPath $path -Name ([string]$item.name) -ErrorAction Stop;$kind=(Get-Item -LiteralPath $path -ErrorAction Stop).GetValueKind([string]$item.name);if([string]$kind -ine [string]$item.type){$ok=$false;$actual+=([string]$item.name+' type='+[string]$kind+' (expected '+[string]$item.type+')')}}catch{if($_.FullyQualifiedErrorId -match 'ItemNotFound|PathNotFound|PropertyNotFound'){$v=$null}else{return @{supported=$false;match=$false;actual='';message='Registry policy could not be read because access or transport failed.'}}};if(([string]$item.type).ToUpperInvariant() -eq 'MULTISTRING'){$cur=if($null -eq $v){$null}else{((@($v)|ForEach-Object{[string]$_}|Sort-Object)-join '|')}}else{$cur=if($null -eq $v){$null}else{[string]$v}};$actual+=([string]$item.name+'='+$(if($null -eq $cur){'<not configured>'}else{$cur}));if($null -eq $cur -or [string]$cur -cne [string]$item.expected){$ok=$false}}
+            return @{supported=$true;match=$ok;actual=($actual -join '; ');message='Endpoint policy registry values were read directly. This evidence does not prove runtime enforcement; restart, logon, service and tamper-protection requirements still apply.'}
           }
           if($Handler -eq 'SecurityTemplate'){
-            $tmp=Join-Path $env:TEMP ('gpo-remediator-'+[guid]::NewGuid().ToString('N')+'.inf');try{& secedit.exe /export /cfg $tmp /quiet | Out-Null;$text=[IO.File]::ReadAllText($tmp);foreach($item in @($ExpectedItems)){$cur=Read-IniValue $text ([string]$item.section) ([string]$item.key);if([string]$item.type -eq 'Principals'){$cur=Normalize-Sids $cur}elseif([string]$item.type -eq 'QuotedString' -and $null -ne $cur){$cur=$cur.Trim().Trim('"')};$actual+=([string]$item.key+'='+$(if($null -eq $cur){'<not configured>'}else{$cur}));if([string]$cur -cne [string]$item.expected){$ok=$false}};return @{supported=$true;match=$ok;actual=($actual -join '; ');message='Effective security policy was exported with secedit.'}}finally{Remove-Item -LiteralPath $tmp -Force -ErrorAction SilentlyContinue}
+            $tmp=Join-Path $env:TEMP ('gpo-remediator-'+[guid]::NewGuid().ToString('N')+'.inf');try{& secedit.exe /export /mergedpolicy /cfg $tmp /quiet | Out-Null;if($LASTEXITCODE -ne 0 -or !(Test-Path -LiteralPath $tmp)){return @{supported=$false;match=$false;actual='';message='secedit could not export merged security policy.'}};$text=[IO.File]::ReadAllText($tmp);foreach($item in @($ExpectedItems)){$cur=Read-IniValue $text ([string]$item.section) ([string]$item.key);if([string]$item.type -eq 'Principals' -and $null -ne $cur){$cur=Normalize-Sids $cur}elseif([string]$item.type -eq 'QuotedString' -and $null -ne $cur){$cur=$cur.Trim().Trim('"')};$actual+=([string]$item.key+'='+$(if($null -eq $cur){'<not configured>'}else{$cur}));if($null -eq $cur){$ok=$false}elseif($Comparator -eq 'includes' -and [string]$item.type -eq 'Principals'){if(@(([string]$item.expected -split ',')|Where-Object{$_ -and $_ -notin @($cur -split ',')}).Count){$ok=$false}}elseif([string]$cur -cne [string]$item.expected){$ok=$false}};return @{supported=$true;match=$ok;actual=($actual -join '; ');message='Effective security policy was exported with secedit.'}}finally{Remove-Item -LiteralPath $tmp -Force -ErrorAction SilentlyContinue}
           }
           if($Handler -eq 'AdvancedAudit'){
             foreach($item in @($ExpectedItems)){
               try{
                 $raw=& auditpol.exe /get /subcategory:([string]$item.guid) /r 2>$null
+                if($LASTEXITCODE -ne 0){return @{supported=$false;match=$false;actual='';message='auditpol failed to read effective policy.'}}
                 $rows=@($raw|ConvertFrom-Csv)
                 if(!$rows.Count){return @{supported=$false;match=$false;actual='';message='auditpol returned no parseable effective-policy row.'}}
                 $row=$rows[0];$value=[string]($row.PSObject.Properties.Value|Select-Object -Last 1);$numeric=0
                 if(![int]::TryParse($value,[ref]$numeric)){return @{supported=$false;match=$false;actual=$value;message='auditpol did not expose a numeric Setting Value, so locale-independent verification is unavailable.'}}
-                $expectedMask=[int]$item.expected;$actual+=([string]$item.guid+'='+$numeric);if($numeric -ne $expectedMask){$ok=$false}
+                $expectedMask=[int]$item.expected;$actual+=([string]$item.guid+'='+$numeric);if($numeric -lt 0 -or $numeric -gt 3){return @{supported=$false;match=$false;actual=$value;message='auditpol returned an invalid mask.'}};if($Comparator -eq 'includes'){if(($numeric -band $expectedMask) -ne $expectedMask){$ok=$false}}elseif($numeric -ne $expectedMask){$ok=$false}
               }catch{return @{supported=$false;match=$false;actual='';message='Effective advanced-audit probe is unavailable on this endpoint.'}}
             }
             return @{supported=$true;match=$ok;actual=($actual -join '; ');message='Effective advanced-audit Setting Value masks were read with auditpol /r and compared numerically.'}
@@ -457,7 +466,8 @@ switch($Operation){
         Emit-Stage 'GPUPDATE'
         $refresh=@();$target=if($rollback){'Both'}elseif([string]$map.scope -eq 'User'){'User'}else{'Computer'}
         foreach($computer in $computers){try{$options=@{Computer=$computer;Force=$true;RandomDelayInMinutes=0;ErrorAction='Stop'};if(!$rollback){$options.Target=$target};Invoke-GPUpdate @options|Out-Null;$refresh+=@{computer=$computer;state='SCHEDULED';message=('gpupdate /target:'+$target.ToLowerInvariant()+' /force scheduled.')}}catch{$refresh+=@{computer=$computer;state='FAILED';message='Remote gpupdate could not be scheduled. Check RPC/task-scheduler firewall and permissions.'}}}
-        $v=if($rollback){Verify-Rollback $plan $map $manifest}else{Verify-Published $plan $map $true};$failed=@($refresh|Where-Object{$_.state -eq 'FAILED'}).Count
+        # Invoke-GPUpdate schedules a task; it does not wait for policy processing.
+        $v=if($rollback){Verify-Rollback $plan $map $manifest}else{Verify-Published $plan $map $false};$failed=@($refresh|Where-Object{$_.state -eq 'FAILED'}).Count
         $state=if($rollback){if($v.restored){'ROLLED_BACK'}else{'ROLLBACK_DRIFT_DETECTED'}}elseif(!$v.published -or !$v.linked){'DRIFT_DETECTED'}elseif($failed){'REFRESH_PARTIAL'}else{'REFRESH_SCHEDULED'}
         return Result $state $(if($failed){'One or more gpupdate /force targets failed. Review the per-host results.'}else{'gpupdate /force was scheduled. Endpoint convergence still requires verification.'}) $manifest $v $refresh
     }

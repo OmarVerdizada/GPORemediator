@@ -18,7 +18,7 @@ function Gpo-Folder {param($Id) return $script:folder}
 function Assert-VersionSync {param($Id) return @{version=1}}
 function Bump-ComputerVersion {param($Id,$Extension) $script:bumps++}
 function Set-GPRegistryValue {param($Guid,$Key,$ValueName,$Type,$Value,$Domain,$Server) $script:registry[$Key+'|'+$ValueName]=@{value=$Value;type=$Type}}
-function Get-GPRegistryValue {param($Guid,$Key,$ValueName,$Domain,$Server,$ErrorAction) $keyName=$Key+'|'+$ValueName;if(!$script:registry.ContainsKey($keyName)){Write-Error 'Missing mocked policy' -ErrorId UnableToRetrievePolicyRegistryItem -ErrorAction Stop};return [pscustomobject]@{Value=$script:registry[$keyName].value}}
+function Get-GPRegistryValue {param($Guid,$Key,$ValueName,$Domain,$Server,$ErrorAction) $keyName=$Key+'|'+$ValueName;if(!$script:registry.ContainsKey($keyName)){Write-Error 'Missing mocked policy' -ErrorId UnableToRetrievePolicyRegistryItem -ErrorAction Stop};return [pscustomobject]@{Value=$script:registry[$keyName].value;Type=$script:registry[$keyName].type}}
 function Assert-Test($Condition,[string]$Message){if(!$Condition){throw $Message}}
 $catalog=Get-Content (Join-Path $root 'backend\data\gpo-production-mappings.json') -Raw|ConvertFrom-Json
 $report=@();$index=0
@@ -47,6 +47,28 @@ foreach($map in $catalog.mappings){
         $report+=@{id=$map.id;handler=$map.handler;state='PASS';items=@($map.items).Count;checks='write/read-back/idempotence/endpoint-recipe/value-bounds'}
     }catch{$report+=@{id=$map.id;handler=$map.handler;state='FAIL';error=$_.Exception.Message}}
 }
+# Preserve stronger existing deny/audit entries when the benchmark says "include".
+$script:folder=Join-Path $sandbox 'incl';$null=New-Item -ItemType Directory -Path $script:folder
+$map=$catalog.mappings|Where-Object{$_.id -eq '2.2.23'}
+$path=Security-Path $selection.gpoId;$null=New-Item -ItemType Directory -Path (Split-Path $path) -Force
+[IO.File]::WriteAllText($path,"[Privilege Rights]`r`nSeDenyBatchLogonRight = *S-1-5-113`r`n",[Text.Encoding]::Unicode)
+$plan=@{selection=$selection};$null=Write-Mapping $plan $map
+$current=Get-ItemCurrent $selection.gpoId $map $map.items[0]
+Assert-Test ($current -eq 'S-1-5-113,S-1-5-32-546') 'Adding Guests removed an existing deny principal'
+Assert-Test (!(Write-Mapping $plan $map)) 'Deny superset was rewritten'
+$map=$catalog.mappings|Where-Object{$_.id -eq '17.2.5'}
+$path=Audit-Path $selection.gpoId;$null=New-Item -ItemType Directory -Path (Split-Path $path) -Force
+[IO.File]::WriteAllText($path,('Machine Name,Policy Target,Subcategory,Subcategory GUID,Inclusion Setting,Exclusion Setting,Setting Value'+"`r`n"+(Audit-Row $map.items[0].name $map.items[0].guid 'Failure' 2)+"`r`n"))
+$null=Write-Mapping $plan $map
+Assert-Test ((Get-ItemCurrent $selection.gpoId $map $map.items[0]) -eq '3') 'Adding Success removed existing Failure auditing'
+Assert-Test (!(Write-Mapping $plan $map)) 'Audit superset was rewritten'
+$map=$catalog.mappings|Where-Object{$_.id -eq '2.3.17.8'};$item=$map.items[0]
+$script:registry=@{};$script:registry[$item.key+'|'+$item.name]=@{value=1;type='String'}
+Assert-Test (!(Mapping-Matches $selection.gpoId $map $selection)) 'Wrong registry type passed publication verification'
+$null=Write-Mapping $plan $map
+Assert-Test (Mapping-Matches $selection.gpoId $map $selection) 'Wrong registry type was not repaired'
+Write-Output 'PASS stronger deny/audit preservation and registry type repair'
+
 # Target selection executes the worker resolver with directory enumeration mocked.
 function Scope {param($Dn) return @{dn=$Dn}}
 $script:targetCount=2

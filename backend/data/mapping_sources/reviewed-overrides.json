@@ -1,0 +1,315 @@
+{
+  "1.2.3": {
+    "handler": "SecurityTemplate",
+    "items": [
+      {
+        "section": "System Access",
+        "key": "AllowAdministratorLockout",
+        "type": "Integer",
+        "value": [
+          "1"
+        ]
+      }
+    ],
+    "scope": "Computer",
+    "domainPolicySensitive": false,
+    "warnings": [
+      "Applies to the built-in local Administrator; review OS/update support and all account-lockout settings. Guided only; automatic writes remain blocked."
+    ]
+  },
+  "2.3.11.6": {
+    "handler": "SecurityTemplate",
+    "items": [
+      {
+        "section": "System Access",
+        "key": "ForceLogoffWhenHourExpire",
+        "type": "Integer",
+        "value": [
+          "1"
+        ]
+      }
+    ],
+    "scope": "Computer",
+    "domainPolicySensitive": false,
+    "warnings": [
+      "SMB logon-hours behavior; this is not a desktop/RDP sign-out command. Review local/domain account policy and do not apply a local procedure to a DC. Guided only; automatic writes remain blocked."
+    ]
+  },
+  "2.3.1.2": {
+    "handler": "SecurityTemplate",
+    "items": [
+      {
+        "section": "System Access",
+        "key": "EnableGuestAccount",
+        "type": "Integer",
+        "value": [
+          "0"
+        ]
+      }
+    ]
+  },
+  "2.3.10.1": {
+    "handler": "SecurityTemplate",
+    "items": [
+      {
+        "section": "System Access",
+        "key": "LSAAnonymousNameLookup",
+        "type": "Integer",
+        "value": [
+          "0"
+        ]
+      }
+    ]
+  },
+  "2.3.17.8": {
+    "handler": "Registry",
+    "items": [
+      {
+        "key": "HKLM\\SOFTWARE\\Microsoft\\Windows\\Currentversion\\Policies\\System",
+        "name": "EnableVirtualization",
+        "type": "DWORD",
+        "value": [
+          "1"
+        ]
+      }
+    ]
+  },
+  "18.9.25.1": {
+    "handler": "Registry",
+    "items": [
+      {
+        "key": "HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Policies\\LAPS",
+        "name": "BackupDirectory",
+        "type": "DWORD",
+        "value": [
+          "2"
+        ]
+      }
+    ],
+    "warnings": [
+      "Active Directory backup (2) requires the Windows LAPS schema and computer self-permissions. Microsoft Entra backup is value 1 and is not selected by this AD workflow."
+    ]
+  },
+  "18.9.25.2": {
+    "handler": "Registry",
+    "items": [
+      {
+        "key": "HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Policies\\LAPS",
+        "name": "PasswordExpirationProtectionEnabled",
+        "type": "DWORD",
+        "value": [
+          "1"
+        ]
+      }
+    ]
+  },
+  "18.6.19.2.1": {
+    "handler": "Registry",
+    "items": [
+      {
+        "key": "HKLM\\SYSTEM\\CurrentControlSet\\Services\\Tcpip6\\Parameters",
+        "name": "DisabledComponents",
+        "type": "DWORD",
+        "value": [
+          "255"
+        ]
+      }
+    ],
+    "requiresRestart": true,
+    "warnings": [
+      "This benchmark disables IPv6 components (255). A restart is required. Validate application and domain dependencies in a pilot; Microsoft generally recommends preferring IPv4 instead of disabling IPv6."
+    ]
+  },
+  "18.6.21.2": {
+    "handler": "Registry",
+    "items": [
+      {
+        "key": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\Wcmsvc\\Grouppolicy",
+        "name": "fBlockNonDomain",
+        "type": "DWORD",
+        "value": [
+          "1"
+        ]
+      }
+    ]
+  },
+  "18.10.43.17": {
+    "handler": "Registry",
+    "items": [
+      {
+        "key": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows Defender",
+        "name": "DisableAntiSpyware",
+        "type": "DWORD",
+        "value": [
+          "0"
+        ]
+      }
+    ],
+    "warnings": [
+      "DisableAntiSpyware is ignored on some modern Defender platforms. Policy registry evidence does not prove that Defender is running; inspect Get-MpComputerStatus and tamper protection on the endpoint."
+    ]
+  },
+  "18.6.9.1": {
+    "handler": "Registry",
+    "items": [
+      {
+        "key": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\Lltd",
+        "name": "EnableLLTDIO",
+        "type": "DWORD",
+        "value": [
+          "0"
+        ]
+      }
+    ]
+  },
+  "18.6.9.2": {
+    "handler": "Registry",
+    "items": [
+      {
+        "key": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\Lltd",
+        "name": "EnableRspndr",
+        "type": "DWORD",
+        "value": [
+          "0"
+        ]
+      }
+    ]
+  },
+  "18.6.20.1": {
+    "handler": "Registry",
+    "items": [
+      {
+        "key": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\Wcn\\Registrars",
+        "name": "EnableRegistrars",
+        "type": "DWORD",
+        "value": [
+          "0"
+        ]
+      }
+    ]
+  },
+  "18.6.14.1": {
+    "handler": "RegistrySet",
+    "items": [
+      {
+        "key": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\NetworkProvider\\HardenedPaths",
+        "name": "\\\\*\\NETLOGON",
+        "type": "String",
+        "value": [
+          "RequireMutualAuthentication=1, RequireIntegrity=1, RequirePrivacy=1"
+        ]
+      },
+      {
+        "key": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\NetworkProvider\\HardenedPaths",
+        "name": "\\\\*\\SYSVOL",
+        "type": "String",
+        "value": [
+          "RequireMutualAuthentication=1, RequireIntegrity=1, RequirePrivacy=1"
+        ]
+      }
+    ]
+  },
+  "18.10.93.4.2": {
+    "handler": "RegistrySet",
+    "items": [
+      {
+        "key": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\WindowsUpdate",
+        "name": "DeferFeatureUpdates",
+        "type": "DWORD",
+        "value": [
+          "1"
+        ]
+      },
+      {
+        "key": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\WindowsUpdate",
+        "name": "DeferFeatureUpdatesPeriodInDays",
+        "type": "DWORD",
+        "value": [
+          "180"
+        ]
+      }
+    ]
+  },
+  "18.4.4": {
+    "handler": "RegistrySet",
+    "items": [
+      {
+        "key": "HKLM\\SOFTWARE\\Microsoft\\Cryptography\\Wintrust\\Config",
+        "name": "EnableCertPaddingCheck",
+        "type": "String",
+        "value": [
+          "1"
+        ]
+      },
+      {
+        "key": "HKLM\\SOFTWARE\\Wow6432Node\\Microsoft\\Cryptography\\Wintrust\\Config",
+        "name": "EnableCertPaddingCheck",
+        "type": "String",
+        "value": [
+          "1"
+        ]
+      }
+    ],
+    "requiresRestart": true,
+    "warnings": [
+      "Microsoft documents EnableCertPaddingCheck as a quoted REG_SZ value on both native and 32-bit paths for 64-bit Windows. Restart and application-compatibility testing are required."
+    ]
+  },
+  "18.9.23.1": {
+    "handler": "RegistrySet",
+    "items": [
+      {
+        "key": "HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Policies\\System\\Kerberos\\Parameters",
+        "name": "DevicePKInitEnabled",
+        "type": "DWORD",
+        "value": [
+          "1"
+        ]
+      },
+      {
+        "key": "HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Policies\\System\\Kerberos\\Parameters",
+        "name": "DevicePKInitBehavior",
+        "type": "DWORD",
+        "value": [
+          "0"
+        ]
+      }
+    ]
+  },
+  "18.9.5.2": {
+    "warnings": [
+      "Requires compatible UEFI/Secure Boot/DMA protection hardware. Validate virtualization platform support before deployment.",
+      "This CIS recipe contains benchmark notes/cautions or environment-specific exceptions. Review the imported benchmark description and application dependencies before Apply.",
+      "Depends on Turn On Virtualization Based Security (18.9.5.1). This individual control does not enable the parent policy. Hardware, firmware and restart requirements must be verified on the endpoint."
+    ]
+  },
+  "18.9.5.3": {
+    "warnings": [
+      "This CIS recipe contains benchmark notes/cautions or environment-specific exceptions. Review the imported benchmark description and application dependencies before Apply.",
+      "Depends on Turn On Virtualization Based Security (18.9.5.1). This individual control does not enable the parent policy. Hardware, firmware and restart requirements must be verified on the endpoint."
+    ]
+  },
+  "18.9.5.4": {
+    "warnings": [
+      "This CIS recipe contains benchmark notes/cautions or environment-specific exceptions. Review the imported benchmark description and application dependencies before Apply.",
+      "Depends on Turn On Virtualization Based Security (18.9.5.1). This individual control does not enable the parent policy. Hardware, firmware and restart requirements must be verified on the endpoint."
+    ]
+  },
+  "18.9.5.5": {
+    "warnings": [
+      "This CIS recipe contains benchmark notes/cautions or environment-specific exceptions. Review the imported benchmark description and application dependencies before Apply.",
+      "Depends on Turn On Virtualization Based Security (18.9.5.1). This individual control does not enable the parent policy. Hardware, firmware and restart requirements must be verified on the endpoint."
+    ]
+  },
+  "18.9.5.7": {
+    "warnings": [
+      "This CIS recipe contains benchmark notes/cautions or environment-specific exceptions. Review the imported benchmark description and application dependencies before Apply.",
+      "Depends on Turn On Virtualization Based Security (18.9.5.1). This individual control does not enable the parent policy. Hardware, firmware and restart requirements must be verified on the endpoint."
+    ]
+  },
+  "18.10.93.2.2": {
+    "warnings": [
+      "The scheduled day requires Configure Automatic Updates (18.10.93.2.1) to enable a scheduled installation mode. A registry day value alone does not prove updates are scheduled."
+    ]
+  }
+}

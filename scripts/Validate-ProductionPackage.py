@@ -39,10 +39,10 @@ check(mapping_doc['meta'].get('totalUnique')==405, 'mapping meta.totalUnique != 
 
 handlers={'SecurityTemplate','Registry','RegistrySet','AdvancedAudit'}
 check(all(x.get('handler') in handlers for x in mappings), 'unapproved handler found')
-check(sum(x['handler']=='Registry' for x in mappings)==324, 'Registry count changed')
-check(sum(x['handler']=='SecurityTemplate' for x in mappings)==49, 'SecurityTemplate count changed')
+check(sum(x['handler']=='Registry' for x in mappings)==319, 'Registry count changed')
+check(sum(x['handler']=='SecurityTemplate' for x in mappings)==51, 'SecurityTemplate count changed')
 check(sum(x['handler']=='AdvancedAudit' for x in mappings)==27, 'AdvancedAudit count changed')
-check(sum(x['handler']=='RegistrySet' for x in mappings)==5, 'RegistrySet count changed')
+check(sum(x['handler']=='RegistrySet' for x in mappings)==8, 'RegistrySet count changed')
 
 sid_guid=re.compile(r'^\{[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}\}$')
 for m in mappings:

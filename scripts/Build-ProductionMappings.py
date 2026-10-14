@@ -1,4 +1,4 @@
-import json, csv, glob, os, re
+import json, csv, glob, os, re, sys
 root=os.path.dirname(os.path.dirname(__file__))
 bench_path=os.path.join(root,'frontend','source','benchmark-v4.json')
 bench=json.load(open(bench_path,encoding='utf-8'))
@@ -154,6 +154,15 @@ if '2.3.10.4' in maps:
 if '18.7.1' in maps:
     maps['18.7.1']['warnings'].append('The Print Spooler service must be restarted before this policy becomes effective.')
 
+# Reviewed corrections are explicit and reproducible; see docs/REMEDIATION-AUDIT.md.
+with open(os.path.join(root, 'backend', 'data', 'mapping_sources', 'reviewed-overrides.json'), encoding='utf-8') as f:
+    for cid, patch in json.load(f).items():
+        maps[cid].update(patch)
+# "Include" is a minimum set, not permission to remove existing deny/audit entries.
+for m in maps.values():
+    if 'include ' in m['title'].lower() and m['handler'] in ('SecurityTemplate', 'AdvancedAudit'):
+        m['comparator'] = 'includes'
+
 # Remove accidental duplicates by ID; preserve user catalog order in output.
 out=[];seen=set()
 for r in rules:
@@ -170,6 +179,13 @@ meta={
 }
 obj={'meta':meta,'mappings':out}
 out_path=os.path.join(root,'backend','data','gpo-production-mappings.json')
-json.dump(obj,open(out_path,'w',encoding='utf-8'),ensure_ascii=False,indent=2)
+serialized=json.dumps(obj,ensure_ascii=False,indent=2)+'\n'
+if '--check' in sys.argv:
+    with open(out_path,encoding='utf-8') as f:
+        if f.read()!=serialized:
+            raise SystemExit('Production mappings differ from reviewed generator output.')
+else:
+    with open(out_path,'w',encoding='utf-8',newline='\n') as f:
+        f.write(serialized)
 print(json.dumps(meta,indent=2))
 print('read-only:',[x['id'] for x in out if x['handler']=='Manual' or x.get('automation')!='Automated'])

@@ -1,6 +1,8 @@
-# GPO Remediator 3.8.1
+# GPO Remediator 3.9.0
 
-3.8.1 uses one domain-account sign-in to open the workspace and connect to AD. The duplicate dashboard password form is removed; expiry/disconnect returns to the same sign-in screen. Startup still requires explicit sign-in, and Windows operator roles remain enforced. It retains compact colored dashboard metrics and supplemental review guidance for empty policy categories. The catalog remains 405 controls: 401 GPO mappings and four guided controls.
+3.9.0 reviews the complete 405-control catalog, corrects policy mappings and distinguishes scheduled refresh from observed endpoint evidence. See [the remediation audit](docs/REMEDIATION-AUDIT.md) for corrections, test coverage and live-domain limitations.
+
+The application uses one domain-account sign-in to open the workspace and connect to AD. The duplicate dashboard password form is removed; expiry/disconnect returns to the same sign-in screen. Startup still requires explicit sign-in, and Windows operator roles remain enforced. It retains compact colored dashboard metrics and supplemental review guidance for empty policy categories. The catalog remains 405 controls: 401 GPO mappings and four guided controls.
 
 3.7.1 provides offline AZ/EN remediation guides for the four blocked controls, with local/central policy paths, read commands, guarded operator-run Defender backup/apply/rollback examples and honest verification limits. The catalog remains 401 automatic GPO mappings plus four guided controls. See [guided procedures and execution boundaries](docs/GUIDED-REMEDIATION.md).
 

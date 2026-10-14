@@ -55,6 +55,14 @@ public record GpoEvidence(string SchemaVersion, string Product, string Benchmark
 
 public static class GpoWorkflowRules
 {
+    public static void ValidateMappingVersion(string? plannedHash,string currentHash,string operation,string? previousState)
+    {
+        // Recovery restores and verifies the recorded snapshot, not the new mapping's desired value.
+        var snapshotRecovery=operation=="rollback" || (previousState=="ROLLED_BACK" && operation is "verify" or "refresh");
+        if(!snapshotRecovery && !string.IsNullOrEmpty(plannedHash) && !string.Equals(plannedHash,currentHash,StringComparison.Ordinal))
+            throw new PolicyException("GPO_MAPPING_CHANGED","The production mapping changed. Generate a fresh preview before Apply/Verify/Refresh; existing snapshots remain available for rollback.");
+    }
+
     public static string EvidenceHash(GpoEvidence evidence) => PolicyValues.Hash(evidence with { IntegrityHash = "" });
     public static bool IsActive(string state) => state.ToUpperInvariant() is
         "APPLYING" or "VERIFYING" or "REFRESHING" or "ROLLBACKING" or "ROLLING_BACK";

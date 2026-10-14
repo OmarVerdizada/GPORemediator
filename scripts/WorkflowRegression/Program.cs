@@ -51,3 +51,11 @@ using(var auditStore=new Store(":memory:")) {
     var report=auditStore.AuditIntegrityReport();Check(!report.Valid&&report.FirstInvalidEventId==3,"Audit mismatch location not reported");
     Console.WriteLine("PASS audit integrity: empty chain, valid chain and first tampered event");
 }
+
+foreach(var action in new[]{"apply","verify","refresh"})
+    Reject(()=>GpoWorkflowRules.ValidateMappingVersion("old","new",action,"PUBLISHED"),"GPO_MAPPING_CHANGED");
+GpoWorkflowRules.ValidateMappingVersion("old","new","rollback","PUBLISHED");
+foreach(var action in new[]{"verify","refresh"})
+    GpoWorkflowRules.ValidateMappingVersion("old","new",action,"ROLLED_BACK");
+Reject(()=>GpoWorkflowRules.ValidateMappingVersion("old","new","apply","ROLLED_BACK"),"GPO_MAPPING_CHANGED");
+Console.WriteLine("PASS mapping upgrades: stale writes blocked; snapshot rollback and restored-snapshot verification remain available");

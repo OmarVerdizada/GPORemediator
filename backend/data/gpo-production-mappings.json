@@ -942,7 +942,7 @@
       "maximum": null,
       "suggested": null,
       "unit": null,
-      "comparator": null,
+      "comparator": "includes",
       "domainPolicySensitive": false,
       "requiresGpUpdate": true,
       "requiresRestart": false,
@@ -980,7 +980,7 @@
       "maximum": null,
       "suggested": null,
       "unit": null,
-      "comparator": null,
+      "comparator": "includes",
       "domainPolicySensitive": false,
       "requiresGpUpdate": true,
       "requiresRestart": false,
@@ -1016,7 +1016,7 @@
       "maximum": null,
       "suggested": null,
       "unit": null,
-      "comparator": null,
+      "comparator": "includes",
       "domainPolicySensitive": false,
       "requiresGpUpdate": true,
       "requiresRestart": false,
@@ -1054,7 +1054,7 @@
       "maximum": null,
       "suggested": null,
       "unit": null,
-      "comparator": null,
+      "comparator": "includes",
       "domainPolicySensitive": false,
       "requiresGpUpdate": true,
       "requiresRestart": false,
@@ -1778,12 +1778,12 @@
       "category": "2.3.1",
       "level": "L1",
       "automation": "Automated",
-      "handler": "Registry",
+      "handler": "SecurityTemplate",
       "items": [
         {
-          "key": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Lsa",
-          "name": "EnableGuestAccount",
-          "type": "DWORD",
+          "section": "System Access",
+          "key": "EnableGuestAccount",
+          "type": "Integer",
           "value": [
             "0"
           ]
@@ -2874,12 +2874,12 @@
       "category": "2.3.10",
       "level": "L1",
       "automation": "Automated",
-      "handler": "Registry",
+      "handler": "SecurityTemplate",
       "items": [
         {
-          "key": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Lsa",
-          "name": "LSAAnonymousNameLookup",
-          "type": "DWORD",
+          "section": "System Access",
+          "key": "LSAAnonymousNameLookup",
+          "type": "Integer",
           "value": [
             "0"
           ]
@@ -4150,7 +4150,7 @@
           "name": "EnableVirtualization",
           "type": "DWORD",
           "value": [
-            "0"
+            "1"
           ]
         }
       ],
@@ -5139,7 +5139,7 @@
       "maximum": null,
       "suggested": null,
       "unit": null,
-      "comparator": null,
+      "comparator": "includes",
       "domainPolicySensitive": false,
       "requiresGpUpdate": true,
       "requiresRestart": false,
@@ -5207,7 +5207,7 @@
       "maximum": null,
       "suggested": null,
       "unit": null,
-      "comparator": null,
+      "comparator": "includes",
       "domainPolicySensitive": false,
       "requiresGpUpdate": true,
       "requiresRestart": false,
@@ -5243,7 +5243,7 @@
       "maximum": null,
       "suggested": null,
       "unit": null,
-      "comparator": null,
+      "comparator": "includes",
       "domainPolicySensitive": false,
       "requiresGpUpdate": true,
       "requiresRestart": false,
@@ -5277,7 +5277,7 @@
       "maximum": null,
       "suggested": null,
       "unit": null,
-      "comparator": null,
+      "comparator": "includes",
       "domainPolicySensitive": false,
       "requiresGpUpdate": true,
       "requiresRestart": false,
@@ -5311,7 +5311,7 @@
       "maximum": null,
       "suggested": null,
       "unit": null,
-      "comparator": null,
+      "comparator": "includes",
       "domainPolicySensitive": false,
       "requiresGpUpdate": true,
       "requiresRestart": false,
@@ -5347,7 +5347,7 @@
       "maximum": null,
       "suggested": null,
       "unit": null,
-      "comparator": null,
+      "comparator": "includes",
       "domainPolicySensitive": false,
       "requiresGpUpdate": true,
       "requiresRestart": false,
@@ -5449,7 +5449,7 @@
       "maximum": null,
       "suggested": null,
       "unit": null,
-      "comparator": null,
+      "comparator": "includes",
       "domainPolicySensitive": false,
       "requiresGpUpdate": true,
       "requiresRestart": false,
@@ -5483,7 +5483,7 @@
       "maximum": null,
       "suggested": null,
       "unit": null,
-      "comparator": null,
+      "comparator": "includes",
       "domainPolicySensitive": false,
       "requiresGpUpdate": true,
       "requiresRestart": false,
@@ -5623,7 +5623,7 @@
       "maximum": null,
       "suggested": null,
       "unit": null,
-      "comparator": null,
+      "comparator": "includes",
       "domainPolicySensitive": false,
       "requiresGpUpdate": true,
       "requiresRestart": false,
@@ -5657,7 +5657,7 @@
       "maximum": null,
       "suggested": null,
       "unit": null,
-      "comparator": null,
+      "comparator": "includes",
       "domainPolicySensitive": false,
       "requiresGpUpdate": true,
       "requiresRestart": false,
@@ -5691,7 +5691,7 @@
       "maximum": null,
       "suggested": null,
       "unit": null,
-      "comparator": null,
+      "comparator": "includes",
       "domainPolicySensitive": false,
       "requiresGpUpdate": true,
       "requiresRestart": false,
@@ -5759,7 +5759,7 @@
       "maximum": null,
       "suggested": null,
       "unit": null,
-      "comparator": null,
+      "comparator": "includes",
       "domainPolicySensitive": false,
       "requiresGpUpdate": true,
       "requiresRestart": false,
@@ -5895,7 +5895,7 @@
       "maximum": null,
       "suggested": null,
       "unit": null,
-      "comparator": null,
+      "comparator": "includes",
       "domainPolicySensitive": false,
       "requiresGpUpdate": true,
       "requiresRestart": false,
@@ -5929,7 +5929,7 @@
       "maximum": null,
       "suggested": null,
       "unit": null,
-      "comparator": null,
+      "comparator": "includes",
       "domainPolicySensitive": false,
       "requiresGpUpdate": true,
       "requiresRestart": false,
@@ -6231,12 +6231,20 @@
       "category": "18.4",
       "level": "L1",
       "automation": "Automated",
-      "handler": "Registry",
+      "handler": "RegistrySet",
       "items": [
         {
           "key": "HKLM\\SOFTWARE\\Microsoft\\Cryptography\\Wintrust\\Config",
           "name": "EnableCertPaddingCheck",
-          "type": "DWORD",
+          "type": "String",
+          "value": [
+            "1"
+          ]
+        },
+        {
+          "key": "HKLM\\SOFTWARE\\Wow6432Node\\Microsoft\\Cryptography\\Wintrust\\Config",
+          "name": "EnableCertPaddingCheck",
+          "type": "String",
           "value": [
             "1"
           ]
@@ -6256,8 +6264,10 @@
       "comparator": null,
       "domainPolicySensitive": false,
       "requiresGpUpdate": true,
-      "requiresRestart": false,
-      "warnings": [],
+      "requiresRestart": true,
+      "warnings": [
+        "Microsoft documents EnableCertPaddingCheck as a quoted REG_SZ value on both native and 32-bit paths for 64-bit Windows. Restart and application-compatibility testing are required."
+      ],
       "source": "operator CIS v4.0.0 + validated Windows policy mapping"
     },
     {
@@ -7069,7 +7079,7 @@
       "items": [
         {
           "key": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\Lltd",
-          "name": "AllowLLTDIOOnDomain",
+          "name": "EnableLLTDIO",
           "type": "DWORD",
           "value": [
             "0"
@@ -7105,7 +7115,7 @@
       "items": [
         {
           "key": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\Lltd",
-          "name": "AllowRspndrOnDomain",
+          "name": "EnableRspndr",
           "type": "DWORD",
           "value": [
             "0"
@@ -7281,11 +7291,19 @@
       "category": "18.6.14",
       "level": "L1",
       "automation": "Automated",
-      "handler": "Registry",
+      "handler": "RegistrySet",
       "items": [
         {
           "key": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\NetworkProvider\\HardenedPaths",
           "name": "\\\\*\\NETLOGON",
+          "type": "String",
+          "value": [
+            "RequireMutualAuthentication=1, RequireIntegrity=1, RequirePrivacy=1"
+          ]
+        },
+        {
+          "key": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\NetworkProvider\\HardenedPaths",
+          "name": "\\\\*\\SYSVOL",
           "type": "String",
           "value": [
             "RequireMutualAuthentication=1, RequireIntegrity=1, RequirePrivacy=1"
@@ -7322,7 +7340,7 @@
       "handler": "Registry",
       "items": [
         {
-          "key": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\Wcn\\Registrars",
+          "key": "HKLM\\SYSTEM\\CurrentControlSet\\Services\\Tcpip6\\Parameters",
           "name": "DisabledComponents",
           "type": "DWORD",
           "value": [
@@ -7344,8 +7362,10 @@
       "comparator": null,
       "domainPolicySensitive": false,
       "requiresGpUpdate": true,
-      "requiresRestart": false,
-      "warnings": [],
+      "requiresRestart": true,
+      "warnings": [
+        "This benchmark disables IPv6 components (255). A restart is required. Validate application and domain dependencies in a pilot; Microsoft generally recommends preferring IPv4 instead of disabling IPv6."
+      ],
       "source": "operator CIS v4.0.0 + validated Windows policy mapping"
     },
     {
@@ -7355,43 +7375,11 @@
       "category": "18.6.20",
       "level": "L2",
       "automation": "Automated",
-      "handler": "RegistrySet",
+      "handler": "Registry",
       "items": [
         {
           "key": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\Wcn\\Registrars",
           "name": "EnableRegistrars",
-          "type": "DWORD",
-          "value": [
-            "0"
-          ]
-        },
-        {
-          "key": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\Wcn\\Registrars",
-          "name": "DisableUPnPRegistrar",
-          "type": "DWORD",
-          "value": [
-            "0"
-          ]
-        },
-        {
-          "key": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\Wcn\\Registrars",
-          "name": "DisableInBand802DOT11Registrar",
-          "type": "DWORD",
-          "value": [
-            "0"
-          ]
-        },
-        {
-          "key": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\Wcn\\Registrars",
-          "name": "DisableFlashConfigRegistrar",
-          "type": "DWORD",
-          "value": [
-            "0"
-          ]
-        },
-        {
-          "key": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\Wcn\\Registrars",
-          "name": "DisableWPDRegistrar",
           "type": "DWORD",
           "value": [
             "0"
@@ -7502,7 +7490,7 @@
           "name": "fBlockNonDomain",
           "type": "DWORD",
           "value": [
-            "0"
+            "1"
           ]
         }
       ],
@@ -8184,7 +8172,8 @@
       "requiresRestart": false,
       "warnings": [
         "Requires compatible UEFI/Secure Boot/DMA protection hardware. Validate virtualization platform support before deployment.",
-        "This CIS recipe contains benchmark notes/cautions or environment-specific exceptions. Review the imported benchmark description and application dependencies before Apply."
+        "This CIS recipe contains benchmark notes/cautions or environment-specific exceptions. Review the imported benchmark description and application dependencies before Apply.",
+        "Depends on Turn On Virtualization Based Security (18.9.5.1). This individual control does not enable the parent policy. Hardware, firmware and restart requirements must be verified on the endpoint."
       ],
       "source": "operator CIS v4.0.0 + validated Windows policy mapping"
     },
@@ -8222,7 +8211,8 @@
       "requiresGpUpdate": true,
       "requiresRestart": false,
       "warnings": [
-        "This CIS recipe contains benchmark notes/cautions or environment-specific exceptions. Review the imported benchmark description and application dependencies before Apply."
+        "This CIS recipe contains benchmark notes/cautions or environment-specific exceptions. Review the imported benchmark description and application dependencies before Apply.",
+        "Depends on Turn On Virtualization Based Security (18.9.5.1). This individual control does not enable the parent policy. Hardware, firmware and restart requirements must be verified on the endpoint."
       ],
       "source": "operator CIS v4.0.0 + validated Windows policy mapping"
     },
@@ -8260,7 +8250,8 @@
       "requiresGpUpdate": true,
       "requiresRestart": false,
       "warnings": [
-        "This CIS recipe contains benchmark notes/cautions or environment-specific exceptions. Review the imported benchmark description and application dependencies before Apply."
+        "This CIS recipe contains benchmark notes/cautions or environment-specific exceptions. Review the imported benchmark description and application dependencies before Apply.",
+        "Depends on Turn On Virtualization Based Security (18.9.5.1). This individual control does not enable the parent policy. Hardware, firmware and restart requirements must be verified on the endpoint."
       ],
       "source": "operator CIS v4.0.0 + validated Windows policy mapping"
     },
@@ -8298,7 +8289,8 @@
       "requiresGpUpdate": true,
       "requiresRestart": false,
       "warnings": [
-        "This CIS recipe contains benchmark notes/cautions or environment-specific exceptions. Review the imported benchmark description and application dependencies before Apply."
+        "This CIS recipe contains benchmark notes/cautions or environment-specific exceptions. Review the imported benchmark description and application dependencies before Apply.",
+        "Depends on Turn On Virtualization Based Security (18.9.5.1). This individual control does not enable the parent policy. Hardware, firmware and restart requirements must be verified on the endpoint."
       ],
       "source": "operator CIS v4.0.0 + validated Windows policy mapping"
     },
@@ -8336,7 +8328,8 @@
       "requiresGpUpdate": true,
       "requiresRestart": false,
       "warnings": [
-        "This CIS recipe contains benchmark notes/cautions or environment-specific exceptions. Review the imported benchmark description and application dependencies before Apply."
+        "This CIS recipe contains benchmark notes/cautions or environment-specific exceptions. Review the imported benchmark description and application dependencies before Apply.",
+        "Depends on Turn On Virtualization Based Security (18.9.5.1). This individual control does not enable the parent policy. Hardware, firmware and restart requirements must be verified on the endpoint."
       ],
       "source": "operator CIS v4.0.0 + validated Windows policy mapping"
     },
@@ -9105,8 +9098,16 @@
       "category": "18.9.23",
       "level": "L2",
       "automation": "Automated",
-      "handler": "Registry",
+      "handler": "RegistrySet",
       "items": [
+        {
+          "key": "HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Policies\\System\\Kerberos\\Parameters",
+          "name": "DevicePKInitEnabled",
+          "type": "DWORD",
+          "value": [
+            "1"
+          ]
+        },
         {
           "key": "HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Policies\\System\\Kerberos\\Parameters",
           "name": "DevicePKInitBehavior",
@@ -9184,7 +9185,7 @@
           "name": "BackupDirectory",
           "type": "DWORD",
           "value": [
-            "1"
+            "2"
           ]
         }
       ],
@@ -9204,7 +9205,7 @@
       "requiresGpUpdate": true,
       "requiresRestart": false,
       "warnings": [
-        "This on-prem Active Directory workflow chooses Active Directory (1). Azure AD backup is also benchmark-compliant but is outside this product's current AD-only deployment model."
+        "Active Directory backup (2) requires the Windows LAPS schema and computer self-permissions. Microsoft Entra backup is value 1 and is not selected by this AD workflow."
       ],
       "source": "operator CIS v4.0.0 + validated Windows policy mapping"
     },
@@ -9219,7 +9220,7 @@
       "items": [
         {
           "key": "HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Policies\\LAPS",
-          "name": "PwdExpirationProtectionEnabled",
+          "name": "PasswordExpirationProtectionEnabled",
           "type": "DWORD",
           "value": [
             "1"
@@ -12395,10 +12396,10 @@
       "items": [
         {
           "key": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows Defender",
-          "name": "HideExclusionsFromLocalUsers",
+          "name": "DisableAntiSpyware",
           "type": "DWORD",
           "value": [
-            "1"
+            "0"
           ]
         }
       ],
@@ -12417,7 +12418,9 @@
       "domainPolicySensitive": false,
       "requiresGpUpdate": true,
       "requiresRestart": false,
-      "warnings": [],
+      "warnings": [
+        "DisableAntiSpyware is ignored on some modern Defender platforms. Policy registry evidence does not prove that Defender is running; inspect Get-MpComputerStatus and tamper protection on the endpoint."
+      ],
       "source": "operator CIS v4.0.0 + validated Windows policy mapping"
     },
     {
@@ -14345,7 +14348,9 @@
       "domainPolicySensitive": false,
       "requiresGpUpdate": true,
       "requiresRestart": false,
-      "warnings": [],
+      "warnings": [
+        "The scheduled day requires Configure Automatic Updates (18.10.93.2.1) to enable a scheduled installation mode. A registry day value alone does not prove updates are scheduled."
+      ],
       "source": "operator CIS v4.0.0 + validated Windows policy mapping"
     },
     {
@@ -14399,7 +14404,7 @@
       "category": "18.10.93.4",
       "level": "L1",
       "automation": "Automated",
-      "handler": "Registry",
+      "handler": "RegistrySet",
       "items": [
         {
           "key": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\WindowsUpdate",
@@ -14407,6 +14412,14 @@
           "type": "DWORD",
           "value": [
             "1"
+          ]
+        },
+        {
+          "key": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\WindowsUpdate",
+          "name": "DeferFeatureUpdatesPeriodInDays",
+          "type": "DWORD",
+          "value": [
+            "180"
           ]
         }
       ],

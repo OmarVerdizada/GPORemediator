@@ -156,7 +156,6 @@ public sealed class GpoWorkflowService(IConfiguration config,Store store,Operati
         var c=Get(token,actor);
         var plan=store.Require<GpoWorkflowPlan>("gpo_plans",id);AssertContext(plan,c,actor);
         var mapping=ProductionGpoMappings.Require(plan.Selection.Setting);
-        if(!string.IsNullOrEmpty(plan.MappingHash) && !string.Equals(plan.MappingHash,PolicyValues.Hash(mapping),StringComparison.Ordinal)) throw new PolicyException("GPO_MAPPING_CHANGED","The production mapping changed after this plan was prepared. Generate a fresh preview.");
         if(operation is not ("apply" or "rollback" or "verify" or "refresh"))
             throw new PolicyException("OPERATION_DENIED","Unknown GPO operation.");
         if(operation=="refresh" && consent.Refresh is not ("Pdc" or "Scope"))
@@ -174,6 +173,7 @@ public sealed class GpoWorkflowService(IConfiguration config,Store store,Operati
         try
         {
             var previous=store.Get<GpoWorkflowRun>("gpo_runs",id);
+            GpoWorkflowRules.ValidateMappingVersion(plan.MappingHash,PolicyValues.Hash(mapping),operation,previous?.Result.State);
             if(operation=="apply"){
                 ProductionGpoMappings.Validate(plan.Selection);
                 GpoWorkflowRules.ValidateConsent(plan,consent);

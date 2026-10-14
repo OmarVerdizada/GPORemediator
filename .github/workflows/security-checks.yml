@@ -38,12 +38,19 @@ jobs:
           ./scripts/Test-SecurityFiles.ps1
           ./scripts/Test-RuntimeIntegrity.ps1
           ./scripts/Test-GpoMappings.ps1
+          ./scripts/Test-EndpointEvidence.ps1
+          python scripts/Build-ProductionMappings.py --check
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python scripts/Test-ProductionMappings.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Frontend regressions
         shell: pwsh
         run: |
           node scripts/Build-Styles.cjs --check
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           node scripts/Test-FrontendSystem.cjs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          node scripts/Test-RemediationEvidence.cjs
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           node scripts/Test-RecipeWorkspace.cjs
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
