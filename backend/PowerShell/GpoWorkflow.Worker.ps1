@@ -36,6 +36,13 @@ function Scope([string]$Dn){
     if(!$ou.DistinguishedName.EndsWith(','+$domainDn,[StringComparison]::OrdinalIgnoreCase)){Fail 'SCOPE_OUTSIDE_DOMAIN' 'The selected OU is outside the configured domain.'}
     return [pscustomobject]@{dn=[string]$ou.DistinguishedName;name=[string]$ou.Name;kind='OU'}
 }
+function Verification-User([string]$Identity){
+    $value=$Identity.Trim();$sam=$value
+    if($value.Contains('\')){$parts=$value.Split('\',2);if($parts[0] -ine [string]$domain.NetBIOSName){Fail 'VERIFICATION_USER_OUTSIDE_DOMAIN' 'The verification user must belong to the configured domain.'};$sam=$parts[1]}
+    elseif($value.Contains('@')){$parts=$value.Split('@',2);if($parts[1] -ine [string]$domain.DNSRoot){Fail 'VERIFICATION_USER_OUTSIDE_DOMAIN' 'The verification user must belong to the configured domain.'};$sam=$parts[0]}
+    if([string]::IsNullOrWhiteSpace($sam) -or $sam.Length -gt 256 -or $sam.IndexOfAny([char[]]@("`r","`n",[char]0)) -ge 0){Fail 'VERIFICATION_USER_INVALID' 'Enter a valid DOMAIN\\user or user@domain identity.'}
+    try{return Get-ADUser -Identity $sam -Server $cfg.domainController -Properties Enabled,SID -ErrorAction Stop}catch{Fail 'VERIFICATION_USER_NOT_FOUND' 'The verification user could not be resolved in the configured domain.'}
+}
 function Scope-Links([string]$Dn){return [string](Get-ADObject -Identity $Dn -Server $cfg.domainController -Properties gPLink).gPLink}
 function All-LinkScopes {
     $configDn=(Get-ADRootDSE -Server $cfg.domainController).configurationNamingContext
@@ -170,6 +177,19 @@ function Validate-Selection($S,$Map){
     if($status -eq 'AllSettingsDisabled'){Fail 'GPO_SETTINGS_DISABLED' 'All settings are disabled in this GPO.'}
     if([string]$Map.scope -eq 'User' -and $status -eq 'UserSettingsDisabled'){Fail 'USER_POLICY_DISABLED' 'User settings are disabled in this GPO.'}
     if([string]$Map.scope -ne 'User' -and $status -eq 'ComputerSettingsDisabled'){Fail 'COMPUTER_POLICY_DISABLED' 'Computer settings are disabled in this GPO.'}
+    if([string]$Map.scope -eq 'User'){
+      if([string]$S.refresh -eq 'Pdc'){Fail 'USER_REFRESH_TARGET_INVALID' 'User policy is processed in a user session, not on the PDC. Choose an endpoint OU or wait for the normal policy cycle.'}
+      if([string]$S.refresh -eq 'Scope'){
+        $endpointDn=[string](Read-Field $S 'endpointScopeDn' '')
+        if([string]::IsNullOrWhiteSpace($endpointDn)){Fail 'ENDPOINT_SCOPE_REQUIRED' 'Choose the computer OU that contains the user session endpoints.'}
+        $null=Scope $endpointDn
+        $identity=[string](Read-Field $S 'verificationUser' '')
+        if([string]::IsNullOrWhiteSpace($identity)){Fail 'VERIFICATION_USER_REQUIRED' 'Choose a concrete user from the selected user OU for endpoint policy verification.'}
+        $user=Verification-User $identity
+        if(!$user.Enabled){Fail 'VERIFICATION_USER_DISABLED' 'The verification user is disabled.'}
+        if(!([string]$user.DistinguishedName).EndsWith(','+[string]$scope.dn,[StringComparison]::OrdinalIgnoreCase) -and [string]$user.DistinguishedName -ine [string]$scope.dn){Fail 'VERIFICATION_USER_OUTSIDE_SCOPE' 'The verification user is outside the selected user policy scope.'}
+      }
+    }elseif((Read-Field $S 'endpointScopeDn' $null) -or (Read-Field $S 'verificationUser' $null)){Fail 'USER_TARGET_NOT_ALLOWED' 'Endpoint OU and verification user are only valid for user-scoped policy.'}
     if([bool]$Map.domainPolicySensitive){
       if($scope.kind -ne 'Domain'){Fail 'ACCOUNT_SCOPE_MISMATCH' 'Domain password and lockout policy requires the domain root.'}
       if(([guid]$S.gpoId).ToString() -ne $defaultDomainPolicy){Fail 'DEFAULT_DOMAIN_POLICY_REQUIRED' 'Domain password/lockout controls must be written to Default Domain Policy.'}
@@ -236,12 +256,13 @@ function Impact-Details($S,$Map,$Gpo,$Scope,[string[]]$LinkScopes){
     if($ad.gPCWQLFilter){$conflicts+=@{severity='MEDIUM';code='WMI_FILTER';message='The selected GPO has a WMI filter. Effective application must be verified on an endpoint.';gpoId=([guid]$S.gpoId).ToString();gpoName=[string]$Gpo.DisplayName;scope=[string]$Scope.dn}}
     $objects=@();$users=@();try{if([string]$Map.scope -eq 'User'){$users=@(Get-ADUser -SearchBase $Scope.dn -SearchScope Subtree -Filter {Enabled -eq $true} -Server $cfg.domainController -ResultSetSize 5001 -ErrorAction Stop)}else{$objects=@(Get-ADComputer -SearchBase $Scope.dn -SearchScope Subtree -Filter * -Server $cfg.domainController -Properties DNSHostName,OperatingSystem,Enabled -ResultSetSize 5001 -ErrorAction Stop)}}catch{Fail 'ANALYSIS_INCOMPLETE' 'Directory impact inventory could not be read completely. Apply is blocked until scope enumeration succeeds.'}
     $truncated=($objects.Count -gt 5000 -or $users.Count -gt 5000);if($objects.Count -gt 5000){$objects=@($objects|Select-Object -First 5000)};if($users.Count -gt 5000){$users=@($users|Select-Object -First 5000)}
-    $enabled=@($objects|Where-Object Enabled);$servers=@($enabled|Where-Object{$_.OperatingSystem -match 'Server'});$workstations=@($enabled|Where-Object{$_.OperatingSystem -notmatch 'Server'});$sample=@($enabled|Where-Object DNSHostName|Select-Object -First 25 -ExpandProperty DNSHostName)
-    return @{inheritance=$(if([bool]$inherit.GpoInheritanceBlocked){'BLOCKED'}else{'NORMAL'});blockInheritance=[bool]$inherit.GpoInheritanceBlocked;conflicts=@($conflicts);affectedObjects=@{computers=$enabled.Count;servers=$servers.Count;workstations=$workstations.Count;disabled=@($objects|Where-Object{-not $_.Enabled}).Count;sampleHosts=$sample;truncated=$truncated;users=$users.Count};existingLinkScopes=@($LinkScopes);securityFiltering=$permissions;wmiFilter=$(if($ad.gPCWQLFilter){[string]$ad.gPCWQLFilter}else{$null})}
+    $enabled=@($objects|Where-Object Enabled);$servers=@($enabled|Where-Object{$_.OperatingSystem -match 'Server'});$workstations=@($enabled|Where-Object{$_.OperatingSystem -notmatch 'Server'});$sample=@($enabled|Where-Object DNSHostName|Select-Object -First 25 -ExpandProperty DNSHostName);$sampleUsers=@($users|Select-Object -First 25 -ExpandProperty SamAccountName)
+    return @{inheritance=$(if([bool]$inherit.GpoInheritanceBlocked){'BLOCKED'}else{'NORMAL'});blockInheritance=[bool]$inherit.GpoInheritanceBlocked;conflicts=@($conflicts);affectedObjects=@{computers=$enabled.Count;servers=$servers.Count;workstations=$workstations.Count;disabled=@($objects|Where-Object{-not $_.Enabled}).Count;sampleHosts=$sample;truncated=$truncated;users=$users.Count;sampleUsers=$sampleUsers};existingLinkScopes=@($LinkScopes);securityFiltering=$permissions;wmiFilter=$(if($ad.gPCWQLFilter){[string]$ad.gPCWQLFilter}else{$null})}
 }
 function Preview($S,$Map){
     Validate-Selection $S $Map;$gpo=Get-GPO -Guid ([guid]$S.gpoId) -Domain $cfg.domain -Server $cfg.domainController;$scope=Scope $S.scopeDn;$raw=Scope-Links $scope.dn;$existing=Selected-Link $scope.dn $S.gpoId;$computers=@()
-    $computers=@(Refresh-Targets ([string]$S.refresh) ([string]$scope.dn))
+    $endpointScope=[string](Read-Field $S 'endpointScopeDn' '')
+    $computers=@(Refresh-Targets ([string]$S.refresh) ([string]$scope.dn) $endpointScope ([string]$Map.scope))
     $links=@();foreach($candidateScope in All-LinkScopes){if(Link $candidateScope.rawLinks $S.gpoId $candidateScope.dn){$links+=$candidateScope.dn}}
     $preflight=Selection-Preflight $S $Map;$impact=Impact-Details $S $Map $gpo $scope $links;$warnings=@('Changing this GPO affects all of its existing links, not only the selected link.',('Existing links: '+$(if($links.Count){$links -join '; '}else{'none'})),'Security filtering, WMI filtering, inheritance and precedence are analyzed but are never silently changed.','gpupdate scheduling does not by itself prove effective endpoint compliance.','A full GPO backup is created before any policy write; rollback is blocked after external changes.')+@($Map.warnings)
     foreach($c in @($impact.conflicts|Where-Object{$_.severity -eq 'HIGH'})){$warnings+=('High-impact conflict: '+$c.message)}
@@ -301,7 +322,32 @@ function Endpoint-Expected($Map,$S){
 function Verify-EffectiveSamples($Plan,$Map){
     $s=$Plan.selection;$checks=@()
     if([bool]$Map.domainPolicySensitive){return @()}
-    if([string]$Map.scope -eq 'User'){return @(@{hostname='<user-scope>';state='PENDING';message='User-scoped effective policy requires a concrete user/session target. GPO publication is verified, but endpoint user RSoP is not inferred.';actualValue=$null})}
+    if([string]$Map.scope -eq 'User'){
+      $identity=[string](Read-Field $s 'verificationUser' '')
+      $hosts=@($Plan.preview.refreshComputers|Sort-Object -Unique|Select-Object -First 5)
+      if([string]::IsNullOrWhiteSpace($identity) -or !$hosts.Count){return @(@{hostname='<user-session>';state='PENDING';message='Choose a concrete user and endpoint OU, then schedule user-policy refresh before exact HKCU verification.';actualValue=$null})}
+      try{$user=Verification-User $identity;$sid=[string]$user.SID.Value}catch{return @(@{hostname='<user-session>';state='UNAVAILABLE';message='The verification user could not be resolved.';actualValue=$null})}
+      $expected=@(Endpoint-Expected $Map $s)
+      foreach($hostName in $hosts){
+        try{
+          $probe=Invoke-Command -ComputerName $hostName -Authentication Kerberos -ArgumentList $sid,$expected -ScriptBlock {
+            param($UserSid,$ExpectedItems)
+            $ErrorActionPreference='Stop';$actual=@();$ok=$true
+            if(!(Test-Path -LiteralPath ('Registry::HKEY_USERS\'+$UserSid))){return @{supported=$false;match=$false;actual='';message='The selected user profile hive is not loaded on this endpoint. The user must have an active or loaded profile before HKCU policy can be verified.'}}
+            foreach($item in @($ExpectedItems)){
+              $key=[string]$item.key;if($key -notmatch '^HKCU\\'){return @{supported=$false;match=$false;actual='';message='The user-policy verifier only accepts HKCU registry mappings.'}}
+              $path='Registry::HKEY_USERS\'+$UserSid+'\'+$key.Substring(5)
+              try{$value=Get-ItemPropertyValue -LiteralPath $path -Name ([string]$item.name) -ErrorAction Stop;$kind=(Get-Item -LiteralPath $path -ErrorAction Stop).GetValueKind([string]$item.name)}catch{if($_.FullyQualifiedErrorId -match 'ItemNotFound|PathNotFound|PropertyNotFound'){$value=$null;$kind=$null}else{return @{supported=$false;match=$false;actual='';message='The user registry policy could not be read because access or transport failed.'}}}
+              if(([string]$item.type).ToUpperInvariant() -eq 'MULTISTRING'){$current=if($null -eq $value){$null}else{((@($value)|ForEach-Object{[string]$_}|Sort-Object)-join '|')}}else{$current=if($null -eq $value){$null}else{[string]$value}}
+              $actual+=([string]$item.name+'='+$(if($null -eq $current){'<not configured>'}else{$current}));if($null -eq $current -or [string]$current -cne [string]$item.expected -or ($kind -and [string]$kind -ine [string]$item.type)){$ok=$false}
+            }
+            return @{supported=$true;match=$ok;actual=($actual -join '; ');message='The effective HKCU policy values were read from the selected user profile hive.'}
+          }
+          if([bool]$probe.supported){$checks+=@{hostname=$hostName;state=$(if([bool]$probe.match){'VERIFIED'}else{'MISMATCH'});message=([string]$probe.message+' User: '+$identity);actualValue=[string]$probe.actual}}else{$checks+=@{hostname=$hostName;state='PENDING';message=([string]$probe.message+' User: '+$identity);actualValue=[string]$probe.actual}}
+        }catch{$checks+=@{hostname=$hostName;state='UNAVAILABLE';message=('User-policy probe failed. Check Kerberos/WinRM, endpoint availability and the selected user session. User: '+$identity);actualValue=$null}}
+      }
+      return @($checks)
+    }
     $hosts=@();if($Plan.preview.impact -and $Plan.preview.impact.affectedObjects){$hosts+=@($Plan.preview.impact.affectedObjects.sampleHosts)};$allowed=@(Read-Field $cfg 'allowedHosts' @());$hosts=@($hosts|Where-Object{$_ -and $_ -in $allowed}|Sort-Object -Unique|Select-Object -First 5)
     if(!$hosts.Count){return @(@{hostname='<scope>';state='PENDING';message='No concrete endpoint is available for effective-policy verification in the selected scope.';actualValue=$null})}
     $expected=@(Endpoint-Expected $Map $s);$handler=[string]$Map.handler
@@ -353,12 +399,12 @@ function Verify-Rollback($Plan,$Map,$Manifest){
     $matches=$matches -and ([string](Gpo-Ad $s.gpoId).gPCMachineExtensionNames -ceq [string]$Manifest.beforeExtensions) -and ((Scope-Links $s.scopeDn) -ceq [string]$Plan.preview.scopeLinks)
     return @{restored=[bool]$matches;published=$false;linked=$false;effective='ROLLBACK_ENDPOINT_PENDING';verification=(Verification-Metadata $s);endpointChecks=@();currentValue=(Mapping-Display $s.gpoId $Map $s $false)}
 }
-function Refresh-Targets([string]$Strategy,[string]$ScopeDn){
+function Refresh-Targets([string]$Strategy,[string]$ScopeDn,[string]$EndpointScopeDn='', [string]$PolicyScope='Computer'){
     $targets=@()
     switch($Strategy){
         'None' {return @()}
-        'Pdc' {$targets=@([string]$domain.PDCEmulator)}
-        'Scope' {$null=Scope $ScopeDn;$objects=@(Get-ADComputer -SearchBase $ScopeDn -SearchScope Subtree -Filter {Enabled -eq $true} -Server $cfg.domainController -Properties DNSHostName -ResultSetSize 101);if($objects.Count -gt 100){Fail 'REFRESH_SCOPE_TOO_LARGE' 'More than 100 computers are in scope. Choose PDC or a smaller OU.'};$targets=@($objects|Where-Object{$_.DNSHostName}|ForEach-Object{[string]$_.DNSHostName})}
+        'Pdc' {if($PolicyScope -eq 'User'){Fail 'USER_REFRESH_TARGET_INVALID' 'User policy cannot be refreshed on the PDC without a user session.'};$targets=@([string]$domain.PDCEmulator)}
+        'Scope' {$searchDn=if($PolicyScope -eq 'User'){$EndpointScopeDn}else{$ScopeDn};if([string]::IsNullOrWhiteSpace($searchDn)){Fail 'ENDPOINT_SCOPE_REQUIRED' 'Choose a computer OU for policy refresh.'};$null=Scope $searchDn;$objects=@(Get-ADComputer -SearchBase $searchDn -SearchScope Subtree -Filter {Enabled -eq $true} -Server $cfg.domainController -Properties DNSHostName -ResultSetSize 101);if($objects.Count -gt 100){Fail 'REFRESH_SCOPE_TOO_LARGE' 'More than 100 computers are in the refresh scope. Choose a smaller endpoint OU.'};$targets=@($objects|Where-Object{$_.DNSHostName}|ForEach-Object{[string]$_.DNSHostName})}
         default {Fail 'GPO_OPTIONS_INVALID' 'Choose PDC or scope computers.'}
     }
     $allowed=@(Read-Field $cfg 'allowedHosts' @())
@@ -461,7 +507,8 @@ switch($Operation){
         elseif(!$before.published -or !$before.linked){Fail 'DRIFT_DETECTED' 'Live GPO content or link changed. Refresh is blocked.'}
         $strategy=[string](Read-Field $Data 'refresh' '')
         if(!$strategy){$strategy=[string]$plan.selection.refresh}
-        $computers=@(Refresh-Targets $strategy $plan.selection.scopeDn)
+         $endpointScope=[string](Read-Field $plan.selection 'endpointScopeDn' '')
+         $computers=@(Refresh-Targets $strategy $plan.selection.scopeDn $endpointScope ([string]$map.scope))
         if(!$computers.Count){return Result $(if($rollback){'ROLLED_BACK'}else{'REFRESH_NOT_CONFIGURED'}) 'No authorized refresh hosts are available. Choose a target strategy and authorize those hosts in Settings.' $manifest $before @()}
         Emit-Stage 'GPUPDATE'
         $refresh=@();$target=if($rollback){'Both'}elseif([string]$map.scope -eq 'User'){'User'}else{'Computer'}

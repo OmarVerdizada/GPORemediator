@@ -17,7 +17,7 @@ function prompt(initial){return new Promise(resolve=>{
   overlay.querySelector('[data-account-label]').textContent=domain?say('Domen hesabı (DOMAIN\\user və ya user@domain)','Domain account (DOMAIN\\user or user@domain)'):say('Windows hesabı','Windows account');
   account.readOnly=!domain;account.tabIndex=domain?0:-1;account.value=current?.operator||'';
   password.disabled=!current;password.required=!!current;
-  button.textContent=!current?say('Yenidən yoxla','Retry'):domain?say('Daxil ol və AD-yə qoşul','Sign in and connect to AD'):say('Təsdiqlə və daxil ol','Confirm and enter');
+  button.textContent=!current?say('Yenidən yoxla','Retry'):domain?say('Daxil ol','Sign in'):say('Təsdiqlə və daxil ol','Confirm and enter');
   overlay.querySelector('[data-sign-in-note]').textContent=domain?say('Parol diskə yazılmır. Bağlantı aktiv olduğu müddətdə təkrar tələb olunmur. Xidmət restartı və ya sessiyanın bitməsi yenidən giriş tələb edir.','The password is not saved to disk. It is reused while the connection is active. A service restart or session expiry requires sign-in again.'):say('Sazlamaları yalnız icazəli Windows operatoru dəyişə bilər.','Only an authorized Windows operator can change configuration.');
  }
  configure();

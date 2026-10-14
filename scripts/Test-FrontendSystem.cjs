@@ -46,6 +46,9 @@ const css=fs.readFileSync(path.join(source,'app.css'),'utf8');
 assert.ok(!css.includes('!important'));
 assert.ok(!/--(?:accent|cc-|ink|muted|green)\b/.test(css));
 for(const s of ['prefers-reduced-motion','data-large-text','data-contrast','data-gr-theme=dark','.ds-field-error','.ds-toast'])assert.ok(css.includes(s));
+const controlView=fs.readFileSync(path.join(source,'control-view.js'),'utf8');
+for(const marker of ['endpointScopeDn','verificationUser','User Configuration','/target:user'])assert.ok(controlView.includes(marker),`Missing user-policy UI marker ${marker}`);
+assert.ok(controlView.includes("${user?'':`<label class=\"refresh-choice"),'PDC refresh is not conditionally hidden for user policy');
 console.log('Frontend system: PASS (honest evidence, status tones, escaping, grouping, audit mismatch, breadcrumb, packaged assets and canonical tokens).');
 // Publication alone and rollback must not become verification on the map.
 const premium=window.GpoPremium;

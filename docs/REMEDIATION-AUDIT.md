@@ -1,4 +1,8 @@
-# Remediation audit — 3.9.0
+# Remediation audit — 3.10.0
+
+## Scope classification
+
+The 405 controls are validated as 385 computer, 12 user, and 8 domain controls. Registry hive and declared processing scope must agree: user controls use HKCU and computer controls use HKLM. User policy links target a user OU, while optional immediate refresh targets a separate endpoint computer OU. A concrete enabled user inside the selected user OU is required for exact HKCU endpoint evidence.
 
 This release reviewed the complete 405-control catalog from mapping generation through write, read-back, refresh, verification, rollback and UI evidence. The supported boundary remains 401 automated GPO remediations and four guided controls: `1.2.3`, `2.3.11.6`, `18.10.43.10.1` and `18.10.43.10.2`.
 

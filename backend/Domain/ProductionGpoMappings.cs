@@ -80,9 +80,29 @@ public static class ProductionGpoMappings
             throw new PolicyException("GPO_MANUAL_ONLY", "This CIS control is not classified as Automated in the imported CIS v4.0.0 catalog. It remains read-only and requires manual review.");
         if (!Guid.TryParse(selection.GpoId, out _)) throw new PolicyException("GPO_SELECTION_REQUIRED", "Select a GPO from the discovered list.");
         if (selection.Refresh is not ("None" or "Pdc" or "Scope")) throw new PolicyException("GPO_OPTIONS_INVALID", "Invalid policy refresh option.");
-        if (selection.AccountScope is not ("Domain" or "LocalComputers")) throw new PolicyException("GPO_OPTIONS_INVALID", "Invalid target scope option.");
+        if (selection.AccountScope is not ("Domain" or "LocalComputers" or "Users")) throw new PolicyException("GPO_OPTIONS_INVALID", "Invalid target scope option.");
         if (string.IsNullOrWhiteSpace(selection.ScopeDn) || selection.ScopeDn.Length > 2048 || selection.ScopeDn.IndexOfAny(['\r','\n','\0']) >= 0)
             throw new PolicyException("GPO_SCOPE_REQUIRED", "Select a discovered domain or OU.");
+        if (!string.IsNullOrWhiteSpace(selection.EndpointScopeDn) && (selection.EndpointScopeDn.Length > 2048 || selection.EndpointScopeDn.IndexOfAny(['\r','\n','\0']) >= 0))
+            throw new PolicyException("ENDPOINT_SCOPE_INVALID", "Select a discovered endpoint OU.");
+        if (!string.IsNullOrWhiteSpace(selection.VerificationUser) && (selection.VerificationUser.Length > 256 || selection.VerificationUser.IndexOfAny(['\r','\n','\0']) >= 0))
+            throw new PolicyException("VERIFICATION_USER_INVALID", "Enter a valid DOMAIN\\user or user@domain identity.");
+        if (mapping.Scope == "User")
+        {
+            if (selection.AccountScope != "Users") throw new PolicyException("GPO_SCOPE_TYPE_MISMATCH", "This control requires a user policy scope.");
+            if (selection.Refresh == "Pdc") throw new PolicyException("USER_REFRESH_TARGET_INVALID", "User policy cannot be refreshed on the PDC unless the user has a session there. Choose an endpoint OU or wait for the normal user policy cycle.");
+            if (selection.Refresh == "Scope" && string.IsNullOrWhiteSpace(selection.EndpointScopeDn))
+                throw new PolicyException("ENDPOINT_SCOPE_REQUIRED", "Choose the computer OU that contains the user session endpoints.");
+            if (selection.Refresh == "Scope" && string.IsNullOrWhiteSpace(selection.VerificationUser))
+                throw new PolicyException("VERIFICATION_USER_REQUIRED", "Choose a concrete enabled user from the selected user OU for endpoint verification.");
+        }
+        else
+        {
+            if (mapping.DomainPolicySensitive && selection.AccountScope != "Domain") throw new PolicyException("GPO_SCOPE_TYPE_MISMATCH", "This control requires the domain account-policy scope.");
+            if (!mapping.DomainPolicySensitive && selection.AccountScope != "LocalComputers") throw new PolicyException("GPO_SCOPE_TYPE_MISMATCH", "This control requires a computer policy scope.");
+            if (!string.IsNullOrWhiteSpace(selection.EndpointScopeDn) || !string.IsNullOrWhiteSpace(selection.VerificationUser))
+                throw new PolicyException("USER_TARGET_NOT_ALLOWED", "Endpoint OU and verification user are only valid for user-scoped policy.");
+        }
 
         if (mapping.AllowValueOverride)
         {
@@ -134,6 +154,10 @@ public static class ProductionGpoMappings
             throw new InvalidOperationException("Production GPO mapping registry manual/read-only control set changed unexpectedly.");
         if (catalog.Mappings.Any(x => x.DomainPolicySensitive && (x.Scope != "Domain" || !(x.ControlId.StartsWith("1.1.") || x.ControlId.StartsWith("1.2.")))))
             throw new InvalidOperationException("Production GPO mapping registry contains an invalid domain-policy-sensitive control.");
+        if (catalog.Mappings.Count(x => x.Scope == "User") != 12 || catalog.Mappings.Count(x => x.Scope == "Domain") != 8 || catalog.Mappings.Count(x => x.Scope == "Computer") != 385)
+            throw new InvalidOperationException("Production GPO mapping registry user/computer/domain scope counts changed unexpectedly.");
+        if (catalog.Mappings.Any(x => x.Scope == "User" && x.Handler is not ("Registry" or "RegistrySet")))
+            throw new InvalidOperationException("User-scoped controls must use a reviewed HKCU registry handler.");
         foreach (var mapping in catalog.Mappings)
         {
             foreach (var item in mapping.Items)

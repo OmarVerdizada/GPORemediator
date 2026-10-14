@@ -109,7 +109,7 @@
   const errors = {
     INVALID_OPERATOR_ALLOWLIST:'Hesabı DOMEN\\istifadəçi formasında yazın və ya aşkarlanan Windows hesabını seçin.',
     OPERATOR_SELF_LOCKOUT:'Hazırda istifadə etdiyiniz Windows hesabı icazəli hesablar siyahısında qalmalıdır.',
-    GPO_LOGIN_REQUIRED:'Domen bağlantısı bitib və ya tətbiq yenidən başlayıb. Əsas ekranda yenidən qoşulun.',
+    GPO_LOGIN_REQUIRED:'İcra sessiyası bitib və ya tətbiq yenidən başlayıb. Vahid giriş ekranı açılacaq.',
     GPO_AUTH_FAILED:'Delegated icra hesabı qəbul edilmədi. DOMAIN\\user (və ya düzgün UPN), şifrə və DC-də PowerShell remoting icazəsini yoxlayın.',
     GPO_DNS_FAILED:'DC-nin FQDN-i bu management hostdan resolve olunmur. Kompüterin DNS serverini AD DNS-ə yönəldin və domen/DC adlarını yoxlayın.',
     GPO_WINRM_UNREACHABLE:'DC resolve olunur, amma TCP/5985 bağlıdır. DC-də WinRM/PowerShell Remoting-i və Windows Remote Management (HTTP-In) firewall qaydasını aktiv edin.',

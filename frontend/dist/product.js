@@ -26,7 +26,7 @@
   function dashboard(s) {
     const steps = [
       {done:s.session?.mode==='WINDOWS',title:text(s,'Windows / AD-ni başlat','Start Windows / AD'),copy:text(s,'Domen və kontroller konfiqurasiyası','Domain and controller configuration'),action:'settings'},
-      {done:!!s.gpoSession?.connected,title:text(s,'Domenə qoşul','Connect to your domain'),copy:text(s,'Əməliyyatları icra edəcək AD hesabı','AD identity used for execution'),action:'connect'},
+      {done:!!s.gpoSession?.connected,title:text(s,'Vahid giriş','Single sign-in'),copy:text(s,'Giriş ekranında təsdiqlənmiş AD icra hesabı','AD execution identity confirmed at sign-in'),action:'sign-in'},
       {done:!!s.readiness?.ready,title:text(s,'Bağlantını yoxla','Check readiness'),copy:text(s,'Kerberos, WinRM, SYSVOL və icazələr','Kerberos, WinRM, SYSVOL and permissions'),action:'readiness'},
       {done:!!s.plan,title:text(s,'İlk planını hazırla','Prepare your next plan'),copy:text(s,'Qayda → GPO → hədəf → preview','Control → GPO → scope → preview'),action:'benchmark'}
     ];
@@ -75,6 +75,9 @@
   }
   function disconnectedControl(s, rule) {
     return `<section class="recipe-offline"><span class="product-eyebrow">${text(s,'QAYDA HAZIRLIĞI','CONTROL PREPARATION')}</span><h2>${text(s,'GPO seçməzdən əvvəl qaydanı nəzərdən keçir','Review the control before choosing a GPO')}</h2><div class="recipe-tags"><span>${rule.implementation==='live'?text(s,'Avtomatlaşdırma hazır','Automation ready'):text(s,'Əl ilə yoxlama','Manual review')}</span><span>${controlStatus(s,rule).label}</span></div><h3>${text(s,'Tövsiyə olunan vəziyyət','Recommended state')}</h3><p>${esc(rule.recommended||'—')}</p><p>${esc(rule.description||'')}</p><ol><li>${text(s,'Qaydanın təsirini və tətbiq sahəsini nəzərdən keçirin.','Review the control impact and intended scope.')}</li><li>${text(s,'Domenə qoşulun və inventardan real GPO seçin.','Connect to the domain and choose a real GPO from inventory.')}</li><li>${text(s,'Dəyişiklikdən əvvəl yalnız oxuma planını hazırlayın.','Generate the read-only plan before making changes.')}</li></ol><button data-product-action="connect">${text(s,'Domenə qoşul','Connect to domain')} →</button></section>`;
+  }
+  function disconnectedControl(s, rule) {
+    return `<section class="recipe-offline"><span class="product-eyebrow">${text(s,'QAYDA HAZIRLIĞI','CONTROL PREPARATION')}</span><h2>${text(s,'GPO seçməzdən əvvəl qaydanı nəzərdən keçir','Review the control before choosing a GPO')}</h2><div class="recipe-tags"><span>${rule.implementation==='live'?text(s,'Avtomatlaşdırma hazır','Automation ready'):text(s,'Əl ilə yoxlama','Manual review')}</span><span>${controlStatus(s,rule).label}</span></div><h3>${text(s,'Tövsiyə olunan vəziyyət','Recommended state')}</h3><p>${esc(rule.recommended||'—')}</p><p>${esc(rule.description||'')}</p><ol><li>${text(s,'Qaydanın user, computer və ya domain scope olduğunu yoxlayın.','Confirm whether this is user, computer, or domain scoped.')}</li><li>${text(s,'Vahid giriş ekranını açın və inventardan real GPO seçin.','Open the single sign-in screen and choose a real GPO from inventory.')}</li><li>${text(s,'Dəyişiklikdən əvvəl yalnız oxuma planını hazırlayın.','Generate the read-only plan before making changes.')}</li></ol><button data-product-action="sign-in">${text(s,'Giriş ekranını aç','Open sign-in')} →</button></section>`;
   }
   function catalogTools(s, count) {
     const filtered = !!s.query || s.level!=='ALL' || s.automation!=='ALL' || s.savedView!=='ALL';

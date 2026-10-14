@@ -22,7 +22,7 @@ assert.ok(html.indexOf('1.2.2')<html.indexOf('1.2.10'));
 assert.ok(html.includes('&lt;script&gt;')&&!html.includes('<script>'));
 assert.ok(html.includes('&lt;img onerror=bad&gt;'));
 assert.ok(product.coverage(s).includes('Not assessed'));
-assert.ok(product.disconnectedControl(s,rule).includes('Connect to domain'));
+assert.ok(product.disconnectedControl(s,rule).includes('Open sign-in'));
 console.log('Recipe workspace: PASS (status evidence, latest record, numeric order, escaping, disconnected preparation).');
 
 const catalog=JSON.parse(fs.readFileSync(path.join(source,'benchmark-v4.json'),'utf8'));

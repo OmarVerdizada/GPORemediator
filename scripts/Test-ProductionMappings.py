@@ -5,6 +5,11 @@ root = Path(__file__).resolve().parents[1]
 m = {x['id']: x for x in json.loads((root/'backend/data/gpo-production-mappings.json').read_text(encoding='utf-8'))['mappings']}
 assert len(m) == 405
 assert {x['id'] for x in m.values() if x['automation'] != 'Automated'} == {'1.2.3','2.3.11.6','18.10.43.10.1','18.10.43.10.2'}
+assert {scope: sum(1 for x in m.values() if x['scope'] == scope) for scope in ('Domain','Computer','User')} == {'Domain':8,'Computer':385,'User':12}
+for x in m.values():
+    roots = {item.get('key','').split('\\',1)[0].upper() for item in x['items'] if item.get('key','').upper().startswith(('HKCU\\','HKLM\\'))}
+    assert 'HKCU' not in roots or x['scope'] == 'User', x['id']
+    assert 'HKLM' not in roots or x['scope'] != 'User', x['id']
 for cid, key in [('2.3.1.2','EnableGuestAccount'),('2.3.10.1','LSAAnonymousNameLookup')]:
     assert m[cid]['handler'] == 'SecurityTemplate'
     assert m[cid]['items'] == [{'section':'System Access','key':key,'type':'Integer','value':['0']}]

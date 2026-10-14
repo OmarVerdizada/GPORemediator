@@ -120,6 +120,9 @@ public sealed class GpoWorkflowService(IConfiguration config,Store store,Operati
         var gpo=c.Inventory.Gpos.SingleOrDefault(g=>string.Equals(g.Id,selection.GpoId,StringComparison.OrdinalIgnoreCase));
         var scope=c.Inventory.Scopes.SingleOrDefault(s=>string.Equals(s.Dn,selection.ScopeDn,StringComparison.OrdinalIgnoreCase));
         if(gpo is null||!gpo.Selectable||scope is null)throw new PolicyException("GPO_SELECTION_REQUIRED","Select an available GPO and scope from the discovered list.");
+        if(mapping.Scope=="User" && selection.Refresh=="Scope" &&
+           !c.Inventory.Scopes.Any(s=>s.Kind=="OU"&&string.Equals(s.Dn,selection.EndpointScopeDn,StringComparison.OrdinalIgnoreCase)))
+            throw new PolicyException("ENDPOINT_SCOPE_REQUIRED","Select a discovered computer OU for user-session refresh.");
         if(mapping.DomainPolicySensitive && scope.Kind!="Domain") throw new PolicyException("PASSWORD_SCOPE_MISMATCH","Domain password and lockout policies require the domain root.");
         var preview=await Run<GpoPreview>("gpoPreview",c,new{selection,mapping},ct);
         var plan=new GpoWorkflowPlan(Guid.NewGuid().ToString("N"),actor,c.Inventory.ExecutionUser,Mode,Domain,Dc,selection,preview,PolicyValues.Now(),PolicyValues.Hash(mapping),ConfigHash,GpoWorkflowRules.IsWriteAuthorized(ApprovedGpos,AuthorizedOus,selection));
@@ -160,6 +163,10 @@ public sealed class GpoWorkflowService(IConfiguration config,Store store,Operati
             throw new PolicyException("OPERATION_DENIED","Unknown GPO operation.");
         if(operation=="refresh" && consent.Refresh is not ("Pdc" or "Scope"))
             throw new PolicyException("GPO_OPTIONS_INVALID","Choose PDC or scope computers for policy refresh.");
+        if(operation=="refresh" && mapping.Scope=="User" && consent.Refresh=="Pdc")
+            throw new PolicyException("USER_REFRESH_TARGET_INVALID","User policy refresh requires the endpoint OU recorded in the plan; the PDC is not a user-session target.");
+        if(operation=="refresh" && mapping.Scope=="User" && consent.Refresh=="Scope" && string.IsNullOrWhiteSpace(plan.Selection.EndpointScopeDn))
+            throw new PolicyException("ENDPOINT_SCOPE_REQUIRED","This user-policy plan does not contain an endpoint OU. Prepare a fresh plan with a user-session endpoint OU.");
         if(operation!="verify")
         {
             if(!config.GetValue<bool>("Windows:EnableWrites"))throw new PolicyException("WRITES_DISABLED","Enable the production change gate first.");

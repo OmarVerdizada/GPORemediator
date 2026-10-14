@@ -5,7 +5,7 @@ const root=path.resolve(__dirname,'../frontend/source'),screens=path.resolve(__d
 fs.mkdirSync(screens,{recursive:true});
 const gpos=[{id:'6ac1786c-016f-11d2-945f-00c04fb984f9',name:'Default Domain Controllers Policy',protected:true,selectable:true},{id:'31b2f340-016d-11d2-945f-00c04fb984f9',name:'Default Domain Policy',protected:true,selectable:true}];
 const run={id:'recovery-test',startedAt:'2026-10-06T08:00:00Z',updatedAt:'2026-10-09T08:00:34Z',plan:{selection:{setting:'1.1.4',gpoId:gpos[0].id,scopeDn:'DC=test,DC=local'},preview:{gpo:gpos[0],scope:{dn:'DC=test,DC=local'},previousValue:0,desiredValue:14},executionUser:'TEST\\operator'},result:{state:'PUBLISHED',backupId:'test-backup-id',gpoPublished:true,linkVerified:true}};
-const inventory={gpos,scopes:[{dn:'DC=test,DC=local',name:'test.local',kind:'Domain'}],domain:'test.local'};
+const inventory={gpos,scopes:[{dn:'DC=test,DC=local',name:'test.local',kind:'Domain'},{dn:'OU=Users,DC=test,DC=local',name:'Users',kind:'OU'},{dn:'OU=Endpoints,DC=test,DC=local',name:'Endpoints',kind:'OU'}],domain:'test.local'};
 let writes=[],refreshRequests=[],rollbackState='ROLLED_BACK',refreshFailure=false,workflowJobs=[];
 const server=http.createServer(async(req,res)=>{
  let body='';for await(const chunk of req)body+=chunk;
@@ -16,7 +16,7 @@ const server=http.createServer(async(req,res)=>{
   if(url.pathname==='/api/session')data={mode:'WINDOWS',role:'Administrator',csrfToken:'test'};
   else if(url.pathname==='/api/service')data={mode:'WINDOWS',writesEnabled:true,processId:1};
   else if(url.pathname==='/api/gpo/history')data=[run];
-  else if(url.pathname==='/api/gpo/settings')data=[{id:'1.1.4',suggested:14,allowValueOverride:true,domainPolicySensitive:true}];
+  else if(url.pathname==='/api/gpo/settings')data=[{id:'1.1.4',scope:'Domain',automation:'Automated',handler:'SecurityTemplate',suggested:14,allowValueOverride:true,domainPolicySensitive:true},{id:'19.5.1.1',scope:'User',automation:'Automated',handler:'Registry',recommended:'Enabled',allowValueOverride:false,domainPolicySensitive:false}];
   else if(url.pathname==='/api/gpo/inventory')data=inventory;
   else if(url.pathname==='/api/gpo/session')data={connected:true};
   else if(url.pathname==='/api/gpo/readiness')data={ready:true,checks:[]};
@@ -133,7 +133,19 @@ const server=http.createServer(async(req,res)=>{
   await page.locator('.ds-activity-row').waitFor();
   await page.screenshot({path:path.join(screens,'operations-mobile.png'),fullPage:true});
   assert.ok(await page.locator('.ds-activity').evaluate(el=>el.scrollWidth<=el.clientWidth));
+  await page.setViewportSize({width:1440,height:1000});
+  await page.goto(`http://127.0.0.1:${server.address().port}/#/benchmark`);
+  if(await page.locator('[data-dismiss-notice]').count())await page.locator('[data-dismiss-notice]').click();
+  await page.locator('[data-domain="19"]').click({force:true});
+  await page.locator('[data-rule="19.5.1.1"]').first().click();
+  await page.locator('[data-tab=remediation]').click();
+  assert.equal(await page.locator('#gpo-selection [name=endpointScopeDn]').count(),1);
+  assert.equal(await page.locator('#gpo-selection [name=verificationUser]').count(),1);
+  assert.equal(await page.locator('#gpo-selection input[value=Pdc]').count(),0,'User policy exposed a PDC refresh choice');
+  await page.locator('#gpo-selection [name=scopeDn]').selectOption('OU=Users,DC=test,DC=local');
+  await page.locator('#gpo-selection [name=endpointScopeDn]').selectOption('OU=Endpoints,DC=test,DC=local');
+  await page.locator('#gpo-selection [name=verificationUser]').fill('TEST\\pilot.user');
   assert.deepEqual(errors,[]);
-  console.log('Recovery UI: PASS (desktop/mobile, search, confirmation/cancel, optional Scope/PDC refresh after restore, incomplete restore blocked, refresh failure preserves restore, manual refresh).');
+  console.log('Recovery UI: PASS (desktop/mobile, recovery refresh, user OU/endpoint OU/verification identity targeting, and user PDC exclusion).');
  }finally{await browser.close();server.close();}
 })().catch(e=>{console.error(e);server.close();process.exitCode=1;});

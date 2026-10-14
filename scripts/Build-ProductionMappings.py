@@ -163,6 +163,15 @@ for m in maps.values():
     if 'include ' in m['title'].lower() and m['handler'] in ('SecurityTemplate', 'AdvancedAudit'):
         m['comparator'] = 'includes'
 
+# A control's processing half is derived from the reviewed policy address, then
+# checked against the declared scope. This prevents an HKCU recipe from being
+# silently treated as a computer policy (or the inverse) during future imports.
+for m in maps.values():
+    registry_roots={i.get('key','').split('\\',1)[0].upper() for i in m.get('items',[]) if i.get('key','').upper().startswith(('HKCU\\','HKLM\\'))}
+    expected='Domain' if m.get('domainPolicySensitive') else ('User' if 'HKCU' in registry_roots else 'Computer')
+    if m['scope'] != expected:
+        raise SystemExit(f"{m['id']}: declared scope {m['scope']} conflicts with reviewed policy address ({expected})")
+
 # Remove accidental duplicates by ID; preserve user catalog order in output.
 out=[];seen=set()
 for r in rules:

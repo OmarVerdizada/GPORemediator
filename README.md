@@ -1,6 +1,6 @@
-# GPO Remediator 3.9.0
+# GPO Remediator 3.10.0
 
-3.9.0 reviews the complete 405-control catalog, corrects policy mappings and distinguishes scheduled refresh from observed endpoint evidence. See [the remediation audit](docs/REMEDIATION-AUDIT.md) for corrections, test coverage and live-domain limitations.
+3.10.0 adds first-class user-policy targeting: user OU, endpoint OU, verification identity, user-only gpupdate and exact HKCU evidence are handled separately. It also consolidates authentication into one sign-in surface and enforces the reviewed 385 computer / 12 user / 8 domain scope contract. See [the remediation audit](docs/REMEDIATION-AUDIT.md) for the complete 405-control review.
 
 The application uses one domain-account sign-in to open the workspace and connect to AD. The duplicate dashboard password form is removed; expiry/disconnect returns to the same sign-in screen. Startup still requires explicit sign-in, and Windows operator roles remain enforced. It retains compact colored dashboard metrics and supplemental review guidance for empty policy categories. The catalog remains 405 controls: 401 GPO mappings and four guided controls.
 

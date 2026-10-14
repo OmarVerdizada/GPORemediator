@@ -26,9 +26,15 @@ Check(visible.Gpos.Length==2&&visible.Scopes.Length==2,"Write boundary hid read-
 Console.WriteLine("PASS full read-only inventory with explicit write boundary enforcement");
 int cases=0,manual=0;
 foreach(var mapping in ProductionGpoMappings.Settings){
-  var selection=new GpoSelection(gpo,dn,mapping.Id,mapping.Suggested??0, mapping.DomainPolicySensitive?"Domain":"LocalComputers",CustomValue:mapping.RequiresInput?(mapping.InputDefault is {Length:>0}?mapping.InputDefault:"Policy test value"):null);
+  var selection=new GpoSelection(gpo,dn,mapping.Id,mapping.Suggested??0, mapping.DomainPolicySensitive?"Domain":mapping.Scope=="User"?"Users":"LocalComputers",CustomValue:mapping.RequiresInput?(mapping.InputDefault is {Length:>0}?mapping.InputDefault:"Policy test value"):null);
   if(!mapping.Writable){Reject(()=>ProductionGpoMappings.Validate(selection),"GPO_MANUAL_ONLY");manual++;continue;}
-  foreach(var refresh in new[]{"None","Pdc","Scope"})foreach(var priority in new[]{false,true}){ProductionGpoMappings.Validate(selection with{Refresh=refresh,FirstLink=priority});cases++;}
+  var refreshes=mapping.Scope=="User"?new[]{"None","Scope"}:new[]{"None","Pdc","Scope"};
+  foreach(var refresh in refreshes)foreach(var priority in new[]{false,true}){var candidate=selection with{Refresh=refresh,FirstLink=priority,EndpointScopeDn=refresh=="Scope"&&mapping.Scope=="User"?"OU=Endpoints,"+dn:null,VerificationUser=refresh=="Scope"&&mapping.Scope=="User"?"EXAMPLE\\PilotUser":null};ProductionGpoMappings.Validate(candidate);cases++;}
+  if(mapping.Scope=="User"){
+    Reject(()=>ProductionGpoMappings.Validate(selection with{Refresh="Pdc"}),"USER_REFRESH_TARGET_INVALID");
+    Reject(()=>ProductionGpoMappings.Validate(selection with{Refresh="Scope"}),"ENDPOINT_SCOPE_REQUIRED");
+    Reject(()=>ProductionGpoMappings.Validate(selection with{Refresh="Scope",EndpointScopeDn="OU=Endpoints,"+dn}),"VERIFICATION_USER_REQUIRED");
+  }
   Reject(()=>ProductionGpoMappings.Validate(selection with{Refresh="Invalid"}),"GPO_OPTIONS_INVALID");
   if(mapping.AllowValueOverride){
     if(mapping.Minimum is int min){ProductionGpoMappings.Validate(selection with{Value=min});Reject(()=>ProductionGpoMappings.Validate(selection with{Value=min-1}),"GPO_VALUE_INVALID");}
@@ -36,7 +42,7 @@ foreach(var mapping in ProductionGpoMappings.Settings){
   }
   if(mapping.RequiresInput)Reject(()=>ProductionGpoMappings.Validate(selection with{CustomValue=""}),"GPO_CUSTOM_VALUE_REQUIRED");
 }
-Check(cases==401*6&&manual==4,"Catalog coverage incomplete");
+Check(cases==389*6+12*4&&manual==4,"Catalog coverage incomplete");
 Console.WriteLine($"PASS {cases} control/refresh/priority combinations; {manual} controls block automatic writes");
 
 using(var auditStore=new Store(":memory:")) {

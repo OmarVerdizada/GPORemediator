@@ -13,13 +13,15 @@ public record GpoScope(string Dn, string Name, string Kind);
 public record GpoInventory(string Domain, string DomainController, string ExecutionUser, GpoChoice[] Gpos, GpoScope[] Scopes);
 
 public record GpoSelection(string GpoId, string ScopeDn, string Setting, int Value,
-    string AccountScope = "Domain", string Refresh = "None", bool FirstLink = false, string? CustomValue = null);
+    string AccountScope = "Domain", string Refresh = "None", bool FirstLink = false, string? CustomValue = null,
+    string? EndpointScopeDn = null, string? VerificationUser = null);
 
 public record GpoHealthCheck(string Id, string Label, string State, string Message, bool Required = true);
 public record GpoEnvironmentStatus(string Domain, string DomainController, string ExecutionUser,
     bool Ready, GpoHealthCheck[] Checks, string CheckedAt);
 public record GpoConflictInfo(string Severity, string Code, string Message, string? GpoId = null, string? GpoName = null, string? Scope = null);
-public record GpoAffectedObjects(int Computers, int Servers, int Workstations, int Disabled, string[] SampleHosts, bool Truncated, int Users = 0);
+public record GpoAffectedObjects(int Computers, int Servers, int Workstations, int Disabled, string[] SampleHosts, bool Truncated,
+    int Users = 0, string[]? SampleUsers = null);
 public record GpoImpactDetails(string Inheritance, bool BlockInheritance, GpoConflictInfo[] Conflicts,
     GpoAffectedObjects AffectedObjects, string[] ExistingLinkScopes, string[] SecurityFiltering, string? WmiFilter);
 public record GpoDcVersionStatus(string DomainController, string? AdVersion, string? GptVersion, bool Reachable, bool VersionsMatch, string Message);

@@ -76,6 +76,8 @@ function Get-ADComputer {param($SearchBase,$SearchScope,$Filter,$Server,$Propert
 Assert-Test (@(Refresh-Targets 'None' 'DC=example,DC=local').Count -eq 0) 'None unexpectedly scheduled targets'
 Assert-Test ((@(Refresh-Targets 'Pdc' 'DC=example,DC=local') -join ',') -eq 'dc.example.local') 'PDC target mismatch'
 Assert-Test ((@(Refresh-Targets 'Scope' 'DC=example,DC=local') -join ',') -eq 'ws.example.local') 'Scope allowlist failed'
+Assert-Test ((@(Refresh-Targets 'Scope' 'OU=Users,DC=example,DC=local' 'OU=Endpoints,DC=example,DC=local' 'User') -join ',') -eq 'ws.example.local') 'User refresh did not use the independent endpoint OU'
+try{$null=Refresh-Targets 'Pdc' 'OU=Users,DC=example,DC=local' '' 'User';throw 'User PDC refresh was allowed'}catch{if($_.Exception.Message -notlike 'USER_REFRESH_TARGET_INVALID*'){throw}}
 $script:targetCount=101
 try{$null=Refresh-Targets 'Scope' 'DC=example,DC=local';throw 'Scope limit was bypassed'}catch{if($_.Exception.Message -notlike 'REFRESH_SCOPE_TOO_LARGE*'){throw}}
 $script:targetCount=2
