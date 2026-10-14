@@ -45,4 +45,5 @@ Assert-Test (!(Included-Value 7 1 'AdvancedAudit')) 'Invalid audit mask accepted
 $refresh=($ast.EndBlock.Statements|Where-Object{$_ -is [Management.Automation.Language.SwitchStatementAst]}|Select-Object -Last 1).Clauses|Where-Object{$_.Item1.Extent.Text -eq "'gpoRefresh'"}|ForEach-Object{$_.Item2}
 Assert-Test ($refresh.Extent.Text -notmatch 'Verify-Published \$plan \$map \$true') 'Scheduled refresh immediately verified stale endpoint state'
 Write-Output 'PASS endpoint evidence: merged policy, scope boundary, SID normalization, missing data, native failures, audit/deny inclusion and asynchronous refresh'
+# End of endpoint-evidence regression assertions.
 
