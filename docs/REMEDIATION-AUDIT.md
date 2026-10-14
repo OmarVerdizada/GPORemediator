@@ -35,6 +35,7 @@ The reviewed corrections live in `backend/data/mapping_sources/reviewed-override
 
 ## Validation coverage
 
+- The Windows authentication and other bundled .NET packages are pinned to the 10.0.13 security servicing release; the vulnerability audit must return no advisories.
 - All 401 automated mappings are exercised offline for initial mismatch, write, read-back, idempotence and endpoint-recipe serialization. The four guided controls are asserted as non-automatic.
 - Independent regression assertions pin every corrected key, value and multi-value mapping.
 - Installed Windows ADMX files are used for a read-only address and simple Enabled/Disabled cross-check. The audit records source hashes and currently matches 221 catalog controls that map directly to those templates.
