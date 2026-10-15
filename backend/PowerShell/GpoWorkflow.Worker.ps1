@@ -102,7 +102,29 @@ function Normalize-Principals([AllowNull()][string]$Raw){
 function Security-Path([string]$Id){return Join-Path (Gpo-Folder $Id) 'Machine\Microsoft\Windows NT\SecEdit\GptTmpl.inf'}
 function Audit-Path([string]$Id){return Join-Path (Gpo-Folder $Id) 'Machine\Microsoft\Windows NT\Audit\audit.csv'}
 function Csv-Field([AllowNull()][string]$Value){$v=if($null -eq $Value){''}else{$Value};return '"'+$v.Replace('"','""')+'"'}
-function Audit-Row([string]$Name,[string]$Guid,[string]$State,[int]$Mask){return ((Csv-Field '')+','+(Csv-Field 'System')+','+(Csv-Field $Name)+','+(Csv-Field $Guid)+','+(Csv-Field $State)+','+(Csv-Field '')+','+(Csv-Field ([string]$Mask)))}
+function Audit-Row([string]$Name,[string]$Guid,[string]$State,[int]$Mask){
+    # MS-GPAC permits a quoted Subcategory, but System/GUID/SettingValue are
+    # literal tokens. Quoting every field is parseable generic CSV, not GPAC.
+    return (',System,'+(Csv-Field $Name)+','+([guid]$Guid).ToString('B')+','+$State+',,'+[string]$Mask)
+}
+function Audit-CanonicalLines([string[]]$Lines){
+    $header='Machine Name,Policy Target,Subcategory,Subcategory GUID,Inclusion Setting,Exclusion Setting,Setting Value'
+    if(!$Lines.Count -or $Lines[0] -cne $header){Fail 'AUDIT_POLICY_INVALID' 'Advanced-audit CSV header is invalid.'}
+    $result=New-Object 'System.Collections.Generic.List[string]';$result.Add($header)
+    for($index=1;$index -lt $Lines.Count;$index++){
+      if([string]::IsNullOrWhiteSpace($Lines[$index])){continue}
+      $rows=@(@($header,$Lines[$index])|ConvertFrom-Csv)
+      if($rows.Count -ne 1){Fail 'AUDIT_POLICY_INVALID' 'Advanced-audit CSV row could not be parsed.'}
+      $row=$rows[0]
+      if([string]$row.'Policy Target' -eq 'System'){
+        $mask=0;$guid=[guid]::Empty
+        if(![guid]::TryParse([string]$row.'Subcategory GUID',[ref]$guid) -or ![int]::TryParse([string]$row.'Setting Value',[ref]$mask) -or $mask -lt 0 -or $mask -gt 4 -or [string]$row.'Exclusion Setting' -ne ''){Fail 'AUDIT_POLICY_INVALID' 'Advanced-audit system row is invalid.'}
+        $state=switch($mask){0{'Not Specified'}1{'Success'}2{'Failure'}3{'Success and Failure'}4{'No Auditing'}}
+        $result.Add((Audit-Row ([string]$row.Subcategory) $guid.ToString('B') $state $mask))
+      }else{$result.Add($Lines[$index])}
+    }
+    return $result.ToArray()
+}
 function Get-ItemCurrent([string]$Id,$Map,$Item){
     switch([string]$Map.handler){
       {$_ -in @('SecurityTemplate')} {
@@ -127,7 +149,11 @@ function Get-ItemCurrent([string]$Id,$Map,$Item){
         try{$rows=@(Get-Content -LiteralPath $path -Encoding UTF8|ConvertFrom-Csv)}catch{Fail 'AUDIT_POLICY_INVALID' 'Advanced-audit CSV could not be parsed.'}
         $matches=@($rows|Where-Object{[string]$_.'Subcategory GUID' -ieq [string]$Item.guid})
         if($matches.Count -gt 1){Fail 'AUDIT_POLICY_AMBIGUOUS' 'Duplicate advanced-audit subcategory rows exist in this GPO.'}
-        if($matches.Count -eq 0){return $null};return [string]$matches[0].'Setting Value'
+        if($matches.Count -eq 0){return $null}
+        $mask=0;if(![int]::TryParse([string]$matches[0].'Setting Value',[ref]$mask) -or $mask -lt 0 -or $mask -gt 4){Fail 'AUDIT_POLICY_INVALID' 'Advanced-audit CSV contains an invalid system setting.'}
+        if($mask -eq 0){return $null} # MS-GPAC: unchanged, not explicit No Auditing.
+        if($mask -eq 4){return '0'} # Internal bitmask representation of explicit None.
+        return [string]$mask
       }
       default {Fail 'GPO_HANDLER_UNSUPPORTED' ('Unsupported mapping handler: '+[string]$Map.handler)}
     }
@@ -160,6 +186,14 @@ function Item-Matches($Current,$Desired,$Map,$Item){
     return [string]$Current -ceq [string]$Desired
 }
 function Mapping-Matches([string]$Id,$Map,$S){
+    if([string]$Map.handler -eq 'AdvancedAudit'){
+      $extensions=[string](Gpo-Ad $Id).gPCMachineExtensionNames
+      if((Add-AuditExtension $extensions) -ine $extensions){return $false}
+      $path=Audit-Path $Id;if(!(Test-Path -LiteralPath $path)){return $false}
+      $text=[IO.File]::ReadAllText($path)
+      $canonical=(@(Audit-CanonicalLines ([string[]](Get-Content -LiteralPath $path -Encoding UTF8))) -join "`r`n")+"`r`n"
+      if($text -cne $canonical){return $false}
+    }
     foreach($item in Mapping-Items $Map){
       if(!(Item-Matches (Get-ItemCurrent $Id $Map $item) (Desired-Normalized $Map $item $S) $Map $item)){return $false}
     }
@@ -302,6 +336,7 @@ function Preview($S,$Map){
     $computers=@(Refresh-Targets ([string]$S.refresh) ([string]$scope.dn) $endpointScope ([string]$Map.scope))
     $links=@();foreach($candidateScope in All-LinkScopes){if(Link $candidateScope.rawLinks $S.gpoId $candidateScope.dn){$links+=$candidateScope.dn}}
     $preflight=Selection-Preflight $S $Map;$impact=Impact-Details $S $Map $gpo $scope $links;$warnings=@('Changing this GPO affects all of its existing links, not only the selected link.',('Existing links: '+$(if($links.Count){$links -join '; '}else{'none'})),'Security filtering, WMI filtering, inheritance and precedence are analyzed but are never silently changed.','gpupdate scheduling does not by itself prove effective endpoint compliance.','A full GPO backup is created before any policy write; rollback is blocked after external changes.')+@($Map.warnings)
+    if([string]$Map.handler -eq 'AdvancedAudit'){$warnings+='AUDIT_DEPENDENCY: Review control 2.3.2.1: SCENoApplyLegacyAuditPolicy=1 on the endpoint prevents legacy category policy overriding audit subcategories. This separate control is not silently changed.';$warnings+='AUDIT_FORMAT: Applying an audit control also normalizes legacy system audit CSV rows without changing their other numeric settings. The full GPO backup preserves the original file.'}
     foreach($c in @($impact.conflicts|Where-Object{$_.severity -eq 'HIGH'})){$warnings+=('High-impact conflict: '+$c.message)}
     if([string]$Map.scope -eq 'User' -and [int]$impact.affectedObjects.users -eq 0){$warnings+='TARGET_EMPTY: No enabled users were discovered under the selected user OU. Writing the GPO is not proof it will affect any user.'}
     if([string]$Map.scope -eq 'Computer' -and [int]$impact.affectedObjects.computers -eq 0){$warnings+='TARGET_EMPTY: No enabled computers were discovered under the selected computer OU. Select an OU containing the intended endpoints.'}
@@ -334,7 +369,7 @@ function Write-Mapping($Plan,$Map){
     switch([string]$Map.handler){
       'SecurityTemplate' {$null=Assert-VersionSync $s.gpoId;$path=Security-Path $s.gpoId;$text=if(Test-Path -LiteralPath $path){[IO.File]::ReadAllText($path)}else{''};foreach($item in Mapping-Items $Map){$desired=Desired-Item $Map $item $s;if([string]$item.type -eq 'Principals'){$values=@($item.value);if([string]$Map.comparator -eq 'includes'){$existing=Get-ItemCurrent $s.gpoId $Map $item;if($existing){$values+=@($existing -split ',')}};$desired=Principals-Desired @($values|Sort-Object -Unique)}elseif([string]$item.type -eq 'QuotedString'){$desired='"'+([string]$desired)+'"'};$text=Set-SecurityTemplateValue $text ([string]$item.section) ([string]$item.key) ([string]$desired)};Atomic-Text $path $text ([Text.Encoding]::Unicode);Bump-ComputerVersion $s.gpoId 'Security';return $true}
       {$_ -in @('Registry','RegistrySet')} {foreach($item in Mapping-Items $Map){$current=Get-ItemCurrent $s.gpoId $Map $item;$desired=Desired-Normalized $Map $item $s;if(Item-Matches $current $desired $Map $item){continue};$value=Desired-Item $Map $item $s;$type=Registry-Type ([string]$item.type);if($type -eq 'DWord'){$value=[int64]$value}elseif($type -eq 'QWord'){$value=[int64]$value}elseif($type -eq 'MultiString'){$value=[string[]]@($value)}else{$value=[string]$value};Set-GPRegistryValue -Guid ([guid]$s.gpoId) -Key ([string]$item.key) -ValueName ([string]$item.name) -Type $type -Value $value -Domain $cfg.domain -Server $cfg.domainController|Out-Null};return $true}
-      'AdvancedAudit' {$null=Assert-VersionSync $s.gpoId;$path=Audit-Path $s.gpoId;$lines=New-Object 'System.Collections.Generic.List[string]';if(Test-Path -LiteralPath $path){$lines.AddRange([string[]](Get-Content -LiteralPath $path -Encoding UTF8))}else{$lines.Add('Machine Name,Policy Target,Subcategory,Subcategory GUID,Inclusion Setting,Exclusion Setting,Setting Value')};foreach($item in Mapping-Items $Map){$guid=[string]$item.guid;$indices=@();for($i=1;$i -lt $lines.Count;$i++){if($lines[$i] -match [regex]::Escape($guid)){$indices+=$i}};if($indices.Count -gt 1){Fail 'AUDIT_POLICY_AMBIGUOUS' 'Duplicate advanced-audit subcategory rows exist in this GPO.'};$mask=[int]$item.mask;if([string]$Map.comparator -eq 'includes'){$existing=Get-ItemCurrent $s.gpoId $Map $item;if($null -ne $existing){$n=0;if(![int]::TryParse([string]$existing,[ref]$n) -or $n -lt 0 -or $n -gt 3){Fail 'AUDIT_POLICY_INVALID' 'Existing audit mask is invalid.'};$mask=$mask -bor $n}};$auditState=switch($mask){0{'No Auditing'}1{'Success'}2{'Failure'}3{'Success and Failure'}};$row=Audit-Row ([string]$item.name) $guid $auditState $mask;if($indices.Count -eq 1){$lines[$indices[0]]=$row}else{$lines.Add($row)}};Atomic-Text $path (($lines -join "`r`n")+"`r`n") ([Text.UTF8Encoding]::new($false));Bump-ComputerVersion $s.gpoId 'Audit';return $true}
+      'AdvancedAudit' {$null=Assert-VersionSync $s.gpoId;$path=Audit-Path $s.gpoId;$lines=New-Object 'System.Collections.Generic.List[string]';if(Test-Path -LiteralPath $path){$lines.AddRange([string[]](Audit-CanonicalLines ([string[]](Get-Content -LiteralPath $path -Encoding UTF8))))}else{$lines.Add('Machine Name,Policy Target,Subcategory,Subcategory GUID,Inclusion Setting,Exclusion Setting,Setting Value')};foreach($item in Mapping-Items $Map){$guid=[string]$item.guid;$indices=@();for($i=1;$i -lt $lines.Count;$i++){if($lines[$i] -match [regex]::Escape($guid)){$indices+=$i}};if($indices.Count -gt 1){Fail 'AUDIT_POLICY_AMBIGUOUS' 'Duplicate advanced-audit subcategory rows exist in this GPO.'};$mask=[int]$item.mask;if([string]$Map.comparator -eq 'includes'){$existing=Get-ItemCurrent $s.gpoId $Map $item;if($null -ne $existing){$n=0;if(![int]::TryParse([string]$existing,[ref]$n) -or $n -lt 0 -or $n -gt 3){Fail 'AUDIT_POLICY_INVALID' 'Existing audit mask is invalid.'};$mask=$mask -bor $n}};$auditState=switch($mask){0{'No Auditing'}1{'Success'}2{'Failure'}3{'Success and Failure'}};$row=Audit-Row ([string]$item.name) $guid $auditState $(if($mask -eq 0){4}else{$mask});if($indices.Count -eq 1){$lines[$indices[0]]=$row}else{$lines.Add($row)}};Atomic-Text $path (($lines -join "`r`n")+"`r`n") ([Text.UTF8Encoding]::new($false));Bump-ComputerVersion $s.gpoId 'Audit';return $true}
       default {Fail 'GPO_HANDLER_UNSUPPORTED' ('Unsupported mapping handler: '+[string]$Map.handler)}
     }
 }
@@ -447,18 +482,30 @@ function Verify-EffectiveSamples($Plan,$Map){
             $tmp=Join-Path $env:TEMP ('gpo-remediator-'+[guid]::NewGuid().ToString('N')+'.inf');try{& secedit.exe /export /mergedpolicy /cfg $tmp /quiet | Out-Null;if($LASTEXITCODE -ne 0 -or !(Test-Path -LiteralPath $tmp)){return @{supported=$false;match=$false;actual='';message='secedit could not export merged security policy.'}};$text=[IO.File]::ReadAllText($tmp);foreach($item in @($ExpectedItems)){$cur=Read-IniValue $text ([string]$item.section) ([string]$item.key);if([string]$item.type -eq 'Principals' -and $null -ne $cur){$cur=Normalize-Sids $cur}elseif([string]$item.type -eq 'QuotedString' -and $null -ne $cur){$cur=$cur.Trim().Trim('"')};$actual+=([string]$item.key+'='+$(if($null -eq $cur){'<not configured>'}else{$cur}));if($null -eq $cur){$ok=$false}elseif($Comparator -eq 'includes' -and [string]$item.type -eq 'Principals'){if(@(([string]$item.expected -split ',')|Where-Object{$_ -and $_ -notin @($cur -split ',')}).Count){$ok=$false}}elseif(!(Value-Matches $cur $item.expected $(if($item.comparator){$item.comparator}else{$Comparator}))){$ok=$false}};return @{supported=$true;match=$ok;actual=($actual -join '; ');message='Effective security policy was exported with secedit.'}}finally{Remove-Item -LiteralPath $tmp -Force -ErrorAction SilentlyContinue}
           }
           if($Handler -eq 'AdvancedAudit'){
+            # /get /r may contain only five columns and localized Setting text.
+            # /backup uses the restorable seven-column numeric policy format.
+            $auditFile=Join-Path $env:TEMP ('gpo-remediator-audit-'+[guid]::NewGuid().ToString('N')+'.csv')
+            try{
+              & auditpol.exe /backup ('/file:'+$auditFile) 2>$null | Out-Null
+              if($LASTEXITCODE -ne 0 -or !(Test-Path -LiteralPath $auditFile)){return @{supported=$false;match=$false;actual='';message='auditpol could not export effective policy. Check audit-policy read/export privileges on this endpoint.'}}
+              $auditRows=@(Get-Content -LiteralPath $auditFile -Encoding UTF8 | ConvertFrom-Csv)
+              try{$override=Get-ItemPropertyValue -LiteralPath 'Registry::HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Lsa' -Name 'SCENoApplyLegacyAuditPolicy' -ErrorAction Stop;$actual+=('SCENoApplyLegacyAuditPolicy='+[string]$override)}catch{$actual+='SCENoApplyLegacyAuditPolicy=<not available>'}
             foreach($item in @($ExpectedItems)){
               try{
-                $raw=& auditpol.exe /get ('/subcategory:'+([string]$item.guid)) /r 2>$null
-                if($LASTEXITCODE -ne 0){return @{supported=$false;match=$false;actual='';message='auditpol failed to read effective policy.'}}
-                $rows=@($raw|ConvertFrom-Csv|Where-Object{@($_.PSObject.Properties.Value|Where-Object{[string]$_ -ieq [string]$item.guid}).Count -gt 0})
+                $rows=@($auditRows|Where-Object{
+                  $columns=@($_.PSObject.Properties.Value)
+                  $columns.Count -eq 7 -and [string]$columns[3] -ieq [string]$item.guid -and [string]$columns[1] -eq 'System' -and [string]$columns[5] -eq ''
+                })
                 if($rows.Count -ne 1){return @{supported=$false;match=$false;actual='';message='auditpol did not return exactly one row for the requested subcategory GUID.'}}
                 $row=$rows[0];$value=[string]($row.PSObject.Properties.Value|Select-Object -Last 1);$numeric=0
-                if(![int]::TryParse($value,[ref]$numeric)){return @{supported=$false;match=$false;actual=$value;message='auditpol did not expose a numeric Setting Value, so locale-independent verification is unavailable.'}}
-                $expectedMask=[int]$item.expected;$actual+=([string]$item.guid+'='+$numeric);if($numeric -lt 0 -or $numeric -gt 3){return @{supported=$false;match=$false;actual=$value;message='auditpol returned an invalid mask.'}};if($Comparator -eq 'includes'){if(($numeric -band $expectedMask) -ne $expectedMask){$ok=$false}}elseif($numeric -ne $expectedMask){$ok=$false}
+                if(![int]::TryParse($value,[ref]$numeric) -or $numeric -lt 1 -or $numeric -gt 4){return @{supported=$false;match=$false;actual=$value;message='auditpol export did not expose a valid explicit numeric setting (1-4).'}}
+                if($numeric -eq 4){$numeric=0}
+                $label=switch($numeric){0{'No Auditing'}1{'Success'}2{'Failure'}3{'Success and Failure'}}
+                $expectedMask=[int]$item.expected;$actual+=([string]$item.guid+'='+$numeric+' ('+$label+')');if($Comparator -eq 'includes'){if(($numeric -band $expectedMask) -ne $expectedMask){$ok=$false}}elseif($numeric -ne $expectedMask){$ok=$false}
               }catch{return @{supported=$false;match=$false;actual='';message='Effective advanced-audit probe is unavailable on this endpoint.'}}
             }
-            return @{supported=$true;match=$ok;actual=($actual -join '; ');message='Effective advanced-audit Setting Value masks were read with auditpol /r and compared numerically.'}
+            return @{supported=$true;match=$ok;actual=($actual -join '; ');message='Effective advanced-audit settings were exported with auditpol /backup and compared numerically. A mismatch is an observed endpoint difference; check policy processing, winning GPO and control 2.3.2.1 (subcategory override).'}
+            }finally{Remove-Item -LiteralPath $auditFile -Force -ErrorAction SilentlyContinue}
           }
           return @{supported=$false;match=$false;actual='';message='No endpoint verifier exists for this handler.'}
         }

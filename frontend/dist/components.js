@@ -65,7 +65,7 @@
       const checks=items.filter(x=>x.key||x.Key).map(x=>`Select-String -LiteralPath $policyFile -Pattern ${psQuote('^\\s*'+String(x.key||x.Key).replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'\\s*=')}`);
       lines=[`$policyFile = Join-Path $env:TEMP ([guid]::NewGuid().ToString('N') + '.inf')\ntry {\n  secedit.exe /export /mergedpolicy /cfg $policyFile /quiet | Out-Null\n  if ($LASTEXITCODE -ne 0) { throw 'secedit export failed' }\n  ${checks.join('\n  ')}\n} finally { Remove-Item -LiteralPath $policyFile -Force -ErrorAction SilentlyContinue }`];
     }
-    else if(/^AdvancedAudit$/i.test(handler))lines=items.filter(x=>x.guid||x.Guid).map(x=>`auditpol.exe /get ${psQuote('/subcategory:'+(x.guid||x.Guid))} /r`);
+    else if(/^AdvancedAudit$/i.test(handler))lines=[...items.filter(x=>x.guid||x.Guid).map(x=>`auditpol.exe /get /subcategory:"${String(x.guid||x.Guid).replaceAll('"','')}"`),`Get-ItemPropertyValue -LiteralPath 'Registry::HKEY_LOCAL_MACHINE\\SYSTEM\\CurrentControlSet\\Control\\Lsa' -Name 'SCENoApplyLegacyAuditPolicy' -ErrorAction Continue`];
     if(!lines.length)lines=[`gpresult.exe /scope ${String(mapping?.scope||mapping?.Scope).toLowerCase()==='user'?'user':'computer'} /r`];
     const host=String(endpoint?.hostname||'').split('.')[0];
     return `${host?`if ($env:COMPUTERNAME -ine ${psQuote(host)}) { Write-Warning ${psQuote('Bu komanda '+endpoint.hostname+' endpoint-ində icra edilməlidir.')} }\n`:''}${lines.join('\n')}`;
@@ -78,5 +78,15 @@
   }
   const renderRecovery=recovery;
   recovery=function(s,h){return renderRecovery(s,h).replace(/>gpupdate \/force<\/button>/,`>${text(s,'Rollback-dan sonra gpupdate /force','gpupdate /force after rollback')}</button>`);};
-  window.GpoComponents=Object.freeze({esc,text,icon,domainIcon:id=>icon(domains[id]||'shield'),status,breadcrumb,operations,timeline,domainEvidence,skeleton,auditChain,activity,recovery,manualCheck});
+  function assuranceStages(s,stages){
+    const names={GPO_CONFIGURATION:['GPO konfiqurasiyası','GPO configuration'],GPO_APPLICABILITY:['Hədəfə tətbiq sahəsi','Target applicability'],AD_SYSVOL_REPLICATION:['Kontrollerlər arasında yayılma','Controller replication'],CLIENT_PROCESSING:['Endpoint-də yenilənmə','Endpoint refresh'],ENDPOINT_CONFIGURATION:['Endpoint-də faktiki dəyər','Actual endpoint value']};
+    const good=new Set(['GPO_APPLIED','VERIFIED','ENDPOINT_VERIFIED','GPUPDATE_COMPLETED']),bad=new Set(['FAILED','ENDPOINT_MISMATCH','PARTIAL_SUCCESS']),pending=new Set(['GPUPDATE_SCHEDULED','GPUPDATE_STARTED','REPLICATION_PENDING','INSUFFICIENT_EVIDENCE']);
+    return `<div class="assurance-stage-list" aria-label="${text(s,'Yoxlama mərhələləri','Verification stages')}">${stages.map(x=>{
+      const tone=good.has(x.status)?'good':bad.has(x.status)?'bad':pending.has(x.status)?'pending':'neutral';
+      const label=good.has(x.status)?text(s,'Yoxlanılıb','Verified'):bad.has(x.status)?text(s,'Uyğunsuzluq / xəta','Mismatch / failure'):x.status==='GPUPDATE_SCHEDULED'?text(s,'Planlaşdırılıb','Scheduled'):x.status==='GPUPDATE_STARTED'?text(s,'Davam edir','In progress'):x.status==='INSUFFICIENT_EVIDENCE'?text(s,'Əlavə yoxlama lazımdır','More evidence needed'):x.status==='REPLICATION_PENDING'?text(s,'Yayılma gözlənilir','Replication pending'):text(s,'Yoxlanılmayıb','Not verified');
+      const name=names[x.stage]||[x.stage,x.stage];
+      return `<article class="assurance-stage ${tone}"><span class="assurance-indicator" aria-hidden="true">${tone==='good'?'✓':tone==='bad'?'!':tone==='pending'?'◷':'—'}</span><div><header><strong>${text(s,name[0],name[1])}</strong><span class="assurance-label">${label}</span></header><details><summary>${text(s,'Yoxlama izahı','Evidence details')}</summary><p>${esc(x.evidence)}</p><code>${esc(x.stage)} · ${esc(x.status)}</code></details></div></article>`;
+    }).join('')}</div>`;
+  }
+  window.GpoComponents=Object.freeze({esc,text,icon,domainIcon:id=>icon(domains[id]||'shield'),status,breadcrumb,operations,timeline,domainEvidence,skeleton,auditChain,activity,recovery,manualCheck,assuranceStages});
 })();

@@ -122,7 +122,9 @@ const server=http.createServer(async(req,res)=>{
   await page.locator('.manual-check-command').waitFor();
   assert.ok((await page.locator('.manual-check-command').textContent()).includes('secedit.exe /export /mergedpolicy'));
   assert.equal(await page.locator('.manual-check-head [data-copy-value]').count(),1);
-  assert.equal(await page.locator('.assurance-stage-list>div').count(),5);
+  assert.equal(await page.locator('.assurance-stage-list>.assurance-stage').count(),5);
+  assert.notEqual(await page.locator('.assurance-stage.good').first().evaluate(el=>getComputedStyle(el).borderLeftColor),await page.locator('.assurance-stage.pending').first().evaluate(el=>getComputedStyle(el).borderLeftColor));
+  assert.equal(await page.locator('.assurance-stage code').first().isVisible(),false,'Technical status codes should stay in collapsed evidence details');
   assert.ok((await page.locator('.assurance-stage-list').textContent()).includes('INSUFFICIENT_EVIDENCE'));
   assert.ok((await page.locator('.assurance-stage-list').textContent()).includes('GPUPDATE_SCHEDULED'));
   await page.screenshot({path:path.join(screens,'audit-verification-desktop.png'),fullPage:true});

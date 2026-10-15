@@ -14,7 +14,7 @@ function Verification-User {param($Identity) [pscustomobject]@{SID=@{Value='S-1-
 function Refresh-Targets {param($Strategy,$ScopeDn,$EndpointScopeDn,$PolicyScope) @('ws.example.test')}
 function Invoke-Command {param($ComputerName,$Authentication,$ArgumentList,$ScriptBlock) & $ScriptBlock @ArgumentList}
 function Test-Path {param($LiteralPath) if($LiteralPath -like 'Registry::*'){return $true};Microsoft.PowerShell.Management\Test-Path -LiteralPath $LiteralPath}
-function Get-ItemPropertyValue {param($LiteralPath,$Name,$ErrorAction) $entry=@($script:expected|Where-Object{$_.name -ceq $Name})[0];$value=$entry.expected;if($script:wrong){return '__mismatch__'};if($entry.type -eq 'MultiString'){return ,([string[]]@($value -split '\|'))};return $value}
+function Get-ItemPropertyValue {param($LiteralPath,$Name,$ErrorAction) if($Name -eq 'SCENoApplyLegacyAuditPolicy' -and $script:map.handler -eq 'AdvancedAudit'){return 1};$entry=@($script:expected|Where-Object{$_.name -ceq $Name})[0];$value=$entry.expected;if($script:wrong){return '__mismatch__'};if($entry.type -eq 'MultiString'){return ,([string[]]@($value -split '\|'))};return $value}
 function Get-Item {param($LiteralPath,$ErrorAction) $result=[pscustomobject]@{};$result|Add-Member ScriptMethod GetValueKind {param($name) return (@($script:expected|Where-Object{$_.name -ceq $name})[0].type)};return $result}
 function secedit.exe {
  $file=$args[[array]::IndexOf($args,'/cfg')+1];$text=''
@@ -22,8 +22,10 @@ function secedit.exe {
  [IO.File]::WriteAllText($file,$text);$global:LASTEXITCODE=0
 }
 function auditpol.exe {
- $guid=([string]$args[1]).Substring('/subcategory:'.Length);$item=@($script:expected|Where-Object{$_.guid -eq $guid})[0];$mask=if($script:wrong){0}else{$item.expected};$global:LASTEXITCODE=0
- @('Machine Name,Policy Target,Subcategory,Subcategory GUID,Inclusion Setting,Exclusion Setting,Setting Value',"WS,System,Test,$guid,State,,$mask")
+ if($args.Count -ne 2 -or $args[0] -ne '/backup' -or $args[1] -notlike '/file:*'){throw 'Unexpected native audit export arguments'}
+ $file=([string]$args[1]).Substring('/file:'.Length);$lines=@('Machine Name,Policy Target,Subcategory,Subcategory GUID,Inclusion Setting,Exclusion Setting,Setting Value')
+ foreach($item in $script:expected){$mask=if($script:wrong){4}else{$item.expected};$lines+="WS,System,Test,$($item.guid),State,,$mask"}
+ [IO.File]::WriteAllLines($file,[string[]]$lines);$global:LASTEXITCODE=0
 }
 function Get-NetFirewallProfile {
  param($Name,$PolicyStore,$ErrorAction)

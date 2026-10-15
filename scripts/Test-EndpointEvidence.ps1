@@ -7,6 +7,7 @@ $ast=[Management.Automation.Language.Parser]::ParseFile((Join-Path $root 'backen
 if($errors.Count){throw ($errors|Out-String)}
 foreach($fn in $ast.FindAll({param($n) $n -is [Management.Automation.Language.FunctionDefinitionAst]},$false)){. ([scriptblock]::Create($fn.Extent.Text))}
 function Assert-Test($Condition,$Message){if(!$Condition){throw $Message}}
+function Get-ItemPropertyValue {param($LiteralPath,$Name,$ErrorAction) if($Name -eq 'SCENoApplyLegacyAuditPolicy'){return 1};throw 'Unexpected fixture registry read'}
 function Get-ADComputer {param($SearchBase,$SearchScope,$Filter,$Server,$Properties,$ResultSetSize,$ErrorAction) [pscustomobject]@{DNSHostName='ws.example.local'}}
 $cfg=@{domainController='dc.example.local';allowedHosts=@('ws.example.local','dc.example.local')}
 $plan=@{selection=@{scopeDn='OU=Endpoints,DC=example,DC=local'};preview=@{refreshComputers=@('dc.example.local');impact=@{affectedObjects=@{sampleHosts=@('ws.example.local','outside.example.local')}}}}
@@ -32,10 +33,21 @@ Assert-Test ((@(Verify-EffectiveSamples $plan $map))[0].state -eq 'MISMATCH') 'A
 $map.items[0].value=@('S-1-5-32-546');$map.comparator='includes';$script:ini="[Privilege Rights]`nSeSystemtimePrivilege = *S-1-5-32-546,*S-1-5-113"
 Assert-Test ((@(Verify-EffectiveSamples $plan $map))[0].state -eq 'VERIFIED') 'Additional deny principals were treated as noncompliant'
 $map.handler='AdvancedAudit';$map.items=@(@{name= $null;section= $null;key= $null;type= $null;guid='{0CCE9235-69AE-11D9-BED3-505054503030}';mask=1});$script:auditMask=3
-function auditpol.exe {Assert-Test ($args.Count -eq 3 -and $args[1] -eq '/subcategory:{0CCE9235-69AE-11D9-BED3-505054503030}') 'auditpol subcategory GUID was split into two native arguments';$global:LASTEXITCODE=$script:nativeExit;return @('Machine Name,Policy Target,Subcategory,Subcategory GUID,Inclusion Setting,Exclusion Setting,Setting Value',('WS,System,Test,{0CCE9235-69AE-11D9-BED3-505054503030},Success and Failure,,'+$script:auditMask))}
+function auditpol.exe {
+ Assert-Test ($args.Count -eq 2 -and $args[0] -eq '/backup' -and $args[1] -like '/file:*') 'auditpol must export numeric backup format, not parse localized /get report'
+ $file=([string]$args[1]).Substring('/file:'.Length);$script:lastAuditFile=$file
+ [IO.File]::WriteAllLines($file,[string[]]@('Machine Name,Policy Target,Subcategory,Subcategory GUID,Inclusion Setting,Exclusion Setting,Setting Value',('WS,System,Lokalisiert,{0CCE9235-69AE-11D9-BED3-505054503030},Erfolg und Fehler,,'+$script:auditMask)))
+ $global:LASTEXITCODE=$script:nativeExit
+}
 Assert-Test ((@(Verify-EffectiveSamples $plan $map))[0].state -eq 'VERIFIED') 'Audit superset did not satisfy include Success'
 $script:auditMask=2
 Assert-Test ((@(Verify-EffectiveSamples $plan $map))[0].state -eq 'MISMATCH') 'Missing required audit bit passed'
+$script:auditMask=4
+$auditResult=@(Verify-EffectiveSamples $plan $map)[0]
+Assert-Test ($auditResult.state -eq 'MISMATCH' -and $auditResult.actualValue -match 'No Auditing') 'Explicit No Auditing must report an observed mismatch, not pending'
+Assert-Test (!(Test-Path -LiteralPath $script:lastAuditFile)) 'Audit export temporary file was not cleaned up'
+$script:auditMask=0
+Assert-Test ((@(Verify-EffectiveSamples $plan $map))[0].state -eq 'PENDING') 'Unchanged audit setting was accepted as explicit evidence'
 $script:nativeExit=5
 Assert-Test ((@(Verify-EffectiveSamples $plan $map))[0].state -eq 'PENDING') 'Failed auditpol produced compliance evidence'
 Assert-Test (!(Numeric-Complies 0 5 '<=')) 'Disabled lockout passed the maximum threshold'
@@ -43,7 +55,7 @@ Assert-Test (Numeric-Complies 3 5 '<=') 'Valid lockout threshold rejected'
 Assert-Test (Included-Value 3 1 'AdvancedAudit') 'Audit inclusion failed'
 Assert-Test (!(Included-Value 7 1 'AdvancedAudit')) 'Invalid audit mask accepted'
 $script:nativeExit=0
-function auditpol.exe {$global:LASTEXITCODE=0;@('Machine Name,Policy Target,Subcategory,Subcategory GUID,Inclusion Setting,Exclusion Setting,Setting Value','WS,System,Other,{11111111-1111-1111-1111-111111111111},Success,,1')}
+function auditpol.exe {$global:LASTEXITCODE=0;$file=([string]$args[1]).Substring('/file:'.Length);[IO.File]::WriteAllLines($file,[string[]]@('Machine Name,Policy Target,Subcategory,Subcategory GUID,Inclusion Setting,Exclusion Setting,Setting Value','WS,System,Other,{11111111-1111-1111-1111-111111111111},Success,,1'))}
 Assert-Test ((@(Verify-EffectiveSamples $plan $map))[0].state -eq 'PENDING') 'Unrelated audit GUID was accepted as target evidence'
 function Get-ADComputer {param($SearchBase,$SearchScope,$Filter,$Server,$Properties,$ResultSetSize,$ErrorAction) @()}
 Assert-Test ((@(Verify-EffectiveSamples $plan $map))[0].state -eq 'PENDING') 'Endpoint outside current scope was verified from stale preview membership'

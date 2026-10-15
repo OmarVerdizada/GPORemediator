@@ -7,8 +7,9 @@ $out=[IO.Path]::GetFullPath((Join-Path $repo $OutputDirectory));$null=New-Item -
 $tests=New-Object 'System.Collections.Generic.List[object]'
 function Run-Check([string]$Name,[string]$Executable,[string[]]$Arguments,[string]$Kind='offline regression'){
  $log=Join-Path $out ($Name+'.log');$start=[DateTimeOffset]::UtcNow
- & $Executable @Arguments *> $log
- $code=$LASTEXITCODE
+ $previousPreference=$ErrorActionPreference
+ try{$ErrorActionPreference='Continue'; & $Executable @Arguments *> $log; $code=$LASTEXITCODE}
+ finally{$ErrorActionPreference=$previousPreference}
  $tests.Add([pscustomobject]@{name=$Name;kind=$Kind;status=$(if($code -eq 0){'PASS'}else{'FAIL'});exitCode=$code;startedAt=$start.ToString('O');durationSeconds=[math]::Round(([DateTimeOffset]::UtcNow-$start).TotalSeconds,2);log=$OutputDirectory+'/'+$Name+'.log';logSha256=(Get-FileHash -LiteralPath $log -Algorithm SHA256).Hash})
  $tests|ConvertTo-Json -Depth 8|Set-Content -LiteralPath (Join-Path $out 'test-results.json') -Encoding UTF8
  Write-Output ($tests[-1].status+' '+$Name)

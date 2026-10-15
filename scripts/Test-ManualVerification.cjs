@@ -9,6 +9,10 @@ for(const row of commands){assert(row.command.includes('ws.example.test'));asser
 assert(commands.find(x=>x.id==='19.5.1.1').command.includes('HKEY_USERS'));
 assert(commands.find(x=>x.id==='19.5.1.1').command.includes("User''Name"));
 assert(commands.find(x=>x.id==='9.1.5').command.includes('-PolicyStore ActiveStore'));
+const auditCommand=commands.find(x=>x.id==='17.2.1').command;
+assert.match(auditCommand,/auditpol\.exe \/get \/subcategory:"\{[a-f0-9-]+\}"/i);
+assert(!auditCommand.includes(' /r'));
+assert(auditCommand.includes('SCENoApplyLegacyAuditPolicy'));
 assert.equal((fs.readFileSync(path.join(root,'frontend/source/product.js'),'utf8').match(/function disconnectedControl\(/g)||[]).length,1,'Dead duplicate control implementation returned');
 const json=path.join(dir,'manual-commands.json'),ps=path.join(dir,'parse-manual.ps1');fs.writeFileSync(json,JSON.stringify(commands));
 fs.writeFileSync(ps,`$ErrorActionPreference='Stop'\n$rows=Get-Content -LiteralPath '${json.replaceAll("'","''")}' -Raw|ConvertFrom-Json\nforeach($row in $rows){$tokens=$null;$errors=$null;$null=[Management.Automation.Language.Parser]::ParseInput($row.command,[ref]$tokens,[ref]$errors);if($errors.Count){throw ($row.id+': '+($errors|Out-String))}}\nWrite-Output 'PASS 405 generated PowerShell commands parsed without execution'\n`);

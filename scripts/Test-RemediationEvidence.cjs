@@ -10,6 +10,14 @@ const state={lang:'en',catalog,selectedRule:rule,selection:{},settings:[],histor
 const esc=x=>String(x??'').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;');
 const view=window.GpoControlView.create({state,esc,say:(az,en)=>en,tr:x=>x,riskFor:()=>({cls:'medium',name:'Medium'}),badges:()=>'',topDomainForRule:()=>null,sectionTitle:()=>'',renderConnection:()=>'',uiIcon:()=>'',stateClass:x=>x==='ENDPOINT_MISMATCH'?'bad':'pending',statusText:x=>x});
 let html=view.controlView();
+run.result.verificationStages=[{stage:'GPO_CONFIGURATION',status:'GPO_APPLIED',evidence:'Selected content matched.'},{stage:'CLIENT_PROCESSING',status:'GPUPDATE_SCHEDULED',evidence:'Scheduling only.'},{stage:'ENDPOINT_CONFIGURATION',status:'ENDPOINT_MISMATCH',evidence:'No Auditing <unsafe>'},{stage:'GPO_APPLICABILITY',status:'INSUFFICIENT_EVIDENCE',evidence:'Need RSoP.'},{stage:'AD_SYSVOL_REPLICATION',status:'NOT_VERIFIED',evidence:'Unknown.'}];
+html=view.controlView();
+for(const tone of ['good','pending','bad','neutral'])assert.ok(html.includes(`class="assurance-stage ${tone}"`));
+assert.ok(html.includes('Actual endpoint value'));
+assert.ok(html.includes('<span class="assurance-label">Scheduled</span>'));
+assert.ok(html.includes('No Auditing &lt;unsafe&gt;'));
+assert.ok(!html.includes('<strong>ENDPOINT_CONFIGURATION'));
+assert.ok(!html.includes('<strong>CLIENT_PROCESSING'));
 assert.ok(html.includes('<h2>ENDPOINT_MISMATCH</h2>'));
 assert.ok(html.includes('SeSystemtimePrivilege=S-1-5-32-544 &lt;unsafe&gt;'));
 assert.ok(!html.includes('<unsafe>'));

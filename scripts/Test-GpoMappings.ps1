@@ -13,10 +13,11 @@ if($parseErrors.Count){throw ($parseErrors|Out-String)}
 foreach($fn in $ast.FindAll({param($node) $node -is [Management.Automation.Language.FunctionDefinitionAst]},$false)){. ([scriptblock]::Create($fn.Extent.Text))}
 $cfg=[pscustomobject]@{domain='example.local';domainController='dc.example.local';allowedHosts=@('dc.example.local','ws.example.local')}
 $domain=[pscustomobject]@{PDCEmulator='dc.example.local'}
-$script:folder=$sandbox;$script:registry=@{};$script:bumps=0
+$script:folder=$sandbox;$script:registry=@{};$script:bumps=0;$script:auditExtensions=''
+function Gpo-Ad {param($Id) @{gPCMachineExtensionNames=$script:auditExtensions}}
 function Gpo-Folder {param($Id) return $script:folder}
 function Assert-VersionSync {param($Id) return @{version=1}}
-function Bump-ComputerVersion {param($Id,$Extension) $script:bumps++}
+function Bump-ComputerVersion {param($Id,$Extension) $script:bumps++;if($Extension -eq 'Audit'){$script:auditExtensions=Add-AuditExtension $script:auditExtensions}}
 function Set-GPRegistryValue {param($Guid,$Key,$ValueName,$Type,$Value,$Domain,$Server) $script:registry[$Key+'|'+$ValueName]=@{value=$Value;type=$Type}}
 function Get-GPRegistryValue {param($Guid,$Key,$ValueName,$Domain,$Server,$ErrorAction) $keyName=$Key+'|'+$ValueName;if(!$script:registry.ContainsKey($keyName)){Write-Error 'Missing mocked policy' -ErrorId UnableToRetrievePolicyRegistryItem -ErrorAction Stop};return [pscustomobject]@{Value=$script:registry[$keyName].value;Type=$script:registry[$keyName].type}}
 $script:caseCount=0
@@ -30,7 +31,7 @@ foreach($map in $catalog.mappings){
     # embedded JSON omits them. Reproduce the worker's actual wire shape.
     foreach($item in $map.items){foreach($field in @('section','key','name','type','value','guid','state','mask')){if(!$item.PSObject.Properties[$field]){$item|Add-Member -NotePropertyName $field -NotePropertyValue $null}}}
     $script:folder=Join-Path $sandbox ([string]$map.id);$null=New-Item -ItemType Directory -Path $script:folder
-    $script:registry=@{};$script:bumps=0
+    $script:registry=@{};$script:bumps=0;$script:auditExtensions=''
     $selection=[pscustomobject]@{gpoId='31b2f340-016d-11d2-945f-00c04fb984f9';scopeDn='DC=example,DC=local';value=$(if($map.allowValueOverride){$map.suggested}else{0});customValue=$(if($map.requiresInput){if($map.inputDefault){$map.inputDefault}else{'Policy test value'}}else{''});refresh='None';firstLink=$false}
     $plan=[pscustomobject]@{selection=$selection}
     try{
@@ -76,6 +77,28 @@ $path=Audit-Path $selection.gpoId;$null=New-Item -ItemType Directory -Path (Spli
 $null=Write-Mapping $plan $map
 Assert-Test ((Get-ItemCurrent $selection.gpoId $map $map.items[0]) -eq '3') 'Adding Success removed existing Failure auditing'
 Assert-Test (!(Write-Mapping $plan $map)) 'Audit superset was rewritten'
+$header='Machine Name,Policy Target,Subcategory,Subcategory GUID,Inclusion Setting,Exclusion Setting,Setting Value'
+$legacyRow='"","System","Audit User Account Management","'+[string]$map.items[0].guid+'","Success and Failure","","3"'
+$sibling='"","System","Other fixture","{11111111-1111-1111-1111-111111111111}","Failure","","2"'
+[IO.File]::WriteAllText($path,($header+"`r`n"+$legacyRow+"`r`n"+$sibling+"`r`n"))
+Assert-Test (!(Mapping-Matches $selection.gpoId $map $selection)) 'Generic quoted CSV was accepted as canonical GPAC storage'
+Assert-Test (Write-Mapping $plan $map) 'Old quoted CSV was not repaired despite equal values'
+$repaired=[IO.File]::ReadAllText($path)
+Assert-Test ($repaired -match ',System,"[^"\r\n]+",\{[a-f0-9-]+\},Success and Failure,,3') 'GPAC literal fields remain quoted'
+$siblingRow=@(Get-Content -LiteralPath $path -Encoding UTF8|ConvertFrom-Csv|Where-Object {$_.'Subcategory GUID' -eq '{11111111-1111-1111-1111-111111111111}'})
+Assert-Test ($siblingRow.Count -eq 1 -and $siblingRow[0].'Setting Value' -eq '2') 'Formatting repair changed an unrelated audit mask'
+Assert-Test (!(Write-Mapping $plan $map)) 'Canonical audit repair was not idempotent'
+$script:auditExtensions=''
+Assert-Test (!(Mapping-Matches $selection.gpoId $map $selection)) 'Correct CSV without audit CSE was incorrectly classified no-change'
+Assert-Test (Write-Mapping $plan $map) 'Missing audit CSE was not repaired'
+Assert-Test (Mapping-Matches $selection.gpoId $map $selection) 'Repaired audit CSE did not verify'
+$noneMap=$map|ConvertTo-Json -Depth 15|ConvertFrom-Json;$noneMap.comparator=$null;$noneMap.items[0].mask=0
+$null=Write-Mapping $plan $noneMap
+$noneRows=@(Get-Content -LiteralPath $path -Encoding UTF8|ConvertFrom-Csv)
+Assert-Test ($noneRows[0].'Setting Value' -eq '4') 'Explicit No Auditing must use MS-GPAC value 4, not unchanged value 0'
+Assert-Test (Mapping-Matches $selection.gpoId $noneMap $selection) 'Explicit No Auditing did not normalize to internal mask zero'
+[IO.File]::WriteAllText($path,('Machine Name,Policy Target,Subcategory,Subcategory GUID,Inclusion Setting,Exclusion Setting,Setting Value'+"`r`n"+(Audit-Row $map.items[0].name $map.items[0].guid 'Not Specified' 0)+"`r`n"))
+Assert-Test (!(Mapping-Matches $selection.gpoId $noneMap $selection)) 'Unchanged GPO audit setting matched explicit No Auditing'
 $map=$catalog.mappings|Where-Object{$_.id -eq '2.3.17.8'};$item=$map.items[0]
 $script:registry=@{};$script:registry[$item.key+'|'+$item.name]=@{value=1;type='String'}
 Assert-Test (!(Mapping-Matches $selection.gpoId $map $selection)) 'Wrong registry type passed publication verification'
