@@ -10,6 +10,47 @@ public sealed class Store : IDisposable
 {
     private readonly SqliteConnection db;
     private readonly object gate = new();
+    private readonly byte[] auditMacKey;
+    private static readonly byte[] MacEntropy=Encoding.UTF8.GetBytes("GPORemediator.AuditHmac.v1");
+    private byte[] OpenAuditMacKey(string dbPath)
+    {
+        if(dbPath==":memory:")return RandomNumberGenerator.GetBytes(32);
+        if(!OperatingSystem.IsWindows())throw new PlatformNotSupportedException("Persistent audit keys require Windows DPAPI.");
+        var keyPath=Path.Combine(Path.GetDirectoryName(Path.GetFullPath(dbPath))!,"audit-hmac-key.dpapi");
+        if(File.Exists(keyPath))
+        {
+            if((File.GetAttributes(keyPath)&FileAttributes.ReparsePoint)!=0)
+                throw new InvalidOperationException("Audit MAC key cannot be a file link.");
+            var sealedKey=File.ReadAllBytes(keyPath);
+            try
+            {
+                var key=ProtectedData.Unprotect(sealedKey,MacEntropy,DataProtectionScope.CurrentUser);
+                if(key.Length!=32){CryptographicOperations.ZeroMemory(key);throw new InvalidOperationException("Invalid audit MAC key length.");}
+                return key;
+            }
+            finally{CryptographicOperations.ZeroMemory(sealedKey);}
+        }
+        using(var c=Command("SELECT COUNT(*) FROM audit_macs"))
+            if(Convert.ToInt64(c.ExecuteScalar())!=0)
+                throw new InvalidOperationException("Audit MAC key is missing but authenticated records exist. Restore the original protected key; do not regenerate it.");
+        var created=RandomNumberGenerator.GetBytes(32);
+        var sealedNew=ProtectedData.Protect(created,MacEntropy,DataProtectionScope.CurrentUser);
+        try
+        {
+            // Fail closed if another process won the creation race. Never overwrite a key.
+            using var fs=new FileStream(keyPath,FileMode.CreateNew,FileAccess.Write,FileShare.None);
+            fs.Write(sealedNew);fs.Flush(true);
+        }
+        catch{CryptographicOperations.ZeroMemory(created);throw;}
+        finally{CryptographicOperations.ZeroMemory(sealedNew);}
+        return created;
+    }
+    private string AuditTag(long id,string hash,string previous)
+    {
+        var payload=Encoding.UTF8.GetBytes(id.ToString(System.Globalization.CultureInfo.InvariantCulture)+"|"+hash+"|"+previous);
+        try{return Convert.ToHexString(HMACSHA256.HashData(auditMacKey,payload));}
+        finally{CryptographicOperations.ZeroMemory(payload);}
+    }
     private static readonly HashSet<string> Tables = ["gpo_plans", "gpo_runs", "gpo_evidence", "workflow_jobs", "batch_plans"];
     public Store(string path)
     {
@@ -24,9 +65,14 @@ public sealed class Store : IDisposable
             CREATE TABLE IF NOT EXISTS audit(id INTEGER PRIMARY KEY AUTOINCREMENT,event TEXT NOT NULL,operator TEXT NOT NULL,job_id TEXT,control_id TEXT,gpo_id TEXT,details TEXT NOT NULL,created_at TEXT NOT NULL,previous_hash TEXT NOT NULL,hash TEXT NOT NULL);
             CREATE TRIGGER IF NOT EXISTS audit_no_update BEFORE UPDATE ON audit BEGIN SELECT RAISE(ABORT,'Audit events are append-only'); END;
             CREATE TRIGGER IF NOT EXISTS audit_no_delete BEFORE DELETE ON audit BEGIN SELECT RAISE(ABORT,'Audit events are append-only'); END;
+            CREATE TABLE IF NOT EXISTS audit_macs(audit_id INTEGER PRIMARY KEY,tag TEXT NOT NULL,
+                FOREIGN KEY(audit_id) REFERENCES audit(id) ON DELETE RESTRICT);
+            CREATE TRIGGER IF NOT EXISTS audit_macs_no_update BEFORE UPDATE ON audit_macs BEGIN SELECT RAISE(ABORT,'Audit MACs are append-only'); END;
+            CREATE TRIGGER IF NOT EXISTS audit_macs_no_delete BEFORE DELETE ON audit_macs BEGIN SELECT RAISE(ABORT,'Audit MACs are append-only'); END;
             CREATE INDEX IF NOT EXISTS ix_gpo_runs_state_updated ON gpo_runs(state,updated_at DESC);
             CREATE INDEX IF NOT EXISTS ix_audit_operator_created ON audit(operator,created_at DESC);
             """);
+        auditMacKey=OpenAuditMacKey(path);
     }
     private SqliteCommand Command(string sql, params (string, object?)[] parameters)
     {
@@ -103,14 +149,22 @@ public sealed class Store : IDisposable
     }
     public void Audit(string eventName, string operatorName, string? jobId = null, string? controlId = null, string? gpoId = null, object? details = null)
     {
-        lock (gate)
+        lock(gate)
         {
-            using var previousCommand = Command("SELECT hash FROM audit ORDER BY id DESC LIMIT 1");
-            var previous = previousCommand.ExecuteScalar() as string ?? "GENESIS";
-            var at = PolicyValues.Now(); var safe = Redactor.Clean(JsonDefaults.Serialize(details ?? new { }));
-            var hash = PolicyValues.Hash(new { eventName, operatorName, jobId, controlId, gpoId, details=safe, at, previous });
-            Execute("INSERT INTO audit(event,operator,job_id,control_id,gpo_id,details,created_at,previous_hash,hash) VALUES($e,$o,$j,$c,$g,$d,$a,$p,$h)",
-                ("$e",eventName),("$o",operatorName),("$j",jobId),("$c",controlId),("$g",gpoId),("$d",safe),("$a",at),("$p",previous),("$h",hash));
+            using var prior=Command("SELECT hash FROM audit ORDER BY id DESC LIMIT 1");
+            var previous=prior.ExecuteScalar() as string ?? "GENESIS";
+            var at=PolicyValues.Now();var safe=Redactor.Clean(JsonDefaults.Serialize(details??new{}));
+            var hash=PolicyValues.Hash(new{eventName,operatorName,jobId,controlId,gpoId,details=safe,at,previous});
+            using var tx=db.BeginTransaction();
+            using(var insert=Command("INSERT INTO audit(event,operator,job_id,control_id,gpo_id,details,created_at,previous_hash,hash) VALUES($e,$o,$j,$c,$g,$d,$a,$p,$h)",
+                ("$e",eventName),("$o",operatorName),("$j",jobId),("$c",controlId),("$g",gpoId),("$d",safe),("$a",at),("$p",previous),("$h",hash)))
+            {insert.Transaction=tx;insert.ExecuteNonQuery();}
+            long id;
+            using(var latest=Command("SELECT last_insert_rowid()")){latest.Transaction=tx;id=Convert.ToInt64(latest.ExecuteScalar());}
+            using(var mac=Command("INSERT INTO audit_macs(audit_id,tag) VALUES($id,$tag)",
+                ("$id",id),("$tag",AuditTag(id,hash,previous))))
+            {mac.Transaction=tx;mac.ExecuteNonQuery();}
+            tx.Commit();
         }
     }
     public AuditEvent[] AuditEvents(int? limit=null)
@@ -120,14 +174,53 @@ public sealed class Store : IDisposable
             using var r=command.ExecuteReader(); var list=new List<AuditEvent>();
             while(r.Read()) list.Add(new(r.GetInt64(0),r.GetString(1),r.GetString(2),r.IsDBNull(3)?null:r.GetString(3),r.IsDBNull(4)?null:r.GetString(4),r.IsDBNull(5)?null:r.GetString(5),r.GetString(6),r.GetString(7),r.GetString(8),r.GetString(9))); return list.ToArray(); }
     }
-    public (bool Valid, long? FirstInvalidEventId) AuditIntegrityReport()
+    public (bool Valid,long? FirstInvalidEventId) AuditIntegrityReport()
     {
-        string previous="GENESIS";
-        foreach(var e in AuditEvents()) { var hash=PolicyValues.Hash(new {eventName=e.Event,operatorName=e.Operator,jobId=e.JobId,controlId=e.ControlId,gpoId=e.GpoId,details=e.Details,at=e.CreatedAt,previous});
-            if(e.PreviousHash!=previous || e.Hash!=hash) return (false,e.Id); previous=e.Hash; } return (true,null);
+        lock(gate)
+        {
+            var tags=new Dictionary<long,string>();
+            using(var query=Command("SELECT audit_id,tag FROM audit_macs ORDER BY audit_id"))
+            using(var reader=query.ExecuteReader())
+                while(reader.Read())tags.Add(reader.GetInt64(0),reader.GetString(1));
+            var events=AuditEvents();var previous="GENESIS";
+            var firstAuthenticated=tags.Count>0?tags.Keys.Min():long.MaxValue;
+            var seen=0;
+            foreach(var e in events)
+            {
+                var hash=PolicyValues.Hash(new{eventName=e.Event,operatorName=e.Operator,jobId=e.JobId,
+                    controlId=e.ControlId,gpoId=e.GpoId,details=e.Details,at=e.CreatedAt,previous});
+                if(e.PreviousHash!=previous||e.Hash!=hash)return(false,e.Id);
+                if(tags.TryGetValue(e.Id,out var tag))
+                {
+                    seen++;
+                    var expected=AuditTag(e.Id,e.Hash,e.PreviousHash);
+                    try
+                    {
+                        if(tag.Length!=64 || !CryptographicOperations.FixedTimeEquals(Convert.FromHexString(tag),Convert.FromHexString(expected)))
+                            return(false,e.Id);
+                    }
+                    catch(FormatException){return(false,e.Id);}
+                }
+                else if(e.Id>=firstAuthenticated)return(false,e.Id);
+                previous=e.Hash;
+            }
+            // A removed audit row with its MAC still present must fail verification.
+            if(seen==tags.Count)return(true,null);
+            return(false,tags.Keys.FirstOrDefault());
+        }
+    }
+    public object AuditProtectionSummary()
+    {
+        lock(gate)
+        {
+            using var c=Command("SELECT (SELECT COUNT(*) FROM audit),(SELECT COUNT(*) FROM audit_macs)");
+            using var r=c.ExecuteReader();r.Read();
+            var total=r.GetInt64(0);var authenticated=r.GetInt64(1);
+            return new{mode="DPAPI-protected HMAC-SHA256 for new events",total,authenticated,legacy=total-authenticated};
+        }
     }
     public bool AuditIntegrity() => AuditIntegrityReport().Valid;
-    public void Dispose() => db.Dispose();
+    public void Dispose(){CryptographicOperations.ZeroMemory(auditMacKey);db.Dispose();}
 }
 
 public static partial class Redactor

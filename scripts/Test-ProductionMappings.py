@@ -4,7 +4,7 @@ from pathlib import Path
 root = Path(__file__).resolve().parents[1]
 m = {x['id']: x for x in json.loads((root/'backend/data/gpo-production-mappings.json').read_text(encoding='utf-8'))['mappings']}
 assert len(m) == 405
-assert {x['id'] for x in m.values() if x['automation'] != 'Automated'} == {'1.2.3','2.3.11.6','18.10.43.10.1','18.10.43.10.2'}
+assert {x['id'] for x in m.values() if x['automation'] != 'Automated'} == {'1.2.3','2.3.11.6','18.10.43.10.1','18.10.43.10.2','2.2.6','2.2.16','2.2.31','2.2.33','2.2.36','2.2.39','2.2.45'}
 assert {scope: sum(1 for x in m.values() if x['scope'] == scope) for scope in ('Domain','Computer','User')} == {'Domain':8,'Computer':385,'User':12}
 for x in m.values():
     roots = {item.get('key','').split('\\',1)[0].upper() for item in x['items'] if item.get('key','').upper().startswith(('HKCU\\','HKLM\\'))}
@@ -26,4 +26,4 @@ assert all(x['type'] == 'String' for x in m['18.4.4']['items']) and m['18.4.4'][
 for x in m.values():
     if 'include ' in x['title'].lower() and x['handler'] in ('SecurityTemplate','AdvancedAudit'):
         assert x['comparator'] == 'includes', x['id']
-print('PASS independent mapping regressions, 405 unique controls and four guided boundaries')
+print('PASS independent mapping regressions, 405 unique controls and eleven guided boundaries')

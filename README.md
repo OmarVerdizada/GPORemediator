@@ -1,8 +1,20 @@
-# GPO Remediator 3.10.0
+# GPO Remediator 3.11.0
+
+Vahid Windows/Active Directory tətbiqi: Studio interfeysinin altı yenilənməsi, vizual GPO/OU seçimi, hesabat və diaqnostika, audit HMAC qorunması və domain/GPO üzrə skript izolyasiyası bir source ağacında birləşdirilib. ZIP patch-lərini ayrıca tətbiq etmək lazım deyil.
+
+The integrated release combines the six-wave Studio UI with the cumulative targeting, reliability, reporting, security and domain/GPO isolation updates. The catalog contains **405 controls: 394 automated mappings and 11 manual/review-only controls**. Seven role-sensitive user-right controls remain blocked from automatic writes. Four of the eleven controls have dedicated offline AZ/EN guides; the other seven display role-specific review warnings.
+
+Start with `GpoRemediator.cmd`. The included `release/GpoRemediator-runtime-win-x64.zip` is rebuilt from this source; operators need no SDK or Node.js. Developers use `Build-Portable.ps1`, then `scripts/Validate-Source.ps1 -IncludeBrowser` (.NET 10, Python, Node.js and Playwright required).
+
+Canonical folders: `backend/` for server and trusted PowerShell, `frontend/source/` for editable UI, generated `frontend/dist/`, `scripts/` for tooling and regressions, `security/` for signing and security checks, `docs/` for operational documentation, and `release/` for the self-contained runtime. Patch installers and backup trees are excluded.
+
+See [3.11 integration and validation](docs/INTEGRATION-3.11.0.md) for provenance, fixes and test limits. Local build and simulated workflow tests do not certify a live AD deployment; effective policy, replication and rollback still require a disposable domain pilot.
+
+## Earlier releases
 
 3.10.0 adds first-class user-policy targeting: user OU, endpoint OU, verification identity, user-only gpupdate and exact HKCU evidence are handled separately. It also consolidates authentication into one sign-in surface and enforces the reviewed 385 computer / 12 user / 8 domain scope contract. See [the remediation audit](docs/REMEDIATION-AUDIT.md) for the complete 405-control review.
 
-The application uses one domain-account sign-in to open the workspace and connect to AD. The duplicate dashboard password form is removed; expiry/disconnect returns to the same sign-in screen. Startup still requires explicit sign-in, and Windows operator roles remain enforced. It retains compact colored dashboard metrics and supplemental review guidance for empty policy categories. The catalog remains 405 controls: 401 GPO mappings and four guided controls.
+The application uses one domain-account sign-in to open the workspace and connect to AD. The duplicate dashboard password form is removed; expiry/disconnect returns to the same sign-in screen. Startup still requires explicit sign-in, and Windows operator roles remain enforced. It retains compact colored dashboard metrics and supplemental review guidance for empty policy categories. At 3.10, the catalog contained 401 automated mappings and four guided controls; 3.11 applies the conservative 394/11 boundary above.
 
 3.7.1 provides offline AZ/EN remediation guides for the four blocked controls, with local/central policy paths, read commands, guarded operator-run Defender backup/apply/rollback examples and honest verification limits. The catalog remains 401 automatic GPO mappings plus four guided controls. See [guided procedures and execution boundaries](docs/GUIDED-REMEDIATION.md).
 
@@ -32,7 +44,7 @@ GPO Remediator is a local Windows/Active Directory policy-remediation console fo
 3. Use the Local Control Center to start the workspace.
 4. In Settings, save the AD DNS domain and a writable DC FQDN.
 5. Start Windows / AD mode.
-6. Connect from Dashboard with the delegated domain execution account.
+6. Use the single sign-in screen with the delegated domain execution account.
 
 The startup console stays attached until the Control Center closes. If startup fails, the error and diagnostic location remain visible; press a key after reviewing them. `GpoRemediator.cmd -Port 5081` opens the panel for an alternate local port.
 

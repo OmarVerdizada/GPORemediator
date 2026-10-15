@@ -11,11 +11,14 @@ public sealed class WindowsPowerShellExecutor(ILogger<WindowsPowerShellExecutor>
     public async Task<T> RunAsync<T>(string operation, object configuration, object payload, CancellationToken ct,Action<string>? progress=null)
     {
         if (!OperatingSystem.IsWindows()) throw new PolicyException("WINDOWS_REQUIRED", "Real execution requires a domain-connected Windows management host.");
-        var gpo = new[] {"gpoInventory","gpoReadiness","gpoPreview","gpoApply","gpoRollback","gpoVerify","gpoRefresh"}.Contains(operation);
+        var gpo = new[] {"gpoInventory","gpoReadiness","gpoPreview","gpoApply","gpoRollback","gpoRollbackInspect","gpoVerify","gpoRefresh"}.Contains(operation);
         if (!gpo) throw new PolicyException("OPERATION_DENIED", "Only the production GPO workflow is exposed by the Windows executor.");
-        var script = Path.Combine(AppContext.BaseDirectory, "PowerShell", "Invoke-GpoWorkflow.ps1");
-        BundledAssets.VerifyScripts(Path.GetDirectoryName(script)!);
-        if (!File.Exists(script)) throw new PolicyException("SCRIPT_MISSING", "Publish the bundled PowerShell directory with the backend.");
+        var trustedScript = Path.Combine(AppContext.BaseDirectory, "PowerShell", "Invoke-GpoWorkflow.ps1");
+        BundledAssets.VerifyScripts(Path.GetDirectoryName(trustedScript)!);
+        if (!File.Exists(trustedScript)) throw new PolicyException("SCRIPT_MISSING", "Publish the bundled PowerShell directory with the backend.");
+        // Per-GPO, per-domain launchers are isolated and verified against the compiled product.
+        // Inventory/readiness still use the common read-only bootstrap (no selected GPO yet).
+        var script = GpoScriptWorkspaces.SelectScript(operation, configuration, payload, trustedScript);
         var executable = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Windows), "System32", "WindowsPowerShell", "v1.0", "powershell.exe");
         var start = new ProcessStartInfo(executable)
         {
@@ -30,7 +33,7 @@ public sealed class WindowsPowerShellExecutor(ILogger<WindowsPowerShellExecutor>
         var operationTimeout = operation switch
         {
             "gpoApply" or "gpoRollback" => TimeSpan.FromMinutes(16),
-            "gpoPreview" or "gpoVerify" => TimeSpan.FromMinutes(10),
+            "gpoPreview" or "gpoRollbackInspect" or "gpoVerify" => TimeSpan.FromMinutes(10),
             "gpoRefresh" => TimeSpan.FromMinutes(12),
             "gpoInventory" or "gpoReadiness" => TimeSpan.FromSeconds(90),
             _ when gpo => TimeSpan.FromMinutes(6),

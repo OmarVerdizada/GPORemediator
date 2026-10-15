@@ -1,7 +1,7 @@
 const assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm'),path=require('node:path');
 const source=path.join(__dirname,'../frontend/source'),window={GpoClient:{storage:{get:()=> '[]',set(){}}}};
 const context=vm.createContext({window,Date,JSON,String,Number,Boolean});
-for(const name of ['ui-domain.js','components.js','product.js','premium.js','catalog-view.js','operation-view.js'])vm.runInContext(fs.readFileSync(path.join(source,name),'utf8'),context);
+for(const name of ['ui-domain.js','components.js','product.js','premium.js','studio-ui.js','catalog-view.js','operation-view.js'])vm.runInContext(fs.readFileSync(path.join(source,name),'utf8'),context);
 const ui=window.GpoComponents,s={lang:'en',history:[],favorites:new Set(),query:'',level:'ALL',automation:'ALL',savedView:'ALL',catalog:JSON.parse(fs.readFileSync(path.join(source,'benchmark-v4.json'),'utf8'))};
 assert.equal(ui.status(s,'ROLLED_BACK').tone,'neutral');
 assert.equal(ui.status(s,'PUBLISHED_REFRESH_FAILED').tone,'danger');
@@ -40,7 +40,7 @@ s.expandedTop=new Set();s.settings=[];
 assert.equal((c.benchmarkView().match(/data-domain=/g)||[]).length,19);
 assert.ok(ui.breadcrumb(s,s.catalog.rules.find(r=>r.id==='1.2.1')).includes('Account Lockout Policy'));
 const index=fs.readFileSync(path.join(source,'index.html'),'utf8');
-assert.equal((index.match(/rel="stylesheet"/g)||[]).length,1);
+assert.deepEqual([...index.matchAll(/rel="stylesheet" href="\/([^?]+)/g)].map(m=>m[1]),['app.css','gpo-scope-picker.css','ux-pro.css','wave1-reliability.css','enterprise-center.css','studio-design.css']);
 for(const name of [...index.matchAll(/(?:src|href)="\/([^"?]+)(?:\?[^" ]+)?"/g)].map(m=>m[1]))if(!name.startsWith('#'))assert.ok(fs.existsSync(path.join(source,name)),`Missing asset ${name}`);
 const css=fs.readFileSync(path.join(source,'app.css'),'utf8');
 assert.ok(!css.includes('!important'));
@@ -48,7 +48,8 @@ assert.ok(!/--(?:accent|cc-|ink|muted|green)\b/.test(css));
 for(const s of ['prefers-reduced-motion','data-large-text','data-contrast','data-gr-theme=dark','.ds-field-error','.ds-toast'])assert.ok(css.includes(s));
 const controlView=fs.readFileSync(path.join(source,'control-view.js'),'utf8');
 for(const marker of ['endpointScopeDn','verificationUser','User Configuration','/target:user'])assert.ok(controlView.includes(marker),`Missing user-policy UI marker ${marker}`);
-assert.ok(controlView.includes("${user?'':`<label class=\"refresh-choice"),'PDC refresh is not conditionally hidden for user policy');
+assert.ok(controlView.includes("${!st?.domainPolicySensitive?'':`<label class=\"refresh-choice"),'PDC refresh must be conditionally limited to domain-account controls');
+require('./Test-GpoScopePicker.cjs');
 console.log('Frontend system: PASS (honest evidence, status tones, escaping, grouping, audit mismatch, breadcrumb, packaged assets and canonical tokens).');
 // Publication alone and rollback must not become verification on the map.
 const premium=window.GpoPremium;

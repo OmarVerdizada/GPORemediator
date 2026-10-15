@@ -100,6 +100,7 @@ public static class ProductionGpoMappings
         {
             if (mapping.DomainPolicySensitive && selection.AccountScope != "Domain") throw new PolicyException("GPO_SCOPE_TYPE_MISMATCH", "This control requires the domain account-policy scope.");
             if (!mapping.DomainPolicySensitive && selection.AccountScope != "LocalComputers") throw new PolicyException("GPO_SCOPE_TYPE_MISMATCH", "This control requires a computer policy scope.");
+            if (!mapping.DomainPolicySensitive && selection.Refresh == "Pdc") throw new PolicyException("PDC_REFRESH_SCOPE_INVALID", "This computer policy targets the selected computer OU, not the PDC. Use scope computers or the normal cycle.");
             if (!string.IsNullOrWhiteSpace(selection.EndpointScopeDn) || !string.IsNullOrWhiteSpace(selection.VerificationUser))
                 throw new PolicyException("USER_TARGET_NOT_ALLOWED", "Endpoint OU and verification user are only valid for user-scoped policy.");
         }
@@ -142,14 +143,14 @@ public static class ProductionGpoMappings
             throw new InvalidOperationException("Production GPO mapping registry benchmark/count contract is invalid.");
         if (catalog.Mappings.Select(x => x.Id).Distinct(StringComparer.OrdinalIgnoreCase).Count() != 405)
             throw new InvalidOperationException("Production GPO mapping registry contains duplicate control IDs.");
-        var allowedHandlers = new HashSet<string>(StringComparer.Ordinal) { "SecurityTemplate", "Registry", "RegistrySet", "AdvancedAudit" };
+        var allowedHandlers = new HashSet<string>(StringComparer.Ordinal) { "SecurityTemplate", "Registry", "RegistrySet", "AdvancedAudit", "Manual" };
         if (catalog.Mappings.Any(x => !allowedHandlers.Contains(x.Handler) || x.Items.Length == 0))
             throw new InvalidOperationException("Production GPO mapping registry contains an unsupported or empty handler mapping.");
         var writable = catalog.Mappings.Count(x => x.Writable);
-        if (writable != 401 || catalog.Meta.Mapped != 401 || catalog.Meta.ManualOrBlocked != 4)
+        if (writable != 394 || catalog.Meta.Mapped != 394 || catalog.Meta.ManualOrBlocked != 11)
             throw new InvalidOperationException("Production GPO mapping registry writable/read-only counts are invalid.");
         var blocked = catalog.Mappings.Where(x => !x.Writable).Select(x => x.Id).OrderBy(x => x, StringComparer.Ordinal).ToArray();
-        var expectedBlocked = new[] { "1.2.3", "18.10.43.10.1", "18.10.43.10.2", "2.3.11.6" }.OrderBy(x => x, StringComparer.Ordinal).ToArray();
+        var expectedBlocked = new[] { "1.2.3", "18.10.43.10.1", "18.10.43.10.2", "2.3.11.6", "2.2.6", "2.2.16", "2.2.31", "2.2.33", "2.2.36", "2.2.39", "2.2.45" }.OrderBy(x => x, StringComparer.Ordinal).ToArray();
         if (!blocked.SequenceEqual(expectedBlocked, StringComparer.Ordinal))
             throw new InvalidOperationException("Production GPO mapping registry manual/read-only control set changed unexpectedly.");
         if (catalog.Mappings.Any(x => x.DomainPolicySensitive && (x.Scope != "Domain" || !(x.ControlId.StartsWith("1.1.") || x.ControlId.StartsWith("1.2.")))))

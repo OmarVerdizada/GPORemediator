@@ -1,3 +1,17 @@
+## 2026-10-14 addendum: safe targeting and role exceptions
+
+- CIS **Section 19** means benchmark section, **not AD domain 19**.
+- **2.2.12** = **Change the system time**, `SeSystemTimePrivilege` (Computer GPO). **2.2.20** = **Debug programs**, `SeDebugPrivilege` (Computer GPO).
+- Domain account policies: **8** controls, Default Domain Policy at domain root.
+- **385 Computer GPO / 12 User GPO** classifications remain unchanged.
+- PDC refresh is allowed only for domain account policy; computer OU policies must refresh the computer OU, user OU policies target an endpoint OU where user sessions exist.
+- User GPO targeting requires a user OU; normal refresh is valid without a loaded user profile, but endpoint HKCU verification remains pending.
+- Preview now explicitly cautions when target OU is empty, GPO Apply trustees cannot be found, or no allowlisted refresh hosts are available; these cases do not prove compliance.
+- **Seven role-sensitive User Rights Assignments** are conservatively **guided-only** pending role-aware discovery (IIS, SQL, AD FS, Exchange). There are now **394 auto mappings + 11 guided**, still 405 controls. See `docs/POLICY-SCOPE-IMPLEMENTATION.md` for the full audit method and exceptions.
+- **Theoretical/structural checks are not an AD laboratory validation**. A Windows AD domain pilot is still required for effective application, security filtering, SYSVOL replication, gpresult/RSOP and rollback.
+
+---
+
 # Remediation audit — 3.10.0
 
 ## Scope classification

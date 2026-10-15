@@ -9,7 +9,8 @@ namespace GpoRemediator.Services;
 
 public sealed class GpoWorkflowService(IConfiguration config,Store store,OperationGate gate,IDataProtectionProvider protection,WindowsPowerShellExecutor executor) : IDisposable, IWorkflowOperations
 {
-    private static readonly TimeSpan ConnectionIdleTimeout=TimeSpan.FromMinutes(30);
+    private static readonly TimeSpan ConnectionIdleTimeout=TimeSpan.FromMinutes(15);
+    private static readonly TimeSpan AbsoluteConnectionLifetime=TimeSpan.FromHours(2);
     private sealed record Connection(string Actor,string UserName,byte[] Password,GpoInventory Inventory,DateTimeOffset Expires,DateTimeOffset Created);
     private readonly SemaphoreSlim loginSlots=new(4,4);
     private readonly ConcurrentDictionary<string,Connection> connections=new();
@@ -33,7 +34,7 @@ public sealed class GpoWorkflowService(IConfiguration config,Store store,Operati
     private Timer? cleanup;
     private void Expire()
     {
-        foreach(var pair in connections.Where(x=>x.Value.Expires<=DateTimeOffset.UtcNow||x.Value.Created.AddHours(8)<=DateTimeOffset.UtcNow)) Disconnect(pair.Key);
+        foreach(var pair in connections.Where(x=>x.Value.Expires<=DateTimeOffset.UtcNow||x.Value.Created.Add(AbsoluteConnectionLifetime)<=DateTimeOffset.UtcNow)) Disconnect(pair.Key);
     }
     public async Task<(string Token,GpoInventory Inventory)> ConnectAsync(GpoLoginRequest request,string actor,CancellationToken ct)
     {
@@ -47,6 +48,7 @@ public sealed class GpoWorkflowService(IConfiguration config,Store store,Operati
         GpoInventory inventory;
         try {
             inventory=Authorize(await executor.RunAsync<GpoInventory>("gpoInventory",Configuration,new{credential=new{userName=request.UserName,password=request.Password}},ct));
+            GpoScriptWorkspaces.SyncInventory(inventory);
             var bytes=Encoding.UTF8.GetBytes(request.Password);
             byte[] encrypted;
             try{encrypted=protector.Protect(bytes);}finally{CryptographicOperations.ZeroMemory(bytes);}
@@ -68,7 +70,7 @@ public sealed class GpoWorkflowService(IConfiguration config,Store store,Operati
         Expire();
         if(!connections.TryGetValue(token,out var c)||!string.Equals(c.Actor,actor,StringComparison.OrdinalIgnoreCase))throw new PolicyException("GPO_LOGIN_REQUIRED","Connect again. The temporary GPO connection expired or the service restarted.");
         var idleExpiry=DateTimeOffset.UtcNow.Add(ConnectionIdleTimeout);
-        var absoluteExpiry=c.Created.AddHours(8);
+        var absoluteExpiry=c.Created.Add(AbsoluteConnectionLifetime);
         var refreshed=c with{Expires=idleExpiry<absoluteExpiry?idleExpiry:absoluteExpiry};
         connections.TryUpdate(token,refreshed,c);
         return refreshed;
@@ -109,6 +111,7 @@ public sealed class GpoWorkflowService(IConfiguration config,Store store,Operati
         var c=Get(token,actor);
         RequireReal();
         var inventory=Authorize(await Run<GpoInventory>("gpoInventory",c,new{},ct));
+        GpoScriptWorkspaces.SyncInventory(inventory);
         connections.TryUpdate(token,c with{Inventory=inventory},c);
         return inventory;
     }
@@ -123,6 +126,7 @@ public sealed class GpoWorkflowService(IConfiguration config,Store store,Operati
         if(mapping.Scope=="User" && selection.Refresh=="Scope" &&
            !c.Inventory.Scopes.Any(s=>s.Kind=="OU"&&string.Equals(s.Dn,selection.EndpointScopeDn,StringComparison.OrdinalIgnoreCase)))
             throw new PolicyException("ENDPOINT_SCOPE_REQUIRED","Select a discovered computer OU for user-session refresh.");
+        if(!mapping.DomainPolicySensitive && scope.Kind!="OU") throw new PolicyException("GPO_OU_REQUIRED","Select an OU returned by AD discovery for User/Computer Configuration.");
         if(mapping.DomainPolicySensitive && scope.Kind!="Domain") throw new PolicyException("PASSWORD_SCOPE_MISMATCH","Domain password and lockout policies require the domain root.");
         var preview=await Run<GpoPreview>("gpoPreview",c,new{selection,mapping},ct);
         var plan=new GpoWorkflowPlan(Guid.NewGuid().ToString("N"),actor,c.Inventory.ExecutionUser,Mode,Domain,Dc,selection,preview,PolicyValues.Now(),PolicyValues.Hash(mapping),ConfigHash,GpoWorkflowRules.IsWriteAuthorized(ApprovedGpos,AuthorizedOus,selection));
@@ -233,6 +237,18 @@ public sealed class GpoWorkflowService(IConfiguration config,Store store,Operati
             return run;
         }
         finally{gate.EndOperation(resourceKey);}
+    }
+    // Read-only rollback preflight: returns a live before/after report without modifying AD.
+    // The worker rechecks drift under an exclusive lock during the actual Restore-GPO.
+    public async Task<object> RollbackPreviewAsync(string id,string token,string actor,CancellationToken ct)
+    {
+        RequireReal();
+        var c=Get(token,actor);
+        var run=store.Require<GpoWorkflowRun>("gpo_runs",id);
+        AssertContext(run.Plan,c,actor);
+        if(store.List<WorkflowJob>("workflow_jobs").Any(job=>job.Action=="apply"&&job.PlanIds.Length>1&&job.CompletedIds.Contains(id)))
+            throw new PolicyException("BATCH_RECOVERY_REQUIRED","Use Workflow center batch recovery for operations in a multi-control batch.");
+        return await Run<object>("gpoRollbackInspect",c,new{plan=run.Plan},ct);
     }
     public GpoEvidence Evidence(string id,string actor)
     {

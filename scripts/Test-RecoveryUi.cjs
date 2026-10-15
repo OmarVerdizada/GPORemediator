@@ -142,8 +142,12 @@ const server=http.createServer(async(req,res)=>{
   assert.equal(await page.locator('#gpo-selection [name=endpointScopeDn]').count(),1);
   assert.equal(await page.locator('#gpo-selection [name=verificationUser]').count(),1);
   assert.equal(await page.locator('#gpo-selection input[value=Pdc]').count(),0,'User policy exposed a PDC refresh choice');
-  await page.locator('#gpo-selection [name=scopeDn]').selectOption('OU=Users,DC=test,DC=local');
-  await page.locator('#gpo-selection [name=endpointScopeDn]').selectOption('OU=Endpoints,DC=test,DC=local');
+  await page.locator('[data-scope-open="scopeDn"]').click();
+  await page.locator('#scope-search').fill('Users');
+  await page.locator('[data-scope-choose="OU=Users,DC=test,DC=local"]').click();
+  await page.locator('[data-scope-open="endpointScopeDn"]').click();
+  await page.locator('#scope-search').fill('Endpoints');
+  await page.locator('[data-scope-choose="OU=Endpoints,DC=test,DC=local"]').click();
   await page.locator('#gpo-selection [name=verificationUser]').fill('TEST\\pilot.user');
   assert.deepEqual(errors,[]);
   console.log('Recovery UI: PASS (desktop/mobile, recovery refresh, user OU/endpoint OU/verification identity targeting, and user PDC exclusion).');

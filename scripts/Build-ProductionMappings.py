@@ -158,6 +158,26 @@ if '18.7.1' in maps:
 with open(os.path.join(root, 'backend', 'data', 'mapping_sources', 'reviewed-overrides.json'), encoding='utf-8') as f:
     for cid, patch in json.load(f).items():
         maps[cid].update(patch)
+# ROLE-SENSITIVE CONTROLS: SAFETY GATE. A single generic SID list must not
+# overwrite service identities installed with IIS, SQL, ADFS or Exchange roles.
+# Future auto-remediation requires per-endpoint role discovery and role-aware
+# desired-set construction, followed by endpoint verification.
+ROLE_SENSITIVE = {
+    '2.2.6': 'IIS application pools require additional SeIncreaseQuotaPrivilege principals on relevant member servers.',
+    '2.2.16': 'Microsoft SQL Server integration services can require additional SeCreateGlobalPrivilege principals.',
+    '2.2.31': 'IIS and AD FS may require additional SeAuditPrivilege principals.',
+    '2.2.33': 'IIS servers require IIS_IUSRS for SeImpersonatePrivilege.',
+    '2.2.36': 'SQL Server memory configuration may require SQL service identities in SeLockMemoryPrivilege.',
+    '2.2.39': 'Exchange servers may require the Exchange Servers principal in SeSecurityPrivilege on domain controllers.',
+    '2.2.45': 'IIS application pools may require additional SeAssignPrimaryTokenPrivilege principals.',
+}
+for _cid, _reason in ROLE_SENSITIVE.items():
+    _m = maps[_cid]
+    _m['handler'] = 'Manual'
+    _m['automation'] = 'Manual'
+    _m['requiresGpUpdate'] = False
+    _m['warnings'].append('ROLE-SENSITIVE / GUIDED ONLY: '+_reason+' Auto-write is disabled until role-specific target inventory and explicit principal approval are implemented.')
+
 # "Include" is a minimum set, not permission to remove existing deny/audit entries.
 for m in maps.values():
     if 'include ' in m['title'].lower() and m['handler'] in ('SecurityTemplate', 'AdvancedAudit'):

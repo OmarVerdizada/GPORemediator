@@ -13,3 +13,4 @@ runtime/
 *.db-wal
 backend/appsettings.Local.json
 .tools/
+.gpo-*-backup-*/

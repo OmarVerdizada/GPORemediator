@@ -3,8 +3,8 @@
     "schemaVersion": "2.0",
     "benchmark": "CIS Benchmark v4.0.0",
     "generatedFrom": "operator-supplied catalog",
-    "mapped": 401,
-    "manualOrBlocked": 4,
+    "mapped": 394,
+    "manualOrBlocked": 11,
     "totalUnique": 405,
     "notes": "Mappings were cross-checked against Windows Group Policy semantics and the MIT-licensed ansible-lockdown Windows-2019-CIS GPO implementation where applicable."
   },
@@ -465,8 +465,8 @@
       "title": "Ensure 'Adjust memory quotas for a process' is set to 'Administrators, LOCAL SERVICE, NETWORK SERVICE'",
       "category": "2.2",
       "level": "L1",
-      "automation": "Automated",
-      "handler": "SecurityTemplate",
+      "automation": "Manual",
+      "handler": "Manual",
       "items": [
         {
           "section": "Privilege Rights",
@@ -492,10 +492,11 @@
       "unit": null,
       "comparator": null,
       "domainPolicySensitive": false,
-      "requiresGpUpdate": true,
+      "requiresGpUpdate": false,
       "requiresRestart": false,
       "warnings": [
-        "This CIS recipe contains benchmark notes/cautions or environment-specific exceptions. Review the imported benchmark description and application dependencies before Apply."
+        "This CIS recipe contains benchmark notes/cautions or environment-specific exceptions. Review the imported benchmark description and application dependencies before Apply.",
+        "ROLE-SENSITIVE / GUIDED ONLY: IIS application pools require additional SeIncreaseQuotaPrivilege principals on relevant member servers. Auto-write is disabled until role-specific target inventory and explicit principal approval are implemented."
       ],
       "source": "operator CIS v4.0.0 + validated Windows policy mapping"
     },
@@ -768,8 +769,8 @@
       "title": "Ensure 'Create global objects' is set to 'Administrators, LOCAL SERVICE, NETWORK SERVICE, SERVICE'",
       "category": "2.2",
       "level": "L1",
-      "automation": "Automated",
-      "handler": "SecurityTemplate",
+      "automation": "Manual",
+      "handler": "Manual",
       "items": [
         {
           "section": "Privilege Rights",
@@ -796,10 +797,11 @@
       "unit": null,
       "comparator": null,
       "domainPolicySensitive": false,
-      "requiresGpUpdate": true,
+      "requiresGpUpdate": false,
       "requiresRestart": false,
       "warnings": [
-        "This CIS recipe contains benchmark notes/cautions or environment-specific exceptions. Review the imported benchmark description and application dependencies before Apply."
+        "This CIS recipe contains benchmark notes/cautions or environment-specific exceptions. Review the imported benchmark description and application dependencies before Apply.",
+        "ROLE-SENSITIVE / GUIDED ONLY: Microsoft SQL Server integration services can require additional SeCreateGlobalPrivilege principals. Auto-write is disabled until role-specific target inventory and explicit principal approval are implemented."
       ],
       "source": "operator CIS v4.0.0 + validated Windows policy mapping"
     },
@@ -1180,8 +1182,8 @@
       "title": "Ensure 'Generate security audits' is set to 'LOCAL SERVICE, NETWORK SERVICE'",
       "category": "2.2",
       "level": "L1",
-      "automation": "Automated",
-      "handler": "SecurityTemplate",
+      "automation": "Manual",
+      "handler": "Manual",
       "items": [
         {
           "section": "Privilege Rights",
@@ -1206,10 +1208,11 @@
       "unit": null,
       "comparator": null,
       "domainPolicySensitive": false,
-      "requiresGpUpdate": true,
+      "requiresGpUpdate": false,
       "requiresRestart": false,
       "warnings": [
-        "This CIS recipe contains benchmark notes/cautions or environment-specific exceptions. Review the imported benchmark description and application dependencies before Apply."
+        "This CIS recipe contains benchmark notes/cautions or environment-specific exceptions. Review the imported benchmark description and application dependencies before Apply.",
+        "ROLE-SENSITIVE / GUIDED ONLY: IIS and AD FS may require additional SeAuditPrivilege principals. Auto-write is disabled until role-specific target inventory and explicit principal approval are implemented."
       ],
       "source": "operator CIS v4.0.0 + validated Windows policy mapping"
     },
@@ -1219,8 +1222,8 @@
       "title": "Ensure 'Impersonate a client after authentication' is set to 'Administrators, LOCAL SERVICE, NETWORK SERVICE, SERVICE' and (when the Web Server (IIS) Role with Web Services Role Service is installed) 'IIS_IUSRS'",
       "category": "2.2",
       "level": "L1",
-      "automation": "Automated",
-      "handler": "SecurityTemplate",
+      "automation": "Manual",
+      "handler": "Manual",
       "items": [
         {
           "section": "Privilege Rights",
@@ -1247,10 +1250,11 @@
       "unit": null,
       "comparator": null,
       "domainPolicySensitive": false,
-      "requiresGpUpdate": true,
+      "requiresGpUpdate": false,
       "requiresRestart": false,
       "warnings": [
-        "This CIS recipe contains benchmark notes/cautions or environment-specific exceptions. Review the imported benchmark description and application dependencies before Apply."
+        "This CIS recipe contains benchmark notes/cautions or environment-specific exceptions. Review the imported benchmark description and application dependencies before Apply.",
+        "ROLE-SENSITIVE / GUIDED ONLY: IIS servers require IIS_IUSRS for SeImpersonatePrivilege. Auto-write is disabled until role-specific target inventory and explicit principal approval are implemented."
       ],
       "source": "operator CIS v4.0.0 + validated Windows policy mapping"
     },
@@ -1335,8 +1339,8 @@
       "title": "Ensure 'Lock pages in memory' is set to 'No One'",
       "category": "2.2",
       "level": "L1",
-      "automation": "Automated",
-      "handler": "SecurityTemplate",
+      "automation": "Manual",
+      "handler": "Manual",
       "items": [
         {
           "section": "Privilege Rights",
@@ -1358,10 +1362,11 @@
       "unit": null,
       "comparator": null,
       "domainPolicySensitive": false,
-      "requiresGpUpdate": true,
+      "requiresGpUpdate": false,
       "requiresRestart": false,
       "warnings": [
-        "This CIS recipe contains benchmark notes/cautions or environment-specific exceptions. Review the imported benchmark description and application dependencies before Apply."
+        "This CIS recipe contains benchmark notes/cautions or environment-specific exceptions. Review the imported benchmark description and application dependencies before Apply.",
+        "ROLE-SENSITIVE / GUIDED ONLY: SQL Server memory configuration may require SQL service identities in SeLockMemoryPrivilege. Auto-write is disabled until role-specific target inventory and explicit principal approval are implemented."
       ],
       "source": "operator CIS v4.0.0 + validated Windows policy mapping"
     },
@@ -1371,8 +1376,8 @@
       "title": "Ensure 'Manage auditing and security log' is set to 'Administrators'",
       "category": "2.2",
       "level": "L1",
-      "automation": "Automated",
-      "handler": "SecurityTemplate",
+      "automation": "Manual",
+      "handler": "Manual",
       "items": [
         {
           "section": "Privilege Rights",
@@ -1396,10 +1401,11 @@
       "unit": null,
       "comparator": null,
       "domainPolicySensitive": false,
-      "requiresGpUpdate": true,
+      "requiresGpUpdate": false,
       "requiresRestart": false,
       "warnings": [
-        "This CIS recipe contains benchmark notes/cautions or environment-specific exceptions. Review the imported benchmark description and application dependencies before Apply."
+        "This CIS recipe contains benchmark notes/cautions or environment-specific exceptions. Review the imported benchmark description and application dependencies before Apply.",
+        "ROLE-SENSITIVE / GUIDED ONLY: Exchange servers may require the Exchange Servers principal in SeSecurityPrivilege on domain controllers. Auto-write is disabled until role-specific target inventory and explicit principal approval are implemented."
       ],
       "source": "operator CIS v4.0.0 + validated Windows policy mapping"
     },
@@ -1590,8 +1596,8 @@
       "title": "Ensure 'Replace a process level token' is set to 'LOCAL SERVICE, NETWORK SERVICE'",
       "category": "2.2",
       "level": "L1",
-      "automation": "Automated",
-      "handler": "SecurityTemplate",
+      "automation": "Manual",
+      "handler": "Manual",
       "items": [
         {
           "section": "Privilege Rights",
@@ -1616,10 +1622,11 @@
       "unit": null,
       "comparator": null,
       "domainPolicySensitive": false,
-      "requiresGpUpdate": true,
+      "requiresGpUpdate": false,
       "requiresRestart": false,
       "warnings": [
-        "This CIS recipe contains benchmark notes/cautions or environment-specific exceptions. Review the imported benchmark description and application dependencies before Apply."
+        "This CIS recipe contains benchmark notes/cautions or environment-specific exceptions. Review the imported benchmark description and application dependencies before Apply.",
+        "ROLE-SENSITIVE / GUIDED ONLY: IIS application pools may require additional SeAssignPrimaryTokenPrivilege principals. Auto-write is disabled until role-specific target inventory and explicit principal approval are implemented."
       ],
       "source": "operator CIS v4.0.0 + validated Windows policy mapping"
     },

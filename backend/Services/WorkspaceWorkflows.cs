@@ -158,7 +158,8 @@ public sealed class WorkspaceWorkflows(Store store,IWorkflowOperations service,O
     private async Task ProcessPreview(Work work,WorkflowJob job,CancellationToken ct){
         var plans=new List<GpoWorkflowPlan>();
         foreach(var selection in job.Selections??[]){
-            var plan=await service.PreviewAsync(work.Token,job.Actor,selection,ct);
+            if(ProductionGpoMappings.Require(selection.Setting).Scope!="Computer") throw new PolicyException("NONCOMPUTER_BATCH_UNSUPPORTED","User and Domain account policies require an individual scope-aware workflow, not a computer OU batch.");
+             var plan=await service.PreviewAsync(work.Token,job.Actor,selection,ct);
             if(job.Pilot)WorkspaceRules.ValidatePilot(plan,job.PilotLimit);
             if(plans.Count>0&&plans[0].Preview.Fingerprint!=plan.Preview.Fingerprint)throw new PolicyException("BATCH_DRIFT","The GPO changed during preview; generate a new batch.");
             plans.Add(plan);job=Update(job.Id,j=>j with{CompletedIds=plans.Select(x=>x.Id).ToArray(),Message=$"Read-only preview: {plans.Count}/{job.Selections!.Length}"});
@@ -171,7 +172,7 @@ public sealed class WorkspaceWorkflows(Store store,IWorkflowOperations service,O
         foreach(var control in job.ScanControls??[]){
             ct.ThrowIfCancellationRequested();var mapping=ProductionGpoMappings.Require(control);
             try{
-                if(!mapping.Writable||mapping.RequiresInput)rows.Add(new(control,"NOT_CHECKED",null,null,"Manual or organization-specific input is required; no compliance claim was made.",PolicyValues.Now()));
+                if(!mapping.Writable||mapping.RequiresInput||mapping.Scope!="Computer")rows.Add(new(control,"NOT_CHECKED",null,null,"Manual, user-session targeting or organization-specific input requires individual review; no compliance claim was made.",PolicyValues.Now()));
                 else{
                     var selection=job.ScanTarget! with{Setting=control,Value=mapping.Suggested??0,Refresh="None",AccountScope=mapping.DomainPolicySensitive?"Domain":"LocalComputers",CustomValue=null};
                     var plan=await service.PreviewAsync(work.Token,job.Actor,selection,ct);

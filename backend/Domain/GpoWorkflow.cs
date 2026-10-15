@@ -81,7 +81,12 @@ public static class GpoWorkflowRules
     {
         var gpoAllowed=Guid.TryParse(selection.GpoId,out var selected) && gpos.Any(x=>Guid.TryParse(x,out var allowed)&&allowed==selected);
         var scopeAllowed=scopes.Any(x=>string.Equals(x,selection.ScopeDn,StringComparison.OrdinalIgnoreCase)||selection.ScopeDn.EndsWith(","+x,StringComparison.OrdinalIgnoreCase));
-        return gpoAllowed&&scopeAllowed;
+        // User policy can specify a different computer OU for the gpupdate/verification session.
+        // Do not allow that secondary OU to escape the server-owned production boundary.
+        var endpointAllowed=string.IsNullOrWhiteSpace(selection.EndpointScopeDn) ||
+            scopes.Any(x=>string.Equals(x,selection.EndpointScopeDn,StringComparison.OrdinalIgnoreCase)||
+                          selection.EndpointScopeDn.EndsWith(","+x,StringComparison.OrdinalIgnoreCase));
+        return gpoAllowed&&scopeAllowed&&endpointAllowed;
     }
     public static void ValidateWriteSelection(string[] gpos, string[] scopes, GpoSelection selection)
     {

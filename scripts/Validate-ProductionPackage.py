@@ -29,18 +29,18 @@ check(set(catalog_ids)==set(map_ids), f'catalog/mapping ID mismatch: missing={so
 
 by_id={x['id']:x for x in mappings}
 blocked={x['id'] for x in mappings if str(x.get('automation','')).lower()!='automated' or str(x.get('handler','')).lower()=='manual'}
-expected_blocked={'1.2.3','2.3.11.6','18.10.43.10.1','18.10.43.10.2'}
+expected_blocked={'1.2.3','2.3.11.6','18.10.43.10.1','18.10.43.10.2','2.2.6','2.2.16','2.2.31','2.2.33','2.2.36','2.2.39','2.2.45'}
 check(blocked==expected_blocked, f'blocked control set changed: {sorted(blocked)}')
 writable=[x for x in mappings if x['id'] not in blocked]
-check(len(writable)==401, f'writable mappings {len(writable)} != 401')
-check(mapping_doc['meta'].get('mapped')==401, 'mapping meta.mapped != 401')
-check(mapping_doc['meta'].get('manualOrBlocked')==4, 'mapping meta.manualOrBlocked != 4')
+check(len(writable)==394, f'writable mappings {len(writable)} != 394')
+check(mapping_doc['meta'].get('mapped')==394, 'mapping meta.mapped != 394')
+check(mapping_doc['meta'].get('manualOrBlocked')==11, 'mapping meta.manualOrBlocked != 11')
 check(mapping_doc['meta'].get('totalUnique')==405, 'mapping meta.totalUnique != 405')
 
-handlers={'SecurityTemplate','Registry','RegistrySet','AdvancedAudit'}
+handlers={'SecurityTemplate','Registry','RegistrySet','AdvancedAudit','Manual'}
 check(all(x.get('handler') in handlers for x in mappings), 'unapproved handler found')
 check(sum(x['handler']=='Registry' for x in mappings)==319, 'Registry count changed')
-check(sum(x['handler']=='SecurityTemplate' for x in mappings)==51, 'SecurityTemplate count changed')
+check(sum(x['handler']=='SecurityTemplate' for x in mappings)==44, 'SecurityTemplate count changed')
 check(sum(x['handler']=='AdvancedAudit' for x in mappings)==27, 'AdvancedAudit count changed')
 check(sum(x['handler']=='RegistrySet' for x in mappings)==8, 'RegistrySet count changed')
 

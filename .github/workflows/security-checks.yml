@@ -32,6 +32,8 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           dotnet run --project scripts/WorkspaceRegression -c Release
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          dotnet run --project scripts/HardeningRegression -c Release
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Windows PowerShell security and mapping regressions
         shell: powershell
         run: |
@@ -43,10 +45,26 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python scripts/Test-ProductionMappings.py
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Integrated security and scope checks
+        shell: pwsh
+        run: |
+          python security/Secret-Pattern-Guard.py --self-test
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python security/Secret-Pattern-Guard.py .
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python scripts/Audit-PolicyScopes.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          ./security/Test-DomainGpoIsolation.ps1
       - name: Frontend regressions
         shell: pwsh
         run: |
           node scripts/Build-Styles.cjs --check
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          node scripts/Test-Studio-UI.cjs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          node scripts/Test-EnterpriseCenter.cjs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          node scripts/Test-UX-Contract.cjs
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           node scripts/Test-FrontendSystem.cjs
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

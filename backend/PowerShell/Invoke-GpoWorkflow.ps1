@@ -1,4 +1,5 @@
-# Credentials arrive through private stdin from the local-only backend, never command arguments or files.
+param([string]$RequestJson)
+# Credentials arrive through private stdin or in-process arguments, never process command-line args or files.
 $ErrorActionPreference='Stop'
 $ProgressPreference='SilentlyContinue'
 $WarningPreference='SilentlyContinue'
@@ -9,14 +10,15 @@ $stage='configuration'
 $clock=[Diagnostics.Stopwatch]::StartNew()
 $session=$null;$secure=$null;$credential=$null;$request=$null
 try {
-    $request=[Console]::In.ReadToEnd() | ConvertFrom-Json
+    $request=if($PSBoundParameters.ContainsKey('RequestJson')){$RequestJson | ConvertFrom-Json}else{[Console]::In.ReadToEnd() | ConvertFrom-Json}
+    $RequestJson=$null
     if(!$request -or !$request.configuration -or !$request.payload -or !$request.payload.credential){throw 'INVALID_REQUEST|The operation requires configuration and an explicit delegated credential.'}
-    if($request.operation -notin @('gpoInventory','gpoReadiness','gpoPreview','gpoApply','gpoRollback','gpoVerify','gpoRefresh')){throw 'OPERATION_DENIED|Unknown GPO operation.'}
+    if($request.operation -notin @('gpoInventory','gpoReadiness','gpoPreview','gpoApply','gpoRollback','gpoRollbackInspect','gpoVerify','gpoRefresh')){throw 'OPERATION_DENIED|Unknown GPO operation.'}
     $cfg=$request.configuration
     $hostPattern='^(?=.{1,253}$)(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)*[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?$'
     if([string]::IsNullOrWhiteSpace([string]$cfg.domain) -or [string]$cfg.domain -notmatch $hostPattern -or [string]$cfg.domainController -notmatch $hostPattern -or -not ([string]$cfg.domainController).EndsWith('.'+[string]$cfg.domain,[StringComparison]::OrdinalIgnoreCase)){throw 'DC_REQUIRED|Save the exact domain and writable DC first.'}
     # Remote deadlines finish before the backend watchdog, leaving time for cleanup.
-    $remoteTimeout=if([string]$request.operation -in @('gpoApply','gpoRollback')){900000}elseif([string]$request.operation -eq 'gpoRefresh'){660000}elseif([string]$request.operation -in @('gpoPreview','gpoVerify')){540000}else{65000}
+    $remoteTimeout=if([string]$request.operation -in @('gpoApply','gpoRollback')){900000}elseif([string]$request.operation -eq 'gpoRefresh'){660000}elseif([string]$request.operation -in @('gpoPreview','gpoRollbackInspect','gpoVerify')){540000}else{65000}
     $options=@{ComputerName=[string]$cfg.domainController;Authentication='Kerberos';SessionOption=(New-PSSessionOption -OpenTimeout 15000 -OperationTimeout $remoteTimeout)}
     if([string]::IsNullOrWhiteSpace([string]$request.payload.credential.userName) -or [string]::IsNullOrEmpty([string]$request.payload.credential.password)){throw 'DELEGATED_CREDENTIAL_REQUIRED|Supply explicit delegated credentials for every GPO operation.'}
     if(([string]$request.payload.credential.userName).Length -gt 256 -or ([string]$request.payload.credential.password).Length -gt 1024 -or [string]$request.payload.credential.userName -match '[\r\n\x00]'){throw 'CREDENTIAL_FORMAT|Invalid delegated credential format.'}

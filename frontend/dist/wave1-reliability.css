@@ -1,0 +1,18 @@
+/* Reliability Wave 1 - scope evidence and rollback inspector.
+   Only visual hints: truth/status always comes from authoritative preview. */
+.target-assurance{margin:14px 0;border:1px solid var(--color-border);background:var(--color-surface)}
+.target-assurance h3{font-size:var(--text-16);margin:8px 0 16px}
+.target-assurance .assurance-grid{margin:0 0 14px;gap:10px}
+.target-assurance .assurance-grid>div{min-width:0;background:var(--color-surface-muted);border:1px solid var(--color-border);border-radius:var(--radius-sm);padding:12px}
+.target-assurance .assurance-grid strong{overflow-wrap:anywhere}
+.target-assurance p{color:var(--color-text-muted);font-size:var(--text-12);line-height:1.6}
+.wf-rollback-inspection{margin:16px 0;padding:18px;border:1px solid var(--color-border-strong);border-radius:var(--radius-md);background:var(--color-surface)}
+.wf-rollback-inspection h3{font-size:var(--text-16);margin:0 0 8px;color:var(--color-text)}
+.wf-rollback-inspection p{color:var(--color-text-muted);font-size:var(--text-12);line-height:1.6}
+.wf-rollback-inspection dl{display:grid;gap:8px;margin:14px 0}
+.wf-rollback-inspection dl>div{display:flex;align-items:flex-start;justify-content:space-between;gap:18px;padding:10px 0;border-bottom:1px solid var(--color-border)}
+.wf-rollback-inspection dt{color:var(--color-text-muted);font-size:var(--text-11)}
+.wf-rollback-inspection dd{color:var(--color-text);margin:0;font-weight:600;overflow-wrap:anywhere;text-align:right;max-width:65%;font-size:var(--text-12)}
+.wf-rollback-inspection [role=alert]{color:var(--color-danger);font-weight:700}
+@media(max-width:650px){.wf-rollback-inspection dl>div{display:block}.wf-rollback-inspection dd{text-align:left;max-width:none;margin-top:6px}.target-assurance .assurance-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(prefers-reduced-motion:reduce){.target-assurance,.wf-rollback-inspection{animation:none!important;transition:none!important}}

@@ -17,7 +17,7 @@ var builder=WebApplication.CreateBuilder(args);
 if(!OperatingSystem.IsWindows())throw new PlatformNotSupportedException("GPO Remediator requires Windows.");
 var protectedStateRoot=Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),"GpoRemediator");
 PrivateFiles.ProtectDirectory(protectedStateRoot);
-foreach(var name in new[]{"Config","State","Data","Backups","Recovery"})PrivateFiles.ProtectTree(Path.Combine(protectedStateRoot,name));
+foreach(var name in new[]{"Config","State","Data","Backups","Recovery","Scripts"})PrivateFiles.ProtectTree(Path.Combine(protectedStateRoot,name));
 // Recovery setup must remain reachable even when the saved JSON or HTTPS configuration is broken.
 builder.Configuration.AddEnvironmentVariables().AddCommandLine(args);
 var localSetup=builder.Configuration.GetValue<bool>("LocalSetup");
@@ -71,6 +71,12 @@ builder.Services.AddSingleton<WindowsPowerShellExecutor>();
 var app=builder.Build();
 var store=app.Services.GetRequiredService<Store>();
 store.BindExecutionMode(mode);
+var startupAuditCheck=store.AuditIntegrityReport();
+if(!startupAuditCheck.Valid)
+{
+    app.Logger.LogCritical("AUDIT_INTEGRITY_STARTUP_FAILED first invalid event {EventId}",startupAuditCheck.FirstInvalidEventId);
+    throw new InvalidOperationException("Protected audit journal integrity validation failed. Start is blocked pending incident review and backup recovery.");
+}
 var interruptedRuns=store.RecoverInterruptedGpoRuns();
 if(interruptedRuns>0) app.Logger.LogWarning("Recovered {Count} interrupted GPO operation record(s) into REVIEW_REQUIRED state.",interruptedRuns);
 app.Use(async(context,next)=>
@@ -237,6 +243,7 @@ app.MapGet("/api/gpo/history",(HttpContext context,GpoWorkflowService service)=>
 app.MapGet("/api/gpo/{id}/evidence",(string id,HttpContext context,GpoWorkflowService service)=>service.Evidence(id,Operator(context)));
 app.MapPost("/api/gpo/preview",async(GpoSelection request,HttpContext context,GpoWorkflowService service,CancellationToken ct)=>await service.PreviewAsync(GpoToken(context),Operator(context),request,ct)).WithMetadata(new OperatorAccess("Administrator","Remediator","Auditor","Viewer"));
 app.MapPost("/api/gpo/{id}/apply",async(string id,GpoConsent request,HttpContext context,GpoWorkflowService service)=>await service.ExecuteAsync(id,"apply",request,GpoToken(context),Operator(context))).WithMetadata(new OperatorAccess("Administrator","Remediator"));
+app.MapGet("/api/gpo/{id}/rollback-preview",async(string id,HttpContext context,GpoWorkflowService service,CancellationToken ct)=>await service.RollbackPreviewAsync(id,GpoToken(context),Operator(context),ct)).WithMetadata(new OperatorAccess("Administrator","Remediator"));
 app.MapPost("/api/gpo/{id}/rollback",async(string id,GpoConsent request,HttpContext context,GpoWorkflowService service)=>await service.ExecuteAsync(id,"rollback",request,GpoToken(context),Operator(context))).WithMetadata(new OperatorAccess("Administrator","Remediator"));
 app.MapPost("/api/gpo/{id}/verify",async(string id,HttpContext context,GpoWorkflowService service)=>await service.ExecuteAsync(id,"verify",new(""),GpoToken(context),Operator(context))).WithMetadata(new OperatorAccess("Administrator","Remediator","Auditor","Viewer"));
 GpoEndpoints.MapRefresh(app,async(id,consent,context)=>await context.RequestServices.GetRequiredService<GpoWorkflowService>().ExecuteAsync(id,"refresh",consent,GpoToken(context),Operator(context)));
@@ -316,7 +323,7 @@ app.MapPost("/api/setup/write-mode",async(WriteModeRequest request,HttpContext c
     },lifetime);
     return new{saved=true,enableWrites=request.Enable,restartRequired=true,restartScheduled=request.AutoRestart};
 }).WithMetadata(new OperatorAccess("Administrator"));
-app.MapGet("/api/audit",()=>{var report=store.AuditIntegrityReport();return new{events=store.AuditEvents(500).Reverse(),integrityValid=report.Valid,firstInvalidEventId=report.FirstInvalidEventId,pageSize=500};}).WithMetadata(new OperatorAccess("Administrator","Auditor"));
+app.MapGet("/api/audit",()=>{var report=store.AuditIntegrityReport();return new{events=store.AuditEvents(500).Reverse(),integrityValid=report.Valid,firstInvalidEventId=report.FirstInvalidEventId,integrityProtection=store.AuditProtectionSummary(),pageSize=500};}).WithMetadata(new OperatorAccess("Administrator","Auditor"));
 app.MapGet("/api/settings",(HttpContext context)=>new
 {
     mode,identityStrategy=real?"Windows Integrated Authentication plus short-lived delegated GPO execution credentials":"Configuration only",@operator=Operator(context),
