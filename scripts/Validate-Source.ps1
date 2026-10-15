@@ -12,7 +12,7 @@ try {
         & $dotnet run --project "scripts/$project" -c Release
         Check-Exit $project
     }
-    foreach($script in @('Test-SecurityFiles','Test-RuntimeIntegrity','Test-GpoMappings','Test-EndpointEvidence','Test-AllEndpointMappings','Test-VerificationLifecycle')){
+    foreach($script in @('Test-SecurityFiles','Test-RuntimeIntegrity','Test-GpoMappings','Test-EndpointEvidence','Test-AllEndpointMappings','Test-VerificationLifecycle','Test-ServiceControl')){
         & powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "scripts/$script.ps1"
         Check-Exit $script
     }

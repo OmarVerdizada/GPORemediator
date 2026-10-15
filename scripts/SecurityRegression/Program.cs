@@ -90,6 +90,8 @@ try{
   app.MapPost("/api/gpo/{id}/"+action,(GpoRefreshRequest request)=>new{refresh=request.Refresh}).WithMetadata(new OperatorAccess("Administrator","Remediator"));
  GpoEndpoints.MapRefresh(app,(id,consent,context)=>Task.FromResult<object>(new{refresh=consent.Refresh}));
  app.MapPost("/api/setup/config",()=>Results.Ok()).WithMetadata(new OperatorAccess("Administrator"));
+ app.MapPost("/api/service/{action}",(string action)=>action is "stop" or "restart"?Results.Accepted():Results.BadRequest())
+  .WithMetadata(new OperatorAccess("Administrator"),new OperatorBootstrap());
  app.MapPost("/api/undeclared",()=>Results.Ok());
  app.MapPost("/api/gpo/connect",()=>Results.Ok()).WithMetadata(new OperatorAccess("Administrator","Remediator","Auditor","Viewer")).RequireRateLimiting("delegated-login");
  BundledAssets.MapFrontend(app);
@@ -112,6 +114,15 @@ try{
   return await client.SendAsync(req);
  }
  var unconfirmed=await Session("TEST\\Admin",false);
+ foreach(var action in new[]{"stop","restart"}){
+  using(var response=await Post("/api/service/"+action,"TEST\\Admin",unconfirmed))Check(response.StatusCode==HttpStatusCode.Accepted,"Native administrator lifecycle client blocked without browser confirmation: "+action);
+  using(var response=await Post("/api/service/"+action,"TEST\\Admin",unconfirmed,token:false))Check(response.StatusCode==HttpStatusCode.Forbidden,"Lifecycle CSRF bypass: "+action);
+  using(var response=await Post("/api/service/"+action,"TEST\\Admin",unconfirmed,"http://evil.example"))Check(response.StatusCode==HttpStatusCode.Forbidden,"Lifecycle origin bypass: "+action);
+ }
+ foreach(var actor in new[]{"TEST\\Writer","TEST\\Viewer","TEST\\Auditor"}){
+  var native=await Session(actor,false);
+  using var response=await Post("/api/service/stop",actor,native);Check(response.StatusCode==HttpStatusCode.Forbidden,"Lifecycle privilege bypass: "+actor);
+ }
  async Task<HttpResponseMessage> Private(string actor,string cookie){
   using var req=new HttpRequestMessage(HttpMethod.Get,"/api/private");req.Headers.Add("Test-Identity",actor);req.Headers.Add("Cookie",cookie);return await client.SendAsync(req);
  }

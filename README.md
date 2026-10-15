@@ -1,4 +1,6 @@
-# GPO Remediator 3.12.0
+# GPO Remediator 3.12.1
+
+3.12.1 fixes sign-in after moving/updating an installation and native Stop/Restart returning 403. See [upgrade and emergency-stop instructions](docs/RELEASE-3.12.1.md). Protected application state does not need to be deleted.
 
 The full source and synthetic audit is in [docs/audit/FULL_PROJECT_AUDIT.md](docs/audit/FULL_PROJECT_AUDIT.md), with one evidence-bounded row for all 405 controls. This release fixes the shared auditpol argument, numeric bounds, active firewall verification, replication content checks, stale evidence and refresh result handling. Five independent assurance stages distinguish stored configuration, applicability, replication, client processing and sampled endpoint configuration. **Live AD enforcement and unrestricted production readiness remain unverified; no live AD GPO was modified during this audit.**
 

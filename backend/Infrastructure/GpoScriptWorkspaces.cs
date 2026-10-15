@@ -82,7 +82,8 @@ public static class GpoScriptWorkspaces
     {
         // PowerShell single-quoted literal escaping prevents script/text injection.
         string Quote(string value) => value.Replace("'","''",StringComparison.Ordinal);
-        return LauncherTemplate.Replace("__DOMAIN__",Quote(domain),StringComparison.Ordinal)
+        return LauncherTemplate.Replace("\r\n","\n",StringComparison.Ordinal).Replace("\r","\n",StringComparison.Ordinal)
+            .Replace("__DOMAIN__",Quote(domain),StringComparison.Ordinal)
             .Replace("__GPO__",Quote(gpoId),StringComparison.Ordinal)
             .Replace("__BOOTSTRAP__",Quote(bootstrap),StringComparison.Ordinal) + "\n";
     }
@@ -110,17 +111,31 @@ public static class GpoScriptWorkspaces
             throw new PolicyException("GPO_ISOLATION_DENIED","The scoped launcher must delegate to the bundled trusted PowerShell bootstrap.");
         // Verify all central scripts against the embedded compiled product before generating launchers.
         BundledAssets.VerifyScripts(Path.GetDirectoryName(bootstrap)!);
-        var directory=Path.Combine(Root,safeDomain,safeGpo);
+        return EnsureGenerated(Root,safeDomain,safeGpo,bootstrap);
+    }
+
+    // Kept separate so relocation/upgrade fixtures never touch shared application state.
+    private static string EnsureGenerated(string root,string safeDomain,string safeGpo,string bootstrap)
+    {
+        var expected=Utf8.GetBytes(ExpectedLauncher(safeDomain,safeGpo,bootstrap));
+        var fingerprint=Convert.ToHexString(SHA256.HashData(expected));
+        // Generated launchers contain an absolute bootstrap path. A new installation or
+        // template needs its own cache entry, rather than treating the previous entry as
+        // tampering. Old entries are preserved and never executed by this installation.
+        var domainDirectory=Path.Combine(root,safeDomain);
+        var gpoDirectory=Path.Combine(domainDirectory,safeGpo);
+        var cacheDirectory=Path.Combine(gpoDirectory,"generated-v2");
+        var directory=Path.Combine(cacheDirectory,fingerprint);
         lock(Locks.GetOrAdd(directory,_=>new object()))
         {
-            PrivateFiles.ProtectDirectory(Root);
-            PrivateFiles.ProtectDirectory(Path.Combine(Root,safeDomain));
+            PrivateFiles.ProtectDirectory(root);
+            PrivateFiles.ProtectDirectory(domainDirectory);
+            PrivateFiles.ProtectDirectory(gpoDirectory);
+            PrivateFiles.ProtectDirectory(cacheDirectory);
             PrivateFiles.ProtectDirectory(directory);
             PrivateFiles.RejectLinks(directory);
             var launcher=Path.Combine(directory,"Invoke-Gpo.ps1");
             var manifest=Path.Combine(directory,"scope.json");
-            var expected=Utf8.GetBytes(ExpectedLauncher(safeDomain,safeGpo,bootstrap));
-            var fingerprint=Convert.ToHexString(SHA256.HashData(expected));
             var expectedManifest=Utf8.GetBytes(JsonSerializer.Serialize(new{
                 schemaVersion=1, domain=safeDomain, gpoId=safeGpo, launcherSha256=fingerprint
             },new JsonSerializerOptions{WriteIndented=true})+"\n");

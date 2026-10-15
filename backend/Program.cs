@@ -226,7 +226,10 @@ app.MapPost("/api/service/{action}",(string action,HttpContext context,Operation
         }
     });
     return Results.Accepted(value:new{action,accepted=true});
-}).WithMetadata(new OperatorAccess("Administrator"));
+// Native lifecycle clients authenticate through Negotiate and enforce the same
+// Administrator, origin, CSRF and idle-operation gates. They have no browser
+// startup-confirmation cookie; stopping must also work when AD sign-in fails.
+}).WithMetadata(new OperatorAccess("Administrator"),new OperatorBootstrap());
 string GpoToken(HttpContext context)=>context.Request.Cookies["GpoRemediator.GpoConnection"]??"";
 app.MapPost("/api/gpo/connect",async(GpoLoginRequest request,HttpContext context,GpoWorkflowService service,CancellationToken ct)=>{
     var connected=await service.ConnectAsync(request,Operator(context),ct);

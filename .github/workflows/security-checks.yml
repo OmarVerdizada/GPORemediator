@@ -43,6 +43,7 @@ jobs:
           ./scripts/Test-EndpointEvidence.ps1
           ./scripts/Test-AllEndpointMappings.ps1
           ./scripts/Test-VerificationLifecycle.ps1
+          ./scripts/Test-ServiceControl.ps1
           python scripts/Build-ProductionMappings.py --check
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python scripts/Test-ProductionMappings.py

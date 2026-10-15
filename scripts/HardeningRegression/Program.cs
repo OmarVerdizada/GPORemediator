@@ -54,6 +54,26 @@ static class Tests
             File.WriteAllText(bootstrap,"param([string]$RequestJson)\n($RequestJson | ConvertFrom-Json).operation\n");
             var launcher=Path.Combine(temp,"Invoke-Gpo.ps1");
             var generate=typeof(GpoScriptWorkspaces).GetMethod("ExpectedLauncher",BindingFlags.Static|BindingFlags.NonPublic)!;
+            var ensure=typeof(GpoScriptWorkspaces).GetMethod("EnsureGenerated",BindingFlags.Static|BindingFlags.NonPublic)!;
+            var cache=Path.Combine(temp,"cache");
+            string Ensure(string path)=>(string)ensure.Invoke(null,new object[]{cache,"lab.test",gpo,path})!;
+            void RejectCache(string name){
+                try{Ensure(bootstrap);throw new Exception("Tampered cache accepted");}
+                catch(TargetInvocationException error)when(error.InnerException is PolicyException policy&&policy.Code=="GPO_SCRIPT_TAMPERED"){Check(true,name);}
+            }
+            var legacy=Path.Combine(cache,"lab.test",gpo);Directory.CreateDirectory(legacy);
+            var legacyFile=Path.Combine(legacy,"Invoke-Gpo.ps1");File.WriteAllText(legacyFile,"# prior release or installation path; never execute");
+            var generated=Ensure(bootstrap);
+            Check(generated!=legacyFile&&File.ReadAllText(legacyFile).StartsWith("# prior"),"legacy generated cache preserved without execution or sign-in failure");
+            Check(Ensure(bootstrap)==generated,"same installation reuses verified launcher");
+            var relocated=Ensure(Path.Combine(temp,"new-installation","bootstrap.ps1"));
+            Check(relocated!=generated&&File.Exists(generated),"relocation creates separate verified launcher and preserves previous entry");
+            var launcherBytes=File.ReadAllBytes(generated);
+            File.AppendAllText(generated,"#tampered");RejectCache("current launcher tampering still rejected");File.WriteAllBytes(generated,launcherBytes);
+            var manifest=Path.Combine(Path.GetDirectoryName(generated)!,"scope.json");var manifestBytes=File.ReadAllBytes(manifest);
+            File.AppendAllText(manifest," ");RejectCache("current manifest tampering still rejected");File.WriteAllBytes(manifest,manifestBytes);
+            var parallel=Enumerable.Range(0,8).AsParallel().Select(_=>Ensure(bootstrap)).ToArray();
+            Check(parallel.All(path=>path==generated),"concurrent inventory sync reuses the same intact launcher");
             File.WriteAllText(launcher,(string)generate.Invoke(null,new object[]{"lab.test",gpo,bootstrap})!);
             (int Exit,string Output) Invoke(string operation,string domain,string id)
             {
