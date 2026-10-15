@@ -2029,6 +2029,9 @@ input:focus, select:focus, textarea:focus {border-color:var(--color-primary-hove
 .endpoint-evidence p{font-size:12px;line-height:1.7}
 .endpoint-evidence small{color:var(--color-text-muted)}
 .endpoint-evidence pre{white-space:pre-wrap;overflow-wrap:anywhere;font-size:12px;line-height:1.7}
+.manual-check-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:14px}
+.manual-check-head button{min-height:32px;padding:5px 10px;border:1px solid var(--color-border-strong);border-radius:var(--radius-sm);background:var(--color-surface);color:var(--color-text);cursor:pointer}
+.endpoint-evidence .manual-check-command{margin:8px 0 0;padding:12px;border-radius:8px;background:var(--color-code-bg,#111827);color:var(--color-code-text,#f8fafc);user-select:text}
 /* Shared controls and screen composition; 4px spacing scale. */
 body{font-size:var(--text-14);color:var(--color-text);background:var(--color-background)}
 .ui-icon{flex:none;vertical-align:middle;width:20px;height:20px}

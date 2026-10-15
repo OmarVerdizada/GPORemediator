@@ -16,7 +16,7 @@ const server=http.createServer(async(req,res)=>{
   if(url.pathname==='/api/session')data={mode:'WINDOWS',role:'Administrator',csrfToken:'test'};
   else if(url.pathname==='/api/service')data={mode:'WINDOWS',writesEnabled:true,processId:1};
   else if(url.pathname==='/api/gpo/history')data=[run];
-  else if(url.pathname==='/api/gpo/settings')data=[{id:'1.1.4',scope:'Domain',automation:'Automated',handler:'SecurityTemplate',suggested:14,allowValueOverride:true,domainPolicySensitive:true},{id:'19.5.1.1',scope:'User',automation:'Automated',handler:'Registry',recommended:'Enabled',allowValueOverride:false,domainPolicySensitive:false}];
+  else if(url.pathname==='/api/gpo/settings')data=[{id:'1.1.4',scope:'Domain',automation:'Automated',handler:'SecurityTemplate',items:[{section:'System Access',key:'MinimumPasswordLength'}],suggested:14,allowValueOverride:true,domainPolicySensitive:true},{id:'19.5.1.1',scope:'User',automation:'Automated',handler:'Registry',items:[{key:'HKCU\\Software\\Policies\\Test',name:'Enabled'}],recommended:'Enabled',allowValueOverride:false,domainPolicySensitive:false}];
   else if(url.pathname==='/api/gpo/inventory')data=inventory;
   else if(url.pathname==='/api/gpo/session')data={connected:true};
   else if(url.pathname==='/api/gpo/readiness')data={ready:true,checks:[]};
@@ -110,10 +110,17 @@ const server=http.createServer(async(req,res)=>{
   assert.equal(run.result.state,'ROLLED_BACK','Refresh failure must preserve completed restore');
   assert.ok((await page.locator('.ds-toast').textContent()).includes('gpupdate /force'));
   refreshFailure=false;
+  run.result={state:'PUBLISHED',backupId:'test-backup-id',gpoPublished:true,linkVerified:true,effectiveStatus:'VERIFIED_ON_SAMPLE',endpointChecks:[{hostname:'DC-01.test.local',state:'VERIFIED',message:'Value read directly.',actualValue:'MinimumPasswordLength=14'}]};
+  await page.reload();
   await page.goto(`http://127.0.0.1:${server.address().port}/#/benchmark`);
   await page.locator('[data-domain="1"]').click();
   const sub=page.locator('[data-subsection="1.1"]');if(await sub.count())await sub.click();
   await page.locator('[data-rule="1.1.4"]').first().click();
+  await page.locator('[data-tab=verification]').click();
+  await page.locator('.endpoint-evidence').waitFor();
+  await page.locator('.manual-check-command').waitFor();
+  assert.ok((await page.locator('.manual-check-command').textContent()).includes('secedit.exe /export /mergedpolicy'));
+  assert.equal(await page.locator('.manual-check-head [data-copy-value]').count(),1);
   await page.locator('[data-tab=remediation]').click();
   await page.locator('[data-gpo-toggle]').click();
   await page.locator('.gpo-modal').waitFor();

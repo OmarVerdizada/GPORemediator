@@ -1,8 +1,10 @@
-# GPO Remediator 3.11.0
+# GPO Remediator 3.11.1
 
 Vahid Windows/Active Directory tətbiqi: Studio interfeysinin altı yenilənməsi, vizual GPO/OU seçimi, hesabat və diaqnostika, audit HMAC qorunması və domain/GPO üzrə skript izolyasiyası bir source ağacında birləşdirilib. ZIP patch-lərini ayrıca tətbiq etmək lazım deyil.
 
 The integrated release combines the six-wave Studio UI with the cumulative targeting, reliability, reporting, security and domain/GPO isolation updates. The catalog contains **405 controls: 394 automated mappings and 11 manual/review-only controls**. Seven role-sensitive user-right controls remain blocked from automatic writes. Four of the eleven controls have dedicated offline AZ/EN guides; the other seven display role-specific review warnings.
+
+3.11.1 clarifies `gpupdate /force` as a separate confirmed operation, exposes the same action after a completed rollback, and adds a copyable mapping-specific PowerShell check beneath every endpoint result. It also records an intentional stop marker before the backend exits so the Windows launcher does not misclassify a requested shutdown as a startup failure.
 
 Start with `GpoRemediator.cmd`. The included `release/GpoRemediator-runtime-win-x64.zip` is rebuilt from this source; operators need no SDK or Node.js. Developers use `Build-Portable.ps1`, then `scripts/Validate-Source.ps1 -IncludeBrowser` (.NET 10, Python, Node.js and Playwright required).
 

@@ -155,6 +155,7 @@ string Role(HttpContext context)=>setup?"Administrator":OperatorSecurity.Role(bu
 bool ValidHostname(string value)=>!string.IsNullOrWhiteSpace(value)&&value.Length<=253&&Regex.IsMatch(value,@"^(?=.{1,253}$)(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)*[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?$");
 string[] CleanList(string[]? values)=>values?.Select(x=>(x??"").Trim()).Where(x=>x.Length>0).Distinct(StringComparer.OrdinalIgnoreCase).ToArray()??[];
 string RestartMarkerPath()=>Path.Combine(programData,"GpoRemediator","State","restart.request.json");
+string StopMarkerPath()=>Path.Combine(programData,"GpoRemediator","State","stop.request.json");
 void ConfigureService(bool restart,Action save,IHostApplicationLifetime lifetime)
 {
     var gate=app.Services.GetRequiredService<OperationGate>();
@@ -216,7 +217,13 @@ app.MapPost("/api/service/{action}",(string action,HttpContext context,Operation
     gate.BeginMaintenance(()=> {
         store.Audit(action=="stop"?"SERVICE_STOP_REQUESTED":"SERVICE_RESTART_REQUESTED",Operator(context),details:new{mode});
         if(action=="restart") ScheduleRestart(lifetime,real?"Windows":"Setup");
-        else { var marker=RestartMarkerPath(); if(File.Exists(marker)) File.Delete(marker); _=Task.Run(async()=>{await Task.Delay(900);lifetime.StopApplication();}); }
+        else
+        {
+            var restartMarker=RestartMarkerPath(); if(File.Exists(restartMarker)) File.Delete(restartMarker);
+            var stopMarker=StopMarkerPath(); Directory.CreateDirectory(Path.GetDirectoryName(stopMarker)!);
+            File.WriteAllText(stopMarker,JsonSerializer.Serialize(new{mode,requestedAt=PolicyValues.Now()},JsonDefaults.Options));
+            _=Task.Run(async()=>{await Task.Delay(900);lifetime.StopApplication();});
+        }
     });
     return Results.Accepted(value:new{action,accepted=true});
 }).WithMetadata(new OperatorAccess("Administrator"));
@@ -233,7 +240,7 @@ app.MapGet("/api/gpo/session",(HttpContext context,GpoWorkflowService service)=>
 app.MapGet("/api/gpo/readiness",async(HttpContext context,GpoWorkflowService service,CancellationToken ct)=>await service.ReadinessAsync(GpoToken(context),Operator(context),ct));
 app.MapPost("/api/gpo/discover",async(HttpContext context,GpoWorkflowService service,CancellationToken ct)=>await service.DiscoverAsync(GpoToken(context),Operator(context),ct)).WithMetadata(new OperatorAccess("Administrator","Remediator","Auditor","Viewer"));
 app.MapGet("/api/gpo/settings",()=>ProductionGpoMappings.Settings.Select(x=>new {
-    x.Id,x.ControlId,x.Title,x.Category,x.Level,x.Automation,x.Handler,x.Recommended,x.Scope,x.RequiresInput,x.InputType,x.InputLabel,x.InputDefault,
+    x.Id,x.ControlId,x.Title,x.Category,x.Level,x.Automation,x.Handler,x.Items,x.Recommended,x.Scope,x.RequiresInput,x.InputType,x.InputLabel,x.InputDefault,
     x.AllowValueOverride,x.Minimum,x.Maximum,x.Suggested,x.Unit,x.Comparator,x.DomainPolicySensitive,x.RequiresGpUpdate,x.RequiresRestart,x.Warnings,x.Source,x.Writable,
     operationalImpact=x.DomainPolicySensitive||x.RequiresRestart?"HIGH":x.RequiresGpUpdate||x.Handler is "SecurityTemplate" or "AdvancedAudit"?"MEDIUM":"LOW",
     impactReason=x.DomainPolicySensitive?"Domain-wide authentication or lockout behavior may change.":x.RequiresRestart?"A restart-sensitive policy is involved.":x.RequiresGpUpdate?"Endpoint policy refresh and staged verification are required.":"The mapping is scoped and still requires preview and verification.",
