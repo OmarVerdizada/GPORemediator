@@ -9,7 +9,7 @@ const s={lang:'en',history:[],favorites:new Set(),query:"",level:"ALL",automatio
 assert.equal(product.controlStatus(s,rule).label,'Not assessed');
 const run=result=>({updatedAt:'2026-10-08T10:00:00Z',plan:{selection:{setting:rule.id},preview:{gpo:{name:'Test GPO'}}},result});
 const verified={state:'PUBLISHED',gpoPublished:true,linkVerified:true,verification:{replicationConverged:true},effectiveStatus:'VERIFIED_ON_SAMPLE'};
-for(const [result,label] of [[verified,'Implementation verified'],[{...verified,state:'ROLLED_BACK'},'Rolled back'],[{state:'APPLYING'},'In progress'],[{state:'FAILED_SAFE'},'Needs review'],[{state:'PUBLISHED',gpoPublished:true},'Verification pending']]){
+for(const [result,label] of [[verified,'Sample configuration verified'],[{...verified,state:'ROLLED_BACK'},'Rolled back'],[{state:'APPLYING'},'In progress'],[{state:'FAILED_SAFE'},'Needs review'],[{state:'PUBLISHED',gpoPublished:true},'Verification pending']]){
   s.history=[run(result)];assert.equal(product.controlStatus(s,rule).label,label);
 }
 s.history=[run(verified),{...run({state:'ROLLED_BACK'}),updatedAt:'2026-10-08T11:00:00Z'}];

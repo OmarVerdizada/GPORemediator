@@ -69,6 +69,10 @@ using(var response=await Post("apply",request,"TEST\\Viewer")){Check(response.St
 Reject(()=>jobs.Get(jobId,"TEST\\Viewer"),"NOT_FOUND");
 fake.Block.SetResult();var finished=await Done(jobs,jobId);Check(finished.State=="COMPLETED","Single workflow failed");
 Check(fake.Actions.SequenceEqual(new[]{"apply:2.3.1.1","refresh:Scope"}),"Server did not own the approved apply/refresh chain");
+fake.RefreshFails=true;
+var failedRefresh=jobs.Start("refresh",new(Guid.NewGuid().ToString(),[first.Id],new(""),"Scope"),"secret-session","TEST\\Admin");
+failedRefresh=await Done(jobs,failedRefresh.Id);Check(failedRefresh.State=="NEEDS_REVIEW","Standalone failed refresh reported a completed workflow");
+fake.RefreshFails=false;
 // Batch preview and rebasing preserve reviewed per-control values while fingerprints advance.
 fake.Actions.Clear();
 var preview=jobs.Preview(Guid.NewGuid().ToString(),new([selection with{Setting="2.3.1.2"},selection with{Setting="2.3.1.3"}],true),"secret-session","TEST\\Admin");
@@ -114,7 +118,7 @@ Console.WriteLine("PASS workspace: production async HTTP/roles/idempotency, serv
 
 sealed class FakeOperations(Store store,OperationGate gate):IWorkflowOperations
 {
- public readonly List<string> Actions=[];public TaskCompletionSource? Block;public bool FailNext;public bool DriftAfterApply;public GpoRollbackAnchor? LastAnchor;public string? LastRestore;private string fingerprint="initial";
+ public readonly List<string> Actions=[];public TaskCompletionSource? Block;public bool FailNext;public bool DriftAfterApply;public bool RefreshFails;public GpoRollbackAnchor? LastAnchor;public string? LastRestore;private string fingerprint="initial";
  public void ValidateConnection(string token,string actor){if(token!="secret-session")throw new PolicyException("GPO_LOGIN_REQUIRED","Reconnect.");}
  public Task<GpoWorkflowPlan> PreviewAsync(string token,string actor,GpoSelection selection,CancellationToken ct){
   ValidateConnection(token,actor);var preview=new GpoPreview(new(selection.GpoId,"<unsafe>",false,true),new(selection.ScopeDn,"Pilot","OU"),"0",fingerprint,"links",null,[],[],new("",false,[],new(2,0,2,0,["ws.test.local"],false),[],[],null),DesiredValue:"1");
@@ -128,6 +132,7 @@ sealed class FakeOperations(Store store,OperationGate gate):IWorkflowOperations
    var state=FailNext?"REVIEW_REQUIRED":operation=="rollback"?"ROLLED_BACK":"PUBLISHED";FailNext=false;
    if(operation=="apply")fingerprint=Guid.NewGuid().ToString("N");if(operation=="rollback"){LastAnchor=rollbackAnchor;LastRestore=id;}
    var result=new GpoWorkflowResult(state,"Recorded",operation=="apply"?"backup-"+id:store.Get<GpoWorkflowRun>("gpo_runs",id)?.Result.BackupId,"backup",fingerprint,operation!="rollback",operation!="rollback",operation=="refresh"?[new("ws.test.local","SCHEDULED","scheduled")]:[],"VERIFIED_ON_SAMPLE",new("1","1",true,[],[],PolicyValues.Now(),true),[]);
+   if(operation=="refresh"&&RefreshFails)result=result with{RefreshResults=[new("ws.test.local","FAILED","RPC unavailable")]};
    var run=new GpoWorkflowRun(id,plan,result,PolicyValues.Now(),consent);store.Put("gpo_runs",id,run,state);if(operation=="apply"&&DriftAfterApply){fingerprint="external-edit";DriftAfterApply=false;}return run;
   }finally{gate.EndOperation(key);}
  }

@@ -1,0 +1,1 @@
+PASS: 405 static mappings (394 AUTO + 11 GUIDED), 19 CIS top sections; generated <WORKSPACE>\work\policy-scope-audit.csv

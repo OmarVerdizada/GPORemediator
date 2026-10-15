@@ -1,0 +1,12 @@
+PASS stronger deny/audit preservation and registry type repair
+PASS partial multi-item repair preserves stricter compliant numeric siblings
+PASS refresh options: None / Domain-Pdc / Scope, host allowlist and 100-host bound
+PASS rollback refresh: restored snapshot, explicit force and drift rejection
+PASS rollback scope refresh and per-host scheduling failure reporting
+PASS batch rollback: first snapshot, final publication anchor, external drift rejection and streamed restore stages
+SecurityTemplate: 44 controls
+Manual: 7 controls
+Registry: 319 controls
+AdvancedAudit: 27 controls
+RegistrySet: 8 controls
+Offline mapping results: 394 PASS, 11 manual, 0 FAIL

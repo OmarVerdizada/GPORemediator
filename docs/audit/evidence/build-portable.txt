@@ -1,0 +1,9 @@
+Styles: 9 component sources → app.css; 18 exact duplicate blocks removed.
+Restoring .NET/NuGet dependencies for win-x64 (attempt 1/3)...
+  Determining projects to restore...
+  Restored <WORKSPACE>\backend\GpoRemediator.csproj (in 372 ms).
+Publishing self-contained Windows x64 backend...
+  GpoRemediator -> <WORKSPACE>\backend\bin\Release\net10.0\win-x64\GpoRemediator.dll
+  GpoRemediator -> <WORKSPACE>\work\runtime-build-80347d36e8a14a4aaae67340be17ca6c\
+Portable Windows x64 application ready. No Node.js/pnpm/npm registry is required.
+Run GpoRemediator.cmd. For real AD/GPO use, complete Setup in the built-in Automation Center.

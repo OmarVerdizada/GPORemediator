@@ -50,9 +50,22 @@
   function manualCheck(s,h,endpoint){
     const mapping=s.settings?.find(x=>x.id===h.plan?.selection?.setting),items=mapping?.items||mapping?.Items||[],handler=String(mapping?.handler||mapping?.Handler||'');
     let lines=[];
-    if(/^Registry(Set)?$/i.test(handler))lines=items.filter(x=>(x.key||x.Key)&&(x.name||x.Name)).map(x=>`Get-ItemPropertyValue -LiteralPath ${psQuote('Registry::'+registryPath(x.key||x.Key))} -Name ${psQuote(x.name||x.Name)}`);
-    else if(/^SecurityTemplate$/i.test(handler))lines=items.filter(x=>x.key||x.Key).map((x,i)=>`${i?'':'$policyFile = Join-Path $env:TEMP \'gpo-effective-policy.inf\'; secedit.exe /export /mergedpolicy /cfg $policyFile /quiet | Out-Null; '}Select-String -LiteralPath $policyFile -Pattern ${psQuote('^\\s*'+String(x.key||x.Key).replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'\\s*=')}`);
-    else if(/^AdvancedAudit$/i.test(handler))lines=items.filter(x=>x.guid||x.Guid).map(x=>`auditpol.exe /get /subcategory:${psQuote(x.guid||x.Guid)} /r`);
+    if(/^Registry(Set)?$/i.test(handler)){
+      const user=String(mapping?.scope||mapping?.Scope).toLowerCase()==='user',identity=h.plan?.selection?.verificationUser;
+      if(user&&identity)lines.push(`$userSid = ([System.Security.Principal.NTAccount]${psQuote(identity)}).Translate([System.Security.Principal.SecurityIdentifier]).Value`);
+      for(const item of items){const key=item.key||item.Key,name=item.name||item.Name;if(!key||!name)continue;
+        const path=user&&identity?`('Registry::HKEY_USERS\\' + $userSid + ${psQuote('\\'+String(key).replace(/^HKCU\\/i,''))})`:psQuote('Registry::'+registryPath(key));
+        if(user&&!identity)lines.push('# Run in the intended user session; HKCU belongs to the current PowerShell identity.');
+        lines.push(`Get-ItemPropertyValue -LiteralPath ${path} -Name ${psQuote(name)} -ErrorAction Stop`);
+        const profile=/\\WindowsFirewall\\(Domain|Private|Public)Profile/i.exec(key)?.[1];
+        if(profile)lines.push(`Get-NetFirewallProfile -Name ${psQuote(profile)} -PolicyStore ActiveStore | Select-Object Name, Enabled, DefaultInboundAction, NotifyOnListen, AllowLocalFirewallRules, AllowLocalIPsecRules, LogFileName, LogMaxSizeKilobytes, LogBlocked, LogAllowed`);
+      }
+    }
+    else if(/^SecurityTemplate$/i.test(handler)){
+      const checks=items.filter(x=>x.key||x.Key).map(x=>`Select-String -LiteralPath $policyFile -Pattern ${psQuote('^\\s*'+String(x.key||x.Key).replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'\\s*=')}`);
+      lines=[`$policyFile = Join-Path $env:TEMP ([guid]::NewGuid().ToString('N') + '.inf')\ntry {\n  secedit.exe /export /mergedpolicy /cfg $policyFile /quiet | Out-Null\n  if ($LASTEXITCODE -ne 0) { throw 'secedit export failed' }\n  ${checks.join('\n  ')}\n} finally { Remove-Item -LiteralPath $policyFile -Force -ErrorAction SilentlyContinue }`];
+    }
+    else if(/^AdvancedAudit$/i.test(handler))lines=items.filter(x=>x.guid||x.Guid).map(x=>`auditpol.exe /get ${psQuote('/subcategory:'+(x.guid||x.Guid))} /r`);
     if(!lines.length)lines=[`gpresult.exe /scope ${String(mapping?.scope||mapping?.Scope).toLowerCase()==='user'?'user':'computer'} /r`];
     const host=String(endpoint?.hostname||'').split('.')[0];
     return `${host?`if ($env:COMPUTERNAME -ine ${psQuote(host)}) { Write-Warning ${psQuote('Bu komanda '+endpoint.hostname+' endpoint-ində icra edilməlidir.')} }\n`:''}${lines.join('\n')}`;

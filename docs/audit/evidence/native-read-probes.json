@@ -1,0 +1,26 @@
+{
+  "observedAt": "2026-10-15T05:55:15.9350415+00:00",
+  "scope": "Local host read-only; hostname and domain omitted",
+  "windows": "Windows 11 Pro 10.0.26200",
+  "domainJoined": true,
+  "rsatModulesAvailable": false,
+  "auditpol": {
+    "result": "UNAVAILABLE",
+    "observedError": "0x00000522: A required privilege is not held by the client",
+    "operation": "/get subcategory GUID /r"
+  },
+  "firewall": {
+    "result": "READ_SUCCEEDED; native profile properties available, no GPO attribution",
+    "operation": "Get-NetFirewallProfile -PolicyStore ActiveStore",
+    "profilesRead": 3,
+    "propertyNamesObserved": [
+      "Name",
+      "Enabled",
+      "DefaultInboundAction",
+      "NotifyOnListen",
+      "LogMaxSizeKilobytes"
+    ],
+    "profileValuesPublished": false
+  },
+  "limitations": "No GPO attribution, policy change, full control certification or live AD end-to-end test."
+}

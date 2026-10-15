@@ -19,10 +19,12 @@ function Assert-VersionSync {param($Id) return @{version=1}}
 function Bump-ComputerVersion {param($Id,$Extension) $script:bumps++}
 function Set-GPRegistryValue {param($Guid,$Key,$ValueName,$Type,$Value,$Domain,$Server) $script:registry[$Key+'|'+$ValueName]=@{value=$Value;type=$Type}}
 function Get-GPRegistryValue {param($Guid,$Key,$ValueName,$Domain,$Server,$ErrorAction) $keyName=$Key+'|'+$ValueName;if(!$script:registry.ContainsKey($keyName)){Write-Error 'Missing mocked policy' -ErrorId UnableToRetrievePolicyRegistryItem -ErrorAction Stop};return [pscustomobject]@{Value=$script:registry[$keyName].value;Type=$script:registry[$keyName].type}}
-function Assert-Test($Condition,[string]$Message){if(!$Condition){throw $Message}}
+$script:caseCount=0
+function Assert-Test($Condition,[string]$Message){if(!$Condition){throw $Message};$script:caseCount++}
 $catalog=Get-Content (Join-Path $root 'backend\data\gpo-production-mappings.json') -Raw|ConvertFrom-Json
 $report=@();$index=0
 foreach($map in $catalog.mappings){
+    $script:caseCount=0
     $index++;if($map.automation -ne 'Automated' -or $map.handler -eq 'Manual'){ $report+=@{id=$map.id;handler=$map.handler;state='MANUAL_BLOCKED'};continue }
     # Backend serialization includes nullable GpoMappingItem members; the compact
     # embedded JSON omits them. Reproduce the worker's actual wire shape.
@@ -38,14 +40,26 @@ foreach($map in $catalog.mappings){
         Assert-Test (!(Write-Mapping $plan $map)) ($map.id+': second write was not idempotent')
         $display=Mapping-Display $selection.gpoId $map $selection $false
         Assert-Test ($null -ne $display) ($map.id+': missing display')
+        if($map.handler -in @('Registry','RegistrySet')){
+            foreach($item in $map.items){
+                $rule=[string](Read-Field $item 'comparator' $map.comparator);if(!$rule){$rule=[string]$map.comparator}
+                if($rule -notin @('>=','<=','atMost')){continue}
+                $original=$script:registry[$item.key+'|'+$item.name].value
+                $stronger=if($rule -eq '>='){[int64]$original+1}elseif($rule -eq 'atMost'){0}else{[math]::Max(1,[int64]$original-1)}
+                $script:registry[$item.key+'|'+$item.name].value=$stronger
+                Assert-Test (Mapping-Matches $selection.gpoId $map $selection) ($map.id+': stricter numeric policy rejected')
+                Assert-Test (!(Write-Mapping $plan $map)) ($map.id+': stricter numeric policy was weakened')
+                $script:registry[$item.key+'|'+$item.name].value=$original
+            }
+        }
         $items=@(Endpoint-Expected $map $selection)
         Assert-Test ($items.Count -eq @($map.items).Count) ($map.id+': endpoint recipe lost items')
         if($map.handler -in @('SecurityTemplate','AdvancedAudit')){Assert-Test ($script:bumps -eq 1) ($map.id+': version increment count incorrect')}
         if($map.allowValueOverride){
             foreach($v in @($map.minimum,$map.maximum)|Sort-Object -Unique){$selection.value=[int]$v;$null=Write-Mapping $plan $map;Assert-Test (Mapping-Matches $selection.gpoId $map $selection) ($map.id+': override read-back mismatch')}
         }
-        $report+=@{id=$map.id;handler=$map.handler;state='PASS';items=@($map.items).Count;checks='write/read-back/idempotence/endpoint-recipe/value-bounds'}
-    }catch{$report+=@{id=$map.id;handler=$map.handler;state='FAIL';error=$_.Exception.Message}}
+        $report+=@{id=$map.id;handler=$map.handler;state='PASS';items=@($map.items).Count;testsPassed=$script:caseCount;testsFailed=0;checks='write/read-back/idempotence/endpoint-recipe/value-bounds'}
+    }catch{$report+=@{id=$map.id;handler=$map.handler;state='FAIL';testsPassed=$script:caseCount;testsFailed=1;error=$_.Exception.Message}}
 }
 # Preserve stronger existing deny/audit entries when the benchmark says "include".
 $script:folder=Join-Path $sandbox 'incl';$null=New-Item -ItemType Directory -Path $script:folder
@@ -68,6 +82,14 @@ Assert-Test (!(Mapping-Matches $selection.gpoId $map $selection)) 'Wrong registr
 $null=Write-Mapping $plan $map
 Assert-Test (Mapping-Matches $selection.gpoId $map $selection) 'Wrong registry type was not repaired'
 Write-Output 'PASS stronger deny/audit preservation and registry type repair'
+$map=$catalog.mappings|Where-Object{$_.id -eq '18.10.93.4.2'}
+$script:registry=@{}
+$script:registry[$map.items[0].key+'|'+$map.items[0].name]=@{value=0;type='DWord'}
+$script:registry[$map.items[1].key+'|'+$map.items[1].name]=@{value=200;type='DWord'}
+$null=Write-Mapping @{selection=$selection} $map
+Assert-Test ($script:registry[$map.items[1].key+'|'+$map.items[1].name].value -eq 200) 'Repairing one registry item weakened a compliant bound in another item'
+Assert-Test (Mapping-Matches $selection.gpoId $map $selection) 'Partial multi-item repair did not satisfy the complete mapping'
+Write-Output 'PASS partial multi-item repair preserves stricter compliant numeric siblings'
 
 # Target selection executes the worker resolver with directory enumeration mocked.
 function Scope {param($Dn) return @{dn=$Dn}}

@@ -1,4 +1,8 @@
-# GPO Remediator 3.11.1
+# GPO Remediator 3.12.0
+
+The full source and synthetic audit is in [docs/audit/FULL_PROJECT_AUDIT.md](docs/audit/FULL_PROJECT_AUDIT.md), with one evidence-bounded row for all 405 controls. This release fixes the shared auditpol argument, numeric bounds, active firewall verification, replication content checks, stale evidence and refresh result handling. Five independent assurance stages distinguish stored configuration, applicability, replication, client processing and sampled endpoint configuration. **Live AD enforcement and unrestricted production readiness remain unverified; no live AD GPO was modified during this audit.**
+
+Developers can reproduce the individually logged checks with `scripts/Invoke-FullAuditTests.ps1`, then generate the audit inventory using `python scripts/Build-FullAuditReport.py --evidence work/audit/final`. Test fixture results must not be presented as live Windows/AD validation.
 
 Vahid Windows/Active Directory tətbiqi: Studio interfeysinin altı yenilənməsi, vizual GPO/OU seçimi, hesabat və diaqnostika, audit HMAC qorunması və domain/GPO üzrə skript izolyasiyası bir source ağacında birləşdirilib. ZIP patch-lərini ayrıca tətbiq etmək lazım deyil.
 

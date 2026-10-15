@@ -11,7 +11,8 @@ public sealed record GpoMappingItem(
     string[]? Value = null,
     string? Guid = null,
     string? State = null,
-    int? Mask = null);
+    int? Mask = null,
+    [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] string? Comparator = null);
 
 public sealed record GpoRuleMapping(
     string Id,

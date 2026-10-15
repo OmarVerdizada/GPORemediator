@@ -27,3 +27,9 @@ for x in m.values():
     if 'include ' in x['title'].lower() and x['handler'] in ('SecurityTemplate','AdvancedAudit'):
         assert x['comparator'] == 'includes', x['id']
 print('PASS independent mapping regressions, 405 unique controls and eleven guided boundaries')
+numeric_ids={'2.3.6.5','2.3.7.3','2.3.7.6','2.3.9.1','9.1.5','9.2.5','9.3.7','18.5.9','18.5.12','18.9.25.5','18.9.25.6','18.9.25.7','18.10.26.1.2','18.10.26.2.2','18.10.26.3.2','18.10.26.4.2','18.10.57.3.10.1'}
+assert all(m[cid]['comparator'] in {'>=','<=','atMost'} for cid in numeric_ids)
+assert m['2.3.7.6']['items'][0]['value']==['4']
+assert m['18.10.93.4.2']['items'][1]['comparator']=='>='
+assert 'Favorite Themes' not in m['19.7.44.2.1']['recommended']
+print('PASS 18 numeric-bound recipes, zero/nonzero distinction and catalog contamination regression')

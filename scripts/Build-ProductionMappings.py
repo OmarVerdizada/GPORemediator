@@ -184,6 +184,24 @@ for m in maps.values():
         m['comparator'] = 'includes'
 
 # A control's processing half is derived from the reviewed policy address, then
+# Preserve compliant stronger values for explicit numeric bounds in the imported
+# control titles. atMost permits zero; <= retains the explicit nonzero contract.
+NUMERIC_BOUNDS = {
+    '2.3.6.5':'<=', '2.3.7.3':'<=', '2.3.7.6':'atMost', '2.3.9.1':'atMost',
+    '9.1.5':'>=', '9.2.5':'>=', '9.3.7':'>=', '18.5.9':'atMost', '18.5.12':'atMost',
+    '18.9.25.5':'>=', '18.9.25.6':'atMost', '18.9.25.7':'<=',
+    '18.10.26.1.2':'>=', '18.10.26.2.2':'>=', '18.10.26.3.2':'>=', '18.10.26.4.2':'>=',
+    '18.10.57.3.10.1':'atMost'
+}
+for cid, comparator in NUMERIC_BOUNDS.items():
+    maps[cid]['comparator']=comparator
+# Use the documented upper boundary; existing stricter values are now retained.
+maps['2.3.7.6']['items'][0]['value']=['4']
+maps['2.3.7.6']['requiresRestart']=True
+maps['2.3.7.6']['warnings'].append('CachedLogonsCount configuration changes require a Windows restart; a matching registry value alone does not prove the cached-logon behavior changed.')
+maps['18.10.93.4.2']['items'][1]['comparator']='>='
+
+# A control's processing half is derived from the reviewed policy address, then
 # checked against the declared scope. This prevents an HKCU recipe from being
 # silently treated as a computer policy (or the inverse) during future imports.
 for m in maps.values():

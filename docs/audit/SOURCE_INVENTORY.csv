@@ -1,0 +1,221 @@
+﻿Path,Category,Bytes,SHA256,Text_Lines,Inspection
+.gitattributes,launcher/documentation,111,015ccedf8eca34e0faad34033ccbcdbcd0bf03064f056362027d80a08d093de6,2,whole-file text inventory and structural scan
+.github/workflows/security-checks.yml,.github,4368,1a8d2a7d5bbf3e847f2713601ecff64ca43cc133f9b45f4281f0e2bbdb365d0f,87,whole-file text inventory and structural scan
+.gitignore,launcher/documentation,289,c75bec2a35ee43d673b858dbced2f70163a23b748c420cc8d5b7d35623136571,16,whole-file text inventory and structural scan
+API-CONTRACT.md,launcher/documentation,2907,73068249e4242aa22d6bf77e8572d246636f6a11c4dc628168c05c4866159d38,38,whole-file text inventory and structural scan
+Build-Portable.ps1,launcher/documentation,5978,8fd0069e1582281285c0efa69b91d0ad487d7f51c6a49766444ced61ac6ee7d1,99,whole-file text inventory and structural scan
+CONNECTION-TROUBLESHOOTING.md,launcher/documentation,2264,5a0a482f8f1533699332a5247f5560bf7ecabd85a0905055fcbf4e28de688e5d,55,whole-file text inventory and structural scan
+Control-Panel.ps1,launcher/documentation,37304,7597797ac80d3b2d65fe2a7864d700c771d67e39fd114c5d40b7133509aa5b97,377,whole-file text inventory and structural scan
+DATA-RETENTION.md,launcher/documentation,946,0c68bec41a64a6391094d3885d03d4a926b3cbf4a1e2c46afa6941f5f71ae98a,13,whole-file text inventory and structural scan
+GpoRemediator.cmd,launcher/documentation,1289,2b01a242439e8bf343098bab00a21cb6cb99895e79b0fa0ca91bf0ed5b271e7a,43,whole-file text inventory and structural scan
+GpoRemediator.ps1,launcher/documentation,45733,5bafb5258df566b98590ea92608e40abb2ec0f742de00057d6227eae129961fd,736,whole-file text inventory and structural scan
+ISTIFADE.md,launcher/documentation,2845,d57c968cad05bc32b040bedb3382d6f7f24fd16a889bc48f37327f1ce0c42079,24,whole-file text inventory and structural scan
+OFFLINE-BOOTSTRAP.txt,launcher/documentation,945,12a1c038ee0b3afb67286a2bc7994bdfc3aa8eea3470c372851b77226a91890b,8,whole-file text inventory and structural scan
+PACKAGE-MANIFEST.txt,launcher/documentation,797,f4b22f8280e532c719b8ceca136471b5861c32c656106d069e96b5023190944b,23,whole-file text inventory and structural scan
+PRODUCTION-OPERATIONS.md,launcher/documentation,2670,0bc64758aaab7808ee0cb6b9c4cbfe0c50da56d36f3049707ca6e4745b96c5af,30,whole-file text inventory and structural scan
+README.md,launcher/documentation,17165,73fc210de9eede8c5d7c77f82e492eb3cb4f2874fc8259d7b658c98c034cf9d5,160,whole-file text inventory and structural scan
+RELEASE-NOTES-3.10.0.md,launcher/documentation,842,3913119a0729fbd6d5a7167d02dc83b9ba80b83bc20521db491817d9ef1f2ea5,9,whole-file text inventory and structural scan
+RELEASE-NOTES-3.8.0.md,launcher/documentation,1380,c2db81d4c45a56fac7d7bcf938d97cc4e3b0bde3574566a7423630ed692b618c,9,whole-file text inventory and structural scan
+RELEASE-NOTES-3.8.1.md,launcher/documentation,1023,43b7c1a0c11fb758f1720374958930044e4aea5302f1fea7380b2ce7db794a38,7,whole-file text inventory and structural scan
+RELEASE-NOTES-3.9.0.md,launcher/documentation,1263,eb6558870ec944e9f74f7e9ac1224c434696cc98a32a781dfe8311a3827f4936,11,whole-file text inventory and structural scan
+RELEASE-NOTES-APPLY-SESSION-3.1.3.md,launcher/documentation,1368,e6f376a27a01f0d1895347556d40f4883fdf7a4f13804cd841b29f2e64380916,14,whole-file text inventory and structural scan
+RELEASE-NOTES-DESIGN-3.3.0.md,launcher/documentation,1124,76474a8751a12eb8f4cd8877edafa26fbff18367f8739c7ced42e74c731a8fbc,7,whole-file text inventory and structural scan
+RELEASE-NOTES-DOMAINS-3.3.2.md,launcher/documentation,957,369020414af83bc8790a539c768b39c61f1b0febfe5d39b8aa0e406904102794,7,whole-file text inventory and structural scan
+RELEASE-NOTES-FINAL-UX.md,launcher/documentation,552,2362d22448eac0dc33fe0f9a0de8a8cb8843cba3fcdc06bf1576812ab7d271cf,10,whole-file text inventory and structural scan
+RELEASE-NOTES-PREMIUM-3.5.1.md,launcher/documentation,1579,3353e49bf217981718effcd1d9c6d77391c1f4f094c876e3891b7331e08fe4fe,9,whole-file text inventory and structural scan
+RELEASE-NOTES-PRODUCT-3.2.0.md,launcher/documentation,2146,cfa3e94c9057403e111e90f9bef5460d272d4ce4ea7712eddcaaed59e54c7318,17,whole-file text inventory and structural scan
+RELEASE-NOTES-PRODUCTION.md,launcher/documentation,3348,853392044b799d1c7dc1bbc2c1a6eecb837cbd2574c2f37e8c198ad901157cfb,40,whole-file text inventory and structural scan
+RELEASE-NOTES-RECIPES-3.3.1.md,launcher/documentation,1109,f7fd60bfef194873cb12c0e7f42a938b056f1e15473fd4b1e5e36cc4957de853,9,whole-file text inventory and structural scan
+RELEASE-NOTES-RECOVERY-UI.md,launcher/documentation,3110,0a28992025301277cc76f16225cb441d2c77cf7135bd8c60de92ba7a5db51ed2,23,whole-file text inventory and structural scan
+RELEASE-NOTES-SECURITY-3.6.0.md,launcher/documentation,2788,26aa8c473ab36dab3d1fd4bbfdee62a3df3b8c196a212ed9a76afa31cdc6e2fe,18,whole-file text inventory and structural scan
+RELEASE-NOTES-STARTUP-3.1.2.md,launcher/documentation,1796,c1b064b1032ec61ecf89928a58c435e1cf8c195b2baadf8071763c65f99f5be3,20,whole-file text inventory and structural scan
+RELEASE-NOTES-SYSTEM-3.5.0.md,launcher/documentation,2598,4b2baa9bc196f655432bd72a2a6731cbc1bd9e08606196b1540b6a6ceb9c2ab3,13,whole-file text inventory and structural scan
+RELEASE-NOTES-WORKFLOW-3.2.1.md,launcher/documentation,2196,ca635adf9d06f1ba4d0443713341fd6ef1423f514fb80fb53c05b3e079dd15cd,14,whole-file text inventory and structural scan
+RELEASE-NOTES-WORKFLOW-REPAIR.md,launcher/documentation,1621,9b979161c2f5bff8bc08245a8d6299461b8aebf1c9cc88a196983266e810ff02,17,whole-file text inventory and structural scan
+RELEASE-NOTES-WORKFLOWS-3.7.0.md,launcher/documentation,4528,eae2c5b44c722cad8e87a124939838109080416602c8365e17990e1425cf8497,27,whole-file text inventory and structural scan
+RELEASE-NOTES.md,launcher/documentation,888,e2a2327f0b117606c0795c681ee912a873f4ed7b0525d77fc43f8a7f09ee4eca,11,whole-file text inventory and structural scan
+RELEASE.txt,launcher/documentation,533,fe37e715098930e8aac5a5116f42f67110e14f3f71a1db150db4591f80c73477,8,whole-file text inventory and structural scan
+SECURITY.md,launcher/documentation,8518,d96f03a181c4cccaf28a153842f0a4a8247aac130529a91bc31ad5cc1137519d,41,whole-file text inventory and structural scan
+Start-Windows.ps1,launcher/documentation,190,46b001d02fe91d5d9bc30c93468c64d66efaf1dd85fdac5b4552da880d62fc34,3,whole-file text inventory and structural scan
+Stop-GpoRemediator.ps1,launcher/documentation,812,9c85201648896b6b367e606acd7fb1f28b62a2012b85dd366a1e51b58d70bbeb,12,whole-file text inventory and structural scan
+VALIDATION.txt,launcher/documentation,791,947adbad8bc0adc46701383e3ddbe7f426dd7bac9c515b61ecdb6ba3ae4fcf01,14,whole-file text inventory and structural scan
+backend/Domain/GpoAssurance.cs,backend,3824,db377391be289fafaf5e170b6df8ce0875beda6fc101fd9e44549a57fc944872,38,whole-file text inventory and structural scan
+backend/Domain/GpoWorkflow.cs,backend,8902,9fedf4b5be277d8fd9f7eea46b3804e729d7947ad485d4a092a792d9db6d92c8,113,whole-file text inventory and structural scan
+backend/Domain/Models.cs,backend,2212,bb441163f6158e478cdb5d05d4c5ac4b81a4d3a718a16acef2a6142ca49b45a3,51,whole-file text inventory and structural scan
+backend/Domain/ProductionGpoMappings.cs,backend,12750,640406d2a87b4e8d78645c855e5b5e422dbba1598dd09b177855e48db4c56044,182,whole-file text inventory and structural scan
+backend/Domain/WindowsAccount.cs,backend,456,71f1f7d18c2e834ed18085f6b096ae1bd475cccb05b3a5c72a6425555cccf219,10,whole-file text inventory and structural scan
+backend/Domain/WorkspaceWorkflow.cs,backend,2886,6d8c5f1e072a623ca7faad3f08f96bc99c830c72328ae4116c375dd230c663ec,31,whole-file text inventory and structural scan
+backend/GpoRemediator.csproj,backend,1371,b881c10069e32e8a28d6b1fa07c5471eff878f49f847af327f097971e2c309a8,17,whole-file text inventory and structural scan
+backend/Infrastructure/BundledAssets.cs,backend,2197,7e033c6b1833ff6e63fe0b7a9afc0d343c46ca0743aac6e56e46fb91266f2358,37,whole-file text inventory and structural scan
+backend/Infrastructure/GpoEndpoints.cs,backend,768,44086a1e1202fff6001813ea174ec0adcec74678313b7feba5a438b9b3cb233b,13,whole-file text inventory and structural scan
+backend/Infrastructure/GpoScriptWorkspaces.cs,backend,9562,084a1be6a6024ddca3fb275d42c3f9d233f9740ef23b4bbdbfd076801857ebb5,163,whole-file text inventory and structural scan
+backend/Infrastructure/OperatorConfirmation.cs,backend,5805,104115ec659b28998cc4535d3dec65ce02befd71e8691165663037214070586d,77,whole-file text inventory and structural scan
+backend/Infrastructure/OperatorSecurity.cs,backend,3886,ede1245d39f1cd95cd95e0d3d9d3aa012922a8286724e73ee75ef69e86c0a0c4,53,whole-file text inventory and structural scan
+backend/Infrastructure/PrivateFiles.cs,backend,3754,329b6ffc65928241c117c7024b95ec99ef12652f1d5a201323509d1daa0fcac3,60,whole-file text inventory and structural scan
+backend/Infrastructure/RequestSecurity.cs,backend,1384,72b4d5cb56c8048a76b488a0549d3b42046e163b0c15f6abad269058a711035b,24,whole-file text inventory and structural scan
+backend/Infrastructure/Store.cs,backend,15988,2894027170a2293cb24106ac4b872a006b67df77e162f8c1d2c1516875450340,261,whole-file text inventory and structural scan
+backend/Infrastructure/WindowsPowerShellExecutor.cs,backend,7459,336f873af9b369bdbb367afd76d40b00a5dc76b91bc90c05325c7970c88ccee4,118,whole-file text inventory and structural scan
+backend/Infrastructure/WorkspaceEndpoints.cs,backend,7688,0482fc64bc3ea9979b5a5fdf5d80cb8f32c456bf83310225852df41f11bb2d79,65,whole-file text inventory and structural scan
+backend/PowerShell/GpoWorkflow.Worker.ps1,backend,85657,1ae6ec1de4c876206e54a4245b502d29dda3314d12340befdca55d46c3a2e46a,654,whole-file text inventory and structural scan
+backend/PowerShell/Invoke-GpoWorkflow.ps1,backend,6053,be726fbc5f02f80d10a239bff3581cadb5f697d95766cb1aa93147caad13460a,67,whole-file text inventory and structural scan
+backend/PowerShell/SecurityTemplate.psm1,backend,5598,95135cd85e39968a1b9a5424b8a24ccdfc629bd99371d7bd232eebd24c71629a,104,whole-file text inventory and structural scan
+backend/Program.cs,backend,34760,2f658e21b18ce4d24fa89f6f3a72d953f9f850b21f5d5bf961fd5976acc34958,346,whole-file text inventory and structural scan
+backend/Properties/AssemblyInfo.cs,backend,94,deba4ed5bf12dcca3a0cada66884a7bdeb9bbc42a1ed9bef5c432b346cf2b1b5,2,whole-file text inventory and structural scan
+backend/Services/GpoWorkflowService.cs,backend,22499,9eae51a74aa62212c3c6599a4316142265fa349a07fe953762d9a67beb5cc323,268,whole-file text inventory and structural scan
+backend/Services/IWorkflowOperations.cs,backend,567,134138a43ea0aad9fb6a78aa0475db91b479b07f291c138cb3cd39167148fb70,9,whole-file text inventory and structural scan
+backend/Services/OperationGate.cs,backend,2894,2702b2473a78429a5195dda478d76d8112dc0e205723524df0b6c70cf32b3e72,58,whole-file text inventory and structural scan
+backend/Services/WorkspaceWorkflows.cs,backend,23107,e1484dd91a5dcc0f8e1197180f471a2d3576a1d98a3763928945c10b8360015a,214,whole-file text inventory and structural scan
+backend/appsettings.json,backend,614,1cf6459301953ed923ed1a2c8e303293ca872d0d9bd90a2b34f1df5dde262faa,27,whole-file text inventory and structural scan
+backend/data/gpo-production-mappings.json,backend,462582,64a7063e9febff3fede9a072ec26a82eecbb0a57698de90716fbb10fe33f11ae,14943,whole-file text inventory and structural scan
+backend/data/mapping_sources/reviewed-overrides.json,backend,9862,b2835c5b820a10f4c64def15bb5b36a4c823259a2af6e821cdb7021a51821274,315,whole-file text inventory and structural scan
+backend/data/mapping_sources/section02-registry.tsv,backend,5515,7bc977ca0cc8a4ae349a19a7cef2fbde23e468093d5c00ac9b99ebd07e8b352e,58,whole-file text inventory and structural scan
+backend/data/mapping_sources/section02-userrights.tsv,backend,1972,57809cf278332d317cf20d9994e016672a8e18d30a8b28d90be71cdc7959ca3a,37,whole-file text inventory and structural scan
+backend/data/mapping_sources/section09-registry.tsv,backend,2487,f4575a27eeec3788b8953d849ad67fd3762b0ae6f019f5ee0b4c13d110af4d0d,23,whole-file text inventory and structural scan
+backend/data/mapping_sources/section17-audit.tsv,backend,2408,fa6daa69ce155be23259a4b80d5a276740d3fed1509918a3f83c03fe0eadebf8,27,whole-file text inventory and structural scan
+backend/data/mapping_sources/section18-registry.tsv,backend,21927,640e4362e8f87ef9ee83d7976682b785413b4f85450521e2869fb4dc483b036e,215,whole-file text inventory and structural scan
+backend/data/mapping_sources/section19-registry.tsv,backend,1254,a379b3fd2ab7b84fc5a8c6012360c7412f3888dcf2f50f39c9fc39f7834a5ea0,12,whole-file text inventory and structural scan
+docs/ARCHITECTURE.md,docs,5066,e76997d9cc37075a4889081a9fc10757153cb00e94c0d93d27a9d88a6fb19ac3,37,whole-file text inventory and structural scan
+docs/BENCHMARK-FLOW.md,docs,1511,e91c9cd29db715380c37a72b6874bc731a335421b4168fe736264b6a4cd6729b,11,whole-file text inventory and structural scan
+docs/DOMAIN-GPO-SCRIPT-ISOLATION-AZ.md,docs,3257,e24f1371b423dbe3d19bc865caa9109a718cf9777e9a05443318588cf7f4ac46,45,whole-file text inventory and structural scan
+docs/FRONTEND-PROFESSIONAL-REFRESH.md,docs,1494,80fe817056c9f8fa7a2e6403bac45640d3db0c9550916df6cd6b12f98e90569e,13,whole-file text inventory and structural scan
+docs/GUIDED-REMEDIATION.md,docs,5408,2115d0c21159e1e9f6ed046e748773add16341c54a87eab63a36692f11a12fc3,26,whole-file text inventory and structural scan
+docs/INTEGRATION-3.11.0.md,docs,4129,cba2b11bdc87bc1b44057172bc4bff3481f3fbc823513e84f815548becceb4a1,32,whole-file text inventory and structural scan
+docs/MODULES.md,docs,1125,dde7701a16db42b4408ef942585f098cb05eac7e38d5bd44e8e41e7397aa5084,13,whole-file text inventory and structural scan
+docs/POLICY-SCOPE-IMPLEMENTATION.md,docs,3409,b8ecaef64a515c36af2304303d0e22e5e38ee332c166124a424648680cd55a4a,34,whole-file text inventory and structural scan
+docs/REMEDIATION-AUDIT.md,docs,6926,f4922929ed4fc05533876c975514f8a51cf45c5174f1077fbd72e7e1c06b4223,67,whole-file text inventory and structural scan
+docs/VISUAL-GPO-OU-CATALOG.md,docs,1894,da5f1f86fcb4ed6e9b40798e5be7f1ae3c18c1683a9d3394f75d03713006c7d8,12,whole-file text inventory and structural scan
+docs/WINDOWS-PROVIDER.md,docs,2027,74d8d20371cec4387242e86318e0f78a8d762820455684ab1b9d6297e1ae7cf9,21,whole-file text inventory and structural scan
+frontend/README.md,frontend,671,02c09e0580a31024a499229f640f8b523a0d02bb413e0c42ba2105ce4487dd39,7,whole-file text inventory and structural scan
+frontend/dist/app.css,generated frontend,248836,042fccf7b555529987a7d5fc276e391b20e271163fffdddd24dc2e7db943f37a,2316,whole-file text inventory and structural scan
+frontend/dist/automation.js,generated frontend,17463,7309f758ccf7c7b9b7a4c4840c1f78af232f5f441e6709d45ce22c50a7775395,105,whole-file text inventory and structural scan
+frontend/dist/benchmark-v4.json,generated frontend,305421,e986dd242a87b8ad8d37ca9aa1da2cc2a38206702eee2130d08bdf8b4bffc0ca,1,whole-file text inventory and structural scan
+frontend/dist/catalog-view.js,generated frontend,7993,a040841ca8ae5d8cea3f6df8467ec57eb5b1176829849902f2e2910e45bf614e,20,whole-file text inventory and structural scan
+frontend/dist/client.js,generated frontend,25904,9a9d0c85e3692adf4dd835d531c4bb8e1d482b2164c7e686380c03987da9ef75,213,whole-file text inventory and structural scan
+frontend/dist/components.js,generated frontend,18050,ecefd82975c41b1073945bd3cb5e3c8c42cead443883244a3a280c3edbb47a01,82,whole-file text inventory and structural scan
+frontend/dist/control-view.js,generated frontend,38818,5b5f1254c7587b32f99e9a98852b1ec1e811f3cc559f1b7936affa328bc1815e,57,whole-file text inventory and structural scan
+frontend/dist/domain-guidance.js,generated frontend,6241,bbe70efbf0cfd9160a87ba3177a6ac03701b5af6d9c50f6d0885b38c8a51c6b6,22,whole-file text inventory and structural scan
+frontend/dist/enterprise-center.css,generated frontend,3997,82062cb2a39759e163869cd2be99c3709bb996a6c1a54fa44cd7e66fce335015,15,whole-file text inventory and structural scan
+frontend/dist/enterprise-center.js,generated frontend,17992,0d8ba37abf2eaf53d98c501ff6e09c3a3416f0957e73bf947fbc2c3e8cd4bc22,104,whole-file text inventory and structural scan
+frontend/dist/fonts/Geist-Variable.woff2,generated frontend,69760,2ffebe993e969069a9789d15164b7715d42491b5835516c5e3b935d5f81b05f1,,binary hash inventory; package integrity test
+frontend/dist/fonts/GeistMono-Variable.woff2,generated frontend,71596,afaacc4c5fbba89d2ebf7a02dc4070208540874592a5504d57175782fe893101,,binary hash inventory; package integrity test
+frontend/dist/fonts/LICENSE.txt,generated frontend,4460,dbb04b3625e63512d8242b3cae4d1b2c2955eb7c47bb80d4e468ec3c5a8e5c7b,92,whole-file text inventory and structural scan
+frontend/dist/fonts/README.txt,generated frontend,255,d96fe4e7f10ce9b75de5f1d638275788a1e07fd74caa160a045fe253e0347198,4,whole-file text inventory and structural scan
+frontend/dist/gpo-scope-picker.css,generated frontend,5061,9885d6393130d3b59ec0c3c82311a89e7f85a91fb2af442cc652d6fbe7fb4815,17,whole-file text inventory and structural scan
+frontend/dist/gpo-scope-picker.js,generated frontend,7243,ee4eea2018753e8e2feea0919132977ea56f9392829689ecdb2d62c99df16215,70,whole-file text inventory and structural scan
+frontend/dist/i18n.js,generated frontend,2184,8aef095285ebfe5044b315b6f1886a8fcf77fccc71bc18d195ecdc0f39c34b6e,13,whole-file text inventory and structural scan
+frontend/dist/index.html,generated frontend,3178,cdda3223b3a02268d9a9898b69341d49b939cb81ca2c2638de5e60927e58519b,54,whole-file text inventory and structural scan
+frontend/dist/operation-view.js,generated frontend,10193,82f78e801d49a404746b168d839d1b7f327577349015998b0de37f0d43c2735d,29,whole-file text inventory and structural scan
+frontend/dist/operator-sign-in.js,generated frontend,6554,2750c330c908de51a33cf5482f8343fe4222d16cec27443c872eebb3c8bd89f9,43,whole-file text inventory and structural scan
+frontend/dist/preferences.js,generated frontend,6439,1a9546ed6ef6356cf6ad5ba6172d717aa9fe5a82583ec10fca3c83b8910d4f0a,31,whole-file text inventory and structural scan
+frontend/dist/premium.js,generated frontend,4014,9d0aaa958e41fa34791fd4da3340a5ef0673f0ab16a3b3dfe40287f4fcbd7630,22,whole-file text inventory and structural scan
+frontend/dist/product.js,generated frontend,21509,c7b480507906065172db2f2f7946a1d554d567390d05d3f78370de913f66faa3,111,whole-file text inventory and structural scan
+frontend/dist/remediation-guides.js,generated frontend,20653,c7ae11098b0f1ee8fab5e8b71cf20ab95fa2cd1051310175a29ef9dd6881aa82,95,whole-file text inventory and structural scan
+frontend/dist/router.js,generated frontend,497,e7bbd9b761439ac66d305cff7e54bea44d5fed6a8dfe1702f141537d5a5af3a0,8,whole-file text inventory and structural scan
+frontend/dist/source.sha256,generated frontend,64,5fd485168134e35cd697df8fbdf797e73d5ade7a19b558a0e0fe10da3c06fab8,,binary hash inventory; package integrity test
+frontend/dist/studio-design.css,generated frontend,18923,62ecf1052852028333e3815fe412c26460c94b4272600819de2ba06c02da4966,162,whole-file text inventory and structural scan
+frontend/dist/studio-ui.js,generated frontend,8763,54cbd3a61fe2f2e7d8cd067efb0eb9dd890fbe280bc69940984cc59d5d0d4793,80,whole-file text inventory and structural scan
+frontend/dist/styles/command.css,generated frontend,36848,b81f9416455b76f945bfdcb38398e45a8b80161e6a778c40c0cbd63ff874f430,95,whole-file text inventory and structural scan
+frontend/dist/styles/components.css,generated frontend,20312,1d3eafdefff0f1927522308fb2b66dcf9d8c5c024d6a3b920783d1857caf14c2,75,whole-file text inventory and structural scan
+frontend/dist/styles/console.css,generated frontend,41075,9079a510e531fdbce13bdaf3c7b734da01e417544eb6b49231227bef5b8f8016,38,whole-file text inventory and structural scan
+frontend/dist/styles/layout.css,generated frontend,86291,e71068a436b60f5d9317ee22e487a9db2ef09b153e7d7065861990721cac42b4,187,whole-file text inventory and structural scan
+frontend/dist/styles/premium.css,generated frontend,8743,f18d49b7ce9fb7f65ebdcc6b7c75a809e975802fe95dffbe698b0ada099ea711,31,whole-file text inventory and structural scan
+frontend/dist/styles/product.css,generated frontend,13201,c542e201959b546dd630a226c3b68821044b0b769777d8ed5694d7417fd47f1e,32,whole-file text inventory and structural scan
+frontend/dist/styles/screens.css,generated frontend,31318,d90b167d5a43181c3223d6eac5cf8f9ab2a9d89ae1e2462b1bb8e32f85bc1ebe,274,whole-file text inventory and structural scan
+frontend/dist/styles/settings.css,generated frontend,9245,b817a6918c7f19a4ad62266e067d5acf179a04a4e04e4f322a3da8dbeef6a165,4,whole-file text inventory and structural scan
+frontend/dist/styles/tokens.css,generated frontend,1900,1d0de0e4af99dee78774a5773dbee7d6203bb893987880e6c7ccb52c44b8406b,5,whole-file text inventory and structural scan
+frontend/dist/ui-domain.js,generated frontend,2211,f275f8d1c5ba1bd5fc7af64da2505d0f6f3ed37f81faa594022a9b9eb84a1f0a,37,whole-file text inventory and structural scan
+frontend/dist/ux-pro.css,generated frontend,12717,1b08a4a51cd3f2d46bcf8090afd47fdb74b5eec152051ffa229a1f5d487c5173,96,whole-file text inventory and structural scan
+frontend/dist/wave1-reliability.css,generated frontend,1950,01a778657f75fcf7007238f3faeba0c0be39574b1c008c0dcc182727e0cd607c,18,whole-file text inventory and structural scan
+frontend/dist/workflow-center.js,generated frontend,27176,bc161a5335f34a99d2c55b845e28630720bfe7db5807c1e5f5323e4555b96e9a,58,whole-file text inventory and structural scan
+frontend/dist/workspace.js,generated frontend,80362,2630da7046485c8aa4b4fb8160f01d733d669376f9ba159723440a5e96fdd416,406,whole-file text inventory and structural scan
+frontend/source/app.css,frontend,248836,042fccf7b555529987a7d5fc276e391b20e271163fffdddd24dc2e7db943f37a,2316,whole-file text inventory and structural scan
+frontend/source/automation.js,frontend,17463,7309f758ccf7c7b9b7a4c4840c1f78af232f5f441e6709d45ce22c50a7775395,105,whole-file text inventory and structural scan
+frontend/source/benchmark-v4.json,frontend,305421,e986dd242a87b8ad8d37ca9aa1da2cc2a38206702eee2130d08bdf8b4bffc0ca,1,whole-file text inventory and structural scan
+frontend/source/catalog-view.js,frontend,7993,a040841ca8ae5d8cea3f6df8467ec57eb5b1176829849902f2e2910e45bf614e,20,whole-file text inventory and structural scan
+frontend/source/client.js,frontend,25904,9a9d0c85e3692adf4dd835d531c4bb8e1d482b2164c7e686380c03987da9ef75,213,whole-file text inventory and structural scan
+frontend/source/components.js,frontend,18050,ecefd82975c41b1073945bd3cb5e3c8c42cead443883244a3a280c3edbb47a01,82,whole-file text inventory and structural scan
+frontend/source/control-view.js,frontend,38818,5b5f1254c7587b32f99e9a98852b1ec1e811f3cc559f1b7936affa328bc1815e,57,whole-file text inventory and structural scan
+frontend/source/domain-guidance.js,frontend,6241,bbe70efbf0cfd9160a87ba3177a6ac03701b5af6d9c50f6d0885b38c8a51c6b6,22,whole-file text inventory and structural scan
+frontend/source/enterprise-center.css,frontend,3997,82062cb2a39759e163869cd2be99c3709bb996a6c1a54fa44cd7e66fce335015,15,whole-file text inventory and structural scan
+frontend/source/enterprise-center.js,frontend,17992,0d8ba37abf2eaf53d98c501ff6e09c3a3416f0957e73bf947fbc2c3e8cd4bc22,104,whole-file text inventory and structural scan
+frontend/source/fonts/Geist-Variable.woff2,frontend,69760,2ffebe993e969069a9789d15164b7715d42491b5835516c5e3b935d5f81b05f1,,binary hash inventory; package integrity test
+frontend/source/fonts/GeistMono-Variable.woff2,frontend,71596,afaacc4c5fbba89d2ebf7a02dc4070208540874592a5504d57175782fe893101,,binary hash inventory; package integrity test
+frontend/source/fonts/LICENSE.txt,frontend,4460,dbb04b3625e63512d8242b3cae4d1b2c2955eb7c47bb80d4e468ec3c5a8e5c7b,92,whole-file text inventory and structural scan
+frontend/source/fonts/README.txt,frontend,255,d96fe4e7f10ce9b75de5f1d638275788a1e07fd74caa160a045fe253e0347198,4,whole-file text inventory and structural scan
+frontend/source/gpo-scope-picker.css,frontend,5061,9885d6393130d3b59ec0c3c82311a89e7f85a91fb2af442cc652d6fbe7fb4815,17,whole-file text inventory and structural scan
+frontend/source/gpo-scope-picker.js,frontend,7243,ee4eea2018753e8e2feea0919132977ea56f9392829689ecdb2d62c99df16215,70,whole-file text inventory and structural scan
+frontend/source/i18n.js,frontend,2184,8aef095285ebfe5044b315b6f1886a8fcf77fccc71bc18d195ecdc0f39c34b6e,13,whole-file text inventory and structural scan
+frontend/source/index.html,frontend,3178,cdda3223b3a02268d9a9898b69341d49b939cb81ca2c2638de5e60927e58519b,54,whole-file text inventory and structural scan
+frontend/source/operation-view.js,frontend,10193,82f78e801d49a404746b168d839d1b7f327577349015998b0de37f0d43c2735d,29,whole-file text inventory and structural scan
+frontend/source/operator-sign-in.js,frontend,6554,2750c330c908de51a33cf5482f8343fe4222d16cec27443c872eebb3c8bd89f9,43,whole-file text inventory and structural scan
+frontend/source/preferences.js,frontend,6439,1a9546ed6ef6356cf6ad5ba6172d717aa9fe5a82583ec10fca3c83b8910d4f0a,31,whole-file text inventory and structural scan
+frontend/source/premium.js,frontend,4014,9d0aaa958e41fa34791fd4da3340a5ef0673f0ab16a3b3dfe40287f4fcbd7630,22,whole-file text inventory and structural scan
+frontend/source/product.js,frontend,21509,c7b480507906065172db2f2f7946a1d554d567390d05d3f78370de913f66faa3,111,whole-file text inventory and structural scan
+frontend/source/remediation-guides.js,frontend,20653,c7ae11098b0f1ee8fab5e8b71cf20ab95fa2cd1051310175a29ef9dd6881aa82,95,whole-file text inventory and structural scan
+frontend/source/router.js,frontend,497,e7bbd9b761439ac66d305cff7e54bea44d5fed6a8dfe1702f141537d5a5af3a0,8,whole-file text inventory and structural scan
+frontend/source/studio-design.css,frontend,18923,62ecf1052852028333e3815fe412c26460c94b4272600819de2ba06c02da4966,162,whole-file text inventory and structural scan
+frontend/source/studio-ui.js,frontend,8763,54cbd3a61fe2f2e7d8cd067efb0eb9dd890fbe280bc69940984cc59d5d0d4793,80,whole-file text inventory and structural scan
+frontend/source/styles/command.css,frontend,36848,b81f9416455b76f945bfdcb38398e45a8b80161e6a778c40c0cbd63ff874f430,95,whole-file text inventory and structural scan
+frontend/source/styles/components.css,frontend,20312,1d3eafdefff0f1927522308fb2b66dcf9d8c5c024d6a3b920783d1857caf14c2,75,whole-file text inventory and structural scan
+frontend/source/styles/console.css,frontend,41075,9079a510e531fdbce13bdaf3c7b734da01e417544eb6b49231227bef5b8f8016,38,whole-file text inventory and structural scan
+frontend/source/styles/layout.css,frontend,86291,e71068a436b60f5d9317ee22e487a9db2ef09b153e7d7065861990721cac42b4,187,whole-file text inventory and structural scan
+frontend/source/styles/premium.css,frontend,8743,f18d49b7ce9fb7f65ebdcc6b7c75a809e975802fe95dffbe698b0ada099ea711,31,whole-file text inventory and structural scan
+frontend/source/styles/product.css,frontend,13201,c542e201959b546dd630a226c3b68821044b0b769777d8ed5694d7417fd47f1e,32,whole-file text inventory and structural scan
+frontend/source/styles/screens.css,frontend,31318,d90b167d5a43181c3223d6eac5cf8f9ab2a9d89ae1e2462b1bb8e32f85bc1ebe,274,whole-file text inventory and structural scan
+frontend/source/styles/settings.css,frontend,9245,b817a6918c7f19a4ad62266e067d5acf179a04a4e04e4f322a3da8dbeef6a165,4,whole-file text inventory and structural scan
+frontend/source/styles/tokens.css,frontend,1900,1d0de0e4af99dee78774a5773dbee7d6203bb893987880e6c7ccb52c44b8406b,5,whole-file text inventory and structural scan
+frontend/source/ui-domain.js,frontend,2211,f275f8d1c5ba1bd5fc7af64da2505d0f6f3ed37f81faa594022a9b9eb84a1f0a,37,whole-file text inventory and structural scan
+frontend/source/ux-pro.css,frontend,12717,1b08a4a51cd3f2d46bcf8090afd47fdb74b5eec152051ffa229a1f5d487c5173,96,whole-file text inventory and structural scan
+frontend/source/wave1-reliability.css,frontend,1950,01a778657f75fcf7007238f3faeba0c0be39574b1c008c0dcc182727e0cd607c,18,whole-file text inventory and structural scan
+frontend/source/workflow-center.js,frontend,27176,bc161a5335f34a99d2c55b845e28630720bfe7db5807c1e5f5323e4555b96e9a,58,whole-file text inventory and structural scan
+frontend/source/workspace.js,frontend,80362,2630da7046485c8aa4b4fb8160f01d733d669376f9ba159723440a5e96fdd416,406,whole-file text inventory and structural scan
+release/GpoRemediator-runtime-win-x64.zip,release package,50425300,6b8fde7c840cfe3e7e3b51f469c5dca2641a598a0d7152020e23573b88f5a9e8,,binary hash inventory; package integrity test
+release/GpoRemediator-runtime-win-x64.zip.sha256,release package,64,2a9ac16b3262f1afa7038854423515c335825f74752fa3d6c2c18082a19a1721,,binary hash inventory; package integrity test
+release/README.md,release package,501,f63cc961831994fbc3d538f3332e0900f7c9a2e19c8bee9c80fb326e792d0307,5,whole-file text inventory and structural scan
+scripts/Audit-AdmxMappings.py,scripts,2521,2844e15e8104909ebb3283187808d9377b94aab601d14a7408de4f8ca704fb37,38,whole-file text inventory and structural scan
+scripts/Audit-PolicyScopes.py,scripts,5266,41084fc21153c1282db25d2e0318e6deb4527b2b47b73f55d68b1516c0efbfee,54,whole-file text inventory and structural scan
+scripts/Build-FullAuditReport.py,scripts,41675,f13678d43e24d19e721a022d4a9fe1c3bd750c6769abb59411d4676cd8f0054d,302,whole-file text inventory and structural scan
+scripts/Build-ProductionMappings.py,scripts,19406,6c7904595f39319f877439d84ef504b9917b31e812701686f540ab048f369aca,238,whole-file text inventory and structural scan
+scripts/Build-Styles.cjs,scripts,1956,8655c6dac2dd37e676f5b5216396438d010b6db7af2afbf29a28b5be34400bdf,14,whole-file text inventory and structural scan
+scripts/HardeningRegression/Program.cs,scripts,5993,05970adfa8eff4d9e616e6fcc1b714d6556aa47afe2399426de20ec1da4c883e,94,whole-file text inventory and structural scan
+scripts/HardeningRegression/SecurityRegression.csproj,scripts,385,79570be8e840a8c1d99bc987f4e2a00f570227e86b56012fbab7fccb3abcf796,10,whole-file text inventory and structural scan
+scripts/Invoke-FullAuditTests.ps1,scripts,4197,801a36da782f5885be1e06ff7ba8d39e5516080b0a4bad33c7db92b282ea7219,40,whole-file text inventory and structural scan
+scripts/Secure-Files.ps1,scripts,1949,b1a6ef96765b973715f7bb17647f274104eded8dc5a75d83e2f99d85b916e633,30,whole-file text inventory and structural scan
+scripts/SecurityRegression/Program.cs,scripts,16585,ac8178acb27f95c9f0209389465bb46303fc8ad423ce419b37f6228524f6131b,171,whole-file text inventory and structural scan
+scripts/SecurityRegression/SecurityRegression.csproj,scripts,439,2a6c8a36a306b4e2f689014dec2673da23d288a4a6fae4f53af3d14f56e4dca3,4,whole-file text inventory and structural scan
+scripts/ServiceControl.ps1,scripts,6139,a81ce9a21e2e334f6597a15a9e6ba0aa25897a1693a9a2ea2941726ecea50dfb,88,whole-file text inventory and structural scan
+scripts/Start-ControlPanel.ps1,scripts,2047,3815cc44b84acb99b37170174d2c81b35d4dbf39926181e66153f02919a4eab5,36,whole-file text inventory and structural scan
+scripts/Test-AllEndpointMappings.ps1,scripts,7348,ab1f1f58dcfea9272aa637ca421c26a00e7fdc9d607a8fb2b8b853a7e4de55ec,76,whole-file text inventory and structural scan
+scripts/Test-BuiltSourceMatch.ps1,scripts,666,71352b8cc2424b4cc0223fb681507b8a209fe54c02334e2ef9d376f97e2c40b0,9,whole-file text inventory and structural scan
+scripts/Test-DependencyAudit.ps1,scripts,827,7b76ddfd9438b5481d7b6a7b2f9cbcb10b809aaf16cc4e195fda14b7de80813e,11,whole-file text inventory and structural scan
+scripts/Test-EndpointEvidence.ps1,scripts,5820,b50f10c19150be8db50bab8fbbdccd62d90f14895b9c9663591f90eb70e2f1ae,55,whole-file text inventory and structural scan
+scripts/Test-EnterpriseCenter.cjs,scripts,3178,d06a20e114c3350d9b4f181b5d3eb4a966b41bb441256dba7106e9f7e2e559e9,37,whole-file text inventory and structural scan
+scripts/Test-FrontendSystem.cjs,scripts,6563,beaf7d02e03d13bee63ffb2c7392aaca7cf398168cee7d72db5c892740863f61,74,whole-file text inventory and structural scan
+scripts/Test-GpoMappings.ps1,scripts,17183,694bc28e8b8a09f7d89f3ed3bd377af7ab5b236b8ec63467e3e3ad7092c886fc,178,whole-file text inventory and structural scan
+scripts/Test-GpoScopePicker.cjs,scripts,2246,c26b27978effbe3334c95f1b9a3eada7bbb51775c43f4fe6e5f120c96a4a85c5,30,whole-file text inventory and structural scan
+scripts/Test-GuidedRemediation.cjs,scripts,3566,4f5dee7faa3c1a2d666cfc916288cb2aef13ab42781856197da580c63c55f793,32,whole-file text inventory and structural scan
+scripts/Test-ManualVerification.cjs,scripts,2098,7da75bc495b5efeedb9ad6908a5f61318207a0ea8388d9771dc30a9f9389bb9a,15,whole-file text inventory and structural scan
+scripts/Test-PowerShellSyntax.ps1,scripts,550,35e1af5802217f363da9035a6adc66fe7189bea2520bf8bb655819df0bd6da91,9,whole-file text inventory and structural scan
+scripts/Test-ProductionMappings.py,scripts,3148,df9482b059c4ebbb0d8a257ecbb823ea4166b09047f55d447762916ff8a249b7,35,whole-file text inventory and structural scan
+scripts/Test-RecipeWorkspace.cjs,scripts,3872,7710b6672c34b214fd3c01b77686df5b07d859b0372368023f1aedf0a05ada95,47,whole-file text inventory and structural scan
+scripts/Test-RecoveryUi.cjs,scripts,13964,9e62b988704a2b4e026b799bfa1f74b58fc01bc0749011f7e521a8cdd6f1de67,167,whole-file text inventory and structural scan
+scripts/Test-RemediationEvidence.cjs,scripts,2752,b5419f5af772571a43ef5daee17e1333667c0db96c912aaf49dc1ede9aa2fbf0,24,whole-file text inventory and structural scan
+scripts/Test-RuntimeIntegrity.ps1,scripts,2348,48b3ceeece2cce6b5c718a3186f8a4ec634a05485e25791f9c5ef75363e0a518,35,whole-file text inventory and structural scan
+scripts/Test-SecurityFiles.ps1,scripts,2163,8ef41ec75bf98114dd4e9af8b39dc966d9be060b64f6295ec77d23a0678737f1,30,whole-file text inventory and structural scan
+scripts/Test-Studio-UI.cjs,scripts,2320,402722dd333aa13ab4a022d20b7a61a4b4c32563340fa0c25895b2e7b6175d90,26,whole-file text inventory and structural scan
+scripts/Test-UX-Contract.cjs,scripts,2396,d037054d828472dbb5d8991ef3ce9a1a4e157d07fa96c639b7352040e951e593,26,whole-file text inventory and structural scan
+scripts/Test-VerificationLifecycle.ps1,scripts,4536,090f789eead6bc082f9065b301104db1e79f6d80c29b52ed1eec54159ecac2aa,45,whole-file text inventory and structural scan
+scripts/Test-WorkflowUi.cjs,scripts,18042,95c8f8fd89aaa1b5c62bc16182e8c50fbd24c7f3c5d5eb8c7374e37b605a722f,135,whole-file text inventory and structural scan
+scripts/Tooling.ps1,scripts,3908,25c3730f3aecfaa2e618b5b66d0ad31caf3779bcfa971ca18c437390a370cba0,64,whole-file text inventory and structural scan
+scripts/Validate-ProductionPackage.py,scripts,10301,ae7cacb42ab3a2892e3390ff4b1b8a5af64643221b4fa7c103d31bf3c43bba46,143,whole-file text inventory and structural scan
+scripts/Validate-Source.ps1,scripts,2504,4f47d7ba86312d25f8761550d492e36462a3a2f8db675fc43cf39a72225ffcad,46,whole-file text inventory and structural scan
+scripts/WorkflowRegression/Program.cs,scripts,9826,cfb0897e7cfbcd1bc77acb710a46a825c7cc650c6bf679eab3c0ff94a12b3f2b,87,whole-file text inventory and structural scan
+scripts/WorkflowRegression/WorkflowRegression.csproj,scripts,310,fe32351d1e71a904033fb351e02ed6ce8936052e18b3278e5cc95017b21bf779,4,whole-file text inventory and structural scan
+scripts/WorkspaceRegression/Program.cs,scripts,16629,fee5a8f2e564b93b17affcfbb30a436da723a2e6faf0f462cc1f40031d800483,144,whole-file text inventory and structural scan
+scripts/WorkspaceRegression/WorkspaceRegression.csproj,scripts,427,196381ea6f1e801cfff3c68408390bb596a4e6a123c88f54803641d0584281eb,1,whole-file text inventory and structural scan
+security/Build-Signed-Release.ps1,security,2353,28d3c6f7620978a90445fbd6e7e0dfa17330696eb93c3fcc4dd55e476fc6471b,35,whole-file text inventory and structural scan
+security/Invoke-Gpo.Template.ps1,security,2083,01db2d57147c042b9fc22825a0efe0188e4262f124eac5967c15fddaf69c77f1,33,whole-file text inventory and structural scan
+security/SECURE-RELEASE.md,security,4687,378fc4562bcef0fa01fa8cfaa497b2e4cba153deed239a6d730c0b189cfca0cb,33,whole-file text inventory and structural scan
+security/Secret-Pattern-Guard.py,security,2180,45a03c6013b4da37955908ed8bb10822a1f7001fe5106cb345eaa9b19a741125,43,whole-file text inventory and structural scan
+security/Test-DomainGpoIsolation.ps1,security,1958,2542e96cf8dc25009ec74fa29193c153fdc48266fe51655bb7d685b1320f7f79,21,whole-file text inventory and structural scan
+security/Test-SecurityHardening.ps1,security,1096,d4a1932785c9eee78b4f6e8f9d9c526cb4affa0d91d3fd5103661d76a4d1538f,15,whole-file text inventory and structural scan

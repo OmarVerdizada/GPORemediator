@@ -1,0 +1,49 @@
+﻿File,Original_Problem,Fix,Test_Result
+.github/workflows/security-checks.yml,New verifier matrix absent from CI,Register all-control/native/lifecycle/manual regressions,local equivalents pass; remote CI not claimed
+GpoRemediator.ps1,After-readiness exit described as startup-before-readiness; old package version,Distinct after-ready diagnosis and release 3.12.0,Test-VerificationLifecycle; built-source-match
+README.md,Release version or audit documentation needed updating,3.12.0 version/cache identity and evidence-bounded documentation,"build, syntax and package checks"
+backend/Domain/GpoAssurance.cs,No independent assurance claim model,Five stages and evidence-bounded diagnostic candidates,WorkflowRegression; RecoveryUi
+backend/Domain/GpoWorkflow.cs,Mixed result properties were the only assurance interface,Expose computed independent stages/diagnosis without changing persisted outcome fields,WorkflowRegression; API regressions
+backend/Domain/ProductionGpoMappings.cs,Multi-item mappings could not express an item-specific bound,Optional item comparator for backward-compatible typed serialization,all-control mapping/endpoint fixtures
+backend/GpoRemediator.csproj,Release version or audit documentation needed updating,3.12.0 version/cache identity and evidence-bounded documentation,"build, syntax and package checks"
+backend/Infrastructure/WorkspaceEndpoints.cs,HTML report omitted independent assurance claims,Escaped five-stage evidence table,WorkspaceRegression report checks
+backend/PowerShell/GpoWorkflow.Worker.ps1,"Audit/native arguments, equality bounds, registry-only firewall evidence, stale scope and version-only replication","Shared item compliance, native ActiveStore/auditpol, current scope, file hashes and both CSE halves",all-control mapping/endpoint and verification-lifecycle fixtures
+backend/Services/GpoWorkflowService.cs,Evidence cache returned the first export after later changes,Current-run export with preserved content-addressed snapshots,WorkflowRegression
+backend/Services/WorkspaceWorkflows.cs,Failed standalone scheduling could finish COMPLETED; scan matched values called COMPLIANT,NEEDS_REVIEW on failed/empty refresh; scoped GPO_MATCH scan label,WorkspaceRegression
+backend/data/gpo-production-mappings.json,19 canonical records needed numeric/recommendation metadata repair,Deterministically regenerated reviewed mapping data,mapping-generation and all-control fixtures
+frontend/dist/benchmark-v4.json,Distributed artifacts must match corrected source,Regenerate compiled/distribution assets and hashes,built-source-match; Validate-ProductionPackage
+frontend/dist/components.js,Distributed artifacts must match corrected source,Regenerate compiled/distribution assets and hashes,built-source-match; Validate-ProductionPackage
+frontend/dist/control-view.js,Distributed artifacts must match corrected source,Regenerate compiled/distribution assets and hashes,built-source-match; Validate-ProductionPackage
+frontend/dist/index.html,Distributed artifacts must match corrected source,Regenerate compiled/distribution assets and hashes,built-source-match; Validate-ProductionPackage
+frontend/dist/product.js,Distributed artifacts must match corrected source,Regenerate compiled/distribution assets and hashes,built-source-match; Validate-ProductionPackage
+frontend/dist/source.sha256,Distributed artifacts must match corrected source,Regenerate compiled/distribution assets and hashes,built-source-match; Validate-ProductionPackage
+frontend/dist/workflow-center.js,Distributed artifacts must match corrected source,Regenerate compiled/distribution assets and hashes,built-source-match; Validate-ProductionPackage
+frontend/dist/workspace.js,Distributed artifacts must match corrected source,Regenerate compiled/distribution assets and hashes,built-source-match; Validate-ProductionPackage
+frontend/source/benchmark-v4.json,19.7.44.2.1 contained scraped footer/navigation chrome,Remove non-policy description/recommendation text,Test-ProductionMappings
+frontend/source/components.js,Manual checks could read wrong HKCU and reused a temporary export name,"Selected SID hive, explicit native syntax, unique export/cleanup and ActiveStore command",Test-ManualVerification; RecoveryUi
+frontend/source/control-view.js,Verification page lacked five independent claims,Display computed assurance stages and diagnostic candidates,RecoveryUi
+frontend/source/index.html,Release version or audit documentation needed updating,3.12.0 version/cache identity and evidence-bounded documentation,"build, syntax and package checks"
+frontend/source/product.js,Duplicate disconnected implementation; broad verification wording; drawer lacked value/check command,"One sign-in implementation, sample-only label and endpoint manual evidence",Test-RecipeWorkspace; Test-ManualVerification; RecoveryUi
+frontend/source/workflow-center.js,Scan summary implied endpoint compliance,GPO_MATCH for current and legacy scan rows,WorkflowUi
+frontend/source/workspace.js,Release version or audit documentation needed updating,3.12.0 version/cache identity and evidence-bounded documentation,"build, syntax and package checks"
+release/GpoRemediator-runtime-win-x64.zip,Distributed artifacts must match corrected source,Regenerate compiled/distribution assets and hashes,built-source-match; Validate-ProductionPackage
+release/GpoRemediator-runtime-win-x64.zip.sha256,Distributed artifacts must match corrected source,Regenerate compiled/distribution assets and hashes,built-source-match; Validate-ProductionPackage
+scripts/Build-FullAuditReport.py,Audit coverage or existing expectations needed regression evidence,Add/extend reproducible real-source synthetic tests and evidence generation,see evidence/test-results.json and individual tests
+scripts/Build-ProductionMappings.py,18 fixed numeric recipes rejected compliant bounds; cached-logon restart omitted,Explicit reviewed comparators and restart note; canonical ceiling for cached logons,Test-ProductionMappings; Test-GpoMappings
+scripts/Invoke-FullAuditTests.ps1,Audit coverage or existing expectations needed regression evidence,Add/extend reproducible real-source synthetic tests and evidence generation,see evidence/test-results.json and individual tests
+scripts/Test-AllEndpointMappings.ps1,Audit coverage or existing expectations needed regression evidence,Add/extend reproducible real-source synthetic tests and evidence generation,see evidence/test-results.json and individual tests
+scripts/Test-BuiltSourceMatch.ps1,Audit coverage or existing expectations needed regression evidence,Add/extend reproducible real-source synthetic tests and evidence generation,see evidence/test-results.json and individual tests
+scripts/Test-DependencyAudit.ps1,Audit coverage or existing expectations needed regression evidence,Add/extend reproducible real-source synthetic tests and evidence generation,see evidence/test-results.json and individual tests
+scripts/Test-EndpointEvidence.ps1,Audit coverage or existing expectations needed regression evidence,Add/extend reproducible real-source synthetic tests and evidence generation,see evidence/test-results.json and individual tests
+scripts/Test-GpoMappings.ps1,Audit coverage or existing expectations needed regression evidence,Add/extend reproducible real-source synthetic tests and evidence generation,see evidence/test-results.json and individual tests
+scripts/Test-ManualVerification.cjs,Audit coverage or existing expectations needed regression evidence,Add/extend reproducible real-source synthetic tests and evidence generation,see evidence/test-results.json and individual tests
+scripts/Test-PowerShellSyntax.ps1,Audit coverage or existing expectations needed regression evidence,Add/extend reproducible real-source synthetic tests and evidence generation,see evidence/test-results.json and individual tests
+scripts/Test-ProductionMappings.py,Audit coverage or existing expectations needed regression evidence,Add/extend reproducible real-source synthetic tests and evidence generation,see evidence/test-results.json and individual tests
+scripts/Test-RecipeWorkspace.cjs,Audit coverage or existing expectations needed regression evidence,Add/extend reproducible real-source synthetic tests and evidence generation,see evidence/test-results.json and individual tests
+scripts/Test-RecoveryUi.cjs,Audit coverage or existing expectations needed regression evidence,Add/extend reproducible real-source synthetic tests and evidence generation,see evidence/test-results.json and individual tests
+scripts/Test-UX-Contract.cjs,Hardcoded old asset version,Assert build-label/asset-version correspondence,Test-UX-Contract
+scripts/Test-VerificationLifecycle.ps1,Audit coverage or existing expectations needed regression evidence,Add/extend reproducible real-source synthetic tests and evidence generation,see evidence/test-results.json and individual tests
+scripts/Validate-Source.ps1,Audit coverage or existing expectations needed regression evidence,Add/extend reproducible real-source synthetic tests and evidence generation,see evidence/test-results.json and individual tests
+scripts/WorkflowRegression/Program.cs,Audit coverage or existing expectations needed regression evidence,Add/extend reproducible real-source synthetic tests and evidence generation,see evidence/test-results.json and individual tests
+scripts/WorkspaceRegression/Program.cs,Audit coverage or existing expectations needed regression evidence,Add/extend reproducible real-source synthetic tests and evidence generation,see evidence/test-results.json and individual tests
+security/Test-DomainGpoIsolation.ps1,PowerShell 5.1 overload split into characters,Escaped literal Regex count,domain-gpo-isolation
