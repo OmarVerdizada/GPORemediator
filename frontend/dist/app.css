@@ -2241,6 +2241,18 @@ input[aria-invalid=true],select[aria-invalid=true]{border-color:var(--color-dang
 .assurance-stage p{margin:10px 0;color:var(--color-text)}
 .assurance-stage code{overflow-wrap:anywhere;font-size:11px}
 @media(max-width:620px){.assurance-stage{padding:12px;gap:8px}.assurance-stage header{display:grid;gap:4px}}
+/* Advanced control tabs must escape the header and horizontal tab clipping. */
+.control-header{overflow:visible}
+.control-tabs{overflow:visible;flex-wrap:wrap;align-items:center}
+.ux-more-tabs{position:relative;margin-left:auto;flex:none}
+.ux-more-tabs>summary{list-style:none;cursor:pointer;padding:10px 14px;border:1px solid var(--color-border);border-radius:8px;background:var(--color-surface-muted);font-size:12px}
+.ux-more-tabs>summary::-webkit-details-marker{display:none}
+.ux-more-tabs[open]>summary{background:var(--color-primary-soft);color:var(--color-primary)}
+.ux-more-tabs>div{position:absolute;right:0;top:calc(100% + 6px);z-index:40;display:grid;gap:4px;min-width:190px;padding:8px;border:1px solid var(--color-border);border-radius:10px;background:var(--color-surface);box-shadow:var(--shadow-lg)}
+.ux-more-tabs:not([open])>div{display:none}
+.ux-more-tabs>div>button{width:100%;text-align:left;white-space:nowrap}
+.ux-more-tabs>summary:focus-visible{outline:2px solid var(--color-primary);outline-offset:3px}
+@media(max-width:620px){.control-tabs{position:relative}.ux-more-tabs{position:static}.ux-more-tabs>div{left:0;right:auto;min-width:0;width:min(220px,100%);max-width:100%}}
 /* Restrained graphite workspace. Local fonts and semantic accents. */
 @font-face{font-family:Geist;src:url('/fonts/Geist-Variable.woff2') format('woff2');font-style:normal;font-weight:100 900;font-display:swap}
 @font-face{font-family:'Geist Mono';src:url('/fonts/GeistMono-Variable.woff2') format('woff2');font-style:normal;font-weight:100 900;font-display:swap}

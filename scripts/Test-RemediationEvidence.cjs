@@ -18,6 +18,8 @@ assert.ok(html.includes('<span class="assurance-label">Scheduled</span>'));
 assert.ok(html.includes('No Auditing &lt;unsafe&gt;'));
 assert.ok(!html.includes('<strong>ENDPOINT_CONFIGURATION'));
 assert.ok(!html.includes('<strong>CLIENT_PROCESSING'));
+assert.ok(!html.includes('class="verify-timeline"'),'Current assurance stages should not show a second conflicting pipeline');
+delete run.result.verificationStages;html=view.controlView();
 assert.ok(html.includes('<h2>ENDPOINT_MISMATCH</h2>'));
 assert.ok(html.includes('SeSystemtimePrivilege=S-1-5-32-544 &lt;unsafe&gt;'));
 assert.ok(!html.includes('<unsafe>'));

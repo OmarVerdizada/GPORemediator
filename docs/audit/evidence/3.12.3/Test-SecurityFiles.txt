@@ -1,0 +1,1 @@
+PASS private files: explicit broad permissions removed, child files protected, junction rejected

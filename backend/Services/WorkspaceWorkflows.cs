@@ -71,7 +71,7 @@ public sealed class WorkspaceWorkflows(Store store,IWorkflowOperations service,O
         if(action=="rollback"&&request.SourceWorkflowId is not null){
             var source=Get(request.SourceWorkflowId,actor);
             if(source.Action!="apply"||WorkspaceRules.Active(source.State)||source.State=="VERIFY_SCHEDULED"||source.CompletedIds.Length==0)throw new PolicyException("ROLLBACK_NOT_AVAILABLE","Select a finished apply workflow with completed backups.");
-            if(List(actor).Any(x=>x.Action=="rollback"&&x.SourceWorkflowId==source.Id&&x.State is "QUEUED" or "RUNNING" or "COMPLETED"))throw new PolicyException("ROLLBACK_NOT_AVAILABLE","This batch recovery was already submitted; inspect that recovery workflow.");
+            if(List(actor).Any(x=>x.Action=="rollback"&&x.SourceWorkflowId==source.Id&&x.State is "QUEUED" or "RUNNING" or "VERIFY_SCHEDULED"))throw new PolicyException("ROLLBACK_NOT_AVAILABLE","This batch recovery is still active; wait for it to finish before submitting another restore.");
             var changed=source.CompletedIds.Where(op=>!string.IsNullOrEmpty(store.Require<GpoWorkflowRun>("gpo_runs",op).Result.BackupId)).ToArray();
             if(changed.Length==0)throw new PolicyException("ROLLBACK_NOT_AVAILABLE","The batch made no changes and has no backup.");
             ids=[changed[0]];

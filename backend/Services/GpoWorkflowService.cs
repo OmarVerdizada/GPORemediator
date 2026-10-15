@@ -193,7 +193,6 @@ public sealed class GpoWorkflowService(IConfiguration config,Store store,Operati
             }else if(operation=="rollback"){
                 if(consent.Confirmation!="ROLLBACK")throw new PolicyException("CONFIRMATION_REQUIRED","Type ROLLBACK.");
                 if(previous is null)throw new PolicyException("NOT_FOUND","No execution exists for this plan.");
-                if(previous.Result.State=="ROLLED_BACK")return previous;
                 if(previous.Result.State=="NO_CHANGE")throw new PolicyException("ROLLBACK_NOT_AVAILABLE","No backup exists because this operation required no change.");
             }
             if(operation!="apply"&&previous is null)throw new PolicyException("NOT_FOUND","Apply has not been started.");

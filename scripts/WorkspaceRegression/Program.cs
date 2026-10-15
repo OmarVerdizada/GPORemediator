@@ -89,7 +89,9 @@ var recovery=jobs.Start("rollback",new(Guid.NewGuid().ToString(),[],new("ROLLBAC
 recovery=await Done(jobs,recovery.Id);Check(recovery.State=="COMPLETED",recovery.Message);
 Check(fake.LastAnchor is not null&&fake.LastRestore==bulk.CompletedIds[0],"Batch rollback did not use first snapshot plus final publication anchor");
 Check(store.Require<GpoWorkflowRun>("gpo_runs",bulk.CompletedIds[1]).Result.State=="BATCH_ROLLED_BACK","Batch restore left later controls marked as applied");
-Reject(()=>jobs.Start("rollback",new(Guid.NewGuid().ToString(),[],new("ROLLBACK"),SourceWorkflowId:bulk.Id),"secret-session","TEST\\Admin"),"ROLLBACK_NOT_AVAILABLE");
+var repeatRecovery=jobs.Start("rollback",new(Guid.NewGuid().ToString(),[],new("ROLLBACK"),SourceWorkflowId:bulk.Id),"secret-session","TEST\\Admin");
+repeatRecovery=await Done(jobs,repeatRecovery.Id);Check(repeatRecovery.State=="COMPLETED","Completed batch could not be restored again: "+repeatRecovery.Message);
+Check(repeatRecovery.Id!=recovery.Id&&fake.LastRestore==bulk.CompletedIds[0],"Repeat batch recovery did not retain the first snapshot");
 // An uncertain write blocks later writes and refresh.
 var p=await fake.PreviewAsync("secret-session","TEST\\Admin",selection with{Setting="2.3.1.5"},CancellationToken.None);
 fake.FailNext=true;fake.Actions.Clear();var failure=jobs.Start("apply",new(Guid.NewGuid().ToString(),[p.Id],consent,"Scope"),"secret-session","TEST\\Admin");

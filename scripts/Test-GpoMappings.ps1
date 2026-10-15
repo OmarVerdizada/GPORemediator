@@ -179,7 +179,7 @@ $firstManifest|ConvertTo-Json -Depth 5|Set-Content (Join-Path $script:batchFirst
 @{phase='PUBLISHED';postFingerprint='batch-last'}|ConvertTo-Json|Set-Content (Join-Path $script:batchLast 'manifest.json')
 $script:currentFingerprint='batch-last';$script:restoreCalls=0
 function Fingerprint {param($Id,$ScopeDn) return $script:currentFingerprint}
-function Restore-GPO {param($BackupId,$Path,$Domain,$Server) $script:restoreCalls++;[IO.File]::WriteAllText((Join-Path $script:folder 'policy.txt'),'restored snapshot')}
+function Restore-GPO {param($BackupId,$Path,$Domain,$Server) $script:restoreCalls++;$script:currentFingerprint='restored-'+$script:restoreCalls;[IO.File]::WriteAllText((Join-Path $script:folder 'policy.txt'),'restored snapshot')}
 function Remove-GPLink {param($Guid,$Target,$Domain,$Server,[switch]$Confirm)}
 $Data=[pscustomobject]@{plan=$plan;mapping=@{};rollbackAnchor=$null}
 try{$null=& ([scriptblock]::Create($rollbackBlock.Extent.Text.TrimStart('{').TrimEnd('}')));throw 'Unanchored old snapshot was accepted'}catch{if($_.Exception.Message -notlike 'ROLLBACK_CONFLICT*'){throw}}
@@ -190,9 +190,16 @@ $events=@(& ([scriptblock]::Create($rollbackBlock.Extent.Text.TrimStart('{').Tri
 $result=$events[-1]
 Assert-Test ($result.state -eq 'ROLLED_BACK' -and $script:restoreCalls -eq 1) 'Anchored batch did not restore the first full snapshot'
 Assert-Test (@($events|Where-Object{$_.PSObject.Properties['gpoStage']}).Count -eq 3) 'Worker did not stream actual restore stages'
+$events=@(& ([scriptblock]::Create($rollbackBlock.Extent.Text.TrimStart('{').TrimEnd('}'))))
+Assert-Test ($events[-1].state -eq 'ROLLED_BACK' -and $script:restoreCalls -eq 2) 'Second rollback was not actually executed'
+$saved=Get-Content -LiteralPath (Join-Path $script:batchFirst 'manifest.json') -Raw|ConvertFrom-Json
+Assert-Test ($saved.rollbackFingerprint -eq 'restored-2' -and $saved.rollbackAttempts -eq 2) 'Repeated restore did not advance the baseline and attempt counter'
+$saved.PSObject.Properties.Remove('rollbackFingerprint');$saved|ConvertTo-Json -Depth 15|Set-Content -LiteralPath (Join-Path $script:batchFirst 'manifest.json')
+$events=@(& ([scriptblock]::Create($rollbackBlock.Extent.Text.TrimStart('{').TrimEnd('}'))))
+Assert-Test ($events[-1].state -eq 'ROLLED_BACK' -and $script:restoreCalls -eq 3) 'Legacy restored manifest was not independently checked and migrated'
 $script:currentFingerprint='external edit'
 try{$null=& ([scriptblock]::Create($rollbackBlock.Extent.Text.TrimStart('{').TrimEnd('}')));throw 'Batch rollback drift was accepted'}catch{if($_.Exception.Message -notlike 'ROLLBACK_CONFLICT*'){throw}}
-Assert-Test ($script:restoreCalls -eq 1) 'Drift caused another restore'
+Assert-Test ($script:restoreCalls -eq 3) 'Drift caused another restore'
 Write-Output 'PASS batch rollback: first snapshot, final publication anchor, external drift rejection and streamed restore stages'
 if($ReportPath){$parent=Split-Path ([IO.Path]::GetFullPath($ReportPath)) -Parent;$null=New-Item -ItemType Directory -Force -Path $parent;$report|ConvertTo-Json -Depth 8|Set-Content -LiteralPath $ReportPath -Encoding UTF8}
 $failures=@($report|Where-Object{$_.state -eq 'FAIL'})

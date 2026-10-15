@@ -1,6 +1,6 @@
-# GPO Remediator 3.12.2
+# GPO Remediator 3.12.3
 
-3.12.2 fixes advanced-audit endpoint evidence and missing audit CSE detection, and adds colored verification cards. See [changes and upgrade instructions](docs/RELEASE-3.12.2.md). Protected application state does not need to be deleted.
+3.12.3 fixes the advanced-tab dropdown, unifies verification stages, and supports repeated confirmed snapshot rollback with live drift checks. See [changes and upgrade instructions](docs/RELEASE-3.12.3.md).
 
 The full source and synthetic audit is in [docs/audit/FULL_PROJECT_AUDIT.md](docs/audit/FULL_PROJECT_AUDIT.md), with one evidence-bounded row for all 405 controls. This release fixes the shared auditpol argument, numeric bounds, active firewall verification, replication content checks, stale evidence and refresh result handling. Five independent assurance stages distinguish stored configuration, applicability, replication, client processing and sampled endpoint configuration. **Live AD enforcement and unrestricted production readiness remain unverified; no live AD GPO was modified during this audit.**
 
