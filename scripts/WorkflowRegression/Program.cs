@@ -66,3 +66,22 @@ foreach(var action in new[]{"verify","refresh"})
     GpoWorkflowRules.ValidateMappingVersion("old","new",action,"ROLLED_BACK");
 Reject(()=>GpoWorkflowRules.ValidateMappingVersion("old","new","apply","ROLLED_BACK"),"GPO_MAPPING_CHANGED");
 Console.WriteLine("PASS mapping upgrades: stale writes blocked; snapshot rollback and restored-snapshot verification remain available");
+
+var evidencePlan=new GpoWorkflowPlan("evidence-fixture","EXAMPLE\\Operator","EXAMPLE\\Executor","WINDOWS","example.local","dc.example.local",selected with{Setting="1.1.4"},new(new(gpo,"Test GPO",false,true),new(dn,"Domain","Domain"),"1","fingerprint","",null,[],[],DesiredValue:"14"),PolicyValues.Now());
+var evidenceResult=new GpoWorkflowResult("PUBLISHED","Published",null,null,null,true,true,[new("ws.example.local","SCHEDULED","scheduled")],"VERIFIED_ON_SAMPLE",new("1","1",true,[],[],PolicyValues.Now(),true),[new("ws.example.local","VERIFIED","sample only","14")],"14");
+store.Put("gpo_runs",evidencePlan.Id,new GpoWorkflowRun(evidencePlan.Id,evidencePlan,evidenceResult,"2026-10-15T00:00:00Z"));
+var exportBefore=service.Evidence(evidencePlan.Id,evidencePlan.Actor);
+store.Put("gpo_runs",evidencePlan.Id,new GpoWorkflowRun(evidencePlan.Id,evidencePlan,evidenceResult with{State="ROLLED_BACK",EffectiveStatus="ROLLBACK_ENDPOINT_PENDING",CurrentValue="1"},"2026-10-15T00:01:00Z"));
+var exportAfter=service.Evidence(evidencePlan.Id,evidencePlan.Actor);
+Check(exportBefore.State=="PUBLISHED"&&exportAfter.State=="ROLLED_BACK"&&exportAfter.CurrentValue=="1"&&exportBefore.IntegrityHash!=exportAfter.IntegrityHash,"Evidence export returned a stale pre-rollback snapshot");
+Check(store.List<GpoEvidence>("gpo_evidence").Length==2,"Earlier evidence snapshot was overwritten");
+var assurance=evidenceResult.VerificationStages;
+Check(assurance.Length==5&&assurance.Single(x=>x.Stage=="GPO_APPLICABILITY").Status=="INSUFFICIENT_EVIDENCE","Link equality was promoted to effective applicability");
+Check(assurance.Single(x=>x.Stage=="CLIENT_PROCESSING").Status=="GPUPDATE_SCHEDULED","Scheduled refresh was promoted to completion");
+Check((evidenceResult with{EndpointChecks=[new("ws.example.local","MISMATCH","auditpol disagrees","0")]}).VerificationStages.Single(x=>x.Stage=="ENDPOINT_CONFIGURATION").Status=="ENDPOINT_MISMATCH","GPO publication hid an endpoint mismatch");
+Console.WriteLine("PASS fresh evidence snapshots, preserved prior exports, five independent stages, scheduled-not-completed and endpoint mismatch separation");
+var compatibleItem=new GpoMappingItem(Key:"HKLM\\Software\\Test",Name:"Enabled",Type:"DWORD",Value:["1"]);
+Check(PolicyValues.Hash(compatibleItem)==PolicyValues.Hash(new{compatibleItem.Section,compatibleItem.Key,compatibleItem.Name,compatibleItem.Type,compatibleItem.Value,compatibleItem.Guid,compatibleItem.State,compatibleItem.Mask}),"Adding an absent optional item comparator invalidated unchanged historical mapping hashes");
+Check(evidenceResult.VerificationStages.Single(x=>x.Stage=="AD_SYSVOL_REPLICATION").Status=="INSUFFICIENT_EVIDENCE","Legacy version-only record was upgraded to content verification without a probe");
+Check((evidenceResult with{Verification=evidenceResult.Verification! with{EvidenceVersion="2.0-content"}}).VerificationStages.Single(x=>x.Stage=="AD_SYSVOL_REPLICATION").Status=="VERIFIED","Current content/CSE evidence was not recognized");
+Console.WriteLine("PASS optional-comparator legacy hash compatibility and version-only evidence migration boundary");

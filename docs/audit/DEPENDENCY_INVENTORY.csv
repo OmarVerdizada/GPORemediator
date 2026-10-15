@@ -1,0 +1,6 @@
+﻿Project,TargetFramework,Package,Version
+backend/GpoRemediator.csproj,net10.0,Microsoft.Data.Sqlite,10.0.13
+backend/GpoRemediator.csproj,net10.0,Microsoft.AspNetCore.Authentication.Negotiate,10.0.13
+backend/GpoRemediator.csproj,net10.0,System.Security.Cryptography.ProtectedData,10.0.13
+scripts/SecurityRegression/SecurityRegression.csproj,net10.0,Microsoft.AspNetCore.TestHost,10.0.12
+scripts/WorkspaceRegression/WorkspaceRegression.csproj,net10.0,Microsoft.AspNetCore.TestHost,10.0.12

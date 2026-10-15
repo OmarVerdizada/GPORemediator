@@ -28,7 +28,8 @@ public record GpoDcVersionStatus(string DomainController, string? AdVersion, str
 public record GpoEndpointCheck(string Hostname, string State, string Message, string? ActualValue = null);
 public record GpoVerificationDetails(string AdVersion, string GptVersion, bool VersionsMatch,
     string[] DomainControllers, string[] ReplicationWarnings, string CheckedAt,
-    bool ReplicationConverged = false, GpoDcVersionStatus[]? DcVersions = null);
+    bool ReplicationConverged = false, GpoDcVersionStatus[]? DcVersions = null,
+    [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] string? EvidenceVersion = null);
 
 public record GpoPreview(GpoChoice Gpo, GpoScope Scope, string? PreviousValue, string Fingerprint, string ScopeLinks,
     GpoLink? ExistingLink, string[] RefreshComputers, string[] Warnings,
@@ -42,7 +43,11 @@ public record GpoConsent(string Confirmation, bool AcknowledgeImpact = false, bo
 public record GpoRefreshResult(string Computer, string State, string Message);
 public record GpoWorkflowResult(string State, string Message, string? BackupId, string? BackupDirectory, string? PostFingerprint,
     bool GpoPublished, bool LinkVerified, GpoRefreshResult[] RefreshResults, string EffectiveStatus,
-    GpoVerificationDetails? Verification = null, GpoEndpointCheck[]? EndpointChecks = null, string? CurrentValue = null);
+    GpoVerificationDetails? Verification = null, GpoEndpointCheck[]? EndpointChecks = null, string? CurrentValue = null)
+{
+    public GpoAssuranceStage[] VerificationStages => GpoAssurance.Stages(this);
+    public string[] Diagnosis => GpoAssurance.Diagnose(this);
+}
 public record GpoWorkflowRun(string Id, GpoWorkflowPlan Plan, GpoWorkflowResult Result, string UpdatedAt, GpoConsent? Approval = null,
     string? CorrelationId = null, string? StartedAt = null, GpoStage[]? Stages = null);
 public record GpoStage(string Phase, string StartedAt, string? FinishedAt = null);

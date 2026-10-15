@@ -1,0 +1,42 @@
+﻿File,Method,Route,Note
+backend/Infrastructure/BundledAssets.cs,GET,/,Dynamic loops expand GPO actions apply/rollback/verify/refresh; compiled frontend assets also create GET routes.
+backend/Infrastructure/BundledAssets.cs,GET,/,Dynamic loops expand GPO actions apply/rollback/verify/refresh; compiled frontend assets also create GET routes.
+backend/Infrastructure/GpoEndpoints.cs,POST,/api/gpo/{id}/refresh,Dynamic loops expand GPO actions apply/rollback/verify/refresh; compiled frontend assets also create GET routes.
+backend/Infrastructure/OperatorConfirmation.cs,POST,/api/operator/sign-in,Dynamic loops expand GPO actions apply/rollback/verify/refresh; compiled frontend assets also create GET routes.
+backend/Infrastructure/WorkspaceEndpoints.cs,GET,/api/workflows,Dynamic loops expand GPO actions apply/rollback/verify/refresh; compiled frontend assets also create GET routes.
+backend/Infrastructure/WorkspaceEndpoints.cs,GET,/api/workflows/{id},Dynamic loops expand GPO actions apply/rollback/verify/refresh; compiled frontend assets also create GET routes.
+backend/Infrastructure/WorkspaceEndpoints.cs,GET,/api/batches,Dynamic loops expand GPO actions apply/rollback/verify/refresh; compiled frontend assets also create GET routes.
+backend/Infrastructure/WorkspaceEndpoints.cs,GET,/api/batches/{id},Dynamic loops expand GPO actions apply/rollback/verify/refresh; compiled frontend assets also create GET routes.
+backend/Infrastructure/WorkspaceEndpoints.cs,POST,/api/workflows/preview,Dynamic loops expand GPO actions apply/rollback/verify/refresh; compiled frontend assets also create GET routes.
+backend/Infrastructure/WorkspaceEndpoints.cs,POST,/api/workflows/scan,Dynamic loops expand GPO actions apply/rollback/verify/refresh; compiled frontend assets also create GET routes.
+backend/Infrastructure/WorkspaceEndpoints.cs,GET,/api/workflows/{id}/report,Dynamic loops expand GPO actions apply/rollback/verify/refresh; compiled frontend assets also create GET routes.
+backend/Program.cs,GET,/api/v1/health/live,Dynamic loops expand GPO actions apply/rollback/verify/refresh; compiled frontend assets also create GET routes.
+backend/Program.cs,GET,/api/v1/health/ready,Dynamic loops expand GPO actions apply/rollback/verify/refresh; compiled frontend assets also create GET routes.
+backend/Program.cs,GET,/api/session,Dynamic loops expand GPO actions apply/rollback/verify/refresh; compiled frontend assets also create GET routes.
+backend/Program.cs,GET,/api/service,Dynamic loops expand GPO actions apply/rollback/verify/refresh; compiled frontend assets also create GET routes.
+backend/Program.cs,POST,/api/service/{action},Dynamic loops expand GPO actions apply/rollback/verify/refresh; compiled frontend assets also create GET routes.
+backend/Program.cs,POST,/api/gpo/connect,Dynamic loops expand GPO actions apply/rollback/verify/refresh; compiled frontend assets also create GET routes.
+backend/Program.cs,POST,/api/gpo/disconnect,Dynamic loops expand GPO actions apply/rollback/verify/refresh; compiled frontend assets also create GET routes.
+backend/Program.cs,GET,/api/gpo/inventory,Dynamic loops expand GPO actions apply/rollback/verify/refresh; compiled frontend assets also create GET routes.
+backend/Program.cs,GET,/api/gpo/session,Dynamic loops expand GPO actions apply/rollback/verify/refresh; compiled frontend assets also create GET routes.
+backend/Program.cs,GET,/api/gpo/readiness,Dynamic loops expand GPO actions apply/rollback/verify/refresh; compiled frontend assets also create GET routes.
+backend/Program.cs,POST,/api/gpo/discover,Dynamic loops expand GPO actions apply/rollback/verify/refresh; compiled frontend assets also create GET routes.
+backend/Program.cs,GET,/api/gpo/settings,Dynamic loops expand GPO actions apply/rollback/verify/refresh; compiled frontend assets also create GET routes.
+backend/Program.cs,GET,/api/gpo/history,Dynamic loops expand GPO actions apply/rollback/verify/refresh; compiled frontend assets also create GET routes.
+backend/Program.cs,GET,/api/gpo/{id}/evidence,Dynamic loops expand GPO actions apply/rollback/verify/refresh; compiled frontend assets also create GET routes.
+backend/Program.cs,POST,/api/gpo/preview,Dynamic loops expand GPO actions apply/rollback/verify/refresh; compiled frontend assets also create GET routes.
+backend/Program.cs,POST,/api/gpo/{id}/apply,Dynamic loops expand GPO actions apply/rollback/verify/refresh; compiled frontend assets also create GET routes.
+backend/Program.cs,GET,/api/gpo/{id}/rollback-preview,Dynamic loops expand GPO actions apply/rollback/verify/refresh; compiled frontend assets also create GET routes.
+backend/Program.cs,POST,/api/gpo/{id}/rollback,Dynamic loops expand GPO actions apply/rollback/verify/refresh; compiled frontend assets also create GET routes.
+backend/Program.cs,POST,/api/gpo/{id}/verify,Dynamic loops expand GPO actions apply/rollback/verify/refresh; compiled frontend assets also create GET routes.
+backend/Program.cs,POST,/api/gpo/{id}/replan,Dynamic loops expand GPO actions apply/rollback/verify/refresh; compiled frontend assets also create GET routes.
+backend/Program.cs,GET,/api/setup/discover,Dynamic loops expand GPO actions apply/rollback/verify/refresh; compiled frontend assets also create GET routes.
+backend/Program.cs,GET,/api/setup/config,Dynamic loops expand GPO actions apply/rollback/verify/refresh; compiled frontend assets also create GET routes.
+backend/Program.cs,POST,/api/setup/config,Dynamic loops expand GPO actions apply/rollback/verify/refresh; compiled frontend assets also create GET routes.
+backend/Program.cs,POST,/api/setup/write-mode,Dynamic loops expand GPO actions apply/rollback/verify/refresh; compiled frontend assets also create GET routes.
+backend/Program.cs,GET,/api/audit,Dynamic loops expand GPO actions apply/rollback/verify/refresh; compiled frontend assets also create GET routes.
+backend/Program.cs,GET,/api/settings,Dynamic loops expand GPO actions apply/rollback/verify/refresh; compiled frontend assets also create GET routes.
+backend/Infrastructure/WorkspaceEndpoints.cs,POST,/api/workflows/apply,"Expanded from production action loop; Verify allows read roles, mutations require Administrator/Remediator; CSRF and server context guards apply."
+backend/Infrastructure/WorkspaceEndpoints.cs,POST,/api/workflows/rollback,"Expanded from production action loop; Verify allows read roles, mutations require Administrator/Remediator; CSRF and server context guards apply."
+backend/Infrastructure/WorkspaceEndpoints.cs,POST,/api/workflows/verify,"Expanded from production action loop; Verify allows read roles, mutations require Administrator/Remediator; CSRF and server context guards apply."
+backend/Infrastructure/WorkspaceEndpoints.cs,POST,/api/workflows/refresh,"Expanded from production action loop; Verify allows read roles, mutations require Administrator/Remediator; CSRF and server context guards apply."

@@ -254,15 +254,14 @@ public sealed class GpoWorkflowService(IConfiguration config,Store store,Operati
     {
         var run=store.Require<GpoWorkflowRun>("gpo_runs",id);
         if(!string.Equals(run.Plan.Actor,actor,StringComparison.OrdinalIgnoreCase)) throw new PolicyException("NOT_FOUND","Operation not found.");
-        var persisted=store.Get<GpoEvidence>("gpo_evidence",id);
-        if(persisted is not null) return persisted;
+        // Each export represents the latest recorded run; preserve earlier snapshots by hash.
         var evidence=new GpoEvidence("1.1","GPO Remediator","CIS v4.0.0",run.Id,run.UpdatedAt,run.Plan.Actor,
             run.Plan.ExecutionUser,run.Plan.Domain,run.Plan.DomainController,ProductionGpoMappings.Require(run.Plan.Selection.Setting).ControlId,run.Plan.Selection.Setting,
             run.Plan.Selection.GpoId,run.Plan.Preview.Gpo.Name,run.Plan.Selection.ScopeDn,run.Plan.Preview.PreviousValue,
             ProductionGpoMappings.Require(run.Plan.Selection.Setting).DesiredDisplay(run.Plan.Selection),run.Result.State,run.Result.BackupId,run.Result.BackupDirectory,run.Result.EffectiveStatus,
             run.Result.Verification,run.Plan.Preview.Warnings,"",run.Approval?.ChangeReference,run.Approval?.ApprovedBy,ProductionGpoMappings.Require(run.Plan.Selection.Setting).Handler,ProductionGpoMappings.Require(run.Plan.Selection.Setting).Source,run.Result.EndpointChecks,run.CorrelationId,run.Result.CurrentValue);
         evidence=evidence with{IntegrityHash=GpoWorkflowRules.EvidenceHash(evidence)};
-        store.Put("gpo_evidence",id,evidence,"IMMUTABLE");
+        store.Put("gpo_evidence",id+"-"+evidence.IntegrityHash,evidence,"IMMUTABLE");
         return evidence;
     }
     public void Dispose(){cleanup?.Dispose();foreach(var key in connections.Keys)Disconnect(key);}

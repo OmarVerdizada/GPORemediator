@@ -49,6 +49,8 @@ public static class WorkspaceEndpoints
             if(run is not null){
                 html.Append($"<p>Result: {E(run.Result.State)} · {E(run.Result.Message)}<br>Backup: {E(run.Result.BackupId)} · {E(run.Result.BackupDirectory)}<br>Effective result: {E(run.Result.EffectiveStatus)}<br>Replication: {E(run.Result.Verification?.ReplicationConverged)}</p><table><tr><th>Observed stage</th><th>Started UTC</th><th>Ended UTC</th></tr>");
                 foreach(var stage in run.Stages??[])html.Append($"<tr><td>{E(stage.Phase)}</td><td>{E(stage.StartedAt)}</td><td>{E(stage.FinishedAt)}</td></tr>");
+                html.Append("</table><h3>Independent verification stages</h3><table><tr><th>Stage</th><th>Status</th><th>Evidence limits</th></tr>");
+                foreach(var stage in run.Result.VerificationStages)html.Append($"<tr><td>{E(stage.Stage)}</td><td>{E(stage.Status)}</td><td>{E(stage.Evidence)}</td></tr>");
                 html.Append("</table><table><tr><th>Endpoint</th><th>State</th><th>Evidence</th></tr>");
                 foreach(var check in run.Result.EndpointChecks??[])html.Append($"<tr><td>{E(check.Hostname)}</td><td>{E(check.State)}</td><td>{E(check.ActualValue)} · {E(check.Message)}</td></tr>");
                 foreach(var check in run.Result.RefreshResults)html.Append($"<tr><td>{E(check.Computer)}</td><td>{E(check.State)}</td><td>{E(check.Message)}</td></tr>");

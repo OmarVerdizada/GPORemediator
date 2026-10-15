@@ -130,6 +130,8 @@ public sealed class WorkspaceWorkflows(Store store,IWorkflowOperations service,O
                 job=Update(job.Id,j=>j with{CompletedIds=[..j.CompletedIds,plan.Id],Message=result.Result.Message});
                 if(job.Action=="apply"&&!WorkspaceRules.Published(result)||job.Action=="rollback"&&result.Result.State!="ROLLED_BACK"||job.Action=="verify"&&result.Result.State is "REVIEW_REQUIRED" or "DRIFT_DETECTED" or "ROLLBACK_DRIFT_DETECTED")
                     throw new PolicyException("WORKFLOW_RESULT_REVIEW","A step requires review. Remaining writes and refresh were stopped.");
+                if(job.Action=="refresh" && (result.Result.RefreshResults.Length==0 || result.Result.RefreshResults.Any(x=>x.State=="FAILED") || result.Result.State is "DRIFT_DETECTED" or "ROLLBACK_DRIFT_DETECTED" or "REVIEW_REQUIRED"))
+                    throw new PolicyException("REFRESH_REVIEW_REQUIRED","Refresh was not scheduled on every authorized target. Inspect per-host evidence.");
                 expected=result.Result.PostFingerprint??plan.Preview.Fingerprint;
             }
             if(job.SourceWorkflowId is not null){
@@ -176,7 +178,7 @@ public sealed class WorkspaceWorkflows(Store store,IWorkflowOperations service,O
                 else{
                     var selection=job.ScanTarget! with{Setting=control,Value=mapping.Suggested??0,Refresh="None",AccountScope=mapping.DomainPolicySensitive?"Domain":"LocalComputers",CustomValue=null};
                     var plan=await service.PreviewAsync(work.Token,job.Actor,selection,ct);
-                    rows.Add(new(control,plan.Preview.NoChange?"COMPLIANT":"DIFFERENT",plan.Preview.PreviousValue,plan.Preview.DesiredValue,"Read-only GPO content/link comparison; effective endpoint compliance is not inferred.",PolicyValues.Now(),plan.Id));
+                    rows.Add(new(control,plan.Preview.NoChange?"GPO_MATCH":"DIFFERENT",plan.Preview.PreviousValue,plan.Preview.DesiredValue,"Read-only GPO content/link comparison; effective endpoint compliance is not inferred.",PolicyValues.Now(),plan.Id));
                 }
             }catch(PolicyException error){if(error.Code=="GPO_LOGIN_REQUIRED")throw;rows.Add(new(control,"NOT_CHECKED",null,null,error.Code,PolicyValues.Now()));}
             Update(job.Id,j=>j with{ScanRows=rows.ToArray(),Message=$"Read-only scan: {rows.Count}/{job.ScanControls!.Length}"});

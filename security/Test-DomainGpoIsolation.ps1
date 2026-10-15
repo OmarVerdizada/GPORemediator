@@ -9,7 +9,7 @@ foreach($required in @('GPO_SCRIPT_TAMPERED','DomainPattern','ValidateGpo','Priv
 }
 if(!$bootstrap.Contains('param([string]$RequestJson)')){throw 'Trusted PowerShell transport contract missing.'}
 if(!$executor.Contains('GpoScriptWorkspaces.SelectScript')){throw 'Executor is not selecting isolated GPO scripts.'}
-if(($service.Split('GpoScriptWorkspaces.SyncInventory(').Count-1) -ne 2){throw 'Initial + refresh discovery must each sync all GPO folders.'}
+if([regex]::Matches($service,[regex]::Escape('GpoScriptWorkspaces.SyncInventory(')).Count -ne 2){throw 'Initial + refresh discovery must each sync all GPO folders.'}
 $psTemplate=Join-Path $ProjectRoot 'security\Invoke-Gpo.Template.ps1'
 $tokenList=$null;$parseErrors=$null
 $ast=[System.Management.Automation.Language.Parser]::ParseFile($psTemplate,[ref]$tokenList,[ref]$parseErrors)

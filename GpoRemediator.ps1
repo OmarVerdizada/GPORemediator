@@ -35,7 +35,7 @@ $runtimeMarker = Join-Path $runtimeRoot 'production-backend-v4.ready'
 $runtimeInstallManifest = Join-Path $runtimeRoot 'runtime-install.json'
 $runtimeArchive = Join-Path $PSScriptRoot 'release\GpoRemediator-runtime-win-x64.zip'
 $runtimeArchiveHash = $runtimeArchive + '.sha256'
-$releaseVersion = '3.11.1'
+$releaseVersion = '3.12.0'
 # 3.1.2 keeps the 3.0 durable schema. It hardens startup recovery, removes the Setup->Windows restart race, and makes early backend failures self-diagnosing.
 # 3.1.2 intentionally uses fresh Setup/Windows state databases so incompatible serialized records from earlier preview builds cannot crash startup. Older databases are left untouched in ProgramData for archival/review.
 $stateSchemaVersion = '3.1.2'
@@ -363,6 +363,7 @@ function Get-StartupFailureCategory([string]$Details) {
     if($text -match 'Negotiate|authentication initialization|SSPI'){ return 'WINDOWS_AUTH' }
     if($text -match 'hostfxr|hostpolicy|coreclr|BadImageFormat|DllNotFound|FileNotFoundException|Could not load file or assembly|entry point|0xc0000135|0xc000007b'){ return 'RUNTIME_PACKAGE' }
     if($text -match 'readiness timeout'){ return 'READINESS_TIMEOUT' }
+    if($text -match 'Runtime exit after readiness'){ return 'RUNTIME_EXIT_AFTER_READY' }
     if($text -match 'process exited with code'){ return 'PROCESS_EXIT' }
     return 'UNKNOWN'
 }
@@ -402,6 +403,7 @@ function Get-SafeStartupIssue([string]$Details) {
         'WINDOWS_AUTH' { return 'Windows Integrated Authentication could not initialize. This is a local backend/authentication startup failure, not a Kerberos/WinRM readiness result.' }
         'RUNTIME_PACKAGE' { return 'The installed self-contained backend runtime is incomplete or could not load. The verified local runtime package will be reinstalled once automatically.' }
         'READINESS_TIMEOUT' { return 'The local backend process stayed alive but did not expose its loopback readiness endpoint in time. Review server-error.log and server.log.' }
+        'RUNTIME_EXIT_AFTER_READY' { return 'The backend became ready, then exited unexpectedly. Inspect the exit code and protected server logs; readiness was achieved before this failure.' }
         'PROCESS_EXIT' { return 'The local backend process exited before readiness. The verified runtime package will be repaired once before Setup recovery is used.' }
         default { return 'The local Windows backend failed before its readiness endpoint became available. The exact failure is preserved in startup-diagnosis.json and windows-startup-error.log.' }
     }

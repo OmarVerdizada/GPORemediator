@@ -111,6 +111,7 @@ const server=http.createServer(async(req,res)=>{
   assert.ok((await page.locator('.ds-toast').textContent()).includes('gpupdate /force'));
   refreshFailure=false;
   run.result={state:'PUBLISHED',backupId:'test-backup-id',gpoPublished:true,linkVerified:true,effectiveStatus:'VERIFIED_ON_SAMPLE',endpointChecks:[{hostname:'DC-01.test.local',state:'VERIFIED',message:'Value read directly.',actualValue:'MinimumPasswordLength=14'}]};
+  run.result.verificationStages=[{stage:'GPO_CONFIGURATION',status:'GPO_APPLIED',evidence:'Stored value only.'},{stage:'GPO_APPLICABILITY',status:'INSUFFICIENT_EVIDENCE',evidence:'Target RSoP required.'},{stage:'AD_SYSVOL_REPLICATION',status:'VERIFIED',evidence:'Fixture content matches.'},{stage:'CLIENT_PROCESSING',status:'GPUPDATE_SCHEDULED',evidence:'No completion telemetry.'},{stage:'ENDPOINT_CONFIGURATION',status:'ENDPOINT_VERIFIED',evidence:'Sample configuration only.'}];
   await page.reload();
   await page.goto(`http://127.0.0.1:${server.address().port}/#/benchmark`);
   await page.locator('[data-domain="1"]').click();
@@ -121,6 +122,10 @@ const server=http.createServer(async(req,res)=>{
   await page.locator('.manual-check-command').waitFor();
   assert.ok((await page.locator('.manual-check-command').textContent()).includes('secedit.exe /export /mergedpolicy'));
   assert.equal(await page.locator('.manual-check-head [data-copy-value]').count(),1);
+  assert.equal(await page.locator('.assurance-stage-list>div').count(),5);
+  assert.ok((await page.locator('.assurance-stage-list').textContent()).includes('INSUFFICIENT_EVIDENCE'));
+  assert.ok((await page.locator('.assurance-stage-list').textContent()).includes('GPUPDATE_SCHEDULED'));
+  await page.screenshot({path:path.join(screens,'audit-verification-desktop.png'),fullPage:true});
   await page.locator('[data-tab=remediation]').click();
   await page.locator('[data-gpo-toggle]').click();
   await page.locator('.gpo-modal').waitFor();
