@@ -9,8 +9,9 @@
     const replication = result.verification?.replicationConverged ? 'converged' : (result.verification ? 'pending' : 'not_checked');
     const effective = effectiveVerified(result.effectiveStatus) ? 'verified' : bad(result.effectiveStatus) ? 'failed' : 'pending';
     const attention = bad(result.state) || publication === 'failed' || effective === 'failed';
-    const compliant = !attention && publication === 'published' && result.linkVerified === true && replication === 'converged' && effective === 'verified';
-    return { publication, replication, effective, attention, compliant };
+    const custom=!!run?.plan?.selection?.itemValues;
+    const compliant = !custom && !attention && publication === 'published' && result.linkVerified === true && replication === 'converged' && effective === 'verified';
+    return { publication, replication, effective, attention, compliant, custom };
   }
   function workflowStep({ plan, approvalReviewed, run }) {
     if (run) {

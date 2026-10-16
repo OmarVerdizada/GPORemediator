@@ -48,8 +48,8 @@ public sealed class WorkspaceWorkflows(Store store,IWorkflowOperations service,O
                 throw new PolicyException("PILOT_NOT_VERIFIED","Promotion requires a completed pilot with replication convergence and effective sample verification for every applied control.");
             if(!selections.Select(x=>x.Setting).Order().SequenceEqual(runs.Select(x=>x.Plan.Selection.Setting).Order()))throw new PolicyException("PILOT_CONTROL_MISMATCH","Promotion must preview the same control set as the verified pilot.");
             if(selections.Any(selection=>{
-                var mapping=ProductionGpoMappings.Require(selection.Setting);var original=runs.Single(run=>run.Plan.Selection.Setting==selection.Setting).Plan;
-                return mapping.DesiredDisplay(selection)!=mapping.DesiredDisplay(original.Selection)||original.MappingHash is not null&&original.MappingHash!=PolicyValues.Hash(mapping);
+                var mapping=ProductionGpoMappings.Effective(selection);var original=runs.Single(run=>run.Plan.Selection.Setting==selection.Setting).Plan;
+                return mapping.DesiredDisplay(selection)!=ProductionGpoMappings.Effective(original.Selection).DesiredDisplay(original.Selection)||original.MappingHash is not null&&original.MappingHash!=PolicyValues.Hash(mapping);
             }))throw new PolicyException("PILOT_VALUE_MISMATCH","Promotion must use the same policy values and mapping as the verified pilot; different values require a new pilot.");
         }
         var job=New(requestId,actor,"preview",new{requestId,request}) with{Selections=selections,BatchId=Guid.NewGuid().ToString("N"),Pilot=request.Pilot,PilotLimit=request.PilotLimit,PilotSourceId=request.PilotSourceId};
@@ -176,7 +176,7 @@ public sealed class WorkspaceWorkflows(Store store,IWorkflowOperations service,O
             try{
                 if(!mapping.Writable||mapping.RequiresInput||mapping.Scope!="Computer")rows.Add(new(control,"NOT_CHECKED",null,null,"Manual, user-session targeting or organization-specific input requires individual review; no compliance claim was made.",PolicyValues.Now()));
                 else{
-                    var selection=job.ScanTarget! with{Setting=control,Value=mapping.Suggested??0,Refresh="None",AccountScope=mapping.DomainPolicySensitive?"Domain":"LocalComputers",CustomValue=null};
+                    var selection=job.ScanTarget! with{Setting=control,Value=mapping.Suggested??0,Refresh="None",AccountScope=mapping.DomainPolicySensitive?"Domain":"LocalComputers",CustomValue=null,ItemValues=null};
                     var plan=await service.PreviewAsync(work.Token,job.Actor,selection,ct);
                     rows.Add(new(control,plan.Preview.NoChange?"GPO_MATCH":"DIFFERENT",plan.Preview.PreviousValue,plan.Preview.DesiredValue,"Read-only GPO content/link comparison; effective endpoint compliance is not inferred.",PolicyValues.Now(),plan.Id));
                 }

@@ -105,4 +105,12 @@ $null=Test-FirewallControl '9.1.7' 'PENDING'
 $script:firewallUnavailable=$true
 $null=Test-FirewallControl '9.1.5' 'PENDING'
 Write-Output 'PASS firewall reported-state regression: size equality/bounds, disabled logging mismatch, independent profiles, path case, unavailable evidence'
+function Scope {param($Dn) [pscustomobject]@{dn=$Dn;kind='OU'}}
+$cfg.domain='example.local'
+function Get-GPO {param($Guid,$Domain,$Server) [pscustomobject]@{GpoStatus='AllSettingsEnabled'}}
+$map=@{id='19.5.1.1';automation='Automated';handler='Registry';scope='User';domainPolicySensitive=$false;requiresInput=$false;allowValueOverride=$false;comparator=$null;items=@(@{name='Enabled';key='HKCU\Software\Policies\Test';type='DWORD';value=@('1');section=$null;guid=$null})}
+$plan.selection=@{gpoId='11111111-1111-1111-1111-111111111111';scopeDn='OU=Users,DC=example,DC=local';endpointScopeDn='OU=Endpoints,DC=example,DC=local';verificationUser='';refresh='Scope'}
+Validate-Selection $plan.selection $map
+Assert-Test ((@(Verify-EffectiveSamples $plan $map))[0].state -eq 'PENDING') 'OU-wide Apply without a sample user must remain endpoint-pending'
+Write-Output 'PASS OU-wide user-policy selection without a verification user; optional HKCU evidence stays pending'
 

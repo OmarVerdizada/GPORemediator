@@ -14,7 +14,8 @@ public record GpoInventory(string Domain, string DomainController, string Execut
 
 public record GpoSelection(string GpoId, string ScopeDn, string Setting, int Value,
     string AccountScope = "Domain", string Refresh = "None", bool FirstLink = false, string? CustomValue = null,
-    string? EndpointScopeDn = null, string? VerificationUser = null);
+    string? EndpointScopeDn = null, string? VerificationUser = null,
+    [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] string[][]? ItemValues = null);
 
 public record GpoHealthCheck(string Id, string Label, string State, string Message, bool Required = true);
 public record GpoEnvironmentStatus(string Domain, string DomainController, string ExecutionUser,

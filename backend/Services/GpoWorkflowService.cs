@@ -119,7 +119,7 @@ public sealed class GpoWorkflowService(IConfiguration config,Store store,Operati
     {
         RequireReal();
         var c=Get(token,actor);ProductionGpoMappings.Validate(selection);
-        var mapping=ProductionGpoMappings.Require(selection.Setting);
+        var mapping=ProductionGpoMappings.Effective(selection);
         var gpo=c.Inventory.Gpos.SingleOrDefault(g=>string.Equals(g.Id,selection.GpoId,StringComparison.OrdinalIgnoreCase));
         var scope=c.Inventory.Scopes.SingleOrDefault(s=>string.Equals(s.Dn,selection.ScopeDn,StringComparison.OrdinalIgnoreCase));
         if(gpo is null||!gpo.Selectable||scope is null)throw new PolicyException("GPO_SELECTION_REQUIRED","Select an available GPO and scope from the discovered list.");
@@ -162,7 +162,7 @@ public sealed class GpoWorkflowService(IConfiguration config,Store store,Operati
             throw new PolicyException("BATCH_RECOVERY_REQUIRED","Use the Workflow center batch recovery action to restore the first full-GPO snapshot safely.");
         var c=Get(token,actor);
         var plan=store.Require<GpoWorkflowPlan>("gpo_plans",id);AssertContext(plan,c,actor);
-        var mapping=ProductionGpoMappings.Require(plan.Selection.Setting);
+        var mapping=ProductionGpoMappings.Effective(plan.Selection);
         if(operation is not ("apply" or "rollback" or "verify" or "refresh"))
             throw new PolicyException("OPERATION_DENIED","Unknown GPO operation.");
         if(operation=="refresh" && consent.Refresh is not ("Pdc" or "Scope"))
@@ -257,8 +257,8 @@ public sealed class GpoWorkflowService(IConfiguration config,Store store,Operati
         var evidence=new GpoEvidence("1.1","GPO Remediator","CIS v4.0.0",run.Id,run.UpdatedAt,run.Plan.Actor,
             run.Plan.ExecutionUser,run.Plan.Domain,run.Plan.DomainController,ProductionGpoMappings.Require(run.Plan.Selection.Setting).ControlId,run.Plan.Selection.Setting,
             run.Plan.Selection.GpoId,run.Plan.Preview.Gpo.Name,run.Plan.Selection.ScopeDn,run.Plan.Preview.PreviousValue,
-            ProductionGpoMappings.Require(run.Plan.Selection.Setting).DesiredDisplay(run.Plan.Selection),run.Result.State,run.Result.BackupId,run.Result.BackupDirectory,run.Result.EffectiveStatus,
-            run.Result.Verification,run.Plan.Preview.Warnings,"",run.Approval?.ChangeReference,run.Approval?.ApprovedBy,ProductionGpoMappings.Require(run.Plan.Selection.Setting).Handler,ProductionGpoMappings.Require(run.Plan.Selection.Setting).Source,run.Result.EndpointChecks,run.CorrelationId,run.Result.CurrentValue);
+            ProductionGpoMappings.Effective(run.Plan.Selection).DesiredDisplay(run.Plan.Selection),run.Result.State,run.Result.BackupId,run.Result.BackupDirectory,run.Result.EffectiveStatus,
+            run.Result.Verification,run.Plan.Preview.Warnings,"",run.Approval?.ChangeReference,run.Approval?.ApprovedBy,ProductionGpoMappings.Require(run.Plan.Selection.Setting).Handler,ProductionGpoMappings.Effective(run.Plan.Selection).Source,run.Result.EndpointChecks,run.CorrelationId,run.Result.CurrentValue);
         evidence=evidence with{IntegrityHash=GpoWorkflowRules.EvidenceHash(evidence)};
         store.Put("gpo_evidence",id+"-"+evidence.IntegrityHash,evidence,"IMMUTABLE");
         return evidence;

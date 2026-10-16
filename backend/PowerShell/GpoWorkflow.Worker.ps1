@@ -224,10 +224,11 @@ function Validate-Selection($S,$Map){
         if([string]::IsNullOrWhiteSpace($endpointDn)){Fail 'ENDPOINT_SCOPE_REQUIRED' 'Choose the computer OU that contains the user session endpoints.'}
         $null=Scope $endpointDn
         $identity=[string](Read-Field $S 'verificationUser' '')
-        if([string]::IsNullOrWhiteSpace($identity)){Fail 'VERIFICATION_USER_REQUIRED' 'Choose a concrete user from the selected user OU for endpoint policy verification.'}
+        if(![string]::IsNullOrWhiteSpace($identity)){
         $user=Verification-User $identity
         if(!$user.Enabled){Fail 'VERIFICATION_USER_DISABLED' 'The verification user is disabled.'}
         if(!([string]$user.DistinguishedName).EndsWith(','+[string]$scope.dn,[StringComparison]::OrdinalIgnoreCase) -and [string]$user.DistinguishedName -ine [string]$scope.dn){Fail 'VERIFICATION_USER_OUTSIDE_SCOPE' 'The verification user is outside the selected user policy scope.'}
+        }
       }
     }elseif((Read-Field $S 'endpointScopeDn' $null) -or (Read-Field $S 'verificationUser' $null)){Fail 'USER_TARGET_NOT_ALLOWED' 'Endpoint OU and verification user are only valid for user-scoped policy.'}
     if([string]$Map.scope -eq 'Computer' -and $scope.kind -ne 'OU'){Fail 'COMPUTER_OU_REQUIRED' 'Choose a computer OU from the discovered directory. The domain root is reserved for account policies.'}
@@ -237,10 +238,11 @@ function Validate-Selection($S,$Map){
     }
     if([bool]$Map.requiresInput){$v=[string]$S.customValue;if([string]::IsNullOrWhiteSpace($v)){Fail 'GPO_CUSTOM_VALUE_REQUIRED' 'This control requires an explicit organization value.'};if($v.IndexOf([char]0)-ge 0){Fail 'GPO_CUSTOM_VALUE_INVALID' 'Custom value contains an invalid character.'}}
     if([bool]$Map.allowValueOverride){if($null -ne $Map.minimum -and [int]$S.value -lt [int]$Map.minimum){Fail 'GPO_VALUE_INVALID' 'Value is below the approved range.'};if($null -ne $Map.maximum -and [int]$S.value -gt [int]$Map.maximum){Fail 'GPO_VALUE_INVALID' 'Value is above the approved range.'}}
-    if([string]$Map.id -in @('1.1.3')){$max=Get-TemplateEntry $(if(Test-Path (Security-Path $S.gpoId)){[IO.File]::ReadAllText((Security-Path $S.gpoId))}else{''}) 'System Access' 'MaximumPasswordAge';if($max -and [int]$max -ne 0 -and [int]$S.value -ge [int]$max){Fail 'PASSWORD_AGE_CONFLICT' 'Minimum password age must be less than maximum password age.'}}
+    if([string]$Map.id -in @('1.1.3')){$max=Get-TemplateEntry $(if(Test-Path (Security-Path $S.gpoId)){[IO.File]::ReadAllText((Security-Path $S.gpoId))}else{''}) 'System Access' 'MaximumPasswordAge';if($max -and [int]$max -ne 0 -and [int](Desired-Item $Map @(Mapping-Items $Map)[0] $S) -ge [int]$max){Fail 'PASSWORD_AGE_CONFLICT' 'Minimum password age must be less than maximum password age.'}}
     if([string]$Map.id -in @('1.2.1','1.2.2','1.2.4')){
       $text=if(Test-Path (Security-Path $S.gpoId)){[IO.File]::ReadAllText((Security-Path $S.gpoId))}else{''};$duration=Get-TemplateEntry $text 'System Access' 'LockoutDuration';$threshold=Get-TemplateEntry $text 'System Access' 'LockoutBadCount';$reset=Get-TemplateEntry $text 'System Access' 'ResetLockoutCount'
-      if($Map.id -eq '1.2.1'){$duration=[string]$S.value}elseif($Map.id -eq '1.2.2'){$threshold=[string]$S.value}else{$reset=[string]$S.value}
+      $requested=[string](Desired-Item $Map @(Mapping-Items $Map)[0] $S)
+      if($Map.id -eq '1.2.1'){$duration=$requested}elseif($Map.id -eq '1.2.2'){$threshold=$requested}else{$reset=$requested}
       if($threshold -and [int]$threshold -eq 0){Fail 'LOCKOUT_DISABLED' 'Account lockout threshold 0 disables lockout.'}
       if($duration -and $reset -and [int]$reset -gt [int]$duration){Fail 'LOCKOUT_INTERVAL_CONFLICT' 'Reset lockout counter interval cannot exceed lockout duration.'}
     }
@@ -416,7 +418,7 @@ function Verify-EffectiveSamples($Plan,$Map){
     if([string]$Map.scope -eq 'User'){
       $identity=[string](Read-Field $s 'verificationUser' '')
       $hosts=@($Plan.preview.refreshComputers|Sort-Object -Unique|Select-Object -First 5)
-      if([string]::IsNullOrWhiteSpace($identity) -or !$hosts.Count){return @(@{hostname='<user-session>';state='PENDING';message='Choose a concrete user and endpoint OU, then schedule user-policy refresh before exact HKCU verification.';actualValue=$null})}
+      if([string]::IsNullOrWhiteSpace($identity) -or !$hosts.Count){return @(@{hostname='<user-session>';state='PENDING';message='The GPO targets the entire selected user OU. A verification user is optional and only enables a sampled HKCU check on authorized session endpoints; no per-user Apply is required.';actualValue=$null})}
       try{$user=Verification-User $identity;if(!$user.Enabled -or !([string]$user.DistinguishedName).EndsWith(','+[string]$s.scopeDn,[StringComparison]::OrdinalIgnoreCase)){throw 'User is outside the current enabled target scope'};$sid=[string]$user.SID.Value}catch{return @(@{hostname='<user-session>';state='UNAVAILABLE';message='The verification user could not be resolved.';actualValue=$null})}
       $currentHosts=@(Refresh-Targets 'Scope' $s.scopeDn ([string](Read-Field $s 'endpointScopeDn' '')) 'User');$hosts=@($hosts|Where-Object{$_ -in $currentHosts})
       if(!$hosts.Count){return @(@{hostname='<user-session>';state='PENDING';message='No preview endpoint remains in the current authorized endpoint scope.';actualValue=$null})}

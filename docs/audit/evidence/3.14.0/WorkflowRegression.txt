@@ -1,0 +1,7 @@
+PASS full read-only inventory with explicit write boundary enforcement
+PASS 1592 control/refresh/priority combinations; 11 controls block automatic writes
+PASS audit integrity: empty chain, valid chain and first tampered event
+PASS mapping upgrades: stale writes blocked; snapshot rollback and restored-snapshot verification remain available
+PASS fresh evidence snapshots, preserved prior exports, five independent stages, scheduled-not-completed and endpoint mismatch separation
+PASS optional-comparator legacy hash compatibility and version-only evidence migration boundary
+PASS custom value resolution/types/read-only boundary, canonical mapping isolation and legacy selection serialization; optional user samples

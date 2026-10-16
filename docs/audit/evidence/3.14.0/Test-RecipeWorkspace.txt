@@ -1,0 +1,2 @@
+Recipe workspace: PASS (status evidence, latest record, numeric order, escaping, disconnected preparation).
+Domain accordion: PASS (19 domains, 405 controls, collapsed default, filtered groups, empty domains, accessible headers).

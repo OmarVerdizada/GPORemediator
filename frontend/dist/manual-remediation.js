@@ -11,7 +11,8 @@ function context(s,r,m){
 }
 function generate(s,r,action='Preview'){
  const original=mappingFor(s,r);if(!original)return null;
- const m={...original,items:original.items.map(x=>({section:null,key:null,name:null,type:'String',value:null,guid:null,state:null,mask:null,...x}))};
+ const effective=window.GpoValueEditor?.effective(original,s.selection?.setting===(r.backendSetting||r.id)?s.selection:{})||original;
+ const m={...effective,items:effective.items.map(x=>({section:null,key:null,name:null,type:'String',value:null,guid:null,state:null,mask:null,...x}))};
  const c=context(s,r,m),engine=window.GpoManualEngine;
  const guide=window.GpoRemediationGuides?.get(r.id);
  if(guide&&!writable(m))return {mapping:m,context:c,writable:false,guide:true,script:guide.read};
@@ -32,7 +33,9 @@ function check(s,r,generated){
  return window.GpoComponents.manualCheck({...s,settings},{plan:{selection}},null);
 }
 function render(s,r){
- const action=s.manualScriptAction==='Apply'?'Apply':'Preview',g=generate(s,r,action);if(!g)return '';
+ const action=s.manualScriptAction==='Apply'?'Apply':'Preview';let g;
+ try{g=generate(s,r,action)}catch(error){return `<section class="manual-procedure" data-manual-procedure="${window.GpoComponents.esc(r.id)}"><p>${window.GpoComponents.esc(error.message)}</p></section>`}
+ if(!g)return '';
  const {esc,text}=window.GpoComponents,t=(az,en)=>text(s,az,en),c=g.context,m=g.mapping;
  if(g.guide)return `<div data-manual-procedure="${esc(r.id)}">${window.GpoRemediationGuides.render(r.id,{state:s,esc,say:t})}</div>`;
  const ready=![c.domain,c.dc,c.gpo,c.target].some(v=>v.startsWith('REPLACE_'))&&(!m.requiresInput||!!c.custom.trim());

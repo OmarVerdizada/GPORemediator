@@ -8,6 +8,7 @@ const run={id:'recovery-test',startedAt:'2026-10-06T08:00:00Z',updatedAt:'2026-1
 const inventory={gpos,scopes:[{dn:'DC=test,DC=local',name:'test.local',kind:'Domain'},{dn:'OU=Users,DC=test,DC=local',name:'Users',kind:'OU'},{dn:'OU=Endpoints,DC=test,DC=local',name:'Endpoints',kind:'OU'}],domain:'test.local'};
 let writes=[],refreshRequests=[],rollbackState='ROLLED_BACK',refreshFailure=false,workflowJobs=[];
 const allPosts=[],manualMappings=JSON.parse(fs.readFileSync(path.resolve(__dirname,'../backend/data/gpo-production-mappings.json'),'utf8')).mappings;
+const previewSelections=[];
 inventory.domainController='dc.test.local';
 const server=http.createServer(async(req,res)=>{
  if(req.method==='POST')allPosts.push(req.url);
@@ -20,6 +21,10 @@ const server=http.createServer(async(req,res)=>{
   else if(url.pathname==='/api/service')data={mode:'WINDOWS',writesEnabled:true,processId:1};
   else if(url.pathname==='/api/gpo/history')data=[run];
   else if(url.pathname==='/api/gpo/settings')data=manualMappings;
+  else if(url.pathname==='/api/gpo/preview'){
+   previewSelections.push(payload);
+   data={id:'preview-fixture',selection:payload,executionUser:'TEST\\operator',writeAuthorized:true,preview:{gpo:gpos.find(x=>x.id===payload.gpoId),scope:{dn:payload.scopeDn,kind:'OU',name:'Users'},previousValue:'0',desiredValue:'1',existingLink:null,refreshComputers:['ws.test.local'],warnings:['User OU policy applies to all eligible users.'],impact:{inheritance:'NORMAL',conflicts:[],existingLinkScopes:[],securityFiltering:[],affectedObjects:{targetKind:'User',scopeDn:payload.scopeDn,users:3,sampleUsers:['one','two','three'],computers:0,servers:0,workstations:0,disabled:0,sampleHosts:[],truncated:false}}}};
+  }
   else if(url.pathname==='/api/gpo/inventory')data=inventory;
   else if(url.pathname==='/api/gpo/session')data={connected:true};
   else if(url.pathname==='/api/gpo/readiness')data={ready:true,checks:[]};
@@ -149,10 +154,13 @@ const server=http.createServer(async(req,res)=>{
   await page.locator('[data-tab=remediation]').click();
   await page.locator('[data-gpo-toggle]').click();
   await page.locator(`[data-gpo="${gpos[1].id}"]`).click();
+  await page.locator('#gpo-selection [name=value]').fill('20');
   await page.locator('[data-tab=overview]').click();
   const postsBeforeManual=allPosts.length;
   assert.ok((await page.locator('.manual-script-source').textContent()).includes("$Action = 'Preview'"));
   assert.ok((await page.locator('.manual-script-source').textContent()).includes(`$GpoId = '${gpos[1].id}'`));
+  assert.ok((await page.locator('.manual-script-source').textContent()).includes('operator-selected values'),'Edited values did not reach the manual script');
+  assert.ok((await page.locator('.manual-script-source').textContent()).includes('"value":["20"]'));
   await page.locator('[data-manual-action=Apply]').click();
   let displayedManual=await page.locator('.manual-script-source code').textContent();
   assert.ok(displayedManual.includes("$Action = 'Apply'"));
@@ -174,6 +182,10 @@ const server=http.createServer(async(req,res)=>{
   await page.locator('.manual-procedure').screenshot({path:path.join(screens,'manual-procedure-mobile.png'),style:'#service-bar,.sidebar,.skip-link,.toast,.ds-toast{visibility:hidden !important}'});
   await page.setViewportSize({width:1440,height:1000});
   assert.equal(allPosts.length,postsBeforeManual,'Viewing, switching, copying and downloading manual scripts must never submit a server job');
+  await page.locator('[data-tab=remediation]').click();
+  await page.locator('.policy-value-editor').screenshot({path:path.join(screens,'custom-policy-value.png')});
+  await page.locator('[data-recommended-values]').click();
+  assert.equal(await page.locator('#gpo-selection [name=value]').inputValue(),'14','Recommendation reset failed');
   await page.locator('[data-tab=verification]').click();
   await page.locator('.ux-more-tabs summary').click();
   assert.equal(await page.locator('.control-header').evaluate(el=>getComputedStyle(el).overflow),'visible');
@@ -251,7 +263,16 @@ const server=http.createServer(async(req,res)=>{
   await page.locator('[data-scope-open="endpointScopeDn"]').click();
   await page.locator('#scope-search').fill('Endpoints');
   await page.locator('[data-scope-choose="OU=Endpoints,DC=test,DC=local"]').click();
-  await page.locator('#gpo-selection [name=verificationUser]').fill('TEST\\pilot.user');
+  assert.equal(await page.locator('#gpo-selection [name=verificationUser]').getAttribute('required'),null);
+  await page.locator('[data-gpo-toggle]').click();
+  await page.locator(`[data-gpo="${gpos[1].id}"]`).click();
+  await page.locator('#gpo-selection .refresh-choice:has(input[value=Scope])').click();
+  await page.locator('#gpo-selection button[type=submit],#gpo-selection>.primary-action').click();
+  await page.waitForFunction(()=>!!document.querySelector('.plan-card'));
+  assert.equal(previewSelections.at(-1).verificationUser,'');
+  assert.equal(previewSelections.at(-1).scopeDn,'OU=Users,DC=test,DC=local');
+  assert.equal(previewSelections.at(-1).refresh,'Scope');
+  await page.screenshot({path:path.join(screens,'ou-wide-user-policy.png'),fullPage:true});
   assert.deepEqual(errors,[]);
   console.log('Recovery UI: PASS (desktop/mobile, recovery refresh, user OU/endpoint OU/verification identity targeting, and user PDC exclusion).');
  }finally{await browser.close();server.close();}

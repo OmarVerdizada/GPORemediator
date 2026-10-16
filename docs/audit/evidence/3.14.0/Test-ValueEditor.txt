@@ -1,0 +1,1 @@
+PASS 394 editable controls, C#/manual-script custom-value parity, capture/reset and custom values excluded from benchmark compliance

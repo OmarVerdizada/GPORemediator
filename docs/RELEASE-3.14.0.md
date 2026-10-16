@@ -1,0 +1,15 @@
+# 3.14.0: editable policy values and OU-wide user policy
+
+Automated controls now show editable policy fields initialized with their benchmark recommendations. Numeric fields, strings, lists of accounts/SIDs or multi-string entries, audit masks and multi-field registry recipes expose their actual typed values. Restore recommendation clears the custom selection. Existing organization-specific inputs remain editable with their account-name/text validation. The eleven manual/review-only controls remain protected.
+
+New optional `GpoSelection.ItemValues` contains one string list per mapped item. The server resolves a fresh effective mapping with the selected values; it never accepts changes to registry paths, value names, handlers, types or policy scope. DWORDs require unsigned 32-bit integers, security-template integers require 0–65535, audit masks require 0–3, and lengths/counts and principal entries are validated. Existing account-policy dependency checks still run against the resolved intent. Valid type does not guarantee OS-specific runtime support.
+
+Custom intent is carried through preview, mapping hashes, Apply, read-back, Verify, evidence and the standalone manual script. It uses explicit value comparison and is marked operator-selected. A matching custom value is not counted as CIS benchmark compliance. Canonical recommendations and default comparison behavior are retained when no override is selected; read-only benchmark scans explicitly discard overrides. The new nullable field is omitted when absent so historical selection serialization and unchanged mapping hashes remain compatible.
+
+User-policy Apply links the selected GPO to the selected user OU once. It does not require a username or loop through users. All eligible users under that OU process the policy subject to inheritance, Read/Apply permissions and WMI filtering; other existing links on the same GPO are still affected by its content change.
+
+For an optional immediate user-policy refresh, the computer/endpoint OU remains required because the tasks run on computers hosting sessions. A specific verification user is now optional even with scoped refresh. If supplied, its enabled status and OU membership remain checked. Without one, publication/link/replication can still be verified, while sampled HKCU evidence stays pending rather than claiming that every user session was verified. The normal policy cycle/logon option needs only the GPO and user OU.
+
+Regression coverage includes server/JS/manual-script value parity, real writer/read-back/idempotence fixtures for custom registry, audit None, security template, principals, registry sets and HKCU values; malformed inputs and manual-only boundaries; default hash compatibility; optional user sampling; and browser editing/reset/manual export plus a complete OU-wide user preview with an empty username. Command evidence is in `docs/audit/3.14.0-test-results.json`. Tests use isolated fixtures; no live domain policy was modified.
+
+Stop the previous app, extract the complete new package and launch `GpoRemediator.cmd`; confirm 3.14.0. Keep the existing protected configuration, history and backups.

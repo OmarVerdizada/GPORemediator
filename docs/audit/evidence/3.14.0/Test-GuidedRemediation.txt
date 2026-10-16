@@ -1,0 +1,2 @@
+PowerShell guide syntax: PASS
+Guided remediation: PASS (four blocked controls, AZ/EN guides, backup-before-write, endpoint/drift/type guards, official links and corrected mapping).

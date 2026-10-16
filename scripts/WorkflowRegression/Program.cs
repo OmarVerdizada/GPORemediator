@@ -34,7 +34,7 @@ foreach(var mapping in ProductionGpoMappings.Settings){
    if(mapping.Scope=="User"){
     Reject(()=>ProductionGpoMappings.Validate(selection with{Refresh="Pdc"}),"USER_REFRESH_TARGET_INVALID");
     Reject(()=>ProductionGpoMappings.Validate(selection with{Refresh="Scope"}),"ENDPOINT_SCOPE_REQUIRED");
-    Reject(()=>ProductionGpoMappings.Validate(selection with{Refresh="Scope",EndpointScopeDn="OU=Endpoints,"+dn}),"VERIFICATION_USER_REQUIRED");
+    ProductionGpoMappings.Validate(selection with{Refresh="Scope",EndpointScopeDn="OU=Endpoints,"+dn});
   }
   Reject(()=>ProductionGpoMappings.Validate(selection with{Refresh="Invalid"}),"GPO_OPTIONS_INVALID");
   if(mapping.AllowValueOverride){
@@ -85,3 +85,24 @@ Check(PolicyValues.Hash(compatibleItem)==PolicyValues.Hash(new{compatibleItem.Se
 Check(evidenceResult.VerificationStages.Single(x=>x.Stage=="AD_SYSVOL_REPLICATION").Status=="INSUFFICIENT_EVIDENCE","Legacy version-only record was upgraded to content verification without a probe");
 Check((evidenceResult with{Verification=evidenceResult.Verification! with{EvidenceVersion="2.0-content"}}).VerificationStages.Single(x=>x.Stage=="AD_SYSVOL_REPLICATION").Status=="VERIFIED","Current content/CSE evidence was not recognized");
 Console.WriteLine("PASS optional-comparator legacy hash compatibility and version-only evidence migration boundary");
+var customCases=new List<object>();
+foreach(var pair in new[]{("9.1.5",new[]{new[]{"32768"}}),("19.5.1.1",new[]{new[]{"0"}}),("17.2.1",new[]{new[]{"0"}}),("1.1.4",new[]{new[]{"20"}}),("2.2.12",new[]{new[]{"S-1-5-32-544"}}),("9.1.4",new[]{new[]{"%SystemRoot%\\System32\\logfiles\\firewall\\customfw.log"}}),(ProductionGpoMappings.Settings.First(x=>x.Writable&&x.Items.Length==1&&x.Items[0].Type=="MultiString").Id,new[]{new[]{"one","two"}})}){
+ var baseline=ProductionGpoMappings.Require(pair.Item1);
+ var selection=new GpoSelection(gpo,baseline.Scope=="Domain"?dn:"OU=Targets,"+dn,baseline.Id,baseline.Suggested??0,baseline.Scope=="Domain"?"Domain":baseline.Scope=="User"?"Users":"LocalComputers",ItemValues:pair.Item2);
+ ProductionGpoMappings.Validate(selection);var effective=ProductionGpoMappings.Effective(selection);
+ Check(!effective.AllowValueOverride&&effective.Source.Contains("operator-selected")&&effective.Items[0].Comparator is "==" or "exact","Custom values were not resolved as explicit policy intent");
+ Check(ProductionGpoMappings.Require(selection.Setting)==baseline,"Custom values mutated the canonical mapping");
+ customCases.Add(new{selection,mapping=effective});
+}
+var multi=ProductionGpoMappings.Require("18.4.4");
+var multiSelection=new GpoSelection(gpo,"OU=Targets,"+dn,multi.Id,0,"LocalComputers",ItemValues:multi.Items.Select(x=>new[]{"0"}).ToArray());
+ProductionGpoMappings.Validate(multiSelection);customCases.Add(new{selection=multiSelection,mapping=ProductionGpoMappings.Effective(multiSelection)});
+var badValues=new GpoSelection(gpo,"OU=Targets,"+dn,"9.1.5",0,"LocalComputers",ItemValues:[["4294967296"]]);
+Reject(()=>ProductionGpoMappings.Validate(badValues),"GPO_VALUE_INVALID");
+Reject(()=>ProductionGpoMappings.Validate(badValues with{ItemValues=[["hello"]]}),"GPO_VALUE_INVALID");
+Reject(()=>ProductionGpoMappings.Validate(badValues with{ItemValues=[]}),"GPO_CUSTOM_VALUES_INVALID");
+Reject(()=>ProductionGpoMappings.Validate(badValues with{Setting="2.2.6",ItemValues=[["S-1-5-32-544"]]}),"GPO_MANUAL_ONLY");
+Check(!System.Text.Json.JsonSerializer.Serialize(selected).Contains("ItemValues"),"Absent custom fields changed historical selection serialization");
+Directory.CreateDirectory("work/audit");
+File.WriteAllText("work/audit/custom-values.json",System.Text.Json.JsonSerializer.Serialize(customCases,new System.Text.Json.JsonSerializerOptions{PropertyNamingPolicy=System.Text.Json.JsonNamingPolicy.CamelCase}));
+Console.WriteLine("PASS custom value resolution/types/read-only boundary, canonical mapping isolation and legacy selection serialization; optional user samples");

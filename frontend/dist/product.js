@@ -41,6 +41,7 @@
     const quality=window.GpoUiDomain.classify(run),state=String(run.result?.state||'').toUpperCase();
     if(state==='ROLLED_BACK')return {tone:'unknown',label:text(s,'Geri qaytarılıb','Rolled back'),run};
     if(active(run))return {tone:'unknown',label:text(s,'İcra olunur','In progress'),run};
+    if(quality.custom)return {tone:'warning',label:text(s,'Fərdi dəyər · benchmark təsdiqlənməyib','Custom value · benchmark not verified'),run};
     if(quality.compliant)return {tone:'good',label:text(s,'Nümunə konfiqurasiyası təsdiqlənib','Sample configuration verified'),run};
     if(quality.attention)return {tone:'warning',label:text(s,'Yoxlama tələb edir','Needs review'),run};
     return {tone:'unknown',label:text(s,'Təsdiq gözlənilir','Verification pending'),run};

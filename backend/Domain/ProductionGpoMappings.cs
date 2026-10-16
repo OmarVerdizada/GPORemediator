@@ -74,9 +74,44 @@ public static class ProductionGpoMappings
     public static GpoRuleMapping Require(string id) => Settings.SingleOrDefault(x => string.Equals(x.Id, id, StringComparison.OrdinalIgnoreCase))
         ?? throw new PolicyException("GPO_SETTING_UNSUPPORTED", "This CIS control does not have a validated production mapping.");
 
+    public static GpoRuleMapping Effective(GpoSelection selection)
+    {
+        var mapping=Require(selection.Setting);
+        if(selection.ItemValues is null)return mapping;
+        if(!mapping.Writable)throw new PolicyException("GPO_MANUAL_ONLY","This control requires manual review.");
+        if(mapping.RequiresInput||selection.ItemValues.Length!=mapping.Items.Length)
+            throw new PolicyException("GPO_CUSTOM_VALUES_INVALID","Supply one value list per policy field; organization inputs use CustomValue.");
+        var items=mapping.Items.Select((item,index)=>{
+            var values=selection.ItemValues[index];
+            if(values is null||values.Length>256||values.Any(v=>v is null||v.Length>4096||v.Contains('\0'))||values.Sum(v=>v.Length)>65536)
+                throw new PolicyException("GPO_CUSTOM_VALUES_INVALID","A policy value list is invalid or too large.");
+            var type=item.Type.ToUpperInvariant();
+            if(type is not ("MULTISTRING" or "PRINCIPALS")&&values.Length!=1)
+                throw new PolicyException("GPO_CUSTOM_VALUES_INVALID","This policy field requires exactly one value.");
+            if(mapping.Handler=="AdvancedAudit"){
+                if(!int.TryParse(values[0],out var mask)||mask<0||mask>3)throw new PolicyException("GPO_VALUE_INVALID","Audit mask must be 0, 1, 2 or 3.");
+                return item with{Mask=mask,State=new[]{"No Auditing","Success","Failure","Success and Failure"}[mask],Comparator="=="};
+            }
+            if(type=="DWORD"){
+                if(!uint.TryParse(values[0],System.Globalization.NumberStyles.None,System.Globalization.CultureInfo.InvariantCulture,out var number))throw new PolicyException("GPO_VALUE_INVALID","DWORD requires an unsigned 32-bit integer.");
+                values=[number.ToString(System.Globalization.CultureInfo.InvariantCulture)];
+            }else if(type=="INTEGER"){
+                if(!int.TryParse(values[0],out var number)||number<0||number>65535)throw new PolicyException("GPO_VALUE_INVALID","Security policy requires an integer from 0 to 65535.");
+                values=[number.ToString(System.Globalization.CultureInfo.InvariantCulture)];
+            }else if(type=="PRINCIPALS"){
+                if(values.Any(v=>string.IsNullOrWhiteSpace(v)||v.Length>256||v.IndexOfAny(['\r','\n'])>=0))throw new PolicyException("GPO_CUSTOM_VALUES_INVALID","Enter one account/group or SID per line.");
+                values=values.Select(v=>v.Trim()).ToArray();
+            }
+            return item with{Value=values,Comparator=type is "DWORD" or "INTEGER"?"==":"exact"};
+        }).ToArray();
+        return mapping with{Items=items,AllowValueOverride=false,RequiresInput=false,Comparator=null,
+            Source=mapping.Source+" | operator-selected values",
+            Warnings=[..mapping.Warnings,"CUSTOM_VALUES: These are operator-selected values, not a CIS benchmark compliance assertion."]};
+    }
+
     public static void Validate(GpoSelection selection)
     {
-        var mapping = Require(selection.Setting);
+        var mapping = Effective(selection);
         if (!mapping.Writable)
             throw new PolicyException("GPO_MANUAL_ONLY", "This CIS control is not classified as Automated in the imported CIS v4.0.0 catalog. It remains read-only and requires manual review.");
         if (!Guid.TryParse(selection.GpoId, out _)) throw new PolicyException("GPO_SELECTION_REQUIRED", "Select a GPO from the discovered list.");
@@ -94,8 +129,6 @@ public static class ProductionGpoMappings
             if (selection.Refresh == "Pdc") throw new PolicyException("USER_REFRESH_TARGET_INVALID", "User policy cannot be refreshed on the PDC unless the user has a session there. Choose an endpoint OU or wait for the normal user policy cycle.");
             if (selection.Refresh == "Scope" && string.IsNullOrWhiteSpace(selection.EndpointScopeDn))
                 throw new PolicyException("ENDPOINT_SCOPE_REQUIRED", "Choose the computer OU that contains the user session endpoints.");
-            if (selection.Refresh == "Scope" && string.IsNullOrWhiteSpace(selection.VerificationUser))
-                throw new PolicyException("VERIFICATION_USER_REQUIRED", "Choose a concrete enabled user from the selected user OU for endpoint verification.");
         }
         else
         {

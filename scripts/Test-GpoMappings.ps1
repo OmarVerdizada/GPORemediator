@@ -62,6 +62,17 @@ foreach($map in $catalog.mappings){
         $report+=@{id=$map.id;handler=$map.handler;state='PASS';items=@($map.items).Count;testsPassed=$script:caseCount;testsFailed=0;checks='write/read-back/idempotence/endpoint-recipe/value-bounds'}
     }catch{$report+=@{id=$map.id;handler=$map.handler;state='FAIL';testsPassed=$script:caseCount;testsFailed=1;error=$_.Exception.Message}}
 }
+# Execute C#-resolved custom mappings through the real writer/read-back functions.
+$customPath=Join-Path $root 'work/audit/custom-values.json'
+if(Test-Path -LiteralPath $customPath){$customFixtures=Get-Content -LiteralPath $customPath -Raw|ConvertFrom-Json;foreach($fixture in $customFixtures){
+ $map=$fixture.mapping;$selection=$fixture.selection;$plan=@{selection=$selection}
+ $script:folder=Join-Path $sandbox ('c'+$map.id.Replace('.',''));$null=New-Item -ItemType Directory -Path $script:folder -Force
+ $script:registry=@{};$script:auditExtensions='';$script:bumps=0
+ Assert-Test (Write-Mapping $plan $map) ($map.id+': custom mapping did not write')
+ Assert-Test (Mapping-Matches $selection.gpoId $map $selection) ($map.id+': custom read-back mismatch')
+ Assert-Test (!(Write-Mapping $plan $map)) ($map.id+': custom mapping was not idempotent')
+ $null=Endpoint-Expected $map $selection
+};Write-Output 'PASS custom DWORD, HKCU, audit None, account policy, principal list and registry set write/read-back/idempotence'}
 # Preserve stronger existing deny/audit entries when the benchmark says "include".
 $script:folder=Join-Path $sandbox 'incl';$null=New-Item -ItemType Directory -Path $script:folder
 $map=$catalog.mappings|Where-Object{$_.id -eq '2.2.23'}
