@@ -50,6 +50,28 @@ const server=http.createServer(async(req,res)=>{
  try{
   const page=await browser.newPage({viewport:{width:1440,height:1000}}),errors=[];
   page.on('pageerror',e=>errors.push(e.message));
+  await page.goto(`http://127.0.0.1:${server.address().port}/#/benchmark`);
+  const largeDomain=page.locator('[data-domain="18"]');await largeDomain.scrollIntoViewIfNeeded();
+  await largeDomain.click();assert.equal(await largeDomain.getAttribute('aria-expanded'),'true');
+  const allRules=JSON.parse(fs.readFileSync(path.join(root,'benchmark-v4.json'),'utf8')).rules.filter(r=>r.id.startsWith('18.')).length;
+  assert.ok(await page.locator('#catalog-domain-18 .recipe-card').count()<allRules);
+  await page.screenshot({path:path.join(screens,'benchmark-subsections-desktop.png')});
+  await page.locator('[data-catalog-section="18"]').selectOption('ALL');
+  assert.equal(await page.locator('#catalog-domain-18 .recipe-card').count(),allRules);
+  const next=page.locator('[data-domain="19"]');await next.scrollIntoViewIfNeeded();const anchor=(await next.boundingBox()).y;await next.click();
+  assert.ok(Math.abs((await next.boundingBox()).y-anchor)<6,'Changing expanded domain moved the clicked header');
+  assert.equal(await largeDomain.getAttribute('aria-expanded'),'false');
+  await page.keyboard.press('ArrowUp');assert.equal(await page.locator('[data-domain="18"]').evaluate(el=>el===document.activeElement),true);
+  await page.locator('#catalog-search').fill('17.2.1');await page.locator('[data-rule="17.2.1"]').first().waitFor();
+  await page.locator('[data-domain="17"]').click();assert.equal(await page.locator('[data-rule="17.2.1"]').count(),0);
+  await page.locator('[data-domain="17"]').click();await page.locator('[data-rule="17.2.1"]').first().waitFor();
+  await page.locator('#catalog-search').fill('');await page.locator('[data-domain="1"]').waitFor();
+  await page.setViewportSize({width:390,height:844});await page.locator('[data-domain="18"]').click();
+  await page.locator('[data-catalog-section="18"]').selectOption({index:0});
+  await page.locator('[data-domain="18"]').scrollIntoViewIfNeeded();
+  assert.ok(await page.locator('.catalog-section-bar').evaluate(el=>el.scrollWidth<=el.clientWidth),'Subsection navigation overflows on mobile');
+  await page.screenshot({path:path.join(screens,'benchmark-subsections-mobile.png')});
+  await page.setViewportSize({width:1440,height:1000});
   await page.goto(`http://127.0.0.1:${server.address().port}/#/operations`);
   await page.locator('.ds-table').waitFor();
   assert.equal(await page.locator('.ds-activity-row').evaluate(el=>getComputedStyle(el).display),'grid');
@@ -176,6 +198,7 @@ const server=http.createServer(async(req,res)=>{
   await page.goto(`http://127.0.0.1:${server.address().port}/#/benchmark`);
   if(await page.locator('[data-dismiss-notice]').count())await page.locator('[data-dismiss-notice]').click();
   await page.locator('[data-domain="19"]').click({force:true});
+  await page.locator('[data-catalog-section="19"]').selectOption('19.5.1');
   await page.locator('[data-rule="19.5.1.1"]').first().click();
   await page.locator('[data-tab=remediation]').click();
   assert.equal(await page.locator('#gpo-selection [name=endpointScopeDn]').count(),1);

@@ -69,8 +69,12 @@
     return s.catalog.sections.filter(d=>!d.parentId).sort((a,b)=>a.id.localeCompare(b.id,undefined,{numeric:true})).map(domain=>{
       const matching=rules.filter(r=>r.id.startsWith(domain.id+'.'));
       if(filtered&&!matching.length)return '';
-      const open=!!s.expandedTop?.has(domain.id);
-      return `<section class="ent-domain recipe-domain domain-tone-${(Number(domain.id)-1)%7} ${open?'open':''}">${domainHeader(s,domain,matching,open)}${open?`<div id="catalog-domain-${esc(domain.id)}" class="ent-domain-body">${matching.length?recipeCards(s,matching):`${window.GpoDomainGuidance?.render(s,domain,esc,(az,en)=>text(s,az,en))||`<p class="domain-empty">${text(s,'Bu import edilmiş bölmədə ayrıca control yoxdur.','This imported category has no standalone controls.')}</p>`}`}</div>`:''}</section>`;
+      const searching=!!s.query?.trim(),open=searching?!s.catalogSearchCollapsed?.has(domain.id):!!s.expandedTop?.has(domain.id);
+      const groups=[...new Set(matching.map(r=>r.sectionId||r.id.split('.').slice(0,-1).join('.')))].sort((a,b)=>a.localeCompare(b,undefined,{numeric:true}));
+      const saved=s.catalogSections?.[domain.id],selected=saved==='ALL'||groups.includes(saved)?saved:groups[0];
+      const visible=searching||selected==='ALL'?matching:matching.filter(r=>(r.sectionId||r.id.split('.').slice(0,-1).join('.'))===selected);
+      const navigation=groups.length>1&&!searching?`<div class="catalog-section-bar"><label for="catalog-section-${esc(domain.id)}">${text(s,'Alt bölmə','Subsection')}<select id="catalog-section-${esc(domain.id)}" data-catalog-section="${esc(domain.id)}">${groups.map(id=>`<option value="${esc(id)}" ${selected===id?'selected':''}>${esc(id)} · ${esc(s.catalog.sections.find(x=>x.id===id)?.title||id)} (${matching.filter(r=>(r.sectionId||r.id.split('.').slice(0,-1).join('.'))===id).length})</option>`).join('')}<option value="ALL" ${selected==='ALL'?'selected':''}>${text(s,'Bütün alt bölmələr','All subsections')} (${matching.length})</option></select></label><span>${visible.length} / ${matching.length} ${text(s,'qayda göstərilir','controls shown')}</span></div>`:'';
+      return `<section class="ent-domain recipe-domain domain-tone-${(Number(domain.id)-1)%7} ${open?'open':''}">${domainHeader(s,domain,matching,open)}${open?`<div id="catalog-domain-${esc(domain.id)}" class="ent-domain-body">${matching.length?navigation+recipeCards(s,visible):`${window.GpoDomainGuidance?.render(s,domain,esc,(az,en)=>text(s,az,en))||`<p class="domain-empty">${text(s,'Bu import edilmiş bölmədə ayrıca control yoxdur.','This imported category has no standalone controls.')}</p>`}`}</div>`:`<div id="catalog-domain-${esc(domain.id)}" hidden></div>`}</section>`;
     }).join('');
   }
   function disconnectedControl(s, rule) {

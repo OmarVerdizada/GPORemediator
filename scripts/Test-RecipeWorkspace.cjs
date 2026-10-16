@@ -32,6 +32,7 @@ assert.equal((grouped.match(/data-domain=/g)||[]).length,19);
 assert.equal((grouped.match(/class="recipe-card"/g)||[]).length,0);
 let total=0;
 for(const domain of catalog.sections.filter(d=>!d.parentId)){
+  s.catalogSections={[domain.id]:'ALL'};
   s.expandedTop=new Set([domain.id]);grouped=product.recipes(s,catalog.rules);
   const expected=catalog.rules.filter(r=>r.id.startsWith(domain.id+'.')).length;
   assert.equal((grouped.match(/class="recipe-card"/g)||[]).length,expected);
@@ -42,6 +43,13 @@ for(const domain of catalog.sections.filter(d=>!d.parentId)){
 assert.equal(total,405);
 s.query='1.2.1';s.expandedTop.clear();grouped=product.recipes(s,catalog.rules.filter(r=>r.id==='1.2.1'));
 assert.equal((grouped.match(/data-domain=/g)||[]).length,1);
-assert.ok(!grouped.includes('class="recipe-card"'));
+assert.ok(grouped.includes('class="recipe-card"'),'Search results should open without an extra category click');
+s.catalogSearchCollapsed=new Set(['1']);assert.ok(!product.recipes(s,catalog.rules.filter(r=>r.id==='1.2.1')).includes('class="recipe-card"'),'Search categories must still be collapsible');s.catalogSearchCollapsed.clear();
 s.expandedTop.add('1');assert.equal((product.recipes(s,catalog.rules.filter(r=>r.id==='1.2.1')).match(/class="recipe-card"/g)||[]).length,1);
 console.log('Domain accordion: PASS (19 domains, 405 controls, collapsed default, filtered groups, empty domains, accessible headers).');
+s.query='';s.catalogSections={};s.expandedTop=new Set(['18']);
+const large=catalog.rules.filter(r=>r.id.startsWith('18.'));
+const compact=product.recipes(s,catalog.rules);
+const visible=(compact.match(/class="recipe-card"/g)||[]).length;
+assert.ok(visible>0&&visible<large.length,'Opening a large domain should show one subsection instead of its entire catalog');
+assert.ok(compact.includes('data-catalog-section="18"'));
