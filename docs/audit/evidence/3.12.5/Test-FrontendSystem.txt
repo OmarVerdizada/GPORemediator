@@ -1,0 +1,3 @@
+PASS visual OU scope catalog: AD inventory, filtering, DN escaping, parent tree, selection, and HTML encoding
+Frontend system: PASS (honest evidence, status tones, escaping, grouping, audit mismatch, breadcrumb, packaged assets and canonical tokens).
+Premium: PASS (405 cells, 19 domains, status evidence, copy escaping and offline fonts).

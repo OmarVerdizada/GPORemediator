@@ -58,7 +58,8 @@
         if(user&&!identity)lines.push('# Run in the intended user session; HKCU belongs to the current PowerShell identity.');
         lines.push(`Get-ItemPropertyValue -LiteralPath ${path} -Name ${psQuote(name)} -ErrorAction Stop`);
         const profile=/\\WindowsFirewall\\(Domain|Private|Public)Profile/i.exec(key)?.[1];
-        if(profile)lines.push(`Get-NetFirewallProfile -Name ${psQuote(profile)} -PolicyStore ActiveStore | Select-Object Name, Enabled, DefaultInboundAction, NotifyOnListen, AllowLocalFirewallRules, AllowLocalIPsecRules, LogFileName, LogMaxSizeKilobytes, LogBlocked, LogAllowed`);
+        const firewallProperty={EnableFirewall:'Enabled',DefaultInboundAction:'DefaultInboundAction',DisableNotifications:'NotifyOnListen',LogFilePath:'LogFileName',LogFileSize:'LogMaxSizeKilobytes',LogDroppedPackets:'LogBlocked',LogSuccessfulConnections:'LogAllowed',AllowLocalPolicyMerge:'AllowLocalFirewallRules',AllowLocalIPsecPolicyMerge:'AllowLocalIPsecRules'}[name];
+        if(profile&&firewallProperty)lines.push(`Get-NetFirewallProfile -Name ${psQuote(profile)} -PolicyStore ActiveStore | Format-List Name, ${firewallProperty}`);
       }
     }
     else if(/^SecurityTemplate$/i.test(handler)){
@@ -81,12 +82,16 @@
   function assuranceStages(s,stages){
     const names={GPO_CONFIGURATION:['GPO konfiqurasiyası','GPO configuration'],GPO_APPLICABILITY:['Hədəfə tətbiq sahəsi','Target applicability'],AD_SYSVOL_REPLICATION:['Kontrollerlər arasında yayılma','Controller replication'],CLIENT_PROCESSING:['Endpoint-də yenilənmə','Endpoint refresh'],ENDPOINT_CONFIGURATION:['Endpoint-də faktiki dəyər','Actual endpoint value']};
     const good=new Set(['GPO_APPLIED','VERIFIED','ENDPOINT_VERIFIED','GPUPDATE_COMPLETED']),bad=new Set(['FAILED','ENDPOINT_MISMATCH','PARTIAL_SUCCESS']),pending=new Set(['GPUPDATE_SCHEDULED','GPUPDATE_STARTED','REPLICATION_PENDING','INSUFFICIENT_EVIDENCE']);
-    return `<div class="assurance-stage-list" aria-label="${text(s,'Yoxlama mərhələləri','Verification stages')}">${stages.map(x=>{
-      const tone=good.has(x.status)?'good':bad.has(x.status)?'bad':pending.has(x.status)?'pending':'neutral';
+    const supplemental=x=>['GPO_APPLICABILITY','CLIENT_PROCESSING'].includes(x.stage);
+    const render=x=>{
+      const tone=good.has(x.status)?'good':bad.has(x.status)?'bad':supplemental(x)&&['GPUPDATE_SCHEDULED','GPUPDATE_STARTED','INSUFFICIENT_EVIDENCE','NOT_TESTED'].includes(x.status)?'info':pending.has(x.status)?'pending':'neutral';
       const label=good.has(x.status)?text(s,'Yoxlanılıb','Verified'):bad.has(x.status)?text(s,'Uyğunsuzluq / xəta','Mismatch / failure'):x.status==='GPUPDATE_SCHEDULED'?text(s,'Planlaşdırılıb','Scheduled'):x.status==='GPUPDATE_STARTED'?text(s,'Davam edir','In progress'):x.status==='INSUFFICIENT_EVIDENCE'?text(s,'Əlavə yoxlama lazımdır','More evidence needed'):x.status==='REPLICATION_PENDING'?text(s,'Yayılma gözlənilir','Replication pending'):text(s,'Yoxlanılmayıb','Not verified');
       const name=names[x.stage]||[x.stage,x.stage];
-      return `<article class="assurance-stage ${tone}"><span class="assurance-indicator" aria-hidden="true">${tone==='good'?'✓':tone==='bad'?'!':tone==='pending'?'◷':'—'}</span><div><header><strong>${text(s,name[0],name[1])}</strong><span class="assurance-label">${label}</span></header><details><summary>${text(s,'Yoxlama izahı','Evidence details')}</summary><p>${esc(x.evidence)}</p><code>${esc(x.stage)} · ${esc(x.status)}</code></details></div></article>`;
-    }).join('')}</div>`;
+      const explanation=x.stage==='CLIENT_PROCESSING'&&x.status==='GPUPDATE_SCHEDULED'?text(s,'Sorğu planlaşdırılıb; tamamlanması təsdiqlənməyib. Ölçülmüş nəticə ilə ziddiyyət təşkil etmir.','The request was scheduled; completion is unconfirmed. This is independent of the measured result.'):x.stage==='GPO_APPLICABILITY'&&x.status==='INSUFFICIENT_EVIDENCE'?text(s,'GPO əlaqəsi var. Bu GPO-nun endpoint-də üstün gəldiyini müəyyən etmək üçün RSoP lazımdır.','A GPO link exists. RSoP is needed to establish whether this GPO won on the endpoint.'):'';
+      return `<article class="assurance-stage ${tone}"><span class="assurance-indicator" aria-hidden="true">${tone==='good'?'✓':tone==='bad'?'!':tone==='info'?'i':tone==='pending'?'◷':'—'}</span><div><header><strong>${text(s,name[0],name[1])}</strong><span class="assurance-label">${label}</span></header>${explanation?`<p class="assurance-context">${explanation}</p>`:''}<details><summary>${text(s,'Yoxlama izahı','Evidence details')}</summary><p>${esc(x.evidence)}</p><code>${esc(x.stage)} · ${esc(x.status)}</code></details></div></article>`;
+    };
+    const primary=stages.filter(x=>!supplemental(x)),extra=stages.filter(supplemental);
+    return `<div class="assurance-stage-list" aria-label="${text(s,'Yoxlama mərhələləri','Verification stages')}"><div class="assurance-group-heading"><strong>${text(s,'Ölçülmüş nəticələr','Measured results')}</strong><p>${text(s,'Nəticə yalnız seçilmiş qaydaya və yoxlanmış endpoint nümunəsinə aiddir. Digər qaydaların və bütün domenin uyğunluğunu göstərmir.','Results cover only the selected control and sampled endpoints. They do not establish compliance for other controls or the whole domain.')}</p></div>${primary.map(render).join('')}${extra.length?`<div class="assurance-group-heading"><strong>${text(s,'Tətbiq mənbəyi və yenilənmə','Policy source and refresh')}</strong><p>${text(s,'Bu məlumatlar ölçülmüş dəyərdən ayrıdır. Planlaşdırılmış yenilənmə tamamlanmış yenilənmə demək deyil.','These details are separate from the measured value. A scheduled refresh is not a completed refresh.')}</p></div>${extra.map(render).join('')}`:''}</div>`;
   }
   window.GpoComponents=Object.freeze({esc,text,icon,domainIcon:id=>icon(domains[id]||'shield'),status,breadcrumb,operations,timeline,domainEvidence,skeleton,auditChain,activity,recovery,manualCheck,assuranceStages});
 })();

@@ -170,11 +170,20 @@ const server=http.createServer(async(req,res)=>{
   assert.ok((await page.locator('.manual-check-command').textContent()).includes('secedit.exe /export /mergedpolicy'));
   assert.equal(await page.locator('.manual-check-head [data-copy-value]').count(),1);
   assert.equal(await page.locator('.assurance-stage-list>.assurance-stage').count(),5);
-  assert.notEqual(await page.locator('.assurance-stage.good').first().evaluate(el=>getComputedStyle(el).borderLeftColor),await page.locator('.assurance-stage.pending').first().evaluate(el=>getComputedStyle(el).borderLeftColor));
+  assert.notEqual(await page.locator('.assurance-stage.good').first().evaluate(el=>getComputedStyle(el).borderLeftColor),await page.locator('.assurance-stage.info').first().evaluate(el=>getComputedStyle(el).borderLeftColor));
+  assert.equal(await page.locator('.assurance-group-heading').count(),2);
+  assert.equal(await page.locator('.assurance-grid').count(),0,'Duplicate legacy status boxes must not contradict server evidence');
   assert.equal(await page.locator('.assurance-stage code').first().isVisible(),false,'Technical status codes should stay in collapsed evidence details');
   assert.ok((await page.locator('.assurance-stage-list').textContent()).includes('INSUFFICIENT_EVIDENCE'));
   assert.ok((await page.locator('.assurance-stage-list').textContent()).includes('GPUPDATE_SCHEDULED'));
   await page.screenshot({path:path.join(screens,'audit-verification-desktop.png'),fullPage:true});
+  await page.setViewportSize({width:390,height:844});
+  await page.screenshot({path:path.join(screens,'audit-verification-mobile.png'),fullPage:true});
+  for(const card of await page.locator('.assurance-stage').all()){
+    const bounds=await card.boundingBox();
+    assert.ok(bounds.x>=0&&bounds.x+bounds.width<=390,'Assurance card escapes mobile viewport');
+  }
+  await page.setViewportSize({width:1440,height:1000});
   await page.locator('[data-tab=remediation]').click();
   await page.locator('[data-gpo-toggle]').click();
   await page.locator('.gpo-modal').waitFor();

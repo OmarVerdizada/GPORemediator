@@ -47,6 +47,9 @@ resultSummary=function(h){
  if(/^(APPLYING|ROLLBACKING|VERIFYING|REFRESHING)$/.test(h?.result?.state||''))html=html.replace(/<button[^>]*data-gpupdate[^>]*>[\s\S]*?<\/button>/,'');
  if(h?.result?.state==='ROLLED_BACK')html=html.replace(/>gpupdate \/force işə sal</,`>${say('Rollback-dan sonra gpupdate /force','Run gpupdate /force after rollback')}<`);
  const stages=h?.result?.verificationStages||[],diagnosis=h?.result?.diagnosis||[];
+ // Current server evidence replaces the legacy four-box summary. Rendering
+ // both can contradict content-aware replication and repeats the same checks.
+ if(stages.length)html=html.replace(/<div class="assurance-grid">(?:<div>[\s\S]*?<\/div>){4}<\/div>/,'');
  if(stages.length)html=html.replace('<div class="result-actions">',`${window.GpoComponents.assuranceStages(state,stages)}${diagnosis.length?`<details><summary>${say('Yoxlama üçün diaqnostik addımlar','Diagnostic checks')}</summary><ul>${diagnosis.map(x=>`<li>${esc(x)}</li>`).join('')}</ul></details>`:''}<div class="result-actions">`);
  return html;
 };

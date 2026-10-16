@@ -1,0 +1,1 @@
+PASS remediation result rendering: scheduled vs completed, endpoint mismatch headline, actual values and escaping

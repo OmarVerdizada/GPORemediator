@@ -1,6 +1,6 @@
-# GPO Remediator 3.12.4
+# GPO Remediator 3.12.5
 
-3.12.4 improves benchmark category expansion, subsection navigation, automatic search results, scroll/focus preservation and mobile layout. See [changes and upgrade instructions](docs/RELEASE-3.12.4.md).
+3.12.5 separates measured verification results from policy-source/refresh evidence and makes Firewall manual checks specific to the selected control. See [changes and upgrade instructions](docs/RELEASE-3.12.5.md) and the [23-control Firewall review](docs/FIREWALL-REVIEW-3.12.5.md).
 
 The full source and synthetic audit is in [docs/audit/FULL_PROJECT_AUDIT.md](docs/audit/FULL_PROJECT_AUDIT.md), with one evidence-bounded row for all 405 controls. This release fixes the shared auditpol argument, numeric bounds, active firewall verification, replication content checks, stale evidence and refresh result handling. Five independent assurance stages distinguish stored configuration, applicability, replication, client processing and sampled endpoint configuration. **Live AD enforcement and unrestricted production readiness remain unverified; no live AD GPO was modified during this audit.**
 

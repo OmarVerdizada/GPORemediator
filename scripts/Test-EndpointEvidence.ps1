@@ -63,5 +63,46 @@ Assert-Test ((@(Verify-EffectiveSamples $plan $map))[0].state -eq 'PENDING') 'En
 $refresh=($ast.EndBlock.Statements|Where-Object{$_ -is [Management.Automation.Language.SwitchStatementAst]}|Select-Object -Last 1).Clauses|Where-Object{$_.Item1.Extent.Text -eq "'gpoRefresh'"}|ForEach-Object{$_.Item2}
 Assert-Test ($refresh.Extent.Text -notmatch 'Verify-Published \$plan \$map \$true') 'Scheduled refresh immediately verified stale endpoint state'
 Write-Output 'PASS endpoint evidence: merged policy, scope boundary, SID normalization, missing data, native failures, audit/deny inclusion and asynchronous refresh'
-# End of endpoint-evidence regression assertions.
+# Reproduce independently observed Domain logging state. One compliant field
+# must never certify the rest of a profile or a different profile.
+function Get-ADComputer {param($SearchBase,$SearchScope,$Filter,$Server,$Properties,$ResultSetSize,$ErrorAction) [pscustomobject]@{DNSHostName='ws.example.local'}}
+$script:firewallUnavailable=$false
+$script:firewallProfiles=@{
+ Domain=[pscustomobject]@{Name='Domain';Enabled='True';DefaultInboundAction='Block';NotifyOnListen='False';LogFileName='%SystemRoot%\System32\logfiles\firewall\domainfw.log';LogMaxSizeKilobytes=16384;LogBlocked='False';LogAllowed='False'}
+ Private=[pscustomobject]@{Name='Private';LogFileName='%SystemRoot%\System32\LogFiles\Firewall\pfirewall.log'}
+}
+function Get-NetFirewallProfile {
+ param($Name,$PolicyStore,$ErrorAction)
+ Assert-Test ($PolicyStore -eq 'ActiveStore') 'Firewall probe read the wrong policy store'
+ if($script:firewallUnavailable){throw 'Fixture transport failure'}
+ return $script:firewallProfiles[$Name]
+}
+$catalog=Get-Content (Join-Path $root 'backend/data/gpo-production-mappings.json') -Raw|ConvertFrom-Json
+function Test-FirewallControl([string]$Id,[string]$ExpectedState){
+ $mapping=$catalog.mappings|Where-Object{$_.id -eq $Id}
+ foreach($item in $mapping.items){foreach($field in @('section','key','name','type','value','guid','state','mask')){if(!$item.PSObject.Properties[$field]){$item|Add-Member NoteProperty $field $null}}}
+ $result=@(Verify-EffectiveSamples $plan $mapping)[0]
+ Assert-Test ($result.state -eq $ExpectedState) ($Id+': expected '+$ExpectedState+', got '+($result|ConvertTo-Json -Compress))
+ return $result
+}
+$null=Test-FirewallControl '9.1.5' 'VERIFIED'
+$blocked=Test-FirewallControl '9.1.6' 'MISMATCH'
+$allowed=Test-FirewallControl '9.1.7' 'MISMATCH'
+Assert-Test ($blocked.actualValue -match 'Domain.LogBlocked=False' -and $allowed.actualValue -match 'Domain.LogAllowed=False') 'Disabled logging lost its measured mismatch'
+$null=Test-FirewallControl '9.2.4' 'MISMATCH'
+$script:firewallProfiles.Domain.LogMaxSizeKilobytes=32768
+$null=Test-FirewallControl '9.1.5' 'VERIFIED'
+$script:firewallProfiles.Domain.LogMaxSizeKilobytes=4096
+$null=Test-FirewallControl '9.1.5' 'MISMATCH'
+$script:firewallProfiles.Domain.LogFileName='%SYSTEMROOT%\system32\LOGFILES\firewall\DOMAINFW.LOG'
+$null=Test-FirewallControl '9.1.4' 'VERIFIED'
+$script:firewallProfiles.Private.LogFileName='%SYSTEMROOT%\system32\logfiles\firewall\privatefw.log'
+$null=Test-FirewallControl '9.2.4' 'VERIFIED'
+$script:firewallProfiles.Domain.LogBlocked='True'
+$null=Test-FirewallControl '9.1.6' 'VERIFIED'
+$script:firewallProfiles.Domain.LogAllowed='NotConfigured'
+$null=Test-FirewallControl '9.1.7' 'PENDING'
+$script:firewallUnavailable=$true
+$null=Test-FirewallControl '9.1.5' 'PENDING'
+Write-Output 'PASS firewall reported-state regression: size equality/bounds, disabled logging mismatch, independent profiles, path case, unavailable evidence'
 
