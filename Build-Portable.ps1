@@ -2,6 +2,7 @@ $ErrorActionPreference = 'Stop'
 Set-Location -LiteralPath $PSScriptRoot
 . (Join-Path $PSScriptRoot 'scripts\Tooling.ps1')
 $dotnet = Find-Dotnet
+& (Join-Path $PSScriptRoot 'scripts\Build-ManualEngine.ps1')
 $styleCompiler = Get-Command node -ErrorAction Stop
 & $styleCompiler.Source (Join-Path $PSScriptRoot 'scripts\Build-Styles.cjs')
 Assert-Exit

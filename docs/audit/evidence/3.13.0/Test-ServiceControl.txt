@@ -1,0 +1,11 @@
+PASS accepted stop does not recreate a marker already consumed by launcher
+PASS denied stop is reported without force-kill or stop marker
+PASS busy stop is reported without force-kill or stop marker
+PASS production lifecycle route retains Administrator, idle-operation gate and persisted stop marker
+PASS emergency stop rejects a non-elevated caller without state changes
+WARNING: Explicit emergency stop: unfinished operations may require review. No GPO rollback is performed.
+PASS emergency marker lets healthy supervisor stop without process termination
+WARNING: Explicit emergency stop: unfinished operations may require review. No GPO rollback is performed.
+PASS emergency stop refuses a changed registered process
+WARNING: Explicit emergency stop: unfinished operations may require review. No GPO rollback is performed.
+PASS explicit emergency stop terminates only revalidated fixture runtime and preserves supervisor stop marker

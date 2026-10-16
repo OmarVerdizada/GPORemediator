@@ -1,0 +1,6 @@
+PRODUCTION PACKAGE VALIDATION: PASS
+ - catalog: 405 unique CIS v4 controls
+ - server-writable: 394 automated controls
+ - manual/read-only: 11 controls
+ - handlers: SecurityTemplate / Registry / RegistrySet / AdvancedAudit
+ - source/dist synchronization: OK

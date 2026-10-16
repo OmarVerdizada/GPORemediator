@@ -1,0 +1,29 @@
+PASS explicit user and endpoint OUs authorized
+PASS secondary endpoint OU outside write boundary denied
+PASS unauthorized endpoint OU denied
+PASS wrong GPO denied
+PASS wrong target OU denied
+PASS wildcard GPO write blocked
+PASS wildcard OU write blocked
+PASS new audit rows authenticate with HMAC
+PASS audit secret redacted
+PASS tampered HMAC detected
+PASS legacy generated cache preserved without execution or sign-in failure
+PASS same installation reuses verified launcher
+PASS relocation creates separate verified launcher and preserves previous entry
+PASS current launcher tampering still rejected
+PASS current manifest tampering still rejected
+PASS concurrent inventory sync reuses the same intact launcher
+PASS isolated launcher dispatches gpoPreview to local stub only
+PASS isolated launcher dispatches gpoApply to local stub only
+PASS isolated launcher dispatches gpoVerify to local stub only
+PASS isolated launcher dispatches gpoRollback to local stub only
+PASS isolated launcher dispatches gpoRollbackInspect to local stub only
+PASS isolated launcher dispatches gpoRefresh to local stub only
+PASS isolated launcher rejects wrong domain, GPO or operation
+PASS isolated launcher rejects wrong domain, GPO or operation
+PASS isolated launcher rejects wrong domain, GPO or operation
+PASS DPAPI authenticated journal created
+PASS DPAPI key stored outside SQLite DB
+PASS missing persisted MAC key blocks startup
+SECURITY REGRESSIONS PASSED: 28
