@@ -256,6 +256,11 @@ const server=http.createServer(async(req,res)=>{
   await page.locator('[data-tab=remediation]').click();
   assert.equal(await page.locator('#gpo-selection [name=endpointScopeDn]').count(),1);
   assert.equal(await page.locator('#gpo-selection [name=verificationUser]').count(),1);
+  await page.locator('#gpo-selection .target-scope-note').screenshot({path:path.join(screens,'user-scope-card-desktop.png')});
+  const userViewport=page.viewportSize();
+  await page.setViewportSize({width:390,height:844});
+  await page.locator('#gpo-selection .target-scope-note').screenshot({path:path.join(screens,'user-scope-card-mobile.png')});
+  await page.setViewportSize(userViewport);
   assert.equal(await page.locator('#gpo-selection input[value=Pdc]').count(),0,'User policy exposed a PDC refresh choice');
   await page.locator('[data-scope-open="scopeDn"]').click();
   await page.locator('#scope-search').fill('Users');

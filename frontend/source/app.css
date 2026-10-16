@@ -2314,6 +2314,13 @@ input[aria-invalid=true],select[aria-invalid=true]{border-color:var(--color-dang
 .policy-value-editor input,.policy-value-editor select,.policy-value-editor textarea{width:100%;min-width:0;background:var(--color-surface);color:var(--color-text)}
 .policy-value-editor .custom-value-note{padding:10px 12px;border-left:3px solid var(--color-warning);background:var(--color-warning-soft);color:var(--color-warning)}
 .custom-value-note{padding:10px 12px;border-left:3px solid var(--color-warning);background:var(--color-warning-soft);color:var(--color-warning);font-size:12px;line-height:1.6}
+/* Scope cards keep the icon beside the text at every form width. */
+.target-scope-note{display:flex;align-items:flex-start;gap:12px;min-width:0;height:100%;box-sizing:border-box}
+.target-scope-note>.target-scope-icon{display:flex;align-items:center;justify-content:center;flex:0 0 36px;width:36px;height:36px;border-radius:10px;background:var(--color-primary-soft);color:var(--color-primary)}
+.target-scope-note>.target-scope-icon .ui-icon{display:block;width:20px;height:20px;flex:none}
+.target-scope-note>div{min-width:0;flex:1}
+.target-scope-note strong{line-height:1.5}
+.target-scope-note small{line-height:1.65;overflow-wrap:anywhere}
 /* Restrained graphite workspace. Local fonts and semantic accents. */
 @font-face{font-family:Geist;src:url('/fonts/Geist-Variable.woff2') format('woff2');font-style:normal;font-weight:100 900;font-display:swap}
 @font-face{font-family:'Geist Mono';src:url('/fonts/GeistMono-Variable.woff2') format('woff2');font-style:normal;font-weight:100 900;font-display:swap}
