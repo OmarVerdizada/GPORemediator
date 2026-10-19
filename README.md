@@ -1,5 +1,7 @@
 # GPO Remediator 3.14.1
 
+Responsiveness maintenance (2026-10-19) reduces background rendering, preserves text selections and allows rollback inspection to finish within the server deadline. The portable Windows runtime is rebuilt. See [changes and validation](docs/RESPONSIVENESS-2026-10-19.md).
+
 3.14.1 makes recommended policy values editable with typed per-field overrides and applies user GPOs to a selected OU without requiring individual usernames. See [changes and upgrade instructions](docs/RELEASE-3.14.1.md).
 
 The full source and synthetic audit is in [docs/audit/FULL_PROJECT_AUDIT.md](docs/audit/FULL_PROJECT_AUDIT.md), with one evidence-bounded row for all 405 controls. This release fixes the shared auditpol argument, numeric bounds, active firewall verification, replication content checks, stale evidence and refresh result handling. Five independent assurance stages distinguish stored configuration, applicability, replication, client processing and sampled endpoint configuration. **Live AD enforcement and unrestricted production readiness remain unverified; no live AD GPO was modified during this audit.**

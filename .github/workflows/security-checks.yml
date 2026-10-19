@@ -61,6 +61,8 @@ jobs:
       - name: Frontend regressions
         shell: pwsh
         run: |
+          node scripts/Test-Responsiveness.cjs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           node scripts/Build-Styles.cjs --check
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           node scripts/Test-Studio-UI.cjs

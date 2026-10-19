@@ -31,6 +31,19 @@ using var store=new Store(":memory:");var gate=new OperationGate(store);var fake
 using var jobs=new WorkspaceWorkflows(store,fake,gate,NullLogger<WorkspaceWorkflows>.Instance,new FastClock());await jobs.StartAsync(CancellationToken.None);
 var selection=new GpoSelection("11111111-1111-1111-1111-111111111111","OU=Pilot,DC=test,DC=local","2.3.1.1",1);
 var first=await fake.PreviewAsync("secret-session","TEST\\Admin",selection,CancellationToken.None);
+using(var maintenanceStore=new Store(":memory:")){
+ var maintenanceGate=new OperationGate(maintenanceStore);
+ foreach(var runState in new[]{"APPLYING","VERIFYING","REFRESHING","ROLLBACKING","ROLLING_BACK","applying"}){
+  var result=new GpoWorkflowResult(runState,"Recorded",null,null,null,false,false,[],"NOT_VERIFIED");
+  var record=new GpoWorkflowRun("maintenance-test",first,result,PolicyValues.Now());
+  maintenanceStore.Put("gpo_runs",record.Id,record,runState);
+  Check(maintenanceStore.CountActiveGpoRuns()==1,"Active operation count: "+runState);
+  Reject(()=>maintenanceGate.BeginMaintenance(()=>{}),"GPO_OPERATION_BUSY");
+ }
+ maintenanceStore.Put("gpo_runs","maintenance-test",new GpoWorkflowRun("maintenance-test",first,new("PUBLISHED","Recorded",null,null,null,true,true,[],"NOT_VERIFIED"),PolicyValues.Now()),"PUBLISHED");
+ Check(maintenanceStore.CountActiveGpoRuns()==0,"Completed operations do not block maintenance");
+ maintenanceGate.BeginMaintenance(()=>{});maintenanceGate.EndMaintenance();
+}
 var consent=new GpoConsent("APPLY",true,true,"CHANGE-1");
 WorkspaceRules.ValidatePilot(first,10);
 Reject(()=>WorkspaceRules.ValidatePilot(first with{Selection=first.Selection with{ScopeDn="DC=test,DC=local"}},10),"PILOT_SCOPE_UNSAFE");

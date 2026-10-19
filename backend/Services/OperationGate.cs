@@ -42,7 +42,7 @@ public sealed class OperationGate(Store store)
         lock (gate)
         {
             if (maintenance) throw new PolicyException("SERVICE_STOPPING", "The service is already stopping, restarting, or saving configuration.");
-            if (operations.Count>0 || reservations.Count>0 || store.List<GpoWorkflowRun>("gpo_runs").Any(r => GpoWorkflowRules.IsActive(r.Result.State)))
+            if (operations.Count>0 || reservations.Count>0 || store.CountActiveGpoRuns()>0)
                 throw new PolicyException("GPO_OPERATION_BUSY", "A GPO operation is active. Wait for it to finish before changing service state or configuration.");
             maintenance = true;
             try { action(); }

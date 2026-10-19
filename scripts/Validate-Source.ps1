@@ -19,7 +19,7 @@ try {
     Get-ChildItem frontend/source -Filter *.js | ForEach-Object { & node --check $_.FullName; Check-Exit $_.Name }
     & node scripts/Build-Styles.cjs --check
     Check-Exit 'Styles'
-    foreach($test in @('Test-FrontendSystem','Test-RemediationEvidence','Test-RecipeWorkspace','Test-GuidedRemediation','Test-GpoScopePicker','Test-UX-Contract','Test-Studio-UI','Test-EnterpriseCenter','Test-ManualVerification')){
+    foreach($test in @('Test-Responsiveness','Test-FrontendSystem','Test-RemediationEvidence','Test-RecipeWorkspace','Test-GuidedRemediation','Test-GpoScopePicker','Test-UX-Contract','Test-Studio-UI','Test-EnterpriseCenter','Test-ManualVerification')){
         & node "scripts/$test.cjs"
         Check-Exit $test
     }

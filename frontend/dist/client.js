@@ -133,7 +133,7 @@
   function policy(path) {
     if (/\/gpo\/[^/]+\/(apply|rollback)$/.test(path)) return { timeout: 980000, label: 'Backup, policy change and verification', cancelable: false };
     if (/\/gpo\/[^/]+\/refresh$/.test(path)) return { timeout: 760000, label: 'Scheduling gpupdate and re-verifying policy', cancelable: false };
-    if (/\/gpo\/(preview|[^/]+\/(verify|replan))$/.test(path)) return { timeout: 620000, label: 'Reading policy and verifying scope', cancelable: true };
+    if (/\/gpo\/(preview|[^/]+\/(verify|replan|rollback-preview))$/.test(path)) return { timeout: 620000, label: 'Reading policy and verifying scope', cancelable: true };
     if (/\/gpo\/(connect|discover|readiness)$/.test(path)) return { timeout: 110000, label: path.endsWith('/readiness') ? 'Checking AD readiness' : 'Connecting to AD and loading GPOs', cancelable: true };
     if (/\/setup\/write-mode$/.test(path)) return { timeout: 120000, label: 'Checking readiness and updating write mode', cancelable: false };
     return { timeout: 20000, label: 'Loading application data', cancelable: true };

@@ -35,8 +35,19 @@
     const recent = recentControls().map(id=>s.catalog?.rules.find(r=>r.id===id)).filter(Boolean);
     return `<section class="product-desk"><article class="product-checklist"><div class="product-section-head"><div><span class="product-eyebrow">${text(s,'İŞ MASASI','YOUR WORKSPACE')}</span><h2>${text(s,'Növbəti addım aydındır','A clear next step')}</h2></div><span class="product-counter">${steps.filter(x=>x.done).length} / 4</span></div><div class="product-step-list">${steps.map((x,i)=>`<button data-product-action="${x.action}" class="product-step ${x.done?'complete':i===next?'next':''}"><span class="product-step-number">${x.done?'✓':String(i+1).padStart(2,'0')}</span><span><strong>${x.title}</strong><small>${x.copy}</small></span><b>↗</b></button>`).join('')}</div></article><article class="product-focus"><div class="product-section-head"><div><span class="product-eyebrow">${text(s,'DİQQƏT MƏRKƏZİ','FOCUS CENTER')}</span><h2>${attention.length?text(s,'Yoxlama tələb edən nəticələr','Results needing review'):text(s,'İşə qaldığın yerdən davam et','Pick up where you left off')}</h2></div><span class="product-status ${attention.length?'warning':'good'}">${attention.length?text(s,'Yoxla','Review'):text(s,'Hazır','Ready')}</span></div>${attention.length?attention.map(h=>`<button class="product-recent" data-inspect="${esc(h.id)}"><span class="product-rule-id">${esc(h.plan?.selection?.setting||'GPO')}</span><span><strong>${esc(h.plan?.preview?.gpo?.name||h.id)}</strong><small>${esc(h.result?.message||h.result?.state)}</small></span><b>↗</b></button>`).join(''):recent.length?recent.map(r=>`<button class="product-recent" data-rule="${esc(r.id)}"><span class="product-rule-id">${esc(r.id)}</span><span><strong>${esc(r.title)}</strong><small>${esc(r.level)} · CIS v4.0.0</small></span><b>→</b></button>`).join(''):`<div class="product-welcome"><span>↗</span><h3>${text(s,'Bir qayda ilə başla','Start with one control')}</h3><p>${text(s,'Son baxdığın qaydalar burada saxlanacaq. Əvvəlcə məhdud hədəf üçün read-only plan hazırla.','Recently viewed controls appear here. Start with a read-only plan for a limited scope.')}</p><a href="#/benchmark">${text(s,'Kitabxananı aç','Explore the library')} →</a></div>`}</article></section>`;
   }
-  function controlStatus(s, rule) {
-    const run=sortedRuns(s.history.filter(h=>h.plan?.selection?.setting===(rule.backendSetting||rule.id)))[0];
+  function latestByControl(history) {
+    const latest=new Map();
+    for(const run of history||[]) {
+      const setting=run.plan?.selection?.setting;
+      if(!setting)continue;
+      const previous=latest.get(setting);
+      // Preserve input order for tied or missing dates, as sortedRuns does.
+      if(!previous||(Date.parse(run.updatedAt)||0)>(Date.parse(previous.updatedAt)||0))latest.set(setting,run);
+    }
+    return latest;
+  }
+  function controlStatus(s, rule, latest=latestByControl(s.history)) {
+    const run=latest.get(rule.backendSetting||rule.id);
     if(!run)return {tone:'unknown',label:text(s,'Yoxlanmayıb','Not assessed'),run:null};
     const quality=window.GpoUiDomain.classify(run),state=String(run.result?.state||'').toUpperCase();
     if(state==='ROLLED_BACK')return {tone:'unknown',label:text(s,'Geri qaytarılıb','Rolled back'),run};
@@ -48,13 +59,14 @@
   }
   function coverage(s) {
     const rules=s.catalog.rules,ready=rules.filter(r=>r.implementation==='live').length,manual=rules.filter(r=>r.implementation==='manual').length;
-    const checked=rules.filter(r=>controlStatus(s,r).run).length;
+    const latest=latestByControl(s.history),checked=rules.filter(r=>latest.has(r.backendSetting||r.id)).length;
     return `<section class="recipe-coverage"><div><span class="product-eyebrow">${text(s,'BENCHMARK ƏHATƏSİ','BENCHMARK COVERAGE')}</span><h2>${text(s,'Bütün qaydalar, bir baxışda','Every control at a glance')}</h2><p>${text(s,'Kataloq GPO bağlantısı olmadan da açıqdır. Tətbiq statusları son qeydə alınmış əməliyyata əsaslanır; domen üzrə audit balı deyil.','The catalog is available without a GPO connection. Implementation statuses reflect the last recorded operation, not a domain audit score.')}</p><a href="#/benchmark">${text(s,'Qaydaları nəzərdən keçir','Browse controls')} →</a></div><dl>${[[rules.length,text(s,'Ümumi qayda','Total controls')],[ready,text(s,'Avtomatik GPO','Automatic GPO')],[manual,text(s,'Təlimatla remediation','Guided remediation')],[rules.length-checked,text(s,'Yoxlanmayıb','Not assessed')]].map(([n,label])=>`<div><dd>${n}</dd><dt>${label}</dt></div>`).join('')}</dl></section>`;
   }
   function recipeCards(s, rules) {
     let section='';
+    const latest=latestByControl(s.history);
     return [...rules].sort((a,b)=>a.id.localeCompare(b.id,undefined,{numeric:true})).map(rule=>{
-      const group=s.catalog.sections.find(x=>x.id===rule.sectionId),status=controlStatus(s,rule);
+      const group=s.catalog.sections.find(x=>x.id===rule.sectionId),status=controlStatus(s,rule,latest);
       const heading=section!==rule.sectionId?`<h2 class="recipe-section">${esc(rule.sectionId)} <span>${esc(group?.title||'')}</span></h2>`:'';section=rule.sectionId;
       const support=rule.implementation==='live'?text(s,'Avtomatlaşdırma hazır','Automation ready'):rule.implementation==='manual'?text(s,'Əl ilə yoxlama','Manual review'):text(s,'Mapping mövcud deyil','Mapping unavailable');
       return `${heading}<article class="recipe-card"><header><span class="recipe-number">${esc(rule.id)}</span><div><h3><button data-rule="${esc(rule.id)}">${esc(rule.title)}</button></h3><div class="recipe-tags"><span>${esc(rule.level)}</span><span class="${rule.implementation==='live'?'good':'unknown'}">${support}</span><span class="${status.tone}">${status.label}</span></div></div><button class="fav-mini ${s.favorites.has(rule.id)?'active':''}" data-favorite="${esc(rule.id)}" aria-label="${text(s,'Seçilmiş statusunu dəyiş','Toggle favorite')}">${s.favorites.has(rule.id)?'★':'☆'}</button></header><p class="recipe-description">${esc(rule.description||text(s,'İzah əlavə edilməyib.','No description available.'))}</p><details><summary>${text(s,'Tam izahı oxu','Read full description')}</summary><p>${esc(rule.description||'—')}</p></details><footer><div><small>${text(s,'TÖVSİYƏ OLUNAN VƏZİYYƏT','RECOMMENDED STATE')}</small><strong>${esc(rule.recommended||text(s,'Benchmark izahına baxın','See benchmark description'))}</strong>${status.run?`<small>${text(s,'Son qeyd','Last record')}: ${date(status.run.updatedAt,s.lang)} · ${esc(status.run.plan?.preview?.gpo?.name||'GPO')}</small>`:''}</div><button data-rule="${esc(rule.id)}">${text(s,'Qaydanı aç','Open control')} →</button></footer></article>`;
@@ -112,5 +124,5 @@
     const cell=value=>'"'+String(value??'').replace(/^[=+@-]/,"'$&").replaceAll('"','""')+'"';
     return '\uFEFF'+[['Control','Title','Level','Automation','Implementation','Recommended'],...rules.map(r=>[r.id,r.title,r.level,r.automation,r.implementation,r.recommended])].map(row=>row.map(cell).join(',')).join('\r\n');
   }
-  window.GpoProduct=Object.freeze({dashboard,coverage,recipes,domainHeader,controlStatus,disconnectedControl,catalogTools,inspector,help,remember,sortedRuns,active,csv,date});
+  window.GpoProduct=Object.freeze({dashboard,coverage,recipes,domainHeader,controlStatus,latestByControl,disconnectedControl,catalogTools,inspector,help,remember,sortedRuns,active,csv,date});
 })();

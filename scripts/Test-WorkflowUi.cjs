@@ -46,6 +46,18 @@ const server=http.createServer(async(req,res)=>{
   await page.locator('[name=password]').fill('fixture-password');await page.locator('.operator-sign-in button').click();await page.locator('.operator-sign-in').waitFor({state:'detached'});
   await page.reload();await page.locator('#wf-gpo option').waitFor({state:'attached'});assert.equal(await page.locator('.operator-sign-in').count(),0);assert.equal(confirmations,1);assert.equal(await page.locator('#gpo-login').count(),0);assert.equal(requests.filter(x=>x.path==='/api/gpo/connect').length,0);
   await page.locator('#wf-gpo option').waitFor({state:'attached'});await page.locator('#wf-pilot').check();
+  await page.locator('#wf-search').fill('account');
+  await page.locator('#wf-search').evaluate(el=>{el.setSelectionRange(1,5,'backward');el.dispatchEvent(new Event('input',{bubbles:true}));});
+  assert.deepEqual(await page.locator('#wf-search').evaluate(el=>[el.selectionStart,el.selectionEnd,el.selectionDirection]),[1,5,'backward'],'Rendering must preserve the full text selection');
+  await page.locator('#wf-search').fill('');
+  await page.evaluate(()=>{document.activeElement?.blur();});
+  // Establish the first snapshot, then observe a second, unchanged poll.
+  await page.waitForResponse(r=>new URL(r.url()).pathname==='/api/workflows');
+  await page.waitForTimeout(100);
+  await page.evaluate(()=>{window.__workflowField=document.getElementById('wf-search');});
+  await page.waitForResponse(r=>new URL(r.url()).pathname==='/api/workflows');
+  await page.waitForTimeout(100);
+  assert.ok(await page.evaluate(()=>window.__workflowField===document.getElementById('wf-search')),'Unchanged polling must keep the existing DOM');
   await page.locator('[data-scope-open="wf-scope"]').click();
   await page.locator('#scope-search').fill('Pilot');
   await page.locator('[data-scope-choose="OU=Pilot,DC=test,DC=local"]').click();

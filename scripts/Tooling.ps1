@@ -10,7 +10,13 @@ function Assert-Exit { if ($LASTEXITCODE -ne 0) { throw "Build command failed wi
 function Get-FileSetFingerprint([System.IO.FileInfo[]]$Files, [string]$BasePath) {
     $lines = [Collections.Generic.List[string]]::new()
     $textExtensions = @('.cs','.csproj','.json','.ps1','.psm1','.js','.cjs','.css','.html','.htm','.md','.txt','.xml','.yml','.yaml')
-    foreach ($file in @($Files | Sort-Object FullName)) {
+    # Culture sorting differs between Windows PowerShell/NLS and PowerShell/ICU
+    # (for example Geist-Variable vs GeistMono-Variable). Use ordinal order so
+    # both hosts verify the same portable package.
+    [string[]]$paths = @($Files | ForEach-Object { $_.FullName })
+    [Array]::Sort($paths, [StringComparer]::Ordinal)
+    foreach ($path in $paths) {
+        $file = [IO.FileInfo]::new($path)
         $relative = $file.FullName.Substring($BasePath.TrimEnd('\').Length).TrimStart('\')
         if ($file.Extension.ToLowerInvariant() -in $textExtensions) {
             # GitHub source archives use LF while Windows checkouts commonly use
