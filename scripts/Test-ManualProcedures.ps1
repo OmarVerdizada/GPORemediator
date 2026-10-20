@@ -20,7 +20,8 @@ $null=New-Item -ItemType Directory -Path $sandbox
 function Import-Module {param($Name,$ErrorAction) if($Name -notin @('ActiveDirectory','GroupPolicy')){throw 'Unexpected module import'}}
 function Get-ADDomain {param($Identity,$Server) [pscustomobject]@{DNSRoot='example.test';DistinguishedName='DC=example,DC=test';NetBIOSName='EXAMPLE'}}
 function Get-ADDomainController {param($Identity,$Server) [pscustomobject]@{IsReadOnly=$script:readOnlyDc;Domain='example.test';HostName=($env:COMPUTERNAME+'.example.test')}}
-function Get-CimInstance {param($ClassName,$Filter) if($ClassName -ne 'Win32_Share'){throw 'Unexpected CIM call'};[pscustomobject]@{Path=$script:share}}
+function Get-CimInstance {throw 'Manual procedure must not require CIM share enumeration'}
+function Get-ItemProperty {param($LiteralPath,$Name,$ErrorAction) if($LiteralPath -ne 'HKLM:\SYSTEM\CurrentControlSet\Services\Netlogon\Parameters'){throw 'Unexpected registry read'};[pscustomobject]@{SysVol=$script:share;SysvolReady=1}}
 function Get-GPO {param($Guid,$Domain,$Server) Assert-Test ($Domain -is [string] -and $Domain -eq 'example.test') 'Domain name was overwritten by an AD domain object';[pscustomobject]@{Id=$Guid;DisplayName='Fixture GPO';GpoStatus='AllSettingsEnabled'}}
 function Get-ADOrganizationalUnit {param($Identity,$Filter,$Server,$Properties,$ResultSetSize) if($Identity){[pscustomobject]@{DistinguishedName=$Identity;Name='Fixture OU'}}else{@('OU=Endpoints,DC=example,DC=test','OU=Users,DC=example,DC=test')|ForEach-Object{[pscustomobject]@{DistinguishedName=$_;Name='Fixture';gPLink=(Fixture-Link $_)}}}}
 function Fixture-Link([string]$Dn){if($script:linkedTarget -eq $Dn){return ('[LDAP://CN='+$script:gpoId.ToString('B')+',CN=Policies,CN=System,DC=example,DC=test;0]')};return ''}

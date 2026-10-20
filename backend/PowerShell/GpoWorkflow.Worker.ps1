@@ -25,10 +25,19 @@ function Gpo-Ad([string]$Id){
     $dn='CN='+([guid]$Id).ToString('B').ToUpperInvariant()+',CN=Policies,CN=System,'+$domainDn
     return Get-ADObject -Identity $dn -Server $cfg.domainController -Properties versionNumber,gPCMachineExtensionNames,gPCUserExtensionNames,flags,whenChanged,gPCWQLFilter
 }
+function Sysvol-Policies {
+    # Read the DC's configured active location, including relocated/DFSR SYSVOL.
+    # Win32_Share enumeration requires unrelated CIM rights for delegated users.
+    $settings=Get-ItemProperty -LiteralPath 'HKLM:\SYSTEM\CurrentControlSet\Services\Netlogon\Parameters' -Name SysVol,SysvolReady -ErrorAction Stop
+    if([int]$settings.SysvolReady -ne 1){Fail 'SYSVOL_UNAVAILABLE' 'Netlogon reports SYSVOL is not ready on the selected DC.'}
+    $root=[Environment]::ExpandEnvironmentVariables([string]$settings.SysVol)
+    if($root -notmatch '^[A-Za-z]:\\'){Fail 'SYSVOL_UNAVAILABLE' 'Netlogon SYSVOL must identify a local absolute drive path on the selected DC.'}
+    $policies=Join-Path ([IO.Path]::GetFullPath($root)) ($domain.DNSRoot+'\Policies')
+    if(!(Test-Path -LiteralPath $policies -PathType Container -ErrorAction Stop)){Fail 'SYSVOL_UNAVAILABLE' ('The configured local SYSVOL Policies directory is unavailable: '+$policies)}
+    return $policies
+}
 function Gpo-Folder([string]$Id){
-    $share=Get-CimInstance Win32_Share -Filter "Name='SYSVOL'"
-    if(!$share -or !$share.Path){Fail 'SYSVOL_UNAVAILABLE' 'The selected DC does not expose a local SYSVOL share.'}
-    return Join-Path ([string]$share.Path) ($domain.DNSRoot+'\Policies\'+([guid]$Id).ToString('B').ToUpperInvariant())
+    return Join-Path (Sysvol-Policies) ([guid]$Id).ToString('B').ToUpperInvariant()
 }
 function Scopes {
     $items=@(Get-ADOrganizationalUnit -Filter * -Server $cfg.domainController -Properties gPLink -ResultSetSize 5001)
@@ -260,7 +269,7 @@ function Environment-Status {
     try{$name='_ldap._tcp.dc._msdcs.'+$domain.DNSRoot;$srv=@(Resolve-DnsName -Name $name -Type SRV -ErrorAction Stop);if($srv.Count){Add-Check 'srv' 'AD DC SRV discovery' 'PASS' ('DC locator SRV records: '+$srv.Count)}else{Add-Check 'srv' 'AD DC SRV discovery' 'WARN' 'No AD DC SRV record was returned.' $false}}catch{Add-Check 'srv' 'AD DC SRV discovery' 'WARN' 'AD DC SRV discovery failed; verify domain DNS and firewall.' $false}
     try{$resolved=@(Resolve-DnsName -Name $cfg.domainController -Type A -ErrorAction Stop);Add-Check 'dns' 'DNS resolution' 'PASS' (($resolved|Where-Object IPAddress|Select-Object -ExpandProperty IPAddress)-join ', ')}catch{Add-Check 'dns' 'DNS resolution' 'FAIL' 'Writable DC name could not be resolved.'}
     try{$null=Get-ADDomain -Identity $cfg.domain -Server $cfg.domainController -ErrorAction Stop;Add-Check 'ldap' 'Active Directory / LDAP' 'PASS' 'Domain query succeeded on the selected DC.'}catch{Add-Check 'ldap' 'Active Directory / LDAP' 'FAIL' 'Domain query failed on the selected DC.'}
-    try{$share=Get-CimInstance Win32_Share -Filter "Name='SYSVOL'" -ErrorAction Stop;if($share.Path -and (Test-Path -LiteralPath $share.Path)){Add-Check 'sysvol' 'SYSVOL' 'PASS' ([string]$share.Path)}else{Add-Check 'sysvol' 'SYSVOL' 'FAIL' 'SYSVOL share path is unavailable.'}}catch{Add-Check 'sysvol' 'SYSVOL' 'FAIL' 'SYSVOL could not be queried.'}
+    try{$policies=Sysvol-Policies;Add-Check 'sysvol' 'SYSVOL' 'PASS' ('Local SYSVOL Policies directory is accessible: '+$policies)}catch{Add-Check 'sysvol' 'SYSVOL' 'FAIL' ('Local SYSVOL check failed for '+[Security.Principal.WindowsIdentity]::GetCurrent().Name+': '+$_.Exception.Message)}
     try{$root=[IO.Path]::GetFullPath([string]$cfg.backupPath);if($root -match '^[A-Za-z]:\\'){if(!(Test-Path -LiteralPath $root)){New-Item -ItemType Directory -Path $root -Force|Out-Null};$probe=Join-Path $root ('.write-probe-'+[guid]::NewGuid().ToString('N'));[IO.File]::WriteAllText($probe,'probe');Remove-Item -LiteralPath $probe -Force;Add-Check 'backup' 'Backup repository' 'PASS' $root}else{Add-Check 'backup' 'Backup repository' 'FAIL' 'Backup path must be a local drive path on the selected DC.'}}catch{Add-Check 'backup' 'Backup repository' 'FAIL' 'Backup directory is not writable by the execution identity.'}
     try{
       $root=[IO.Path]::GetFullPath([string]$cfg.backupPath)
