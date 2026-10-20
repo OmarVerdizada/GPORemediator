@@ -20,7 +20,7 @@ The delegated AD execution account is separate from the browser identity. Its pa
 
 API mutations require the exact application Origin, application/json and an identity-bound antiforgery token. Cookies are HttpOnly and SameSite=Strict. The local HTTP deployment does not provide TLS confidentiality: never proxy or expose it to a LAN. Browser scripts use a self-only CSP; inline styles remain permitted for existing UI rendering. Request bodies are limited to 32 KiB.
 
-Apply, rollback and refresh require the write gate and explicit authorized GPO/OU boundary. Refresh accepts only Pdc or Scope. Endpoint targets must be exact DNS names within the configured domain, with at most 100 entries; wildcard host execution is rejected. Existing backup, stale-plan, rollback-drift and interrupted-operation safeguards remain in force. A reported publication result does not establish effective endpoint compliance.
+Apply, rollback and refresh require the write gate and explicit authorized GPO/OU boundary. Refresh accepts only Pdc or Scope. Endpoint targets must be exact DNS names within the configured domain. Explicit host mode accepts at most 100 configured entries; automatic mode enumerates enabled computers only beneath the selected OU (including child OUs), with a 5,000-object bound. Existing host lists retain explicit mode until changed. Wildcard host execution is rejected. Effective endpoint verification samples at most five computers; a larger target list does not certify all endpoints. Existing backup, stale-plan, rollback-drift and interrupted-operation safeguards remain in force. A reported publication result does not establish effective endpoint compliance.
 
 ## Files and distribution
 

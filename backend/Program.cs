@@ -182,12 +182,12 @@ SetupConfigView CurrentSetupConfig()
             string Text(JsonElement element,string name,string fallback="")=>Property(element,name) is var value&&value.ValueKind==JsonValueKind.String?(value.GetString()??fallback):fallback;
             bool Flag(JsonElement element,string name)=>Property(element,name).ValueKind==JsonValueKind.True;
             string[] Array(JsonElement element,string name)=>Property(element,name) is var value&&value.ValueKind==JsonValueKind.Array?value.EnumerateArray().Where(v=>v.ValueKind==JsonValueKind.String).Select(v=>v.GetString()!).Where(v=>!string.IsNullOrWhiteSpace(v)).ToArray():[];
-            return new SetupConfigView(Text(root,"Urls","http://127.0.0.1:5080"),Text(win,"Domain"),Text(win,"DomainController"),Array(win,"ApprovedGpoIds"),Array(win,"AuthorizedOus"),Array(win,"AllowedHosts"),Text(win,"BackupPath",@"C:\ProgramData\GpoRemediator\Backups"),Flag(win,"EnableWrites"),localConfigPath,true);
+            return new SetupConfigView(Text(root,"Urls","http://127.0.0.1:5080"),Text(win,"Domain"),Text(win,"DomainController"),Array(win,"ApprovedGpoIds"),Array(win,"AuthorizedOus"),Array(win,"AllowedHosts"),Text(win,"BackupPath",@"C:\ProgramData\GpoRemediator\Backups"),Flag(win,"EnableWrites"),localConfigPath,true,EndpointTargeting.Resolve(Text(win,"EndpointTargeting"),Array(win,"AllowedHosts")));
         }
         catch(JsonException) { }
     }
     var section=builder.Configuration.GetSection("Windows");
-    return new SetupConfigView(builder.Configuration["Urls"]??"http://127.0.0.1:5080",section["Domain"]??"",section["DomainController"]??"",section.GetSection("ApprovedGpoIds").Get<string[]>()??[],section.GetSection("AuthorizedOus").Get<string[]>()??[],section.GetSection("AllowedHosts").Get<string[]>()??[],section["BackupPath"]??@"C:\ProgramData\GpoRemediator\Backups",section.GetValue<bool>("EnableWrites"),localConfigPath,false);
+    return new SetupConfigView(builder.Configuration["Urls"]??"http://127.0.0.1:5080",section["Domain"]??"",section["DomainController"]??"",section.GetSection("ApprovedGpoIds").Get<string[]>()??[],section.GetSection("AuthorizedOus").Get<string[]>()??[],section.GetSection("AllowedHosts").Get<string[]>()??[],section["BackupPath"]??@"C:\ProgramData\GpoRemediator\Backups",section.GetValue<bool>("EnableWrites"),localConfigPath,false,EndpointTargeting.Resolve(section["EndpointTargeting"],section.GetSection("AllowedHosts").Get<string[]>()??[]));
 }
 app.MapGet("/api/v1/health/live",()=>Results.Ok(new{status="live",version="1.0"})).WithMetadata(new OperatorBootstrap());
 app.MapGet("/api/v1/health/ready",()=>Results.Ok(new{status="ready",mode,database=true})).WithMetadata(new OperatorBootstrap());
@@ -274,7 +274,9 @@ app.MapPost("/api/setup/config",(SetupConfigRequest request,HttpContext context,
     var domain=(request.Domain??"").Trim().ToLowerInvariant(); var dc=(request.DomainController??"").Trim().ToLowerInvariant();
     if(!ValidHostname(domain)||!domain.Contains('.')||!ValidHostname(dc)||!dc.EndsWith("."+domain,StringComparison.OrdinalIgnoreCase)) throw new PolicyException("INVALID_DOMAIN","Domain and writable DC must be exact DNS names in the same domain.");
     var gpos=CleanList(request.ApprovedGpoIds); var ous=CleanList(request.AuthorizedOus); var hosts=CleanList(request.AllowedHosts);
-    OperatorSecurity.ValidateHosts(hosts,domain);
+    var endpointTargeting=EndpointTargeting.Resolve(request.EndpointTargeting,hosts);
+    if(endpointTargeting=="ExplicitHosts")OperatorSecurity.ValidateHosts(hosts,domain);
+    else hosts=[];
     if(gpos.Length==0||gpos.Any(x=>x!="*"&&!Guid.TryParse(x.Trim('{','}'),out _))) throw new PolicyException("INVALID_GPO_ALLOWLIST","Enter at least one approved GPO GUID, or an explicit * only when unrestricted GPO access is intended.");
     if(ous.Length==0||ous.Any(x=>x!="*"&&!(x.StartsWith("OU=",StringComparison.OrdinalIgnoreCase)||x.StartsWith("DC=",StringComparison.OrdinalIgnoreCase)))) throw new PolicyException("INVALID_SCOPE_ALLOWLIST","Enter at least one authorized OU/domain distinguished name, or an explicit * only when unrestricted scope access is intended.");
     var backup=(request.BackupPath??"").Trim();
@@ -285,11 +287,11 @@ app.MapPost("/api/setup/config",(SetupConfigRequest request,HttpContext context,
     var output=new
     {
         Mode="Windows", Urls=localUrl,SecurityVersion=1,
-        Windows=new{Workflow="GpoRemediation",EnableWrites=false,Domain=domain,DomainController=dc,ApprovedGpoIds=gpos,AuthorizedOus=ous,AllowedHosts=hosts,BackupPath=backup}
+        Windows=new{Workflow="GpoRemediation",EnableWrites=false,Domain=domain,DomainController=dc,ApprovedGpoIds=gpos,AuthorizedOus=ous,AllowedHosts=hosts,EndpointTargeting=endpointTargeting,BackupPath=backup}
     };
     var path=localConfigPath; Directory.CreateDirectory(Path.GetDirectoryName(path)!); var temp=path+".tmp";
     ConfigureService(request.AutoRestart,()=> { File.WriteAllText(temp,JsonSerializer.Serialize(output,new JsonSerializerOptions{WriteIndented=true})); File.Move(temp,path,true);
-    store.Audit("SETUP_CONFIG_SAVED",Operator(context),details:new{domain,domainController=dc,gpoCount=gpos.Length,ouCount=ous.Length,hostCount=hosts.Length,writes=false,autoRestart=request.AutoRestart});
+    store.Audit("SETUP_CONFIG_SAVED",Operator(context),details:new{domain,domainController=dc,gpoCount=gpos.Length,ouCount=ous.Length,hostCount=hosts.Length,endpointTargeting,writes=false,autoRestart=request.AutoRestart});
     },lifetime);
     return new{saved=true,restartRequired=true,restartScheduled=request.AutoRestart,writesEnabled=false,path=localConfigPath};
 });

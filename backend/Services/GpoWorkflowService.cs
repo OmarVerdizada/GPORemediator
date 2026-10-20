@@ -20,11 +20,12 @@ public sealed class GpoWorkflowService(IConfiguration config,Store store,Operati
     private void RequireReal(){if(!Real)throw new PolicyException("WINDOWS_MODE_REQUIRED","GPO discovery and remediation require Windows / AD mode. Setup mode is configuration-only.");}
     private string Domain=>config["Windows:Domain"]??"";
     private string Dc=>config["Windows:DomainController"]??"";
-    private object Configuration { get { OperatorSecurity.ValidateHosts(AllowedHosts,Domain);return new{domain=Domain,domainController=Dc,backupPath=config["Windows:BackupPath"],allowedHosts=AllowedHosts,emitProgress=true}; } }
+    private object Configuration { get { if(Targeting=="ExplicitHosts")OperatorSecurity.ValidateHosts(AllowedHosts,Domain);return new{domain=Domain,domainController=Dc,backupPath=config["Windows:BackupPath"],allowedHosts=AllowedHosts,endpointTargeting=Targeting,emitProgress=true}; } }
     private string[] ApprovedGpos=>config.GetSection("Windows:ApprovedGpoIds").Get<string[]>()??[];
     private string[] AuthorizedOus=>config.GetSection("Windows:AuthorizedOus").Get<string[]>()??[];
     private string[] AllowedHosts=>config.GetSection("Windows:AllowedHosts").Get<string[]>()??[];
-    private string ConfigHash=>PolicyValues.Hash(new{domain=Domain,dc=Dc,backupPath=config["Windows:BackupPath"],approvedGpos=ApprovedGpos,authorizedOus=AuthorizedOus,allowedHosts=AllowedHosts});
+    private string Targeting=>EndpointTargeting.Resolve(config["Windows:EndpointTargeting"],AllowedHosts);
+    private string ConfigHash=>PolicyValues.Hash(new{domain=Domain,dc=Dc,backupPath=config["Windows:BackupPath"],approvedGpos=ApprovedGpos,authorizedOus=AuthorizedOus,allowedHosts=AllowedHosts,endpointTargeting=Targeting});
     private GpoInventory Authorize(GpoInventory source)
     {
         // Discovery/preview are read-only under the delegated account. A saved

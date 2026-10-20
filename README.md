@@ -1,5 +1,7 @@
 # GPO Remediator 3.14.1
 
+Endpoint targeting update (2026-10-20): Settings can automatically discover enabled computers in the selected OU and child OUs, without entering each host. Explicit host lists remain available. Existing lists keep their restriction until the operator selects automatic targeting. See [OU targeting and DC fields](docs/ENDPOINT-TARGETING-2026-10-20.md).
+
 Authentication update (2026-10-20): application operator roles and account allowlists have been removed. Sign in with a user from the configured AD domain. GPO operations use only that credential, and AD enforces its permissions. Windows identity is retained for session binding and audit context. See [authentication changes](docs/AUTHENTICATION-2026-10-20.md).
 
 Responsiveness maintenance (2026-10-19) reduces background rendering, preserves text selections and allows rollback inspection to finish within the server deadline. The portable Windows runtime is rebuilt. See [changes and validation](docs/RESPONSIVENESS-2026-10-19.md).
@@ -129,7 +131,7 @@ Important behavior:
 - interrupted/ambiguous write outcomes are recorded for administrator review rather than automatically replayed;
 - the durable operation manifest now records `VERIFY_MISMATCH` when immediate post-write read-back fails instead of incorrectly recording `PUBLISHED`.
 
-The backend independently rejects wildcard write authorization, including when it is started without the launcher. Host allowlists are applied on the DC during both preview and execution. Missing values differ from explicitly configured empty values, and advanced audit compares numeric masks rather than localized display text. Verification preserves administrator-review states after interrupted publication or rollback, and refresh cannot run against an ambiguous execution.
+The backend independently rejects wildcard write authorization, including when it is started without the launcher. Endpoint targeting is applied on the DC during preview and execution: either the selected AD scope or an explicit host list. Missing values differ from explicitly configured empty values, and advanced audit compares numeric masks rather than localized display text. Verification preserves administrator-review states after interrupted publication or rollback, and refresh cannot run against an ambiguous execution.
 
 New evidence exports use schema `1.1`. Their SHA-256 integrity hash covers the serialized export with `integrityHash` set to an empty string, using the backend's canonical JSON serialization. Existing evidence remains immutable.
 

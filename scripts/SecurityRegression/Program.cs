@@ -17,6 +17,10 @@ using Microsoft.Extensions.Logging;
 
 static void Check(bool value,string message){if(!value)throw new Exception(message);}
 static void Reject(Action action,string code){try{action();throw new Exception("Expected "+code);}catch(PolicyException error){Check(error.Code==code,"Unexpected code "+error.Code);}}
+Check(EndpointTargeting.Resolve(null,[])=="SelectedOu","New empty config did not select OU targeting");
+Check(EndpointTargeting.Resolve(null,["ws.example.local"])=="ExplicitHosts","Legacy explicit host list expanded");
+Check(EndpointTargeting.Resolve("SelectedOu",["ws.example.local"])=="SelectedOu","Automatic mode remained restricted by old host list");
+Reject(()=>EndpointTargeting.Resolve("*",[]),"INVALID_ENDPOINT_TARGETING");
 OperatorSecurity.ValidateHosts(["dc.example.local","ws.example.local"],"example.local");
 foreach(var host in new[]{"*","*.example.local","ws.evil.local","dc.example.local.evil","dc.example.local\n","127.0.0.1"})
  Reject(()=>OperatorSecurity.ValidateHosts([host],"example.local"),"INVALID_HOST_ALLOWLIST");

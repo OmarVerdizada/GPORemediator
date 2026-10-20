@@ -106,6 +106,9 @@
 .gr-auto-permission:has(.gr-auto-state.on):before{background:#10b981}
 @media(max-width:700px){.gr-auto-rail{grid-template-columns:1fr;gap:8px}.gr-auto-rail>i{display:none}.gr-auto-body{padding:16px}.gr-auto-card{padding:16px}}
 .gr-auto-inline-warning{display:inline-flex;align-items:center;max-width:420px;padding:8px 8px;border:1px solid #f0d89d;border-radius:var(--radius-sm);background:#fff8e7;color:#805f12;font-size:var(--text-11);line-height:1.35;font-weight:650}
+.gr-auto-field select{display:block;width:100%;margin-top:6px;padding:10px;border:1px solid var(--border);border-radius:10px;background:var(--surface);color:inherit;font:inherit}
+.gr-auto-field small{display:block;margin-top:8px;line-height:1.6;font-weight:400}
+.gr-auto-field textarea:disabled{opacity:.55}
 :root{font-family:Inter,"Segoe UI Variable","Segoe UI",Arial,sans-serif}
 :root[data-gr-theme="dark"]{}
 *{box-sizing:border-box}

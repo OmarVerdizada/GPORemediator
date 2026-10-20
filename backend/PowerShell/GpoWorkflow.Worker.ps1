@@ -353,12 +353,9 @@ function Preview($S,$Map){
 
     # Apply regenerates the preview on the DC. Use the same host boundary here
     # so filtering cannot make a fresh plan reject its own refresh target list.
-    $allowed=@(Read-Field $cfg 'allowedHosts' @())
-    if($allowed -notcontains '*'){
-        $computers=@($computers|Where-Object{$allowed -contains $_})
-        $impact.affectedObjects.sampleHosts=@($impact.affectedObjects.sampleHosts|Where-Object{$allowed -contains $_})
-    }
-    if([string]$S.refresh -eq 'Scope' -and @($computers).Count -eq 0){$warnings+='NO_REFRESH_HOSTS: No enabled in-scope endpoint matched AllowedHosts. gpupdate and endpoint evidence cannot be obtained automatically.'}
+    $computers=@(Filter-EndpointHosts $computers)
+    $impact.affectedObjects.sampleHosts=@(Filter-EndpointHosts @($impact.affectedObjects.sampleHosts))
+    if([string]$S.refresh -eq 'Scope' -and @($computers).Count -eq 0){$warnings+='NO_REFRESH_HOSTS: No enabled endpoint matched the selected OU and endpoint targeting mode.'}
     $contentMatches=Mapping-Matches $S.gpoId $Map $S;$linkMatches=$null -ne $existing -and $existing.enabled -and (!$S.firstLink -or $existing.order -eq 1);$desired=Mapping-Display $S.gpoId $Map $S $true
     return @{gpo=(Gpo-Choice $gpo);scope=$scope;previousValue=(Mapping-Display $S.gpoId $Map $S $false);desiredValue=$desired;noChange=($contentMatches -and $linkMatches);fingerprint=(Fingerprint $S.gpoId $scope.dn);scopeLinks=$raw;existingLink=$existing;refreshComputers=$computers;warnings=$warnings;impact=$impact;preflight=$preflight}
 }
@@ -448,7 +445,7 @@ function Verify-EffectiveSamples($Plan,$Map){
       }
       return @($checks)
     }
-    $hosts=@();if($Plan.preview.impact -and $Plan.preview.impact.affectedObjects){$hosts+=@($Plan.preview.impact.affectedObjects.sampleHosts)};$allowed=@(Read-Field $cfg 'allowedHosts' @());$hosts=@($hosts|Where-Object{$_ -and $_ -in $allowed}|Sort-Object -Unique|Select-Object -First 5)
+    $hosts=@();if($Plan.preview.impact -and $Plan.preview.impact.affectedObjects){$hosts+=@($Plan.preview.impact.affectedObjects.sampleHosts)};$hosts=@(Filter-EndpointHosts $hosts|Sort-Object -Unique|Select-Object -First 5)
     if(!$hosts.Count){return @(@{hostname='<scope>';state='PENDING';message='No concrete endpoint is available for effective-policy verification in the selected scope.';actualValue=$null})}
     try{$liveHosts=@(Get-ADComputer -SearchBase $s.scopeDn -SearchScope Subtree -Filter {Enabled -eq $true} -Server $cfg.domainController -Properties DNSHostName -ResultSetSize 5001 -ErrorAction Stop|ForEach-Object{[string]$_.DNSHostName});$hosts=@($hosts|Where-Object{$_ -in $liveHosts})}catch{return @(@{hostname='<scope>';state='UNAVAILABLE';message='Current endpoint scope membership could not be established.';actualValue=$null})}
     if(!$hosts.Count){return @(@{hostname='<scope>';state='PENDING';message='Preview sample endpoints no longer belong to the enabled target scope.';actualValue=$null})}
@@ -547,16 +544,25 @@ function Verify-Rollback($Plan,$Map,$Manifest){
     $matches=$matches -and ([string](Gpo-Ad $s.gpoId).gPCMachineExtensionNames -ceq [string]$Manifest.beforeExtensions) -and ((Scope-Links $s.scopeDn) -ceq [string]$Plan.preview.scopeLinks)
     return @{restored=[bool]$matches;published=$false;linked=$false;effective='ROLLBACK_ENDPOINT_PENDING';verification=(Verification-Metadata $s);endpointChecks=@();currentValue=(Mapping-Display $s.gpoId $Map $s $false)}
 }
+function Filter-EndpointHosts([string[]]$Hosts){
+    $allowed=@(Read-Field $cfg 'allowedHosts' @())
+    $mode=[string](Read-Field $cfg 'endpointTargeting' '')
+    if(!$mode){$mode=if($allowed.Count){'ExplicitHosts'}else{'SelectedOu'}}
+    if($mode -notin @('SelectedOu','ExplicitHosts')){Fail 'INVALID_ENDPOINT_TARGETING' 'Choose selected OU or explicit endpoint hosts.'}
+    if($mode -eq 'ExplicitHosts'){return @($Hosts|Where-Object{$_ -and $_ -in $allowed})}
+    # Only accept concrete DNS names in the configured domain from the scoped AD query.
+    $suffix='.'+[string]$cfg.domain
+    return @($Hosts|Where-Object{$_ -and $_.Length -le 253 -and $_ -match '^(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)+[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?$' -and $_.EndsWith($suffix,[StringComparison]::OrdinalIgnoreCase)})
+}
 function Refresh-Targets([string]$Strategy,[string]$ScopeDn,[string]$EndpointScopeDn='', [string]$PolicyScope='Computer'){
     $targets=@()
     switch($Strategy){
         'None' {return @()}
         'Pdc' {if($PolicyScope -eq 'User'){Fail 'USER_REFRESH_TARGET_INVALID' 'User policy cannot be refreshed on the PDC without a user session.'};if($PolicyScope -ne 'Domain'){Fail 'PDC_REFRESH_SCOPE_INVALID' 'PDC refresh is only valid for domain-account-policy controls.'};$targets=@([string]$domain.PDCEmulator)}
-        'Scope' {$searchDn=if($PolicyScope -eq 'User'){$EndpointScopeDn}else{$ScopeDn};if([string]::IsNullOrWhiteSpace($searchDn)){Fail 'ENDPOINT_SCOPE_REQUIRED' 'Choose a computer OU for policy refresh.'};$null=Scope $searchDn;$objects=@(Get-ADComputer -SearchBase $searchDn -SearchScope Subtree -Filter {Enabled -eq $true} -Server $cfg.domainController -Properties DNSHostName -ResultSetSize 101);if($objects.Count -gt 100){Fail 'REFRESH_SCOPE_TOO_LARGE' 'More than 100 computers are in the refresh scope. Choose a smaller endpoint OU.'};$targets=@($objects|Where-Object{$_.DNSHostName}|ForEach-Object{[string]$_.DNSHostName})}
+        'Scope' {$searchDn=if($PolicyScope -eq 'User'){$EndpointScopeDn}else{$ScopeDn};if([string]::IsNullOrWhiteSpace($searchDn)){Fail 'ENDPOINT_SCOPE_REQUIRED' 'Choose a computer OU for policy refresh.'};$null=Scope $searchDn;$objects=@(Get-ADComputer -SearchBase $searchDn -SearchScope Subtree -Filter {Enabled -eq $true} -Server $cfg.domainController -Properties DNSHostName -ResultSetSize 5001);if($objects.Count -gt 5000){Fail 'REFRESH_SCOPE_TOO_LARGE' 'More than 5,000 computers are in the refresh scope. Choose a smaller endpoint OU.'};$targets=@($objects|Where-Object{$_.DNSHostName}|ForEach-Object{[string]$_.DNSHostName})}
         default {Fail 'GPO_OPTIONS_INVALID' 'Choose PDC or scope computers.'}
     }
-    $allowed=@(Read-Field $cfg 'allowedHosts' @())
-    return @($targets|Where-Object{$_ -and ($allowed -contains $_)}|Sort-Object -Unique)
+    return @(Filter-EndpointHosts $targets|Sort-Object -Unique)
 }
 function Run-Directory($Plan){if($Plan.id -notmatch '^[a-f0-9]{32}$' -or $Plan.domain -ine $cfg.domain -or $Plan.domainController -ine $cfg.domainController){Fail 'PLAN_CONTEXT_CHANGED' 'Plan context does not match the selected DC/domain.'};$root=[IO.Path]::GetFullPath([string]$cfg.backupPath);if($root -notmatch '^[A-Za-z]:\\'){Fail 'BACKUP_PATH_INVALID' 'A local backup path on the selected DC is required.'};return Join-Path $root ('GpoWorkflow\'+$Plan.id)}
 function Save-Manifest($Manifest,[string]$Directory){Atomic-Text (Join-Path $Directory 'manifest.json') ($Manifest|ConvertTo-Json -Depth 50) ([Text.UTF8Encoding]::new($false))}
@@ -657,7 +663,7 @@ switch($Operation){
         if(!$strategy){$strategy=[string]$plan.selection.refresh}
          $endpointScope=[string](Read-Field $plan.selection 'endpointScopeDn' '')
          $computers=@(Refresh-Targets $strategy $plan.selection.scopeDn $endpointScope ([string]$map.scope))
-        if(!$computers.Count){return Result $(if($rollback){'ROLLED_BACK'}else{'REFRESH_NOT_CONFIGURED'}) 'No authorized refresh hosts are available. Choose a target strategy and authorize those hosts in Settings.' $manifest $before @()}
+        if(!$computers.Count){return Result $(if($rollback){'ROLLED_BACK'}else{'REFRESH_NOT_CONFIGURED'}) 'No authorized refresh hosts are available. Choose the endpoint OU and automatic OU targeting, or configure explicit hosts in Settings.' $manifest $before @()}
         Emit-Stage 'GPUPDATE'
         $refresh=@();$target=if($rollback){'Both'}elseif([string]$map.scope -eq 'User'){'User'}else{'Computer'}
         foreach($computer in $computers){try{$options=@{Computer=$computer;Force=$true;RandomDelayInMinutes=0;ErrorAction='Stop'};if(!$rollback){$options.Target=$target};Invoke-GPUpdate @options|Out-Null;$refresh+=@{computer=$computer;state='SCHEDULED';message=('gpupdate /target:'+$target.ToLowerInvariant()+' /force scheduled.')}}catch{$refresh+=@{computer=$computer;state='FAILED';message='Remote gpupdate could not be scheduled. Check RPC/task-scheduler firewall and permissions.'}}}

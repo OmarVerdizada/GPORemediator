@@ -12,7 +12,7 @@ try {
         & $dotnet run --project "scripts/$project" -c Release
         Check-Exit $project
     }
-    foreach($script in @('Test-SecurityFiles','Test-DomainSignIn','Test-RuntimeIntegrity','Test-GpoMappings','Test-EndpointEvidence','Test-AllEndpointMappings','Test-VerificationLifecycle','Test-ServiceControl')){
+    foreach($script in @('Test-SecurityFiles','Test-DomainSignIn','Test-EndpointTargeting','Test-RuntimeIntegrity','Test-GpoMappings','Test-EndpointEvidence','Test-AllEndpointMappings','Test-VerificationLifecycle','Test-ServiceControl')){
         & powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "scripts/$script.ps1"
         Check-Exit $script
     }
@@ -37,7 +37,7 @@ try {
     if(!(Test-FrontendDistMatchesSource)){throw 'Frontend/dist does not match source. Run Build-Portable.ps1.'}
     if(!(Test-PortableBackendMatchesSource)){throw 'Runtime does not match source. Run Build-Portable.ps1.'}
     if($IncludeBrowser){
-        foreach($test in @('Test-RecoveryUi','Test-WorkflowUi')){
+        foreach($test in @('Test-RecoveryUi','Test-WorkflowUi','Test-EndpointTargetingUi')){
             & node "scripts/$test.cjs"
             Check-Exit $test
         }

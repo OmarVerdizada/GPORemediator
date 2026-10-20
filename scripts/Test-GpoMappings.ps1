@@ -128,17 +128,17 @@ Write-Output 'PASS partial multi-item repair preserves stricter compliant numeri
 # Target selection executes the worker resolver with directory enumeration mocked.
 function Scope {param($Dn) return @{dn=$Dn}}
 $script:targetCount=2
-function Get-ADComputer {param($SearchBase,$SearchScope,$Filter,$Server,$Properties,$ResultSetSize) if($script:targetCount -gt 100){return 1..101|ForEach-Object{[pscustomobject]@{DNSHostName=('ws'+$_+'.example.local')}}};return @([pscustomobject]@{DNSHostName='ws.example.local'},[pscustomobject]@{DNSHostName='unauthorized.example.local'})}
+function Get-ADComputer {param($SearchBase,$SearchScope,$Filter,$Server,$Properties,$ResultSetSize) if($script:targetCount -gt 5000){return 1..5001|ForEach-Object{[pscustomobject]@{DNSHostName=('ws'+$_+'.example.local')}}};return @([pscustomobject]@{DNSHostName='ws.example.local'},[pscustomobject]@{DNSHostName='unauthorized.example.local'})}
 Assert-Test (@(Refresh-Targets 'None' 'DC=example,DC=local').Count -eq 0) 'None unexpectedly scheduled targets'
 Assert-Test ((@(Refresh-Targets 'Pdc' 'DC=example,DC=local' '' 'Domain') -join ',') -eq 'dc.example.local') 'PDC target mismatch'
 Assert-Test ((@(Refresh-Targets 'Scope' 'DC=example,DC=local') -join ',') -eq 'ws.example.local') 'Scope allowlist failed'
 Assert-Test ((@(Refresh-Targets 'Scope' 'OU=Users,DC=example,DC=local' 'OU=Endpoints,DC=example,DC=local' 'User') -join ',') -eq 'ws.example.local') 'User refresh did not use the independent endpoint OU'
 try{$null=Refresh-Targets 'Pdc' 'OU=Users,DC=example,DC=local' '' 'User';throw 'User PDC refresh was allowed'}catch{if($_.Exception.Message -notlike 'USER_REFRESH_TARGET_INVALID*'){throw}}
 try{$null=Refresh-Targets 'Pdc' 'OU=Servers,DC=example,DC=local' '' 'Computer';throw 'Computer OU PDC refresh was allowed'}catch{if($_.Exception.Message -notlike 'PDC_REFRESH_SCOPE_INVALID*'){throw}}
-$script:targetCount=101
+$script:targetCount=5001
 try{$null=Refresh-Targets 'Scope' 'DC=example,DC=local';throw 'Scope limit was bypassed'}catch{if($_.Exception.Message -notlike 'REFRESH_SCOPE_TOO_LARGE*'){throw}}
 $script:targetCount=2
-Write-Output 'PASS refresh options: None / Domain-Pdc / Scope, host allowlist and 100-host bound'
+Write-Output 'PASS refresh options: None / Domain-Pdc / Scope, host allowlist and 5,000-host bound'
 
 # Execute the actual refresh branch after rollback, including both-policy refresh.
 $switchAst=$ast.EndBlock.Statements|Where-Object{$_ -is [Management.Automation.Language.SwitchStatementAst]}|Select-Object -Last 1

@@ -185,6 +185,9 @@ function Save-CanonicalConfig([string]$Domain,[string]$Dc,[object]$Existing=$nul
     $ous=if($win){Convert-ToStringArray $win.AuthorizedOus}else{@()}
     if($ous.Count -eq 0){$ous=@((Convert-DomainToDn $domain))}
     $hosts=if($win){Convert-ToStringArray $win.AllowedHosts}else{@()}
+    $targeting=if($win -and $win.EndpointTargeting){[string]$win.EndpointTargeting}elseif($hosts.Count -gt 0){'ExplicitHosts'}else{'SelectedOu'}
+    if($targeting -notin @('SelectedOu','ExplicitHosts')){throw 'Choose SelectedOu or ExplicitHosts endpoint targeting.'}
+    if($targeting -eq 'SelectedOu'){$hosts=@()}
     $writes=$false
     if($win -and $Existing.SecurityVersion -eq 1 -and $null -ne $win.EnableWrites){$writes=[bool]$win.EnableWrites}
     $canonical=[ordered]@{
@@ -198,6 +201,7 @@ function Save-CanonicalConfig([string]$Domain,[string]$Dc,[object]$Existing=$nul
             DomainController=$dc
             ApprovedGpoIds=@($approved)
             AuthorizedOus=@($ous)
+            EndpointTargeting=$targeting
             AllowedHosts=@($hosts)
             BackupPath=$backupRoot
         }
