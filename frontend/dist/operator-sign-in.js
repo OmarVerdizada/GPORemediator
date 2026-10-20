@@ -3,7 +3,7 @@
 let pending=null,reloading=false;
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const say=(az,en)=>window.GpoClient.storage.get('gr-lang','az')==='az'?az:en;
-async function session(){const response=await fetch('/api/session',{credentials:'same-origin',cache:'no-store',signal:AbortSignal.timeout(15000),headers:{Accept:'application/json'}});if(!response.ok)throw new Error(say('Windows girişini və operator icazənizi yoxlayın.','Check Windows sign-in and operator permissions.'));return response.json();}
+async function session(){const response=await fetch('/api/session',{credentials:'same-origin',cache:'no-store',signal:AbortSignal.timeout(15000),headers:{Accept:'application/json'}});if(!response.ok)throw new Error(say('Windows girişini yoxlayın.','Check Windows sign-in.'));return response.json();}
 function prompt(initial){return new Promise(resolve=>{
  const root=document.getElementById('root');root.inert=true;root.hidden=true;
  const overlay=document.createElement('div');overlay.className='operator-sign-in';overlay.setAttribute('role','dialog');overlay.setAttribute('aria-modal','true');overlay.setAttribute('aria-labelledby','operator-sign-in-title');

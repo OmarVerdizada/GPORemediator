@@ -9,12 +9,11 @@ public record GpoLink(string Target, int Order, bool Enforced, bool Enabled);
 public record AuditEvent(long Id, string Event, string Operator, string? JobId, string? ControlId, string? GpoId,
     string Details, string CreatedAt, string PreviousHash, string Hash);
 public record SetupConfigRequest(string Urls, string Domain, string DomainController, string[] ApprovedGpoIds,
-    string[] AuthorizedOus, string[] AllowedHosts, string[] AllowedOperators, string BackupPath, bool AutoRestart = true,
-    string[]? Remediators = null, string[]? Auditors = null, string[]? Viewers = null);
+    string[] AuthorizedOus, string[] AllowedHosts, string BackupPath, bool AutoRestart = true);
 public record WriteModeRequest(bool Enable, string Confirmation, bool AutoRestart = true);
 public record SetupConfigView(string Urls, string Domain, string DomainController, string[] ApprovedGpoIds,
-    string[] AuthorizedOus, string[] AllowedHosts, string[] AllowedOperators, string BackupPath, bool EnableWrites,
-    string ConfigPath, bool Exists, string[] Remediators, string[] Auditors, string[] Viewers);
+    string[] AuthorizedOus, string[] AllowedHosts, string BackupPath, bool EnableWrites,
+    string ConfigPath, bool Exists);
 
 public sealed class PolicyException(string code, string message) : Exception(message)
 {

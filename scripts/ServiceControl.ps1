@@ -25,8 +25,8 @@ function Invoke-RemediatorServiceAction {
         $configPath=Join-Path $env:ProgramData 'GpoRemediator\Config\appsettings.Local.json'
         try {
             $cfg=Get-Content -LiteralPath $configPath -Raw -Encoding UTF8 | ConvertFrom-Json
-            if(!$cfg -or [string]$cfg.Mode -ne 'Windows' -or !$cfg.Windows -or [string]::IsNullOrWhiteSpace([string]$cfg.Windows.Domain) -or [string]::IsNullOrWhiteSpace([string]$cfg.Windows.DomainController) -or @($cfg.Windows.AllowedOperators).Count -lt 1){
-                throw 'Domain, writable DC and at least one operator must be saved before Windows / AD promotion.'
+            if(!$cfg -or [string]$cfg.Mode -ne 'Windows' -or !$cfg.Windows -or [string]::IsNullOrWhiteSpace([string]$cfg.Windows.Domain) -or [string]::IsNullOrWhiteSpace([string]$cfg.Windows.DomainController)){
+                throw 'Domain and writable DC must be saved before Windows / AD promotion.'
             }
         } catch {
             throw ('Windows / AD promotion is blocked because the saved configuration is incomplete or invalid: '+$_.Exception.Message)

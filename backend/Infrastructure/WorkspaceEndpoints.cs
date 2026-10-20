@@ -19,15 +19,15 @@ public static class WorkspaceEndpoints
         });
         app.MapPost("/api/workflows/preview",(PreviewSubmission request,HttpContext ctx,WorkspaceWorkflows jobs)=>{
             var job=jobs.Preview(request.RequestId,request.Batch,Token(ctx),Actor(ctx));return Results.Accepted("/api/workflows/"+job.Id,job);
-        }).WithMetadata(new OperatorAccess("Administrator","Remediator","Auditor","Viewer"));
+        });
         app.MapPost("/api/workflows/scan",(ScanRequest request,HttpContext ctx,WorkspaceWorkflows jobs)=>{
             var job=jobs.Scan(request,Token(ctx),Actor(ctx));return Results.Accepted("/api/workflows/"+job.Id,job);
-        }).WithMetadata(new OperatorAccess("Administrator","Remediator","Auditor","Viewer"));
+        });
         foreach(var action in new[]{"apply","rollback","verify","refresh"}){
             var operation=action;
             app.MapPost("/api/workflows/"+operation,(WorkflowRequest request,HttpContext ctx,WorkspaceWorkflows jobs)=>{
                 var job=jobs.Start(operation,request,Token(ctx),Actor(ctx));return Results.Accepted("/api/workflows/"+job.Id,job);
-            }).WithMetadata(new OperatorAccess(operation=="verify"?["Administrator","Remediator","Auditor","Viewer"]:["Administrator","Remediator"]));
+            });
         }
         app.MapGet("/api/workflows/{id}/report",(string id,HttpContext ctx,WorkspaceWorkflows jobs,Store store)=>{
             var job=jobs.Get(id,Actor(ctx));

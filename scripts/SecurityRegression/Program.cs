@@ -17,15 +17,6 @@ using Microsoft.Extensions.Logging;
 
 static void Check(bool value,string message){if(!value)throw new Exception(message);}
 static void Reject(Action action,string code){try{action();throw new Exception("Expected "+code);}catch(PolicyException error){Check(error.Code==code,"Unexpected code "+error.Code);}}
-var config=new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string,string?>{
- ["Windows:Roles:Administrators:0"]="TEST\\Admin",["Windows:Roles:Remediators:0"]="TEST\\Writer",
- ["Windows:Roles:Auditors:0"]="TEST\\Auditor",["Windows:Roles:Viewers:0"]="TEST\\Viewer",
- ["Windows:Roles:Viewers:1"]="TEST\\Conflict",["Windows:Roles:Administrators:1"]="TEST\\Conflict",
- ["Windows:AllowedOperators:0"]="TEST\\Legacy"
-}).Build();
-Check(OperatorSecurity.Role(config,"TEST/Viewer")=="Viewer","Identity normalization");
-Check(OperatorSecurity.Role(config,"TEST\\Legacy")=="Denied","Legacy list silently grants privilege");
-Check(OperatorSecurity.Role(config,"TEST\\Conflict")=="Denied","Ambiguous roles silently elevate");
 OperatorSecurity.ValidateHosts(["dc.example.local","ws.example.local"],"example.local");
 foreach(var host in new[]{"*","*.example.local","ws.evil.local","dc.example.local.evil","dc.example.local\n","127.0.0.1"})
  Reject(()=>OperatorSecurity.ValidateHosts([host],"example.local"),"INVALID_HOST_ALLOWLIST");
@@ -72,7 +63,7 @@ try{
  app.Use(async(ctx,next)=>{
   var actor=ctx.Request.Headers["Test-Identity"].ToString();
   if(actor.Length>0)ctx.User=new ClaimsPrincipal(new ClaimsIdentity([new Claim(ClaimTypes.Name,actor),new Claim(ClaimTypes.NameIdentifier,actor)],"Test"));
-  try{OperatorSecurity.Authorize(ctx,config,true,"TEST\\Admin");await RequestSecurity.ValidateMutationAsync(ctx);ctx.RequestServices.GetRequiredService<OperatorConfirmation>().Require(ctx);await next(ctx);}
+  try{OperatorSecurity.RequireIdentity(ctx);await RequestSecurity.ValidateMutationAsync(ctx);ctx.RequestServices.GetRequiredService<OperatorConfirmation>().Require(ctx);await next(ctx);}
   catch(PolicyException e){ctx.Response.StatusCode=e.Code=="AUTHENTICATION_REQUIRED"?401:403;await ctx.Response.WriteAsync(e.Code);}
   catch(AntiforgeryValidationException){ctx.Response.StatusCode=403;await ctx.Response.WriteAsync("CSRF_INVALID");}
  });
@@ -87,13 +78,13 @@ try{
  });
  app.MapGet("/api/private",()=>Results.Ok());
  foreach(var action in new[]{"apply","rollback"})
-  app.MapPost("/api/gpo/{id}/"+action,(GpoRefreshRequest request)=>new{refresh=request.Refresh}).WithMetadata(new OperatorAccess("Administrator","Remediator"));
+  app.MapPost("/api/gpo/{id}/"+action,(GpoRefreshRequest request)=>new{refresh=request.Refresh});
  GpoEndpoints.MapRefresh(app,(id,consent,context)=>Task.FromResult<object>(new{refresh=consent.Refresh}));
- app.MapPost("/api/setup/config",()=>Results.Ok()).WithMetadata(new OperatorAccess("Administrator"));
+ app.MapPost("/api/setup/config",()=>Results.Ok());
  app.MapPost("/api/service/{action}",(string action)=>action is "stop" or "restart"?Results.Accepted():Results.BadRequest())
-  .WithMetadata(new OperatorAccess("Administrator"),new OperatorBootstrap());
+  .WithMetadata(new OperatorBootstrap());
  app.MapPost("/api/undeclared",()=>Results.Ok());
- app.MapPost("/api/gpo/connect",()=>Results.Ok()).WithMetadata(new OperatorAccess("Administrator","Remediator","Auditor","Viewer")).RequireRateLimiting("delegated-login");
+ app.MapPost("/api/gpo/connect",()=>Results.Ok()).RequireRateLimiting("delegated-login");
  BundledAssets.MapFrontend(app);
  await app.StartAsync();
  using var client=app.GetTestClient();client.BaseAddress=new Uri("http://localhost");
@@ -121,7 +112,7 @@ try{
  }
  foreach(var actor in new[]{"TEST\\Writer","TEST\\Viewer","TEST\\Auditor"}){
   var native=await Session(actor,false);
-  using var response=await Post("/api/service/stop",actor,native);Check(response.StatusCode==HttpStatusCode.Forbidden,"Lifecycle privilege bypass: "+actor);
+  using var response=await Post("/api/service/stop",actor,native);Check(response.StatusCode==HttpStatusCode.Accepted,"Role-free lifecycle blocked: "+actor);
  }
  async Task<HttpResponseMessage> Private(string actor,string cookie){
   using var req=new HttpRequestMessage(HttpMethod.Get,"/api/private");req.Headers.Add("Test-Identity",actor);req.Headers.Add("Cookie",cookie);return await client.SendAsync(req);
@@ -143,11 +134,11 @@ try{
  Check(setupContext.Response.Headers.SetCookie.Any(x=>x?.StartsWith(OperatorConfirmation.CookieName+"=")==true),"Initial setup owner confirmation failed");
  var restartedContext=new DefaultHttpContext();restartedContext.User=new ClaimsPrincipal(new ClaimsIdentity([new Claim(ClaimTypes.Name,"TEST\\Admin")],"Test"));restartedContext.Request.Headers.Cookie=confirmed.Cookie;
  Check(!restarted.Confirmed(restartedContext),"Restart retained prior startup proof");
- foreach(var role in new[]{"Viewer","Auditor","Admin","Writer"}){
+ foreach(var role in new[]{"Viewer","Auditor","Admin","Writer","Unconfigured","Conflict","Legacy"}){
   var actor="TEST\\"+role;var session=await Session(actor);
   foreach(var action in new[]{"apply","rollback","refresh"})foreach(var suffix in new[]{action,action+"/",action.ToUpperInvariant()}){
    using var response=await Post("/api/gpo/test/"+suffix,actor,session);
-   Check(response.StatusCode==(role is "Viewer" or "Auditor"?HttpStatusCode.Forbidden:HttpStatusCode.OK),"Route privilege bypass: "+role+"/"+suffix);
+   Check(response.StatusCode==HttpStatusCode.OK,"Application role restriction remains: "+role+"/"+suffix);
   }
  }
  var admin=await Session("TEST\\Admin");
@@ -164,19 +155,19 @@ try{
  using(var response=await Post("/api/gpo/test/refresh","TEST\\Admin",admin,null))Check(response.StatusCode==HttpStatusCode.Forbidden,"Missing Origin accepted");
  using(var response=await Post("/api/gpo/test/refresh","",admin))Check(response.StatusCode==HttpStatusCode.Unauthorized,"Anonymous write accepted");
  using(var response=await Post("/api/gpo/test/refresh","TEST\\Writer",admin))Check(response.StatusCode==HttpStatusCode.Forbidden,"Cross-identity CSRF accepted");
- using(var response=await Post("/api/undeclared","TEST\\Admin",admin))Check(response.StatusCode==HttpStatusCode.Forbidden,"Undeclared mutation accepted");
+ using(var response=await Post("/api/undeclared","TEST\\Admin",admin))Check(response.StatusCode==HttpStatusCode.OK,"Role metadata still required");
  using(var response=await Post("/api/gpo/test/refresh","TEST\\Admin",admin,json:"{\"refresh\":\"Scope\",\"command\":\"injected\"}"))Check(response.StatusCode==HttpStatusCode.BadRequest,"Unknown refresh fields accepted");
  var throttled=await Session("TEST\\Writer",false);
  for(var i=0;i<5;i++){using var response=await Post("/api/operator/sign-in","TEST\\Writer",throttled,json:"{\"password\":\"wrong\"}");Check(response.StatusCode==(i<4?HttpStatusCode.Forbidden:HttpStatusCode.TooManyRequests),"Startup password retry throttle failed");}
  var viewer=await Session("TEST\\Viewer");
- using(var response=await Post("/api/setup/config","TEST\\Viewer",viewer))Check(response.StatusCode==HttpStatusCode.Forbidden,"Viewer saved configuration");
+ using(var response=await Post("/api/setup/config","TEST\\Viewer",viewer))Check(response.StatusCode==HttpStatusCode.OK,"Application role blocked configuration");
  for(var i=0;i<6;i++){using var response=await Post("/api/gpo/connect","TEST\\Viewer",viewer);Check(response.StatusCode==(i<5?HttpStatusCode.OK:HttpStatusCode.TooManyRequests),"Login rate limit failed");}
  using(var req=new HttpRequestMessage(HttpMethod.Get,"/index.html")){
   req.Headers.Add("Test-Identity","TEST\\Viewer");using var response=await client.SendAsync(req);
   Check(response.IsSuccessStatusCode&&(await response.Content.ReadAsStringAsync()).Contains("GPO Remediator"),"Compiled UI asset unavailable");
  }
  await app.StopAsync();
- Console.WriteLine("PASS security: startup password/CSRF/identity/tamper/restart gate, endpoint roles/case/trailing slash, ambiguous/legacy roles, CSRF/origin/identity isolation, anonymous denial, login rate limit, refresh JSON, host boundary, script tampering, DPAPI and compiled UI.");
+ Console.WriteLine("PASS security: startup password/CSRF/identity/tamper/restart gate, role-free endpoints/case/trailing slash, unconfigured and legacy identities, CSRF/origin/identity isolation, anonymous denial, login rate limit, refresh JSON, host boundary, script tampering, DPAPI and compiled UI.");
 }finally{Directory.Delete(sandbox,true);}
 
 sealed class FixturePasswordVerifier : IOperatorPasswordVerifier { public bool Verify(string actor,string password)=>password=="fixture-password"; }

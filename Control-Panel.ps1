@@ -196,9 +196,8 @@ function Read-ConfigSummary {
     try {
         $cfg=Get-Content -LiteralPath $localConfig -Raw -Encoding UTF8 | ConvertFrom-Json
         $domain=[string]$cfg.Windows.Domain; $dc=[string]$cfg.Windows.DomainController
-        $ops=@($cfg.Windows.AllowedOperators).Count
-        if ([string]::IsNullOrWhiteSpace($domain) -or [string]::IsNullOrWhiteSpace($dc) -or $ops -lt 1) { return @{exists=$true;state='Incomplete';detail='Domain/DC/operator configuration needs attention';color='#DC2626';cfg=$cfg} }
-        return @{exists=$true;state=$domain;detail=($dc + ' · ' + $ops + ' operator(s)');color='#16A34A';cfg=$cfg}
+        if ([string]::IsNullOrWhiteSpace($domain) -or [string]::IsNullOrWhiteSpace($dc)) { return @{exists=$true;state='Incomplete';detail='Domain/DC configuration needs attention';color='#DC2626';cfg=$cfg} }
+        return @{exists=$true;state=$domain;detail=($dc + ' · AD account permissions');color='#16A34A';cfg=$cfg}
     } catch { return @{exists=$true;state='Invalid config';detail='appsettings.Local.json could not be parsed';color='#DC2626'} }
 }
 function Open-Product {

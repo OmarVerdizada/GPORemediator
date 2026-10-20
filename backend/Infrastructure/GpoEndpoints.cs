@@ -9,5 +9,5 @@ public static class GpoEndpoints
         =>routes.MapPost("/api/gpo/{id}/refresh",async(string id,GpoRefreshRequest request,HttpContext context)=>{
             if(request.Refresh is not ("Pdc" or "Scope"))throw new PolicyException("INVALID_REQUEST","Choose Pdc or Scope for policy refresh.");
             return await execute(id,new("",Refresh:request.Refresh),context);
-        }).WithMetadata(new OperatorAccess("Administrator","Remediator"));
+        });
 }

@@ -68,10 +68,10 @@ public sealed class OperatorConfirmation(IOperatorPasswordVerifier verifier)
     public static void MapEndpoints(WebApplication app,Func<OperatorPassword,HttpContext,CancellationToken,Task>? connect=null){
         app.MapPost("/api/operator/sign-in",async(OperatorPassword request,HttpContext context,OperatorConfirmation confirmation,Store store,CancellationToken ct)=>{
             // In AD mode one successful delegated connection proves the explicit startup login.
-            // Negotiate still identifies the operator and determines every application role.
+            // Negotiate identifies the browser operator for session binding and auditing.
             if(connect is null)confirmation.SignIn(context,request);
             else {await connect(request,context,ct);confirmation.IssueProof(context);}
-            store.Audit("OPERATOR_STARTUP_CONFIRMED",Actor(context));return Results.Ok(new{confirmed=true,connected=connect is not null});
-        }).WithMetadata(new OperatorBootstrap(),new OperatorAccess("Administrator","Remediator","Auditor","Viewer")).RequireRateLimiting("operator-confirmation");
+            store.Audit("OPERATOR_STARTUP_CONFIRMED",Actor(context),details:new{executionUser=context.Items["ExecutionUser"]});return Results.Ok(new{confirmed=true,connected=connect is not null});
+        }).WithMetadata(new OperatorBootstrap()).RequireRateLimiting("operator-confirmation");
     }
 }

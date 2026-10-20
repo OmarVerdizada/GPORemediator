@@ -179,25 +179,12 @@ function Save-CanonicalConfig([string]$Domain,[string]$Dc,[object]$Existing=$nul
     $domain=([string]$Domain).Trim().Trim('.').ToLowerInvariant()
     $dc=([string]$Dc).Trim().Trim('.').ToLowerInvariant()
     if(!$domain -or !$dc){ return $null }
-    $identity=[Security.Principal.WindowsIdentity]::GetCurrent().Name
     $win=if($Existing -and $Existing.Windows){$Existing.Windows}else{$null}
     $approved=if($win){Convert-ToStringArray $win.ApprovedGpoIds}else{@()}
     if($approved.Count -eq 0){$approved=@('*')}
     $ous=if($win){Convert-ToStringArray $win.AuthorizedOus}else{@()}
     if($ous.Count -eq 0){$ous=@((Convert-DomainToDn $domain))}
     $hosts=if($win){Convert-ToStringArray $win.AllowedHosts}else{@()}
-    $operators=if($win){Convert-ToStringArray $win.AllowedOperators}else{@()}
-    if($operators.Count -eq 0 -and $identity -match '\\'){$operators=@($identity)}
-    $roles=if($win -and $win.Roles){$win.Roles}else{$null}
-    # Use explicit roles. Never resolve conflicting membership by granting a stronger role.
-    $admins=@($(if($roles){Convert-ToStringArray $roles.Administrators}else{$identity}) | Sort-Object -Unique)
-    $operators=@($admins)
-    $remediators=@($(if($roles){Convert-ToStringArray $roles.Remediators}else{@()}) | Sort-Object -Unique)
-    $auditors=@($(if($roles){Convert-ToStringArray $roles.Auditors}else{@()}) | Sort-Object -Unique)
-    $viewers=@($(if($roles){Convert-ToStringArray $roles.Viewers}else{@()}) | Sort-Object -Unique)
-    $members=@($admins)+@($remediators)+@($auditors)+@($viewers)
-    $duplicate=$members | Group-Object { $_.ToLowerInvariant() } | Where-Object Count -gt 1 | Select-Object -First 1
-    if($duplicate){throw 'The configuration assigns one Windows account to multiple roles. Correct the role lists in recovery Setup mode.'}
     $writes=$false
     if($win -and $Existing.SecurityVersion -eq 1 -and $null -ne $win.EnableWrites){$writes=[bool]$win.EnableWrites}
     $canonical=[ordered]@{
@@ -212,13 +199,6 @@ function Save-CanonicalConfig([string]$Domain,[string]$Dc,[object]$Existing=$nul
             ApprovedGpoIds=@($approved)
             AuthorizedOus=@($ous)
             AllowedHosts=@($hosts)
-            AllowedOperators=@($operators)
-            Roles=[ordered]@{
-                Administrators=@($admins)
-                Remediators=@($remediators)
-                Auditors=@($auditors)
-                Viewers=@($viewers)
-            }
             BackupPath=$backupRoot
         }
     }

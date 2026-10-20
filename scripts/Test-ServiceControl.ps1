@@ -53,7 +53,7 @@ try{
  $start=$program.IndexOf('app.MapPost("/api/service/{action}"')
  $end=$program.IndexOf('string GpoToken',$start)
  $route=$program.Substring($start,$end-$start)
- Assert-Fixture ($route.Contains('new OperatorAccess("Administrator"),new OperatorBootstrap()') -and $route.Contains('gate.BeginMaintenance(') -and $route.Contains('File.WriteAllText(stopMarker')) 'production lifecycle route retains Administrator, idle-operation gate and persisted stop marker'
+ Assert-Fixture ($route.Contains('new OperatorBootstrap()') -and $route.Contains('gate.BeginMaintenance(') -and $route.Contains('File.WriteAllText(stopMarker')) 'production lifecycle route retains authenticated bootstrap, idle-operation gate and persisted stop marker'
  $script:admin=$false;$message='';try{Stop-RemediatorEmergency}catch{$message=$_.Exception.Message}
  Assert-Fixture ($message -match 'Administrator' -and $script:killCount -eq 0 -and !(Test-Path -LiteralPath (Join-Path $work 'stop.request.json'))) 'emergency stop rejects a non-elevated caller without state changes'
  $script:admin=$true;$script:scenario='cooperative';Stop-RemediatorEmergency

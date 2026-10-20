@@ -1,5 +1,7 @@
 # GPO Remediator 3.14.1
 
+Authentication update (2026-10-20): application operator roles and account allowlists have been removed. Sign in with a user from the configured AD domain. GPO operations use only that credential, and AD enforces its permissions. Windows identity is retained for session binding and audit context. See [authentication changes](docs/AUTHENTICATION-2026-10-20.md).
+
 Responsiveness maintenance (2026-10-19) reduces background rendering, preserves text selections and allows rollback inspection to finish within the server deadline. The portable Windows runtime is rebuilt. See [changes and validation](docs/RESPONSIVENESS-2026-10-19.md).
 
 3.14.1 makes recommended policy values editable with typed per-field overrides and applies user GPOs to a selected OU without requiring individual usernames. See [changes and upgrade instructions](docs/RELEASE-3.14.1.md).
@@ -24,7 +26,7 @@ See [3.11 integration and validation](docs/INTEGRATION-3.11.0.md) for provenance
 
 3.10.0 adds first-class user-policy targeting: user OU, endpoint OU, verification identity, user-only gpupdate and exact HKCU evidence are handled separately. It also consolidates authentication into one sign-in surface and enforces the reviewed 385 computer / 12 user / 8 domain scope contract. See [the remediation audit](docs/REMEDIATION-AUDIT.md) for the complete 405-control review.
 
-The application uses one domain-account sign-in to open the workspace and connect to AD. The duplicate dashboard password form is removed; expiry/disconnect returns to the same sign-in screen. Startup still requires explicit sign-in, and Windows operator roles remain enforced. It retains compact colored dashboard metrics and supplemental review guidance for empty policy categories. At 3.10, the catalog contained 401 automated mappings and four guided controls; 3.11 applies the conservative 394/11 boundary above.
+The application uses one domain-account sign-in to open the workspace and connect to AD. The duplicate dashboard password form is removed; expiry/disconnect returns to the same sign-in screen. Startup still requires explicit sign-in, and Application roles were removed in the 2026-10-20 authentication update. It retains compact colored dashboard metrics and supplemental review guidance for empty policy categories. At 3.10, the catalog contained 401 automated mappings and four guided controls; 3.11 applies the conservative 394/11 boundary above.
 
 3.7.1 provides offline AZ/EN remediation guides for the four blocked controls, with local/central policy paths, read commands, guarded operator-run Defender backup/apply/rollback examples and honest verification limits. The catalog remains 401 automatic GPO mappings plus four guided controls. See [guided procedures and execution boundaries](docs/GUIDED-REMEDIATION.md).
 
@@ -105,10 +107,10 @@ Wildcard scope is permitted for read-only discovery, but production writes remai
 
 Web UI identity and execution identity are separate:
 
-- **Web UI Administrator / Remediator / Auditor / Viewer** = Windows account used to open and authorize the console.
-- **Delegated execution account** = the domain account entered on Dashboard for Kerberos/WinRM/GPO execution. Its password stays in memory and it is never automatically written into the UI role lists.
+- **Windows operator** = authenticated Windows account used to bind the local browser session and record audit context; it has no application role.
+- **Domain execution account** = the account entered at sign-in for Kerberos/WinRM/GPO execution. Its password stays in protected memory. The DC validates the account and enforces its AD permissions.
 
-Each Web UI account must belong to exactly one explicit role. Conflicting membership is rejected. Legacy `AllowedOperators` entries do not implicitly grant Administrator access. Windows authentication is mandatory in both AD mode and recovery Setup; Setup is restricted to the Windows identity that launched the service. Browsers may prompt for that Windows account.
+No role or operator list is required. Legacy `Windows.Roles` and `AllowedOperators` values are ignored and removed when the launcher saves canonical configuration. Windows authentication remains mandatory for local session identity in both AD mode and Setup. Initial Setup verifies the current Windows caller password; Windows/AD mode uses the single domain sign-in. Browsers may reuse or prompt for Windows credentials.
 
 ## GPO workflow
 

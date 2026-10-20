@@ -53,12 +53,11 @@ Reject(()=>WorkspaceRules.ValidateSchedule([1]),"INVALID_REQUEST");
 // HTTP tests use production route registration, authorization and antiforgery helpers.
 var builder=WebApplication.CreateBuilder();builder.WebHost.UseTestServer();builder.Logging.ClearProviders();
 builder.Services.AddSingleton(store);builder.Services.AddSingleton(jobs);builder.Services.AddAntiforgery(o=>o.HeaderName="X-CSRF-Token");
-var configuration=new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string,string?>{["Windows:Roles:Administrators:0"]="TEST\\Admin",["Windows:Roles:Viewers:0"]="TEST\\Viewer"}).Build();
 await using var app=builder.Build();app.UseRouting();
 app.Use(async(ctx,next)=>{
  var actor=ctx.Request.Headers["Test-Identity"].ToString();if(actor.Length>0)ctx.User=new ClaimsPrincipal(new ClaimsIdentity([new Claim(ClaimTypes.Name,actor),new Claim(ClaimTypes.NameIdentifier,actor)],"Test"));
- try{OperatorSecurity.Authorize(ctx,configuration,true,"TEST\\Admin");await RequestSecurity.ValidateMutationAsync(ctx);await next(ctx);}
- catch(PolicyException error){ctx.Response.StatusCode=error.Code is "ROLE_DENIED" or "OPERATOR_DENIED"?403:error.Code=="NOT_FOUND"?404:409;await ctx.Response.WriteAsJsonAsync(new{error.Code});}
+ try{OperatorSecurity.RequireIdentity(ctx);await RequestSecurity.ValidateMutationAsync(ctx);await next(ctx);}
+ catch(PolicyException error){ctx.Response.StatusCode=error.Code=="AUTHENTICATION_REQUIRED"?401:error.Code=="NOT_FOUND"?404:409;await ctx.Response.WriteAsJsonAsync(new{error.Code});}
 });
 app.MapGet("/api/session",(HttpContext ctx,IAntiforgery anti)=>new{token=anti.GetAndStoreTokens(ctx).RequestToken});WorkspaceEndpoints.MapWorkspace(app);await app.StartAsync();
 using var http=app.GetTestClient();http.BaseAddress=new Uri("http://localhost");
@@ -78,7 +77,7 @@ Reject(()=>gate.BeginOperation(Guid.Parse(selection.GpoId).ToString("D"),()=>{})
 Check(!JsonDefaults.Serialize(jobs.Get(jobId,"TEST\\Admin")).Contains("secret-session"),"Session token was persisted");
 using(var response=await Post("apply",request)){Check(response.StatusCode==HttpStatusCode.Accepted,"Idempotent retry failed");}
 using(var response=await Post("apply",request with{Refresh="Pdc"})){Check(response.StatusCode==HttpStatusCode.Conflict,"Changed idempotency payload accepted");}
-using(var response=await Post("apply",request,"TEST\\Viewer")){Check(response.StatusCode==HttpStatusCode.Forbidden,"Viewer submitted a write");}
+using(var response=await Post("apply",request,"TEST\\Viewer")){Check(response.StatusCode==HttpStatusCode.NotFound,"Another Windows identity accessed an existing plan");}
 Reject(()=>jobs.Get(jobId,"TEST\\Viewer"),"NOT_FOUND");
 fake.Block.SetResult();var finished=await Done(jobs,jobId);Check(finished.State=="COMPLETED","Single workflow failed");
 Check(fake.Actions.SequenceEqual(new[]{"apply:2.3.1.1","refresh:Scope"}),"Server did not own the approved apply/refresh chain");
@@ -129,7 +128,7 @@ using(var restarted=new WorkspaceWorkflows(store,fake,gate,NullLogger<WorkspaceW
  await restarted.StartAsync(CancellationToken.None);for(var i=0;i<100&&restarted.Get(interrupted.Id,"TEST\\Admin").State=="RUNNING";i++)await Task.Delay(10);
  Check(restarted.Get(interrupted.Id,"TEST\\Admin").State=="NEEDS_REVIEW","Restart replayed or lost an interrupted write");await restarted.StopAsync(CancellationToken.None);
 }
-Console.WriteLine("PASS workspace: production async HTTP/roles/idempotency, server refresh chain, serialized batch/rebase/first-snapshot rollback, scheduled checks, read-only scan, pilot boundaries, report escaping, streaming limits and restart recovery.");
+Console.WriteLine("PASS workspace: production async HTTP/identity isolation/idempotency, server refresh chain, serialized batch/rebase/first-snapshot rollback, scheduled checks, read-only scan, pilot boundaries, report escaping, streaming limits and restart recovery.");
 
 sealed class FakeOperations(Store store,OperationGate gate):IWorkflowOperations
 {

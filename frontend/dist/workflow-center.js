@@ -4,7 +4,7 @@ window.GpoWorkflowCenter={create({state,esc,say,api,run,render}){
  const c={tab:'prepare',jobs:[],batches:[],selectedJob:null,batch:null,selected:new Set(),search:'',gpo:'',scope:'',pilot:false,limit:10,pilotSource:'',firstLink:false,scopeModal:null,scopeQuery:'',scopeExpanded:new Set(),values:{},confirmation:null,error:'',loaded:false};
  let polling=false,renderPending=false;
  document.addEventListener('keydown',e=>{if(e.key==='Escape'&&c.scopeModal){e.preventDefault();c.scopeModal=null;c.scopeQuery='';render();return;}if(!c.confirmation)return;if(e.key==='Escape'){e.preventDefault();c.confirmation=null;render();return;}if(e.key==='Tab'){const items=[...document.querySelectorAll('.wf-dialog button,.wf-dialog input,.wf-dialog select,.wf-dialog a')].filter(el=>!el.disabled);const first=items[0],last=items.at(-1);if(e.shiftKey&&document.activeElement===first){e.preventDefault();last?.focus();}else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first?.focus();}}});
- const writable=()=>['Administrator','Remediator'].includes(state.session?.role);
+ const writable=()=>!!state.gpoSession?.connected;
  const active=j=>['QUEUED','RUNNING','VERIFY_SCHEDULED'].includes(j.state);
  const options=(items,value,label)=>items.map(x=>`<option value="${esc(value(x))}">${esc(label(x))}</option>`).join('');
  const date=v=>v?new Date(v).toLocaleString(state.lang==='az'?'az-AZ':'en-GB'):'—';

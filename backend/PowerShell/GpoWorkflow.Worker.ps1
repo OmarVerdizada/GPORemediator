@@ -11,6 +11,11 @@ Import-Module (New-Module -Name RemediatorSecurityTemplate -ScriptBlock ([script
 $cfg=$Configuration
 function Hash([string]$Text){$sha=[Security.Cryptography.SHA256]::Create();try{return [BitConverter]::ToString($sha.ComputeHash([Text.Encoding]::UTF8.GetBytes($Text))).Replace('-','')}finally{$sha.Dispose()}}
 $domain=Get-ADDomain -Identity $cfg.domain -Server $cfg.domainController
+function Assert-DomainExecutionIdentity([Security.Principal.SecurityIdentifier]$UserSid,[string]$DomainSid){
+    if(!$UserSid -or !$UserSid.AccountDomainSid -or $UserSid.AccountDomainSid.Value -ine $DomainSid){Fail 'AD_ACCOUNT_DOMAIN_MISMATCH' 'Sign in with a user from the configured AD domain.'}
+}
+$executionIdentity=[Security.Principal.WindowsIdentity]::GetCurrent()
+Assert-DomainExecutionIdentity $executionIdentity.User ([string]$domain.DomainSID)
 $dc=Get-ADDomainController -Identity $cfg.domainController -Server $cfg.domainController
 if($dc.IsReadOnly -or $dc.Domain -ine $domain.DNSRoot -or $env:COMPUTERNAME -ine ($dc.HostName -split '\.')[0]){Fail 'WRITABLE_DC_REQUIRED' 'Execution must be on the selected writable DC in the configured domain.'}
 $domainDn=[string]$domain.DistinguishedName

@@ -18,7 +18,7 @@ Push-Location $repo
 try{
  Run-Check 'build-portable' 'powershell.exe' @('-NoProfile','-ExecutionPolicy','Bypass','-File','Build-Portable.ps1') 'build/package'
  foreach($project in @('SecurityRegression','WorkflowRegression','WorkspaceRegression','HardeningRegression')){Run-Check $project $sdk @('run','--project',('scripts/'+$project),'-c','Release')}
- foreach($script in @('Test-SecurityFiles','Test-RuntimeIntegrity','Test-GpoMappings','Test-EndpointEvidence','Test-AllEndpointMappings','Test-VerificationLifecycle','Test-PowerShellSyntax','Test-ServiceControl')){
+ foreach($script in @('Test-SecurityFiles','Test-DomainSignIn','Test-RuntimeIntegrity','Test-GpoMappings','Test-EndpointEvidence','Test-AllEndpointMappings','Test-VerificationLifecycle','Test-PowerShellSyntax','Test-ServiceControl')){
   $arguments=@('-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-File',('scripts/'+$script+'.ps1'))
   if($script -eq 'Test-GpoMappings'){$arguments+=@('-ReportPath',($OutputDirectory+'/remediation-controls.json'))}
   if($script -eq 'Test-AllEndpointMappings'){$arguments+=@('-ReportPath',($OutputDirectory+'/endpoint-controls.json'))}

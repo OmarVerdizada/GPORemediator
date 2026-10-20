@@ -17,7 +17,7 @@ const server=http.createServer(async(req,res)=>{
  const url=new URL(req.url,'http://localhost');
  if(url.pathname.startsWith('/api/')){
   let data={};
-  if(url.pathname==='/api/session')data={mode:'WINDOWS',role:'Administrator',csrfToken:'test'};
+  if(url.pathname==='/api/session')data={mode:'WINDOWS',csrfToken:'test'};
   else if(url.pathname==='/api/service')data={mode:'WINDOWS',writesEnabled:true,processId:1};
   else if(url.pathname==='/api/gpo/history')data=[run];
   else if(url.pathname==='/api/gpo/settings')data=manualMappings;

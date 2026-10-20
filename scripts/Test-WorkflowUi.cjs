@@ -3,7 +3,7 @@ const fs=require('node:fs'),path=require('node:path'),http=require('node:http'),
 const root=path.resolve(__dirname,'../frontend/source'),screens=path.resolve(__dirname,'../work/screens');fs.mkdirSync(screens,{recursive:true});
 const settings=JSON.parse(fs.readFileSync(path.resolve(__dirname,'../backend/data/gpo-production-mappings.json'),'utf8')).mappings.map(m=>({...m,writable:m.automation==='Automated'&&['SecurityTemplate','Registry','RegistrySet','AdvancedAudit'].includes(m.handler)}));
 const inventory={domain:'test.local',domainController:'dc.test.local',executionUser:'TEST\\executor',gpos:[{id:'11111111-1111-1111-1111-111111111111',name:'Pilot policy',protected:false,selectable:true}],scopes:[{dn:'OU=Pilot,DC=test,DC=local',name:'Pilot',kind:'OU'},{dn:'OU=Production,DC=test,DC=local',name:'Production',kind:'OU'}]};
-const jobs=[],batches=[],history=[],requests=[];let serial=0,role='Administrator',boot=1,confirmations=0,connected=false;
+const jobs=[],batches=[],history=[],requests=[];let serial=0,boot=1,confirmations=0,connected=false;
 function plan(selection){return {id:'plan-'+(++serial),actor:'TEST\\operator',executionUser:inventory.executionUser,domain:inventory.domain,domainController:inventory.domainController,selection,preview:{gpo:inventory.gpos[0],scope:inventory.scopes[0],previousValue:'Disabled',desiredValue:'Enabled',existingLink:{enabled:false,order:3,enforced:false},warnings:['Recorded warning'],impact:{affectedObjects:{computers:2}}}};}
 function job(action,payload){const j={id:'job-'+(++serial),action,state:'COMPLETED',planIds:payload.planIds||[],completedIds:payload.planIds||[],createdAt:new Date().toISOString(),updatedAt:new Date().toISOString(),message:'Recorded server result',refresh:payload.refresh||'None',verificationDelays:payload.verificationDelays||[]};jobs.unshift(j);return j;}
 const server=http.createServer(async(req,res)=>{
@@ -11,7 +11,7 @@ const server=http.createServer(async(req,res)=>{
  if(url.pathname.startsWith('/api/')){
   let data={};res.setHeader('Content-Type','application/json');
   if(req.method==='POST'&&url.pathname!=='/api/operator/sign-in')requests.push({path:url.pathname,body:payload});
-  if(url.pathname==='/api/session')data={mode:'WINDOWS',role,operator:'TEST\\operator',csrfToken:'test',domainSignIn:true,operatorConfirmationRequired:!String(req.headers.cookie).split('; ').includes('startup='+boot)};
+  if(url.pathname==='/api/session')data={mode:'WINDOWS',operator:'TEST\\operator',csrfToken:'test',domainSignIn:true,operatorConfirmationRequired:!String(req.headers.cookie).split('; ').includes('startup='+boot)};
   else if(url.pathname==='/api/operator/sign-in'){if(payload.password!=='fixture-password'||payload.userName!=='TEST\\executor'){res.statusCode=403;data={error:{code:'OPERATOR_PASSWORD_INVALID'}};}else{confirmations++;connected=true;res.setHeader('Set-Cookie',`startup=${boot}; Path=/; HttpOnly; SameSite=Strict`);data={confirmed:true};}}
   else if(url.pathname==='/api/service')data={mode:'WINDOWS',writesEnabled:true,processId:1};
   else if(url.pathname==='/api/gpo/settings')data=settings;
