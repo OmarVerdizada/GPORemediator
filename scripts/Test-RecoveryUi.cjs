@@ -4,12 +4,13 @@ const {chromium}=require('playwright');
 const root=path.resolve(__dirname,'../frontend/source'),screens=path.resolve(__dirname,'../work/screens');
 fs.mkdirSync(screens,{recursive:true});
 const gpos=[{id:'6ac1786c-016f-11d2-945f-00c04fb984f9',name:'Default Domain Controllers Policy',protected:true,selectable:true},{id:'31b2f340-016d-11d2-945f-00c04fb984f9',name:'Default Domain Policy',protected:true,selectable:true}];
+gpos.push({id:'11111111-1111-1111-1111-111111111111',name:'GPO-Pilot-Computers',protected:false,selectable:true});
 const run={id:'recovery-test',startedAt:'2026-10-06T08:00:00Z',updatedAt:'2026-10-09T08:00:34Z',plan:{selection:{setting:'1.1.4',gpoId:gpos[0].id,scopeDn:'DC=test,DC=local'},preview:{gpo:gpos[0],scope:{dn:'DC=test,DC=local'},previousValue:0,desiredValue:14},executionUser:'TEST\\operator'},result:{state:'PUBLISHED',backupId:'test-backup-id',gpoPublished:true,linkVerified:true}};
 const inventory={gpos,scopes:[{dn:'DC=test,DC=local',name:'test.local',kind:'Domain'},{dn:'OU=Users,DC=test,DC=local',name:'Users',kind:'OU'},{dn:'OU=Endpoints,DC=test,DC=local',name:'Endpoints',kind:'OU'}],domain:'test.local'};
 let writes=[],refreshRequests=[],rollbackState='ROLLED_BACK',refreshFailure=false,workflowJobs=[];
 const allPosts=[],manualMappings=JSON.parse(fs.readFileSync(path.resolve(__dirname,'../backend/data/gpo-production-mappings.json'),'utf8')).mappings;
-const previewSelections=[];
-inventory.domainController='dc.test.local';
+const previewSelections=[];let previewDenied=null,accessDenied=null,accessDelay=0;const accessRequests=[];
+inventory.domainController='dc.test.local';inventory.executionUser='TEST\\operator';
 const server=http.createServer(async(req,res)=>{
  if(req.method==='POST')allPosts.push(req.url);
  let body='';for await(const chunk of req)body+=chunk;
@@ -21,9 +22,11 @@ const server=http.createServer(async(req,res)=>{
   else if(url.pathname==='/api/service')data={mode:'WINDOWS',writesEnabled:true,processId:1};
   else if(url.pathname==='/api/gpo/history')data=[run];
   else if(url.pathname==='/api/gpo/settings')data=manualMappings;
+  else if(url.pathname==='/api/gpo/target-access'){accessRequests.push(payload);const denied=accessDenied,delay=accessDelay;if(delay)await new Promise(r=>setTimeout(r,delay));if(denied){res.statusCode=403;res.end(JSON.stringify({code:denied,message:'Fixture permission denied'}));return;}data={authorized:true,executionUser:'TEST\\operator'};}
   else if(url.pathname==='/api/gpo/preview'){
    previewSelections.push(payload);
-   data={id:'preview-fixture',selection:payload,executionUser:'TEST\\operator',writeAuthorized:true,preview:{gpo:gpos.find(x=>x.id===payload.gpoId),scope:{dn:payload.scopeDn,kind:'OU',name:'Users'},previousValue:'0',desiredValue:'1',existingLink:null,refreshComputers:['ws.test.local'],warnings:['User OU policy applies to all eligible users.'],impact:{inheritance:'NORMAL',conflicts:[],existingLinkScopes:[],securityFiltering:[],affectedObjects:{targetKind:'User',scopeDn:payload.scopeDn,users:3,sampleUsers:['one','two','three'],computers:0,servers:0,workstations:0,disabled:0,sampleHosts:[],truncated:false}}}};
+   if(previewDenied){res.statusCode=403;res.end(JSON.stringify({code:previewDenied,message:'Fixture permission denied'}));return;}
+   data={id:'preview-fixture',selection:payload,executionUser:'TEST\\operator',writeAuthorized:true,preview:{gpo:gpos.find(x=>x.id===payload.gpoId),scope:{dn:payload.scopeDn,kind:payload.accountScope==='Domain'?'Domain':'OU',name:'Users'},previousValue:'0',desiredValue:'1',existingLink:null,refreshComputers:['ws.test.local'],warnings:['User OU policy applies to all eligible users.'],impact:{inheritance:'NORMAL',conflicts:[],existingLinkScopes:[],securityFiltering:[],affectedObjects:{targetKind:'User',scopeDn:payload.scopeDn,users:3,sampleUsers:['one','two','three'],computers:0,servers:0,workstations:0,disabled:0,sampleHosts:[],truncated:false}}}};
   }
   else if(url.pathname==='/api/gpo/inventory')data=inventory;
   else if(url.pathname==='/api/gpo/session')data={connected:true};
@@ -233,7 +236,7 @@ const server=http.createServer(async(req,res)=>{
   assert.equal(await page.locator('.gpo-option').first().evaluate(el=>getComputedStyle(el).display),'grid');
   assert.ok(await page.locator('.gpo-option-copy').first().boundingBox().then(b=>b.width>300));
   await page.screenshot({path:path.join(screens,'gpo-desktop.png')});
-  await page.locator('#gpo-search').fill('Domain Controllers');
+  await page.locator('#gpo-search').fill('Default Domain Policy');
   assert.equal(await page.locator('.gpo-option').count(),1);
   await page.locator('#gpo-search').fill('no-such-policy');
   assert.equal(await page.locator('.gpo-modal-empty').count(),1);
@@ -278,6 +281,55 @@ const server=http.createServer(async(req,res)=>{
   assert.equal(previewSelections.at(-1).scopeDn,'OU=Users,DC=test,DC=local');
   assert.equal(previewSelections.at(-1).refresh,'Scope');
   await page.screenshot({path:path.join(screens,'ou-wide-user-policy.png'),fullPage:true});
+  // Reproduce the reported domain password control with a pilot GPO in inventory.
+  await page.goto(`http://127.0.0.1:${server.address().port}/#/benchmark`);
+  await page.locator('#catalog-search').fill('1.1.1');await page.locator('[data-rule="1.1.1"]').first().click();
+  await page.locator('[data-tab=remediation]').click();
+  assert.ok((await page.locator('.target-scope-note').textContent()).includes('Domain hesab siyasəti'));
+  assert.equal(await page.locator('#gpo-selection input[name=refresh][value=Scope]').count(),0);
+  assert.equal(await page.locator('#gpo-selection input[name=firstLink]').count(),0);
+  assert.equal(await page.locator('#gpo-selection>.primary-action').isDisabled(),true);
+  await page.locator('[data-gpo-toggle]').click();assert.equal(await page.locator('.gpo-option').count(),3);
+  await page.locator('[data-gpo="11111111-1111-1111-1111-111111111111"]').click();
+  assert.ok((await page.locator('.target-access-error').textContent()).includes('access xətası deyil'));assert.equal(await page.locator('#gpo-selection>.primary-action').isDisabled(),true);await page.locator('[data-gpo-toggle]').click();
+  await page.locator('[data-gpo="31b2f340-016d-11d2-945f-00c04fb984f9"]').click();
+  await page.locator('[data-scope-open="scopeDn"]').click();
+  assert.ok((await page.locator('.visual-scope-head p').textContent()).includes('Bütün aşkarlanan'));
+  assert.ok(await page.locator('[data-scope-choose^="OU="]').count()>0);
+  await page.locator('[data-scope-choose="OU=Endpoints,DC=test,DC=local"]').click();assert.equal(await page.locator('#gpo-selection>.primary-action').isDisabled(),true);await page.locator('[data-scope-open="scopeDn"]').click();
+  await page.locator('[data-scope-choose="DC=test,DC=local"]').click();
+  await page.locator('.refresh-choice:has(input[value=Pdc])').click();
+  await page.screenshot({path:path.join(screens,'domain-account-targeting.png'),fullPage:true});
+  await page.locator('#gpo-selection>.primary-action').click();await page.waitForFunction(()=>!!document.querySelector('.plan-card'));
+  assert.equal(previewSelections.at(-1).gpoId,'31b2f340-016d-11d2-945f-00c04fb984f9');
+  assert.equal(previewSelections.at(-1).accountScope,'Domain');assert.equal(previewSelections.at(-1).firstLink,false);assert.equal(previewSelections.at(-1).refresh,'Pdc');
+  await page.goto(`http://127.0.0.1:${server.address().port}/#/benchmark`);
+  await page.locator('#catalog-search').fill('2.3.1.1');await page.locator('[data-rule="2.3.1.1"]').first().click();await page.locator('[data-tab=remediation]').click();
+  await page.locator('[data-gpo-toggle]').click();await page.locator('[data-gpo="11111111-1111-1111-1111-111111111111"]').click();
+  await page.locator('[data-scope-open="scopeDn"]').click();assert.equal(await page.locator('[data-scope-choose="DC=test,DC=local"]').count(),1);
+  await page.locator('[data-scope-choose="OU=Endpoints,DC=test,DC=local"]').click();
+  assert.equal(await page.locator('#gpo-selection input[value=Pdc]').count(),0);assert.equal(await page.locator('#gpo-selection input[value=Scope]').count(),1);
+  await page.screenshot({path:path.join(screens,'computer-ou-targeting.png'),fullPage:true});
+  // Selection itself checks permissions without creating a preview.
+  const plansBeforeAccess=previewSelections.length;accessDenied='GPO_EDIT_ACCESS_DENIED';
+  await page.locator('[data-gpo-toggle]').click();await page.locator('[data-gpo="11111111-1111-1111-1111-111111111111"]').click();
+  await page.waitForFunction(()=>document.querySelector('#target-access-feedback')?.textContent.includes('Edit settings'));
+  assert.equal(previewSelections.length,plansBeforeAccess);assert.ok(accessRequests.length>0);assert.ok((await page.locator('#target-access-feedback').textContent()).includes(inventory.executionUser));
+  accessDenied=null;await page.locator('[data-scope-open="scopeDn"]').click();await page.locator('[data-scope-choose="OU=Endpoints,DC=test,DC=local"]').click();
+  await page.waitForFunction(()=>document.querySelector('#target-access-feedback')?.textContent.includes('İlkin yazma'));
+  // An old target's delayed denial must not overwrite a new target's result.
+  accessDenied='OU_LINK_ACCESS_DENIED';accessDelay=600;
+  await page.locator('[data-scope-open="scopeDn"]').click();await page.locator('[data-scope-choose="OU=Users,DC=test,DC=local"]').click();
+  await page.waitForRequest(r=>new URL(r.url()).pathname==='/api/gpo/target-access');
+  accessDenied=null;accessDelay=0;await page.locator('[data-scope-open="scopeDn"]').click();await page.locator('[data-scope-choose="OU=Endpoints,DC=test,DC=local"]').click();
+  await page.waitForFunction(()=>document.querySelector('#target-access-feedback')?.textContent.includes('İlkin yazma'));await page.waitForTimeout(700);assert.equal(await page.locator('#target-access-feedback .target-access-error').count(),0);
+  for(const [code,needle] of [['GPO_EDIT_ACCESS_DENIED','Edit settings'],['OU_LINK_ACCESS_DENIED','Link GPOs'],['SYSVOL_WRITE_ACCESS_DENIED','SYSVOL'],['GPO_ACCESS_UNVERIFIED','təsdiqlənmədi']]){
+   previewDenied=code;await page.locator('#gpo-selection>.primary-action').click();
+   await page.waitForFunction(text=>[...document.querySelectorAll('.target-access-error')].some(el=>el.textContent.includes(text)),needle);
+   assert.equal(await page.locator('.plan-card').count(),0);
+  }
+  await page.screenshot({path:path.join(screens,'target-access-guidance.png'),fullPage:true});
+  previewDenied=null;await page.locator('#gpo-selection>.primary-action').click();await page.waitForFunction(()=>!!document.querySelector('.plan-card'));assert.equal(await page.locator('.target-access-error').count(),0);
   assert.deepEqual(errors,[]);
   console.log('Recovery UI: PASS (desktop/mobile, recovery refresh, user OU/endpoint OU/verification identity targeting, and user PDC exclusion).');
  }finally{await browser.close();server.close();}

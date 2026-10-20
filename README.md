@@ -1,5 +1,7 @@
 # GPO Remediator 3.14.1
 
+Target visibility and access update (2026-10-20): all discovered GPOs/OUs remain visible. Incompatible controls get a separate explanation; remediation planning checks effective GPO, SYSVOL and required link access and displays targeted delegation steps when blocked. Read-only scans remain available without edit delegation. See [target access and guidance](docs/TARGET-ACCESS-2026-10-20.md).
+
 Endpoint targeting update (2026-10-20): Settings can automatically discover enabled computers in the selected OU and child OUs, without entering each host. Explicit host lists remain available. Existing lists keep their restriction until the operator selects automatic targeting. See [OU targeting and DC fields](docs/ENDPOINT-TARGETING-2026-10-20.md).
 
 Authentication update (2026-10-20): application operator roles and account allowlists have been removed. Sign in with a user from the configured AD domain. GPO operations use only that credential, and AD enforces its permissions. Windows identity is retained for session binding and audit context. See [authentication changes](docs/AUTHENTICATION-2026-10-20.md).

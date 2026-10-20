@@ -177,7 +177,7 @@ public sealed class WorkspaceWorkflows(Store store,IWorkflowOperations service,O
                 if(!mapping.Writable||mapping.RequiresInput||mapping.Scope!="Computer")rows.Add(new(control,"NOT_CHECKED",null,null,"Manual, user-session targeting or organization-specific input requires individual review; no compliance claim was made.",PolicyValues.Now()));
                 else{
                     var selection=job.ScanTarget! with{Setting=control,Value=mapping.Suggested??0,Refresh="None",AccountScope=mapping.DomainPolicySensitive?"Domain":"LocalComputers",CustomValue=null,ItemValues=null};
-                    var plan=await service.PreviewAsync(work.Token,job.Actor,selection,ct);
+                    var plan=await service.PreviewAsync(work.Token,job.Actor,selection,ct,requireWriteAccess:false);
                     rows.Add(new(control,plan.Preview.NoChange?"GPO_MATCH":"DIFFERENT",plan.Preview.PreviousValue,plan.Preview.DesiredValue,"Read-only GPO content/link comparison; effective endpoint compliance is not inferred.",PolicyValues.Now(),plan.Id));
                 }
             }catch(PolicyException error){if(error.Code=="GPO_LOGIN_REQUIRED")throw;rows.Add(new(control,"NOT_CHECKED",null,null,error.Code,PolicyValues.Now()));}

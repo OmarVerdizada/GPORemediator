@@ -10,6 +10,8 @@ static void Check(bool value,string message){if(!value)throw new Exception(messa
 static void Reject(Action action,string code){try{action();throw new Exception("Expected "+code);}catch(PolicyException e){Check(e.Code==code,"Wrong rejection "+e.Code);}}
 const string gpo="31b2f340-016d-11d2-945f-00c04fb984f9",other="6ac1786c-016f-11d2-945f-00c04fb984f9",dn="DC=example,DC=local";
 var selected=new GpoSelection(gpo,dn,"1.2.1",15);
+Reject(()=>ProductionGpoMappings.Validate(selected with{GpoId=other}),"DEFAULT_DOMAIN_POLICY_REQUIRED");
+ProductionGpoMappings.Validate(selected with{GpoId="{"+gpo.ToUpperInvariant()+"}"});
 GpoWorkflowRules.ValidateWriteSelection([gpo],[dn],selected);
 GpoWorkflowRules.ValidateWriteSelection(["{"+gpo.ToUpperInvariant()+"}"],[dn.ToUpperInvariant()],selected with{ScopeDn="OU=Servers,"+dn});
 Reject(()=>GpoWorkflowRules.ValidateWriteSelection([gpo],[dn],selected with{GpoId=other}),"GPO_WRITE_NOT_AUTHORIZED");

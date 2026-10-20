@@ -107,6 +107,13 @@
     for(const element of root.querySelectorAll('[placeholder],[title],[aria-label]'))for(const attr of ['placeholder','title','aria-label']){const value=element.getAttribute(attr);if(words[value])element.setAttribute(attr,words[value]);}
   }
   const errors = {
+    GPO_EDIT_ACCESS_DENIED:'Seçilmiş GPO-nu redaktə etmək icazəsi yoxdur. Administrator GPMC → Group Policy Objects → seçilmiş GPO → Delegation → Add bölməsində icra hesabına və ya uyğun qrupa Edit settings icazəsi verməlidir. Read və Apply Group Policy redaktə icazəsi deyil. Sonra çıxış edib yenidən daxil olun və planı təkrarlayın.',
+    OU_LINK_ACCESS_DENIED:'Seçilmiş OU/domain üçün GPO linkini dəyişmək icazəsi yoxdur. Administrator GPMC-də həmin OU/domain → Delegation → Link GPOs bölməsindən icra hesabına və ya uyğun qrupa hədəfə aid icazə verməlidir. Bu, GPO-nun özünün Edit settings icazəsindən ayrıdır. Sonra yenidən daxil olun.',
+    SYSVOL_WRITE_ACCESS_DENIED:'Seçilmiş GPO-nun SYSVOL fayllarına yazmaq icazəsi yoxdur. Administrator GPMC → seçilmiş GPO → Delegation bölməsində Edit settings icazəsini və həmin GPO-nun SYSVOL NTFS Effective Access nəticəsini yoxlamalıdır. Bütün SYSVOL-a geniş icazə verməyin; yalnız seçilmiş GPO-nun delegation və ACL uyğunluğunu bərpa edin. Sonra yenidən daxil olun.',
+    GPO_ACCESS_UNVERIFIED:'Effektiv yazma icazəsi təsdiqlənmədi; plan yaradılmadı. Bu, icazənin mütləq olmaması demək deyil. Administrator seçilmiş GPO-nun Edit settings delegation-ını, SYSVOL Effective Access-i və hədəf OU/domain üçün Link GPOs icazəsini yoxlamalıdır. Metadata oxuma icazəsini və DC bağlantısını da yoxlayın, sonra yenidən daxil olun.',
+    DEFAULT_DOMAIN_POLICY_REQUIRED:'Bu domain parol/lockout qaydası Default Domain Policy və domain kökü tələb edir. Pilot GPO bu qaydaya uyğun deyil; bu, access xətası deyil.',
+    PASSWORD_SCOPE_MISMATCH:'Bu qayda domain kökü tələb edir. OU hədəfi uyğun deyil; bu, access xətası deyil.',
+    GPO_OU_REQUIRED:'Bu kompüter/user qaydası OU tələb edir. Domain kökü əvəzinə uyğun OU seçin; bu, access xətası deyil.',
     INVALID_OPERATOR_ALLOWLIST:'Hesabı DOMEN\\istifadəçi formasında yazın və ya aşkarlanan Windows hesabını seçin.',
     OPERATOR_SELF_LOCKOUT:'Hazırda istifadə etdiyiniz Windows hesabı icazəli hesablar siyahısında qalmalıdır.',
     GPO_LOGIN_REQUIRED:'İcra sessiyası bitib və ya tətbiq yenidən başlayıb. Vahid giriş ekranı açılacaq.',
@@ -133,7 +140,7 @@
   function policy(path) {
     if (/\/gpo\/[^/]+\/(apply|rollback)$/.test(path)) return { timeout: 980000, label: 'Backup, policy change and verification', cancelable: false };
     if (/\/gpo\/[^/]+\/refresh$/.test(path)) return { timeout: 760000, label: 'Scheduling gpupdate and re-verifying policy', cancelable: false };
-    if (/\/gpo\/(preview|[^/]+\/(verify|replan|rollback-preview))$/.test(path)) return { timeout: 620000, label: 'Reading policy and verifying scope', cancelable: true };
+    if (/\/gpo\/(target-access|preview|[^/]+\/(verify|replan|rollback-preview))$/.test(path)) return { timeout: 620000, label: 'Reading policy and verifying scope', cancelable: true };
     if (/\/gpo\/(connect|discover|readiness)$/.test(path)) return { timeout: 110000, label: path.endsWith('/readiness') ? 'Checking AD readiness' : 'Connecting to AD and loading GPOs', cancelable: true };
     if (/\/setup\/write-mode$/.test(path)) return { timeout: 120000, label: 'Checking readiness and updating write mode', cancelable: false };
     return { timeout: 20000, label: 'Loading application data', cancelable: true };

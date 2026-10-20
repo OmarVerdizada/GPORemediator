@@ -282,37 +282,113 @@ function Environment-Status {
     $ready=@($checks|Where-Object{$_.required -and $_.state -eq 'FAIL'}).Count -eq 0
     return @{domain=$domain.DNSRoot;domainController=$dc.HostName;executionUser=[Security.Principal.WindowsIdentity]::GetCurrent().Name;ready=$ready;checks=$checks.ToArray();checkedAt=[DateTimeOffset]::UtcNow.ToString('O')}
 }
+function Test-FileSystemModify([string]$Path){
+    # Ask Windows AccessCheck with the real remoting token. Do not infer access
+    # by adding allow ACEs: deny ACEs, inheritance and token group flags matter.
+    if(!('GpoRemediator.EffectiveFileAccess' -as [type])){
+        Add-Type -TypeDefinition @'
+using System;
+using System.ComponentModel;
+using System.Runtime.InteropServices;
+using System.Security.Principal;
+namespace GpoRemediator {
+ public static class EffectiveFileAccess {
+  [StructLayout(LayoutKind.Sequential)] struct Mapping { public uint Read,Write,Execute,All; }
+  [DllImport("advapi32.dll",SetLastError=true)] static extern bool DuplicateToken(IntPtr token,int level,out IntPtr copy);
+  [DllImport("kernel32.dll")] static extern bool CloseHandle(IntPtr handle);
+  [DllImport("advapi32.dll",SetLastError=true)] static extern bool AccessCheck(byte[] descriptor,IntPtr token,uint desired,ref Mapping mapping,IntPtr privileges,ref uint size,out uint granted,[MarshalAs(UnmanagedType.Bool)] out bool allowed);
+  public static bool Modify(byte[] descriptor) {
+   using(var identity=WindowsIdentity.GetCurrent()) {
+    IntPtr token;
+    if(!DuplicateToken(identity.Token,2,out token))throw new Win32Exception(Marshal.GetLastWin32Error());
+    try {
+     var mapping=new Mapping{Read=0x120089,Write=0x120116,Execute=0x1200A0,All=0x1F01FF};
+     uint size=4096;
+     for(int attempt=0;attempt<2;attempt++) {
+      IntPtr buffer=Marshal.AllocHGlobal((int)size);
+      try {
+       uint granted;bool allowed;
+       if(AccessCheck(descriptor,token,(uint)System.Security.AccessControl.FileSystemRights.Modify,ref mapping,buffer,ref size,out granted,out allowed))return allowed;
+       int error=Marshal.GetLastWin32Error();if(error!=122)throw new Win32Exception(error);
+      } finally { Marshal.FreeHGlobal(buffer); }
+     }
+     throw new InvalidOperationException("Effective access buffer unavailable.");
+    } finally { CloseHandle(token); }
+   }
+  }
+ }
+}
+'@
+    }
+    $acl=Get-Acl -LiteralPath $Path -ErrorAction Stop
+    return [GpoRemediator.EffectiveFileAccess]::Modify($acl.GetSecurityDescriptorBinaryForm())
+}
+function Attribute-WriteState([string]$Dn,[string[]]$Required){
+    try{
+        # The DC computes this property for the actual caller, including AD
+        # property-specific and inherited permissions. No directory write probe.
+        $object=Get-ADObject -Identity $Dn -Server $cfg.domainController -Properties allowedAttributesEffective -ErrorAction Stop
+        $property=$object.PSObject.Properties['allowedAttributesEffective']
+        if(!$property -or $null -eq $property.Value){return 'UNKNOWN'}
+        $attributes=@($property.Value|ForEach-Object{[string]$_})
+        if(@($Required|Where-Object{$_ -notin $attributes}).Count){return 'DENIED'}
+        return 'ALLOWED'
+    }catch{return 'UNKNOWN'}
+}
+function Link-ChangeRequired($S,$Link){
+    if($null -eq $Link){return $true}
+    return (!$Link.enabled -or ([bool](Read-Field $S 'firstLink' $false) -and [int]$Link.order -ne 1))
+}
+function Selection-Access($S,$Map){
+    $checks=@()
+    $gpoDn='CN='+([guid]$S.gpoId).ToString('B').ToUpperInvariant()+',CN=Policies,CN=System,'+$domainDn
+    $extension=if([string]$Map.scope -eq 'User'){'gPCUserExtensionNames'}else{'gPCMachineExtensionNames'}
+    $checks+=@{id='gpo-edit';state=(Attribute-WriteState $gpoDn @('versionNumber',$extension));code='GPO_EDIT_ACCESS_DENIED';label='GPO edit authority'}
+    $linkState='UNKNOWN'
+    try{$link=Selected-Link ([string]$S.scopeDn) ([string]$S.gpoId);$linkState=if(Link-ChangeRequired $S $link){Attribute-WriteState ([string]$S.scopeDn) @('gPLink')}else{'ALLOWED'}}catch{}
+    $checks+=@{id='link-write';state=$linkState;code='OU_LINK_ACCESS_DENIED';label='GPO link authority or unchanged link'}
+    $fileState='UNKNOWN'
+    try{
+        $folder=Gpo-Folder $S.gpoId
+        $branch=Join-Path $folder $(if([string]$Map.scope -eq 'User'){'User'}else{'Machine'})
+        $paths=@($folder)
+        $gpt=Join-Path $folder 'GPT.INI';if(Test-Path -LiteralPath $gpt){$paths+=@($gpt)}
+        $tooLarge=$false
+        if(Test-Path -LiteralPath $branch){$paths+=@($branch);$children=@(Get-ChildItem -LiteralPath $branch -Recurse -Force -ErrorAction Stop|Select-Object -First 5001 -ExpandProperty FullName);$tooLarge=$children.Count -gt 5000;$paths+=$children}
+        if(!$tooLarge){
+            $fileState='ALLOWED'
+            foreach($path in $paths){if(!(Test-FileSystemModify $path)){$fileState='DENIED';break}}
+        }
+    }catch{$fileState='UNKNOWN'}
+    $checks+=@{id='sysvol-write';state=$fileState;code='SYSVOL_WRITE_ACCESS_DENIED';label='SYSVOL GPO write authority'}
+    return @{checks=@($checks);executionUser=[Security.Principal.WindowsIdentity]::GetCurrent().Name}
+}
+function Assert-SelectionAccess($S,$Map){
+    $access=Selection-Access $S $Map
+    $denied=@($access.checks|Where-Object{$_.state -eq 'DENIED'}|Select-Object -First 1)
+    if($denied.Count){
+        $code=[string]$denied[0].code
+        $guidance=switch($code){
+            'GPO_EDIT_ACCESS_DENIED' {'No GPO edit access. Ask an administrator: GPMC > Group Policy Objects > selected GPO > Delegation > Add the execution account/group with Edit settings. Read/Apply permission is not edit permission. Reconnect after changes. No remediation plan was created.'}
+            'OU_LINK_ACCESS_DENIED' {'No permission to change the selected target link. Ask an administrator: GPMC > selected OU/domain > Delegation > Link GPOs > add the execution account/group for that target. GPO Edit settings is separate. Reconnect after changes. No remediation plan was created.'}
+            'SYSVOL_WRITE_ACCESS_DENIED' {'No SYSVOL modification access for the selected GPO. Ask an administrator to review that GPO in GPMC > Delegation > Edit settings and its SYSVOL NTFS Effective Access. Repair delegation/ACL consistency for this GPO only, not broad SYSVOL access. Reconnect after changes. No remediation plan was created.'}
+        }
+        Fail $code $guidance
+    }
+    if(@($access.checks|Where-Object{$_.state -ne 'ALLOWED'}).Count){Fail 'GPO_ACCESS_UNVERIFIED' 'Effective write access could not be established for the selected GPO, SYSVOL or target link. No remediation plan was created. An administrator should inspect effective access and GPMC delegation, then reconnect and retry.'}
+    return $access
+}
+
 function Token-Sids {
     $id=[Security.Principal.WindowsIdentity]::GetCurrent();$s=@([string]$id.User.Value);$s+=@($id.Groups|ForEach-Object{[string]$_.Value});return @($s|Sort-Object -Unique)
 }
-function Selection-Preflight($S,$Map){
+function Selection-Preflight($S,$Map,$Access=$null){
     $base=Environment-Status;$checks=New-Object 'System.Collections.Generic.List[object]';foreach($c in @($base.checks)){$checks.Add($c)|Out-Null}
-    function Add-Specific([string]$Id,[string]$Label,[string]$State,[string]$Message,[bool]$Required=$true){$checks.Add([pscustomobject]@{id=$Id;label=$Label;state=$State;message=$Message;required=$Required})|Out-Null}
-    $token=@(Token-Sids)
-    try{
-        $perms=@(Get-GPPermission -Guid ([guid]$S.gpoId) -All -Domain $cfg.domain -Server $cfg.domainController)
-        $editable=@($perms|Where-Object{$_.Trustee.Sid -and $token -contains [string]$_.Trustee.Sid.Value -and [string]$_.Permission -in @('GpoEdit','GpoEditDeleteModifySecurity')})
-        if($editable.Count){Add-Specific 'gpo-edit' 'GPO edit authority' 'PASS' ('Edit permission confirmed through '+[string]$editable[0].Trustee.Name)}else{Add-Specific 'gpo-edit' 'GPO edit authority' 'WARN' 'Effective GPO edit authority could not be proven from GPMC trustee entries. Apply will fail safely before publication if access is denied.' $false}
-    }catch{Add-Specific 'gpo-edit' 'GPO edit authority' 'WARN' 'GPO permission metadata could not be evaluated.' $false}
-    try{
-        $folder=Gpo-Folder $S.gpoId;$acl=Get-Acl -LiteralPath $folder;$allow=$false;$deny=$false
-        foreach($a in @($acl.Access)){try{$sid=[string]$a.IdentityReference.Translate([Security.Principal.SecurityIdentifier]).Value}catch{continue};if($token -notcontains $sid){continue};$write=(([string]$a.FileSystemRights) -match 'FullControl|Modify|Write');if(!$write){continue};if([string]$a.AccessControlType -eq 'Deny'){$deny=$true}else{$allow=$true}}
-        if($deny){Add-Specific 'sysvol-write' 'SYSVOL GPO write authority' 'FAIL' 'A token-matching deny ACE blocks write/modify access to the selected GPO folder.'}
-        elseif($allow){Add-Specific 'sysvol-write' 'SYSVOL GPO write authority' 'PASS' 'Write/modify access is present on the selected GPO folder.'}
-        else{Add-Specific 'sysvol-write' 'SYSVOL GPO write authority' 'WARN' 'Effective SYSVOL write authority could not be proven from the folder ACL.' $false}
-    }catch{Add-Specific 'sysvol-write' 'SYSVOL GPO write authority' 'WARN' 'Selected GPO folder ACL could not be evaluated.' $false}
-    try{
-        $root=Get-ADRootDSE -Server $cfg.domainController;$attr=Get-ADObject -LDAPFilter '(lDAPDisplayName=gPLink)' -SearchBase $root.schemaNamingContext -Server $cfg.domainController -Properties schemaIDGUID|Select-Object -First 1
-        $gpLinkGuid=if($attr){[guid](New-Object byte[] 16)}else{[guid]::Empty};if($attr){$gpLinkGuid=New-Object Guid (,[byte[]]$attr.schemaIDGUID)}
-        $acl=Get-Acl ('AD:\'+$S.scopeDn);$allow=$false;$deny=$false
-        foreach($a in @($acl.Access)){try{$sid=[string]$a.IdentityReference.Translate([Security.Principal.SecurityIdentifier]).Value}catch{continue};if($token -notcontains $sid){continue};$rights=[string]$a.ActiveDirectoryRights;$covers=($rights -match 'GenericAll|GenericWrite') -or (($rights -match 'WriteProperty') -and ($a.ObjectType -eq [guid]::Empty -or $a.ObjectType -eq $gpLinkGuid));if(!$covers){continue};if([string]$a.AccessControlType -eq 'Deny'){$deny=$true}else{$allow=$true}}
-        if($deny){Add-Specific 'link-write' 'GPO link authority' 'FAIL' 'A token-matching deny ACE blocks gPLink modification on the selected target.'}
-        elseif($allow){Add-Specific 'link-write' 'GPO link authority' 'PASS' 'gPLink/GenericWrite authority is present on the selected target.'}
-        else{Add-Specific 'link-write' 'GPO link authority' 'WARN' 'Effective gPLink authority could not be proven from the target ACL.' $false}
-    }catch{Add-Specific 'link-write' 'GPO link authority' 'WARN' 'Target gPLink ACL could not be evaluated.' $false}
-    Add-Specific 'handler' 'Remediation handler' 'PASS' ([string]$Map.handler+' · '+[string]$Map.source)
-    $ready=@($checks|Where-Object{$_.required -and $_.state -eq 'FAIL'}).Count -eq 0
-    return @{domain=$base.domain;domainController=$base.domainController;executionUser=$base.executionUser;ready=$ready;checks=$checks.ToArray();checkedAt=[DateTimeOffset]::UtcNow.ToString('O')}
+    if($null -eq $Access){$Access=Selection-Access $S $Map}
+    foreach($check in @($Access.checks)){$checks.Add([pscustomobject]@{id=$check.id;label=$check.label;state=$(if($check.state -eq 'ALLOWED'){'PASS'}elseif($check.state -eq 'DENIED'){'FAIL'}else{'WARN'});message='Read-only effective access check for the domain execution account.';required=$true})|Out-Null}
+    $checks.Add([pscustomobject]@{id='handler';label='Remediation handler';state='PASS';message=([string]$Map.handler+' · '+[string]$Map.source);required=$true})|Out-Null
+    $ready=@($checks|Where-Object{$_.required -and $_.state -ne 'PASS'}).Count -eq 0
+    return @{domain=$base.domain;domainController=$dc.HostName;executionUser=$base.executionUser;ready=$ready;checks=$checks.ToArray();checkedAt=[DateTimeOffset]::UtcNow.ToString('O')}
 }
 function Impact-Details($S,$Map,$Gpo,$Scope,[string[]]$LinkScopes){
     $inherit=Get-GPInheritance -Target $Scope.dn -Domain $cfg.domain -Server $cfg.domainController;$conflicts=@();$allLinks=@($inherit.GpoLinks)+@($inherit.InheritedGpoLinks);$desired=Mapping-Display $S.gpoId $Map $S $true
@@ -337,12 +413,12 @@ function Impact-Details($S,$Map,$Gpo,$Scope,[string[]]$LinkScopes){
     $kind=if($domainAccount){'DomainAccount'}elseif([string]$Map.scope -eq 'User'){'User'}else{'Computer'}
     return @{inheritance=$(if([bool]$inherit.GpoInheritanceBlocked){'BLOCKED'}else{'NORMAL'});blockInheritance=[bool]$inherit.GpoInheritanceBlocked;conflicts=@($conflicts);affectedObjects=@{targetKind=$kind;scopeDn=[string]$Scope.dn;computers=$enabled.Count;servers=$servers.Count;workstations=$workstations.Count;disabled=@($objects|Where-Object{-not $_.Enabled}).Count;sampleHosts=$sample;truncated=$false;users=$enabledUsers.Count;disabledUsers=@($users|Where-Object{-not $_.Enabled}).Count;sampleUsers=$sampleUsers};existingLinkScopes=@($LinkScopes);securityFiltering=$permissions;wmiFilter=$(if($ad.gPCWQLFilter){[string]$ad.gPCWQLFilter}else{$null})}
 }
-function Preview($S,$Map){
-    Validate-Selection $S $Map;$gpo=Get-GPO -Guid ([guid]$S.gpoId) -Domain $cfg.domain -Server $cfg.domainController;$scope=Scope $S.scopeDn;$raw=Scope-Links $scope.dn;$existing=Selected-Link $scope.dn $S.gpoId;$computers=@()
+function Preview($S,$Map,[bool]$RequireWriteAccess=$true){
+    Validate-Selection $S $Map;$access=if($RequireWriteAccess){Assert-SelectionAccess $S $Map}else{@{checks=@()}};$gpo=Get-GPO -Guid ([guid]$S.gpoId) -Domain $cfg.domain -Server $cfg.domainController;$scope=Scope $S.scopeDn;$raw=Scope-Links $scope.dn;$existing=Selected-Link $scope.dn $S.gpoId;$computers=@()
     $endpointScope=[string](Read-Field $S 'endpointScopeDn' '')
     $computers=@(Refresh-Targets ([string]$S.refresh) ([string]$scope.dn) $endpointScope ([string]$Map.scope))
     $links=@();foreach($candidateScope in All-LinkScopes){if(Link $candidateScope.rawLinks $S.gpoId $candidateScope.dn){$links+=$candidateScope.dn}}
-    $preflight=Selection-Preflight $S $Map;$impact=Impact-Details $S $Map $gpo $scope $links;$warnings=@('Changing this GPO affects all of its existing links, not only the selected link.',('Existing links: '+$(if($links.Count){$links -join '; '}else{'none'})),'Security filtering, WMI filtering, inheritance and precedence are analyzed but are never silently changed.','gpupdate scheduling does not by itself prove effective endpoint compliance.','A full GPO backup is created before any policy write; rollback is blocked after external changes.')+@($Map.warnings)
+    $preflight=Selection-Preflight $S $Map $access;$impact=Impact-Details $S $Map $gpo $scope $links;$warnings=@('Changing this GPO affects all of its existing links, not only the selected link.',('Existing links: '+$(if($links.Count){$links -join '; '}else{'none'})),'Security filtering, WMI filtering, inheritance and precedence are analyzed but are never silently changed.','gpupdate scheduling does not by itself prove effective endpoint compliance.','A full GPO backup is created before any policy write; rollback is blocked after external changes.')+@($Map.warnings)
     if([string]$Map.handler -eq 'AdvancedAudit'){$warnings+='AUDIT_DEPENDENCY: Review control 2.3.2.1: SCENoApplyLegacyAuditPolicy=1 on the endpoint prevents legacy category policy overriding audit subcategories. This separate control is not silently changed.';$warnings+='AUDIT_FORMAT: Applying an audit control also normalizes legacy system audit CSV rows without changing their other numeric settings. The full GPO backup preserves the original file.'}
     foreach($c in @($impact.conflicts|Where-Object{$_.severity -eq 'HIGH'})){$warnings+=('High-impact conflict: '+$c.message)}
     if([string]$Map.scope -eq 'User' -and [int]$impact.affectedObjects.users -eq 0){$warnings+='TARGET_EMPTY: No enabled users were discovered under the selected user OU. Writing the GPO is not proof it will affect any user.'}
@@ -584,9 +660,9 @@ function Emit-Stage([string]$Name){if([bool](Read-Field $cfg 'emitProgress' $fal
 switch($Operation){
     'gpoReadiness'{return Environment-Status}
     'gpoInventory'{$gpos=@(Get-GPO -All -Domain $cfg.domain -Server $cfg.domainController|Sort-Object DisplayName|ForEach-Object{Gpo-Choice $_});if($gpos.Count -gt 5000){Fail 'DIRECTORY_TOO_LARGE' 'More than 5000 GPOs exist. Narrow the configured domain.'};return @{domain=$domain.DNSRoot;domainController=$dc.HostName;executionUser=[Security.Principal.WindowsIdentity]::GetCurrent().Name;gpos=$gpos;scopes=@(Scopes)}}
-    'gpoPreview'{return Preview $Data.selection $Data.mapping}
+    'gpoPreview'{if([bool](Read-Field $Data 'accessOnly' $false)){$access=Assert-SelectionAccess $Data.selection $Data.mapping;return @{authorized=$true;executionUser=$access.executionUser}};return Preview $Data.selection $Data.mapping ([bool](Read-Field $Data 'requireWriteAccess' $true))}
     'gpoApply'{
-        $plan=$Data.plan;$map=$Data.mapping;$s=$plan.selection;Validate-Selection $s $map;$directory=Run-Directory $plan;$null=New-Item -ItemType Directory -Path $directory -Force;$lockRoot=Split-Path $directory -Parent;$lock=$null
+        $plan=$Data.plan;$map=$Data.mapping;$s=$plan.selection;Validate-Selection $s $map;$null=Assert-SelectionAccess $s $map;$directory=Run-Directory $plan;$null=New-Item -ItemType Directory -Path $directory -Force;$lockRoot=Split-Path $directory -Parent;$lock=$null
         try{$lock=[IO.File]::Open((Join-Path $lockRoot (([guid]$s.gpoId).ToString()+'.lock')),[IO.FileMode]::OpenOrCreate,[IO.FileAccess]::ReadWrite,[IO.FileShare]::None)}catch{Fail 'GPO_BUSY' 'Another operation is writing this GPO.'}
         $manifest=$null
         try{
@@ -602,7 +678,9 @@ switch($Operation){
             if((Fingerprint $s.gpoId $s.scopeDn) -cne $plan.preview.fingerprint){Fail 'GPO_CHANGED' 'GPO changed during backup; no policy write started.'}
             Emit-Stage 'WRITING'
             $manifest.phase='WRITING';Save-Manifest $manifest $directory;$null=Write-Mapping $plan $map
+            if(Link-ChangeRequired $s $fresh.existingLink){
             if($null -eq $fresh.existingLink){$p=@{Guid=[guid]$s.gpoId;Target=$s.scopeDn;Domain=$cfg.domain;Server=$cfg.domainController;LinkEnabled='Yes'};if($s.firstLink){$p.Order=1};New-GPLink @p|Out-Null}else{$p=@{Guid=[guid]$s.gpoId;Target=$s.scopeDn;Domain=$cfg.domain;Server=$cfg.domainController;LinkEnabled='Yes'};if($s.firstLink){$p.Order=1};Set-GPLink @p|Out-Null}
+            }
             Emit-Stage 'PUBLICATION_CHECK'
             $v=Verify-Published $plan $map $false;$manifest.postFingerprint=Fingerprint $s.gpoId $s.scopeDn;$manifest.phase=if(!$v.published -or !$v.linked){'VERIFY_MISMATCH'}else{'PUBLISHED'};Save-Manifest $manifest $directory
             # Do not force endpoint refresh as a side effect of Apply. Publication and refresh are

@@ -116,7 +116,22 @@ public sealed class GpoWorkflowService(IConfiguration config,Store store,Operati
         connections.TryUpdate(token,c with{Inventory=inventory},c);
         return inventory;
     }
-    public async Task<GpoWorkflowPlan> PreviewAsync(string token,string actor,GpoSelection selection,CancellationToken ct)
+    public async Task<object> CheckTargetAccessAsync(string token,string actor,GpoSelection selection,CancellationToken ct)
+    {
+        RequireReal();var c=Get(token,actor);var mapping=ProductionGpoMappings.Require(selection.Setting);
+        if(!mapping.Writable)throw new PolicyException("GPO_MANUAL_ONLY","This control requires manual review.");
+        var gpo=c.Inventory.Gpos.SingleOrDefault(x=>string.Equals(x.Id,selection.GpoId,StringComparison.OrdinalIgnoreCase));
+        var scope=c.Inventory.Scopes.SingleOrDefault(x=>string.Equals(x.Dn,selection.ScopeDn,StringComparison.OrdinalIgnoreCase));
+        if(gpo is null||!gpo.Selectable||scope is null)throw new PolicyException("GPO_SELECTION_REQUIRED","Select a discovered GPO and target.");
+        if(mapping.DomainPolicySensitive&&Guid.Parse(gpo.Id)!=Guid.Parse("31b2f340-016d-11d2-945f-00c04fb984f9"))throw new PolicyException("DEFAULT_DOMAIN_POLICY_REQUIRED","This control requires Default Domain Policy.");
+        if(scope.Kind!=(mapping.DomainPolicySensitive?"Domain":"OU"))throw new PolicyException(mapping.DomainPolicySensitive?"PASSWORD_SCOPE_MISMATCH":"GPO_OU_REQUIRED","The target kind is incompatible with this control.");
+        try{return await Run<System.Text.Json.JsonElement>("gpoPreview",c,new{selection,mapping,accessOnly=true},ct);}
+        catch(PolicyException error) when(error.Code.EndsWith("ACCESS_DENIED",StringComparison.Ordinal)||error.Code=="GPO_ACCESS_UNVERIFIED"){
+            store.Audit("GPO_TARGET_ACCESS_BLOCKED",actor,controlId:selection.Setting,gpoId:selection.GpoId,details:new{selection.ScopeDn,c.Inventory.ExecutionUser,error.Code});
+            throw;
+        }
+    }
+    public async Task<GpoWorkflowPlan> PreviewAsync(string token,string actor,GpoSelection selection,CancellationToken ct,bool requireWriteAccess=true)
     {
         RequireReal();
         var c=Get(token,actor);ProductionGpoMappings.Validate(selection);
@@ -129,7 +144,12 @@ public sealed class GpoWorkflowService(IConfiguration config,Store store,Operati
             throw new PolicyException("ENDPOINT_SCOPE_REQUIRED","Select a discovered computer OU for user-session refresh.");
         if(!mapping.DomainPolicySensitive && scope.Kind!="OU") throw new PolicyException("GPO_OU_REQUIRED","Select an OU returned by AD discovery for User/Computer Configuration.");
         if(mapping.DomainPolicySensitive && scope.Kind!="Domain") throw new PolicyException("PASSWORD_SCOPE_MISMATCH","Domain password and lockout policies require the domain root.");
-        var preview=await Run<GpoPreview>("gpoPreview",c,new{selection,mapping},ct);
+        GpoPreview preview;
+        try{preview=await Run<GpoPreview>("gpoPreview",c,new{selection,mapping,requireWriteAccess},ct);}
+        catch(PolicyException error) when(error.Code.EndsWith("ACCESS_DENIED",StringComparison.Ordinal)||error.Code=="GPO_ACCESS_UNVERIFIED"){
+            store.Audit("GPO_PREVIEW_ACCESS_BLOCKED",actor,controlId:selection.Setting,gpoId:selection.GpoId,details:new{selection.ScopeDn,c.Inventory.ExecutionUser,error.Code});
+            throw;
+        }
         var plan=new GpoWorkflowPlan(Guid.NewGuid().ToString("N"),actor,c.Inventory.ExecutionUser,Mode,Domain,Dc,selection,preview,PolicyValues.Now(),PolicyValues.Hash(mapping),ConfigHash,GpoWorkflowRules.IsWriteAuthorized(ApprovedGpos,AuthorizedOus,selection));
         store.Put("gpo_plans",plan.Id,plan);store.Audit("GPO_PLAN_PREPARED",actor,details:plan);
         return plan;

@@ -117,8 +117,9 @@ fake.Actions.Clear();fake.FailNext=true;
 var restoreFailure=jobs.Start("rollback",new(Guid.NewGuid().ToString(),[first.Id],new("ROLLBACK"),"Scope"),"secret-session","TEST\\Admin");
 restoreFailure=await Done(jobs,restoreFailure.Id);Check(restoreFailure.State=="NEEDS_REVIEW"&&fake.Actions.Count==1,"Uncertain restore continued to refresh");
 // Read-only scan keeps manual/unsupported controls distinct and never calls ExecuteAsync.
-fake.Actions.Clear();var scan=jobs.Scan(new(Guid.NewGuid().ToString(),selection,["2.3.1.1","1.2.3"]),"secret-session","TEST\\Admin");scan=await Done(jobs,scan.Id);
+fake.Actions.Clear();fake.PreviewAccessRequirements.Clear();var scan=jobs.Scan(new(Guid.NewGuid().ToString(),selection,["2.3.1.1","1.2.3"]),"secret-session","TEST\\Admin");scan=await Done(jobs,scan.Id);
 Check(scan.State=="COMPLETED"&&scan.ScanRows!.Length==2&&scan.ScanRows.Any(x=>x.State=="NOT_CHECKED")&&fake.Actions.Count==0,"Read-only scan wrote or hid a manual control");
+Check(fake.PreviewAccessRequirements.Count>0&&fake.PreviewAccessRequirements.All(x=>!x),"Read-only scan required write permissions");
 using(var req=new HttpRequestMessage(HttpMethod.Get,"/api/workflows/"+jobId+"/report")){req.Headers.Add("Test-Identity","TEST\\Admin");using var response=await http.SendAsync(req);var html=await response.Content.ReadAsStringAsync();Check(response.IsSuccessStatusCode&&html.Contains("&lt;unsafe&gt;")&&!html.Contains("<unsafe>"),"Report escaping failed");}
 using(var req=new HttpRequestMessage(HttpMethod.Get,"/api/workflows/"+jobId+"/report?format=json")){req.Headers.Add("Test-Identity","TEST\\Admin");using var response=await http.SendAsync(req);var report=await response.Content.ReadFromJsonAsync<JsonElement>();Check(report.GetProperty("integrityHash").GetString()==PolicyValues.Hash(report.GetProperty("payload")),"Report payload integrity hash does not match exported JSON");}
 await app.StopAsync();await jobs.StopAsync(CancellationToken.None);
@@ -132,9 +133,11 @@ Console.WriteLine("PASS workspace: production async HTTP/identity isolation/idem
 
 sealed class FakeOperations(Store store,OperationGate gate):IWorkflowOperations
 {
+ public readonly List<bool> PreviewAccessRequirements=[];
  public readonly List<string> Actions=[];public TaskCompletionSource? Block;public bool FailNext;public bool DriftAfterApply;public bool RefreshFails;public GpoRollbackAnchor? LastAnchor;public string? LastRestore;private string fingerprint="initial";
  public void ValidateConnection(string token,string actor){if(token!="secret-session")throw new PolicyException("GPO_LOGIN_REQUIRED","Reconnect.");}
- public Task<GpoWorkflowPlan> PreviewAsync(string token,string actor,GpoSelection selection,CancellationToken ct){
+ public Task<GpoWorkflowPlan> PreviewAsync(string token,string actor,GpoSelection selection,CancellationToken ct,bool requireWriteAccess=true){
+  PreviewAccessRequirements.Add(requireWriteAccess);
   ValidateConnection(token,actor);var preview=new GpoPreview(new(selection.GpoId,"<unsafe>",false,true),new(selection.ScopeDn,"Pilot","OU"),"0",fingerprint,"links",null,[],[],new("",false,[],new(2,0,2,0,["ws.test.local"],false),[],[],null),DesiredValue:"1");
   var plan=new GpoWorkflowPlan(Guid.NewGuid().ToString("N"),actor,"TEST\\Executor","WINDOWS","test.local","dc.test.local",selection,preview,PolicyValues.Now());store.Put("gpo_plans",plan.Id,plan);return Task.FromResult(plan);
  }

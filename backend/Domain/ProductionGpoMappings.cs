@@ -115,6 +115,8 @@ public static class ProductionGpoMappings
         if (!mapping.Writable)
             throw new PolicyException("GPO_MANUAL_ONLY", "This CIS control is not classified as Automated in the imported CIS v4.0.0 catalog. It remains read-only and requires manual review.");
         if (!Guid.TryParse(selection.GpoId, out _)) throw new PolicyException("GPO_SELECTION_REQUIRED", "Select a GPO from the discovered list.");
+        if(mapping.DomainPolicySensitive && Guid.Parse(selection.GpoId)!=Guid.Parse("31b2f340-016d-11d2-945f-00c04fb984f9"))
+            throw new PolicyException("DEFAULT_DOMAIN_POLICY_REQUIRED","Domain password/lockout controls require Default Domain Policy at the domain root. Choose it from the discovered GPO list; a pilot OU GPO cannot be used for this control.");
         if (selection.Refresh is not ("None" or "Pdc" or "Scope")) throw new PolicyException("GPO_OPTIONS_INVALID", "Invalid policy refresh option.");
         if (selection.AccountScope is not ("Domain" or "LocalComputers" or "Users")) throw new PolicyException("GPO_OPTIONS_INVALID", "Invalid target scope option.");
         if (string.IsNullOrWhiteSpace(selection.ScopeDn) || selection.ScopeDn.Length > 2048 || selection.ScopeDn.IndexOfAny(['\r','\n','\0']) >= 0)

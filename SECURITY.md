@@ -16,6 +16,10 @@ Only a hash of a random 256-bit confirmation cookie is retained in server memory
 
 The delegated AD execution account is separate from the browser identity. Its password is encrypted in server memory, passed to fixed worker scripts via stdin, and never placed in argv or persisted by the application. Sessions are bound to the operator, expire after 15 minutes idle or two hours total, and disappear on restart. Managed strings cannot be reliably erased; the launcher owner and local administrators remain trusted and can inspect process memory. Logins are limited to five attempts per minute per Windows identity, four concurrent connection attempts and 32 active sessions.
 
+## Target planning access
+
+All inventory objects readable by the execution account remain visible. Planning a remediation checks computed AD attribute-write access and native Windows SYSVOL modification access without write probes; any necessary link change requires effective gPLink write authority. Denied and unverifiable access are distinct errors with delegation guidance. An unchanged link is preserved rather than rewritten. Apply rechecks access, and Windows remains the authority for each operation. Read-only scans do not require edit delegation. See [access assessment and test limits](docs/TARGET-ACCESS-2026-10-20.md).
+
 ## Request and write protection
 
 API mutations require the exact application Origin, application/json and an identity-bound antiforgery token. Cookies are HttpOnly and SameSite=Strict. The local HTTP deployment does not provide TLS confidentiality: never proxy or expose it to a LAN. Browser scripts use a self-only CSP; inline styles remain permitted for existing UI rendering. Request bodies are limited to 32 KiB.

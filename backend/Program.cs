@@ -102,7 +102,7 @@ app.Use(async(context,next)=>
             "GPO_LOGIN_REQUIRED" or "AUTHENTICATION_REQUIRED"=>401,
             "CONTENT_TYPE_DENIED"=>415,
             "GPO_CONNECTION_LIMIT"=>429,
-            "LOOPBACK_ONLY" or "ORIGIN_DENIED" or "OPERATOR_CONFIRMATION_REQUIRED" or "OPERATOR_PASSWORD_INVALID"=>403,
+            "GPO_EDIT_ACCESS_DENIED" or "OU_LINK_ACCESS_DENIED" or "SYSVOL_WRITE_ACCESS_DENIED" or "GPO_ACCESS_UNVERIFIED" or "LOOPBACK_ONLY" or "ORIGIN_DENIED" or "OPERATOR_CONFIRMATION_REQUIRED" or "OPERATOR_PASSWORD_INVALID"=>403,
             "INVALID_REQUEST" or "INVALID_DOMAIN" or "INVALID_SCOPE_ALLOWLIST" or "INVALID_GPO_ALLOWLIST" or "INVALID_BACKUP_PATH"=>422,
             "GPO_OPERATION_BUSY" or "SERVICE_STOPPING"=>423,
             "WINDOWS_TIMEOUT"=>504,
@@ -246,6 +246,7 @@ app.MapGet("/api/gpo/settings",()=>ProductionGpoMappings.Settings.Select(x=>new 
 }));
 app.MapGet("/api/gpo/history",(HttpContext context,GpoWorkflowService service)=>service.History(Operator(context)));
 app.MapGet("/api/gpo/{id}/evidence",(string id,HttpContext context,GpoWorkflowService service)=>service.Evidence(id,Operator(context)));
+app.MapPost("/api/gpo/target-access",async(GpoSelection request,HttpContext context,GpoWorkflowService service,CancellationToken ct)=>await service.CheckTargetAccessAsync(GpoToken(context),Operator(context),request,ct));
 app.MapPost("/api/gpo/preview",async(GpoSelection request,HttpContext context,GpoWorkflowService service,CancellationToken ct)=>await service.PreviewAsync(GpoToken(context),Operator(context),request,ct));
 app.MapPost("/api/gpo/{id}/apply",async(string id,GpoConsent request,HttpContext context,GpoWorkflowService service)=>await service.ExecuteAsync(id,"apply",request,GpoToken(context),Operator(context)));
 app.MapGet("/api/gpo/{id}/rollback-preview",async(string id,HttpContext context,GpoWorkflowService service,CancellationToken ct)=>await service.RollbackPreviewAsync(id,GpoToken(context),Operator(context),ct));
