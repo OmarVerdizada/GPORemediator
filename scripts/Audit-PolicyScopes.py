@@ -31,7 +31,7 @@ for r in rows:
     if cid in roles and auto: errors.append(f'{cid}: role-specific principals must be guided until role discovery')
     if cid in fixed and auto: errors.append(f'{cid}: existing guided safety boundary disabled')
     if auto and not items: errors.append(f'{cid}: automated mapping without items')
-    target = 'Default Domain Policy (domain root)' if scope=='Domain' else 'User OU' if scope=='User' else 'Computer OU/domain (choose precisely)'
+    target = 'Selected GPO at domain root (link order 1)' if scope=='Domain' else 'User OU' if scope=='User' else 'Computer OU/domain (choose precisely)'
     addr='; '.join((('['+i['section']+'] ') if i.get('section') else '')+(i.get('key') or i.get('guid') or '?') + (('\\'+i['name']) if i.get('name') else '') for i in items)
     if not addr: addr='GUIDED — no automatic write'
     principal='; '.join(','.join(i.get('value') or []) for i in items if i.get('section')=='Privilege Rights')

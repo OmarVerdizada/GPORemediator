@@ -7,7 +7,7 @@ No new product feature was added in this backend pass. The work hardens the exis
 - Server-authoritative CIS v4 mapping registry: 405 catalog controls, 401 catalog-marked Automated controls with handlers, four catalog Manual/Unspecified controls intentionally read-only.
 - Generic handlers: Security Template, Registry Policy, multi-value Registry Set and Advanced Audit Policy.
 - Mapping validation fails closed at startup if counts, IDs, handler shape, scope or audit metadata are inconsistent.
-- Account Policy mappings are domain-sensitive and constrained to Default Domain Policy/domain root.
+- Account Policy mappings are domain-sensitive and use the selected active GPO at the domain root with link order 1; no built-in GPO is required.
 - Read → compare → plan → backup → write → link → verify transaction model.
 - Comparator-aware idempotency prevents weakening already stricter compliant Account Policy values.
 

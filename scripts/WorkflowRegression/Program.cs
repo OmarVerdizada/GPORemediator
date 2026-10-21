@@ -8,7 +8,7 @@ using Microsoft.AspNetCore.DataProtection;
 
 static void Check(bool value,string message){if(!value)throw new Exception(message);}
 static void Reject(Action action,string code){try{action();throw new Exception("Expected "+code);}catch(PolicyException e){Check(e.Code==code,"Wrong rejection "+e.Code);}}
-const string gpo="31b2f340-016d-11d2-945f-00c04fb984f9",other="6ac1786c-016f-11d2-945f-00c04fb984f9",dn="DC=example,DC=local";
+const string gpo="11111111-1111-1111-1111-111111111111",other="22222222-2222-2222-2222-222222222222",dn="DC=example,DC=local";
 var selected=new GpoSelection(gpo,dn,"1.2.1",15,FirstLink:true);
 ProductionGpoMappings.Validate(selected with{GpoId=other});
 Reject(()=>ProductionGpoMappings.Validate(selected with{FirstLink=false}),"DOMAIN_POLICY_PRIORITY_REQUIRED");
@@ -22,7 +22,7 @@ Reject(()=>GpoWorkflowRules.ValidateWriteScope(["*"],[dn]),"WRITE_SCOPE_UNRESTRI
 using var store=new Store(":memory:");
 var config=new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string,string?>{{"Windows:ApprovedGpoIds:0",gpo},{"Windows:AuthorizedOus:0",dn}}).Build();
 using var service=new GpoWorkflowService(config,store,new OperationGate(store),new EphemeralDataProtectionProvider(),new WindowsPowerShellExecutor(NullLogger<WindowsPowerShellExecutor>.Instance));
-var inventory=new GpoInventory("example.local","dc.example.local","EXAMPLE\\Operator",[new(gpo,"Default Domain Policy",true,true),new(other,"Default Domain Controllers Policy",true,true)],[new(dn,"Domain","Domain"),new("OU=Servers,"+dn,"Servers","OU")]);
+var inventory=new GpoInventory("example.local","dc.example.local","EXAMPLE\\Operator",[new(gpo,"Security baseline",false,true),new(other,"Pilot policy",false,true)],[new(dn,"Domain","Domain"),new("OU=Servers,"+dn,"Servers","OU")]);
 var discover=typeof(GpoWorkflowService).GetMethod("Authorize",BindingFlags.Instance|BindingFlags.NonPublic)!;
 var visible=(GpoInventory)discover.Invoke(service,[inventory])!;
 Check(visible.Gpos.Length==2&&visible.Scopes.Length==2,"Write boundary hid read-only discovery");
@@ -48,7 +48,7 @@ foreach(var mapping in ProductionGpoMappings.Settings){
   if(mapping.RequiresInput)Reject(()=>ProductionGpoMappings.Validate(selection with{CustomValue=""}),"GPO_CUSTOM_VALUE_REQUIRED");
 }
 Check(cases==8*2+386*4&&manual==11,"Catalog coverage incomplete");
-Console.WriteLine($"PASS {cases} control/refresh/priority combinations; {manual} controls block automatic writes");
+Console.WriteLine($"PASS {cases} control/refresh/priority combinations on a non-default GPO; {manual} controls block automatic writes");
 
 using(var auditStore=new Store(":memory:")) {
     Check(auditStore.AuditIntegrityReport().Valid,"Empty audit chain invalid");

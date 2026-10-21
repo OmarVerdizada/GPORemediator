@@ -3,7 +3,7 @@ const fs=require('node:fs'),path=require('node:path'),http=require('node:http'),
 const {chromium}=require('playwright');
 const root=path.resolve(__dirname,'../frontend/source'),screens=path.resolve(__dirname,'../work/screens');
 fs.mkdirSync(screens,{recursive:true});
-const gpos=[{id:'6ac1786c-016f-11d2-945f-00c04fb984f9',name:'Default Domain Controllers Policy',protected:true,selectable:true},{id:'31b2f340-016d-11d2-945f-00c04fb984f9',name:'Default Domain Policy',protected:true,selectable:true}];
+const gpos=[{id:'6ac1786c-016f-11d2-945f-00c04fb984f9',name:'Protected controller policy',protected:true,selectable:true},{id:'31b2f340-016d-11d2-945f-00c04fb984f9',name:'Protected domain policy',protected:true,selectable:true}];
 gpos.push({id:'11111111-1111-1111-1111-111111111111',name:'GPO-Pilot-Computers',protected:false,selectable:true});
 const run={id:'recovery-test',startedAt:'2026-10-06T08:00:00Z',updatedAt:'2026-10-09T08:00:34Z',plan:{selection:{setting:'1.1.4',gpoId:gpos[0].id,scopeDn:'DC=test,DC=local'},preview:{gpo:gpos[0],scope:{dn:'DC=test,DC=local'},previousValue:0,desiredValue:14},executionUser:'TEST\\operator'},result:{state:'PUBLISHED',backupId:'test-backup-id',gpoPublished:true,linkVerified:true}};
 const inventory={gpos,scopes:[{dn:'DC=test,DC=local',name:'test.local',kind:'Domain'},{dn:'OU=Users,DC=test,DC=local',name:'Users',kind:'OU'},{dn:'OU=Endpoints,DC=test,DC=local',name:'Endpoints',kind:'OU'}],domain:'test.local'};
@@ -236,7 +236,7 @@ const server=http.createServer(async(req,res)=>{
   assert.equal(await page.locator('.gpo-option').first().evaluate(el=>getComputedStyle(el).display),'grid');
   assert.ok(await page.locator('.gpo-option-copy').first().boundingBox().then(b=>b.width>300));
   await page.screenshot({path:path.join(screens,'gpo-desktop.png')});
-  await page.locator('#gpo-search').fill('Default Domain Policy');
+  await page.locator('#gpo-search').fill('Protected domain policy');
   assert.equal(await page.locator('.gpo-option').count(),1);
   await page.locator('#gpo-search').fill('no-such-policy');
   assert.equal(await page.locator('.gpo-modal-empty').count(),1);

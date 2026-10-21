@@ -261,7 +261,7 @@ One production project and four regression projects target net10.0. Production a
 1. **Select CIS control:** benchmark-v4.json → catalog-view/product → workspace.selectRule → syncBackendMappings/ProductionGpoMappings.
 2. **Choose domain:** Setup writes one pinned domain/DC config and controlled restart; explicit sign-in connects through GpoWorkflowService.ConnectAsync → gpoInventory. Simultaneous multi-domain browsing is not implemented.
 3. **Select GPO:** discovered GUID/name/selectable flags → visual picker. Read-only inventory is not hidden by the production write allowlist.
-4. **Select target:** live domain/OU catalog → GpoSelection; user policy separates user OU, endpoint OU and verification user; domain password/lockout requires Default Domain Policy at the root.
+4. **Select target:** live domain/OU catalog → GpoSelection; user policy separates user OU, endpoint OU and verification user; domain password/lockout accepts any selected active GPO and links it at the domain root with order 1.
 5. **Preview:** /api/gpo/preview → typed mapping validation → DC Preview/Validate-Selection → current content/link fingerprint, authority warnings, inventory and conflicts. Readiness may create/delete a backup-directory probe; it does not change a GPO.
 6. **Confirm:** change reference, APPLY/impact/protected confirmations → /api/workflows/apply or guarded direct endpoint → ValidateConsent, write gate, GUID/OU/host boundaries and current context.
 7. **Apply:** server reservation + durable DC file lock → fresh preview/fingerprint check → full Backup-GPO/manifest → mechanism-specific write → selected link → read-back. Apply worker itself never forces endpoint refresh.

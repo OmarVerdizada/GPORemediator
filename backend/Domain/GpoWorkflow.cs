@@ -109,6 +109,6 @@ public static class GpoWorkflowRules
         if (!string.IsNullOrWhiteSpace(consent.ApprovedBy) && (consent.ApprovedBy.Length > 256 || consent.ApprovedBy.IndexOfAny(['\r','\n','\0']) >= 0))
             throw new PolicyException("APPROVER_REFERENCE_INVALID", "The optional operator-entered approver reference is invalid.");
         if (plan.Preview.Gpo.Protected && !consent.AcknowledgeProtected)
-            throw new PolicyException("PROTECTED_GPO_CONFIRMATION", "Explicitly acknowledge editing the protected default domain policy.");
+            throw new PolicyException("PROTECTED_GPO_CONFIRMATION", "Explicitly acknowledge editing this protected built-in GPO.");
     }
 }

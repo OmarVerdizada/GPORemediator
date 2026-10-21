@@ -39,7 +39,7 @@ for cid,(key,val,cmp,unit) in account.items():
         minimum={'1.1.1':24,'1.1.3':1,'1.1.4':14,'1.1.5':1,'1.1.6':0,'1.2.1':15,'1.2.2':1,'1.2.3':1,'1.2.4':15}[cid],
         maximum={'1.1.1':24,'1.1.3':998,'1.1.4':20,'1.1.5':1,'1.1.6':0,'1.2.1':99999,'1.2.2':5,'1.2.3':1,'1.2.4':99999}[cid],
         suggested=int(val),
-        warnings=['Domain user password/lockout policy must be written to Default Domain Policy and linked at the domain root.'])
+        warnings=['Domain user password/lockout policy must use the domain root; the selected GPO is enabled at link order 1 so it becomes the effective domain account policy.'])
 
 # TSV helpers.
 def read_tsv(name):

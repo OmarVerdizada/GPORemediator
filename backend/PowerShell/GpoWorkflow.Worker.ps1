@@ -19,8 +19,10 @@ Assert-DomainExecutionIdentity $executionIdentity.User ([string]$domain.DomainSI
 $dc=Get-ADDomainController -Identity $cfg.domainController -Server $cfg.domainController
 if($dc.IsReadOnly -or $dc.Domain -ine $domain.DNSRoot -or $env:COMPUTERNAME -ine ($dc.HostName -split '\.')[0]){Fail 'WRITABLE_DC_REQUIRED' 'Execution must be on the selected writable DC in the configured domain.'}
 $domainDn=[string]$domain.DistinguishedName
-$defaultDomainPolicy='31b2f340-016d-11d2-945f-00c04fb984f9'
-$defaultDomainControllersPolicy='6ac1786c-016f-11d2-945f-00c04fb984f9'
+$protectedBuiltInGpoIds=@(
+    '31b2f340-016d-11d2-945f-00c04fb984f9',
+    '6ac1786c-016f-11d2-945f-00c04fb984f9'
+)
 function Gpo-Ad([string]$Id){
     $dn='CN='+([guid]$Id).ToString('B').ToUpperInvariant()+',CN=Policies,CN=System,'+$domainDn
     return Get-ADObject -Identity $dn -Server $cfg.domainController -Properties versionNumber,gPCMachineExtensionNames,gPCUserExtensionNames,flags,whenChanged,gPCWQLFilter
@@ -82,7 +84,9 @@ function Link([string]$Raw,[string]$Id,[string]$Dn){
 }
 function Gpo-Choice($Gpo){
     $id=$Gpo.Id.ToString();$status=[string]$Gpo.GpoStatus
-    return @{id=$id;name=[string]$Gpo.DisplayName;protected=($id -in @($defaultDomainPolicy,$defaultDomainControllersPolicy));selectable=($status -ne 'AllSettingsDisabled')}
+    # Built-in GPO IDs only add the protected-change acknowledgement. They never
+    # constrain which GPO can be selected for a control.
+    return @{id=$id;name=[string]$Gpo.DisplayName;protected=($id -in $protectedBuiltInGpoIds);selectable=($status -ne 'AllSettingsDisabled')}
 }
 function Mapping-Items($Map){return @($Map.items)}
 function Desired-Item($Map,$Item,$S){

@@ -14,14 +14,14 @@ Məsələn:
 ```text
 C:\ProgramData\GpoRemediator\Scripts\
 ├── prosol.local\
-│   ├── 31b2f340-016d-11d2-945f-00c04fb984f9\
+│   ├── 11111111-1111-1111-1111-111111111111\
 │   │   ├── Invoke-Gpo.ps1
 │   │   └── scope.json
 │   └── 483fcf29-...\
 │       ├── Invoke-Gpo.ps1
 │       └── scope.json
 └── shamsi.local\
-    └── 6ac1786c-016f-11d2-945f-00c04fb984f9\
+    └── 22222222-2222-2222-2222-222222222222\
         ├── Invoke-Gpo.ps1
         └── scope.json
 ```

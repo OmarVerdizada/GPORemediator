@@ -15,7 +15,7 @@ Open the console with an authorized Windows operator account. Connect separately
 5. Apply. The DC worker creates a full GPO backup before writing and reads back the policy and selected link.
 6. Review publication, AD/SYSVOL replication and effective endpoint results separately. Publication alone does not establish endpoint compliance. Refresh is a separate explicit action.
 
-Domain password and lockout controls require Default Domain Policy and the domain root. Other controls should use the approved remediation GPO and intended OU. Wildcards are discovery-only and cannot authorize writes.
+Domain password and lockout controls accept any selected active GPO and apply it at link order 1 on the domain root. Other controls use the selected remediation GPO and intended OU. No control requires a GPO by built-in name or GUID. Wildcards are discovery-only and cannot authorize writes.
 
 ## Verify and recover
 

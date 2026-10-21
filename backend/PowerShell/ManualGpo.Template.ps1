@@ -33,7 +33,6 @@ __GR_FUNCTIONS__
         throw 'Run on the selected writable DC in the selected domain'
     }
     $domainDn=[string]$domain.DistinguishedName
-    $defaultDomainPolicy='31b2f340-016d-11d2-945f-00c04fb984f9'
     $s=[pscustomobject]@{gpoId=$GpoId;scopeDn=$TargetDn;setting=$map.id;value=$PolicyValue;customValue=$CustomValue;firstLink=$FirstLink;refresh='None';endpointScopeDn='';verificationUser=''}
     Validate-Selection $s $map
     $null=Assert-VersionSync $GpoId
