@@ -6,7 +6,7 @@
 
 The reproducible `scripts/Audit-PolicyScopes.py` reads the server-authoritative catalog and imported CIS rule IDs/titles. For every control it records: CIS section, title, declared scope, handler, policy hive or secedit privilege/audit GUID, configured principals, activation state, and potential role exception. This is a **static mapping audit**, not a live domain proof.
 
-- **Section 1:** eight **Domain account** policies (`Default Domain Policy`, domain root). `1.2.3` is a guided **Computer** exception for the local built-in Administrator.
+- **Section 1:** eight **Domain account** policies (operator-selected active GPO, domain root, link order 1). `1.2.3` is a guided **Computer** exception for the local built-in Administrator.
 - **Section 2:** 103 **Computer** policies. All 37 `2.2.*` User Rights Assignment records write `Machine\Microsoft\Windows NT\SecEdit\GptTmpl.inf` -> `[Privilege Rights]`. The names of the principals do NOT turn these into User Configuration policies.
 - **Section 5:** one **Computer** policy (service start).
 - **Section 9:** 23 **Computer** firewall policies (HKLM).

@@ -3,7 +3,7 @@
 **User-facing flow**: CIS control → choose existing GPO from searchable visual inventory (already supported) → choose User OU / Computer OU from a searchable hierarchical AD tree (new) → optional endpoint OU for User gpupdate → read-only Preview → explicit approval → Apply → Verify.
 
 - OU names and DNs are taken exclusively from authenticated `/api/gpo/inventory`/AD discovery. No typing arbitrary OU DNs or GPO GUIDs.
-- User Configuration requires an OU hosting the users. Computer Configuration requires an OU hosting the computers. Domain account policies require the actual domain root, and the Default Domain Policy constraint remains enforced.
+- User Configuration requires an OU hosting the users. Computer Configuration requires an OU hosting the computers. Domain account policies require the actual domain root and automatically use link order 1 for the selected active GPO.
 - User Rights Assignment `2.2.*` is a **Computer** policy even when user/group names appear in the privilege list.
 - A GPO already linked to another OU might affect **both** OUs after editing. Existing links, security filtering, WMI filters and inheritance are never deleted to make the UI work. Preview retains these warnings and a full GPO backup is required.
 - Duplicate old `targetForm` was removed by the base safety patch; the new OU tree replaces the existing drop-down rather than creating competing inputs. Batch plans are computer-only and avoid pretending User or Domain policies can be applied with a computer OU.

@@ -2,7 +2,7 @@
 
 - CIS **Section 19** means benchmark section, **not AD domain 19**.
 - **2.2.12** = **Change the system time**, `SeSystemTimePrivilege` (Computer GPO). **2.2.20** = **Debug programs**, `SeDebugPrivilege` (Computer GPO).
-- Domain account policies: **8** controls, Default Domain Policy at domain root.
+- Domain account policies: **8** controls, selected active GPO at domain root and link order 1.
 - **385 Computer GPO / 12 User GPO** classifications remain unchanged.
 - PDC refresh is allowed only for domain account policy; computer OU policies must refresh the computer OU, user OU policies target an endpoint OU where user sessions exist.
 - User GPO targeting requires a user OU; normal refresh is valid without a loaded user profile, but endpoint HKCU verification remains pending.

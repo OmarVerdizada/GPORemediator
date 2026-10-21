@@ -123,7 +123,6 @@ public sealed class GpoWorkflowService(IConfiguration config,Store store,Operati
         var gpo=c.Inventory.Gpos.SingleOrDefault(x=>string.Equals(x.Id,selection.GpoId,StringComparison.OrdinalIgnoreCase));
         var scope=c.Inventory.Scopes.SingleOrDefault(x=>string.Equals(x.Dn,selection.ScopeDn,StringComparison.OrdinalIgnoreCase));
         if(gpo is null||!gpo.Selectable||scope is null)throw new PolicyException("GPO_SELECTION_REQUIRED","Select a discovered GPO and target.");
-        if(mapping.DomainPolicySensitive&&Guid.Parse(gpo.Id)!=Guid.Parse("31b2f340-016d-11d2-945f-00c04fb984f9"))throw new PolicyException("DEFAULT_DOMAIN_POLICY_REQUIRED","This control requires Default Domain Policy.");
         if(scope.Kind!=(mapping.DomainPolicySensitive?"Domain":"OU"))throw new PolicyException(mapping.DomainPolicySensitive?"PASSWORD_SCOPE_MISMATCH":"GPO_OU_REQUIRED","The target kind is incompatible with this control.");
         try{return await Run<System.Text.Json.JsonElement>("gpoPreview",c,new{selection,mapping,accessOnly=true},ct);}
         catch(PolicyException error) when(error.Code.EndsWith("ACCESS_DENIED",StringComparison.Ordinal)||error.Code=="GPO_ACCESS_UNVERIFIED"){

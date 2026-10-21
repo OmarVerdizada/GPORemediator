@@ -8,7 +8,7 @@ const mappings=JSON.parse(fs.readFileSync(path.join(repo,'backend/data/gpo-produ
 assert.deepEqual(JSON.parse(JSON.stringify(window.GpoManualEngine.mappings)),mappings);
 const api=window.GpoManualRemediation,rows=[],gpo='11111111-1111-1111-1111-111111111111';
 for(const m of mappings){
- const r=catalog.rules.find(x=>x.id===m.id),selection={setting:m.id,gpoId:m.domainPolicySensitive?'31b2f340-016d-11d2-945f-00c04fb984f9':gpo,scopeDn:m.domainPolicySensitive?'DC=example,DC=test':m.scope==='User'?'OU=Users,DC=example,DC=test':'OU=Endpoints,DC=example,DC=test',value:m.suggested??0,customValue:m.requiresInput?'Policy test value':'',firstLink:false};
+ const r=catalog.rules.find(x=>x.id===m.id),selection={setting:m.id,gpoId:m.domainPolicySensitive?'22222222-2222-2222-2222-222222222222':gpo,scopeDn:m.domainPolicySensitive?'DC=example,DC=test':m.scope==='User'?'OU=Users,DC=example,DC=test':'OU=Endpoints,DC=example,DC=test',value:m.suggested??0,customValue:m.requiresInput?'Policy test value':'',firstLink:!!m.domainPolicySensitive};
  const s={lang:'en',settings:mappings,selection,inventory:{domain:'example.test',domainController:'dc.example.test',gpos:[]}};
  for(const action of m.automation==='Automated'?['Preview','Apply']:['Review']){
   s.manualScriptAction=action;

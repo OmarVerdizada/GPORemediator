@@ -248,7 +248,8 @@ function Validate-Selection($S,$Map){
     if([string]$Map.scope -eq 'Computer' -and $scope.kind -ne 'OU'){Fail 'COMPUTER_OU_REQUIRED' 'Choose a computer OU from the discovered directory. The domain root is reserved for account policies.'}
     if([bool]$Map.domainPolicySensitive){
       if($scope.kind -ne 'Domain'){Fail 'ACCOUNT_SCOPE_MISMATCH' 'Domain password and lockout policy requires the domain root.'}
-      if(([guid]$S.gpoId).ToString() -ne $defaultDomainPolicy){Fail 'DEFAULT_DOMAIN_POLICY_REQUIRED' 'Domain password/lockout controls must be written to Default Domain Policy.'}
+      if(![bool](Read-Field $S 'firstLink' $false)){Fail 'DOMAIN_POLICY_PRIORITY_REQUIRED' 'Domain password/lockout policy must be enabled at link order 1 on the domain root.'}
+      if([string]$S.refresh -eq 'Scope'){Fail 'DOMAIN_REFRESH_SCOPE_INVALID' 'Domain account policy has no computer OU refresh scope. Refresh the PDC or wait for the normal policy cycle.'}
     }
     if([bool]$Map.requiresInput){$v=[string]$S.customValue;if([string]::IsNullOrWhiteSpace($v)){Fail 'GPO_CUSTOM_VALUE_REQUIRED' 'This control requires an explicit organization value.'};if($v.IndexOf([char]0)-ge 0){Fail 'GPO_CUSTOM_VALUE_INVALID' 'Custom value contains an invalid character.'}}
     if([bool]$Map.allowValueOverride){if($null -ne $Map.minimum -and [int]$S.value -lt [int]$Map.minimum){Fail 'GPO_VALUE_INVALID' 'Value is below the approved range.'};if($null -ne $Map.maximum -and [int]$S.value -gt [int]$Map.maximum){Fail 'GPO_VALUE_INVALID' 'Value is above the approved range.'}}

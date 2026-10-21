@@ -115,8 +115,6 @@ public static class ProductionGpoMappings
         if (!mapping.Writable)
             throw new PolicyException("GPO_MANUAL_ONLY", "This CIS control is not classified as Automated in the imported CIS v4.0.0 catalog. It remains read-only and requires manual review.");
         if (!Guid.TryParse(selection.GpoId, out _)) throw new PolicyException("GPO_SELECTION_REQUIRED", "Select a GPO from the discovered list.");
-        if(mapping.DomainPolicySensitive && Guid.Parse(selection.GpoId)!=Guid.Parse("31b2f340-016d-11d2-945f-00c04fb984f9"))
-            throw new PolicyException("DEFAULT_DOMAIN_POLICY_REQUIRED","Domain password/lockout controls require Default Domain Policy at the domain root. Choose it from the discovered GPO list; a pilot OU GPO cannot be used for this control.");
         if (selection.Refresh is not ("None" or "Pdc" or "Scope")) throw new PolicyException("GPO_OPTIONS_INVALID", "Invalid policy refresh option.");
         if (selection.AccountScope is not ("Domain" or "LocalComputers" or "Users")) throw new PolicyException("GPO_OPTIONS_INVALID", "Invalid target scope option.");
         if (string.IsNullOrWhiteSpace(selection.ScopeDn) || selection.ScopeDn.Length > 2048 || selection.ScopeDn.IndexOfAny(['\r','\n','\0']) >= 0)
@@ -135,6 +133,8 @@ public static class ProductionGpoMappings
         else
         {
             if (mapping.DomainPolicySensitive && selection.AccountScope != "Domain") throw new PolicyException("GPO_SCOPE_TYPE_MISMATCH", "This control requires the domain account-policy scope.");
+            if (mapping.DomainPolicySensitive && !selection.FirstLink) throw new PolicyException("DOMAIN_POLICY_PRIORITY_REQUIRED", "A domain password/lockout GPO must be enabled at link order 1 on the domain root so the requested policy is effective.");
+            if (mapping.DomainPolicySensitive && selection.Refresh == "Scope") throw new PolicyException("DOMAIN_REFRESH_SCOPE_INVALID", "Domain account policy has no computer OU refresh scope. Refresh the PDC or wait for the normal policy cycle.");
             if (!mapping.DomainPolicySensitive && selection.AccountScope != "LocalComputers") throw new PolicyException("GPO_SCOPE_TYPE_MISMATCH", "This control requires a computer policy scope.");
             if (!mapping.DomainPolicySensitive && selection.Refresh == "Pdc") throw new PolicyException("PDC_REFRESH_SCOPE_INVALID", "This computer policy targets the selected computer OU, not the PDC. Use scope computers or the normal cycle.");
             if (!string.IsNullOrWhiteSpace(selection.EndpointScopeDn) || !string.IsNullOrWhiteSpace(selection.VerificationUser))

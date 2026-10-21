@@ -2,7 +2,7 @@
 
 All GPOs and domain/OU entries returned by the signed-in account's AD inventory remain visible in the target pickers. A readable object is not labelled writable. Completing a compatible GPO/OU selection triggers a debounced, read-only access check without creating a plan. Its result appears beside the target. Edit permissions are checked again when preparing a remediation plan. Delayed results for an earlier selection cannot overwrite the current target feedback. AD ACLs can hide objects from discovery; the application does not use a second privileged identity to reveal them.
 
-Control compatibility and account permissions are separate. All discovered targets can be inspected/selected, but incompatible selections show an inline explanation and disable Preview. For example, the current domain-password workflow requires Default Domain Policy and the domain root, while computer/user controls require OUs. A disabled GPO is identified as disabled, not as an access-denied result. The application never silently switches a pilot GPO to Default Domain Policy.
+Control compatibility and account permissions are separate. All discovered targets can be inspected/selected, but incompatible selections show an inline explanation and disable Preview. Domain-password workflows accept any active discovered GPO but require the domain root and link order 1; computer/user controls require OUs. A disabled GPO is identified as disabled, not as an access-denied result. The application never silently replaces the operator's selected GPO.
 
 ## Read-only permission assessment
 

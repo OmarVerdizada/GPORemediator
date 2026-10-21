@@ -281,7 +281,8 @@ const server=http.createServer(async(req,res)=>{
   assert.equal(previewSelections.at(-1).scopeDn,'OU=Users,DC=test,DC=local');
   assert.equal(previewSelections.at(-1).refresh,'Scope');
   await page.screenshot({path:path.join(screens,'ou-wide-user-policy.png'),fullPage:true});
-  // Reproduce the reported domain password control with a pilot GPO in inventory.
+  // Domain password controls may use any active GPO, but always target the
+  // domain root at link priority 1 so the resulting account policy is effective.
   await page.goto(`http://127.0.0.1:${server.address().port}/#/benchmark`);
   await page.locator('#catalog-search').fill('1.1.1');await page.locator('[data-rule="1.1.1"]').first().click();
   await page.locator('[data-tab=remediation]').click();
@@ -291,8 +292,7 @@ const server=http.createServer(async(req,res)=>{
   assert.equal(await page.locator('#gpo-selection>.primary-action').isDisabled(),true);
   await page.locator('[data-gpo-toggle]').click();assert.equal(await page.locator('.gpo-option').count(),3);
   await page.locator('[data-gpo="11111111-1111-1111-1111-111111111111"]').click();
-  assert.ok((await page.locator('.target-access-error').textContent()).includes('access xətası deyil'));assert.equal(await page.locator('#gpo-selection>.primary-action').isDisabled(),true);await page.locator('[data-gpo-toggle]').click();
-  await page.locator('[data-gpo="31b2f340-016d-11d2-945f-00c04fb984f9"]').click();
+  assert.equal(await page.locator('.target-access-error').count(),0);assert.equal(await page.locator('#gpo-selection>.primary-action').isDisabled(),false);
   await page.locator('[data-scope-open="scopeDn"]').click();
   assert.ok((await page.locator('.visual-scope-head p').textContent()).includes('Bütün aşkarlanan'));
   assert.ok(await page.locator('[data-scope-choose^="OU="]').count()>0);
@@ -301,8 +301,8 @@ const server=http.createServer(async(req,res)=>{
   await page.locator('.refresh-choice:has(input[value=Pdc])').click();
   await page.screenshot({path:path.join(screens,'domain-account-targeting.png'),fullPage:true});
   await page.locator('#gpo-selection>.primary-action').click();await page.waitForFunction(()=>!!document.querySelector('.plan-card'));
-  assert.equal(previewSelections.at(-1).gpoId,'31b2f340-016d-11d2-945f-00c04fb984f9');
-  assert.equal(previewSelections.at(-1).accountScope,'Domain');assert.equal(previewSelections.at(-1).firstLink,false);assert.equal(previewSelections.at(-1).refresh,'Pdc');
+  assert.equal(previewSelections.at(-1).gpoId,'11111111-1111-1111-1111-111111111111');
+  assert.equal(previewSelections.at(-1).accountScope,'Domain');assert.equal(previewSelections.at(-1).firstLink,true);assert.equal(previewSelections.at(-1).refresh,'Pdc');
   await page.goto(`http://127.0.0.1:${server.address().port}/#/benchmark`);
   await page.locator('#catalog-search').fill('2.3.1.1');await page.locator('[data-rule="2.3.1.1"]').first().click();await page.locator('[data-tab=remediation]').click();
   await page.locator('[data-gpo-toggle]').click();await page.locator('[data-gpo="11111111-1111-1111-1111-111111111111"]').click();

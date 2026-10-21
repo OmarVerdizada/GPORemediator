@@ -32,7 +32,7 @@ foreach($map in $catalog.mappings){
     foreach($item in $map.items){foreach($field in @('section','key','name','type','value','guid','state','mask')){if(!$item.PSObject.Properties[$field]){$item|Add-Member -NotePropertyName $field -NotePropertyValue $null}}}
     $script:folder=Join-Path $sandbox ([string]$map.id);$null=New-Item -ItemType Directory -Path $script:folder
     $script:registry=@{};$script:bumps=0;$script:auditExtensions=''
-    $selection=[pscustomobject]@{gpoId='31b2f340-016d-11d2-945f-00c04fb984f9';scopeDn='DC=example,DC=local';value=$(if($map.allowValueOverride){$map.suggested}else{0});customValue=$(if($map.requiresInput){if($map.inputDefault){$map.inputDefault}else{'Policy test value'}}else{''});refresh='None';firstLink=$false}
+    $selection=[pscustomobject]@{gpoId='22222222-2222-2222-2222-222222222222';scopeDn='DC=example,DC=local';value=$(if($map.allowValueOverride){$map.suggested}else{0});customValue=$(if($map.requiresInput){if($map.inputDefault){$map.inputDefault}else{'Policy test value'}}else{''});refresh='None';firstLink=[bool]$map.domainPolicySensitive}
     $plan=[pscustomobject]@{selection=$selection}
     try{
         Assert-Test (!(Mapping-Matches $selection.gpoId $map $selection)) ($map.id+': clean fixture unexpectedly matched')

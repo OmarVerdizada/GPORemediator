@@ -9,8 +9,9 @@ using Microsoft.AspNetCore.DataProtection;
 static void Check(bool value,string message){if(!value)throw new Exception(message);}
 static void Reject(Action action,string code){try{action();throw new Exception("Expected "+code);}catch(PolicyException e){Check(e.Code==code,"Wrong rejection "+e.Code);}}
 const string gpo="31b2f340-016d-11d2-945f-00c04fb984f9",other="6ac1786c-016f-11d2-945f-00c04fb984f9",dn="DC=example,DC=local";
-var selected=new GpoSelection(gpo,dn,"1.2.1",15);
-Reject(()=>ProductionGpoMappings.Validate(selected with{GpoId=other}),"DEFAULT_DOMAIN_POLICY_REQUIRED");
+var selected=new GpoSelection(gpo,dn,"1.2.1",15,FirstLink:true);
+ProductionGpoMappings.Validate(selected with{GpoId=other});
+Reject(()=>ProductionGpoMappings.Validate(selected with{FirstLink=false}),"DOMAIN_POLICY_PRIORITY_REQUIRED");
 ProductionGpoMappings.Validate(selected with{GpoId="{"+gpo.ToUpperInvariant()+"}"});
 GpoWorkflowRules.ValidateWriteSelection([gpo],[dn],selected);
 GpoWorkflowRules.ValidateWriteSelection(["{"+gpo.ToUpperInvariant()+"}"],[dn.ToUpperInvariant()],selected with{ScopeDn="OU=Servers,"+dn});
@@ -28,11 +29,12 @@ Check(visible.Gpos.Length==2&&visible.Scopes.Length==2,"Write boundary hid read-
 Console.WriteLine("PASS full read-only inventory with explicit write boundary enforcement");
 int cases=0,manual=0;
 foreach(var mapping in ProductionGpoMappings.Settings){
-  var selection=new GpoSelection(gpo,dn,mapping.Id,mapping.Suggested??0, mapping.DomainPolicySensitive?"Domain":mapping.Scope=="User"?"Users":"LocalComputers",CustomValue:mapping.RequiresInput?(mapping.InputDefault is {Length:>0}?mapping.InputDefault:"Policy test value"):null);
+  var selection=new GpoSelection(gpo,dn,mapping.Id,mapping.Suggested??0, mapping.DomainPolicySensitive?"Domain":mapping.Scope=="User"?"Users":"LocalComputers",FirstLink:mapping.DomainPolicySensitive,CustomValue:mapping.RequiresInput?(mapping.InputDefault is {Length:>0}?mapping.InputDefault:"Policy test value"):null);
   if(!mapping.Writable){Reject(()=>ProductionGpoMappings.Validate(selection),"GPO_MANUAL_ONLY");manual++;continue;}
-  var refreshes=mapping.Scope=="User"?new[]{"None","Scope"}:mapping.DomainPolicySensitive?new[]{"None","Pdc","Scope"}:new[]{"None","Scope"};
-  foreach(var refresh in refreshes)foreach(var priority in new[]{false,true}){var candidate=selection with{Refresh=refresh,FirstLink=priority,EndpointScopeDn=refresh=="Scope"&&mapping.Scope=="User"?"OU=Endpoints,"+dn:null,VerificationUser=refresh=="Scope"&&mapping.Scope=="User"?"EXAMPLE\\PilotUser":null};ProductionGpoMappings.Validate(candidate);cases++;}
+  var refreshes=mapping.Scope=="User"?new[]{"None","Scope"}:mapping.DomainPolicySensitive?new[]{"None","Pdc"}:new[]{"None","Scope"};
+  foreach(var refresh in refreshes)foreach(var priority in mapping.DomainPolicySensitive?new[]{true}:new[]{false,true}){var candidate=selection with{Refresh=refresh,FirstLink=priority,EndpointScopeDn=refresh=="Scope"&&mapping.Scope=="User"?"OU=Endpoints,"+dn:null,VerificationUser=refresh=="Scope"&&mapping.Scope=="User"?"EXAMPLE\\PilotUser":null};ProductionGpoMappings.Validate(candidate);cases++;}
   if(mapping.Scope=="Computer") Reject(()=>ProductionGpoMappings.Validate(selection with{Refresh="Pdc"}),"PDC_REFRESH_SCOPE_INVALID");
+  if(mapping.DomainPolicySensitive) Reject(()=>ProductionGpoMappings.Validate(selection with{Refresh="Scope"}),"DOMAIN_REFRESH_SCOPE_INVALID");
    if(mapping.Scope=="User"){
     Reject(()=>ProductionGpoMappings.Validate(selection with{Refresh="Pdc"}),"USER_REFRESH_TARGET_INVALID");
     Reject(()=>ProductionGpoMappings.Validate(selection with{Refresh="Scope"}),"ENDPOINT_SCOPE_REQUIRED");
@@ -45,7 +47,7 @@ foreach(var mapping in ProductionGpoMappings.Settings){
   }
   if(mapping.RequiresInput)Reject(()=>ProductionGpoMappings.Validate(selection with{CustomValue=""}),"GPO_CUSTOM_VALUE_REQUIRED");
 }
-Check(cases==8*6+386*4&&manual==11,"Catalog coverage incomplete");
+Check(cases==8*2+386*4&&manual==11,"Catalog coverage incomplete");
 Console.WriteLine($"PASS {cases} control/refresh/priority combinations; {manual} controls block automatic writes");
 
 using(var auditStore=new Store(":memory:")) {
@@ -90,7 +92,7 @@ Console.WriteLine("PASS optional-comparator legacy hash compatibility and versio
 var customCases=new List<object>();
 foreach(var pair in new[]{("9.1.5",new[]{new[]{"32768"}}),("19.5.1.1",new[]{new[]{"0"}}),("17.2.1",new[]{new[]{"0"}}),("1.1.4",new[]{new[]{"20"}}),("2.2.12",new[]{new[]{"S-1-5-32-544"}}),("9.1.4",new[]{new[]{"%SystemRoot%\\System32\\logfiles\\firewall\\customfw.log"}}),(ProductionGpoMappings.Settings.First(x=>x.Writable&&x.Items.Length==1&&x.Items[0].Type=="MultiString").Id,new[]{new[]{"one","two"}})}){
  var baseline=ProductionGpoMappings.Require(pair.Item1);
- var selection=new GpoSelection(gpo,baseline.Scope=="Domain"?dn:"OU=Targets,"+dn,baseline.Id,baseline.Suggested??0,baseline.Scope=="Domain"?"Domain":baseline.Scope=="User"?"Users":"LocalComputers",ItemValues:pair.Item2);
+ var selection=new GpoSelection(gpo,baseline.Scope=="Domain"?dn:"OU=Targets,"+dn,baseline.Id,baseline.Suggested??0,baseline.Scope=="Domain"?"Domain":baseline.Scope=="User"?"Users":"LocalComputers",FirstLink:baseline.Scope=="Domain",ItemValues:pair.Item2);
  ProductionGpoMappings.Validate(selection);var effective=ProductionGpoMappings.Effective(selection);
  Check(!effective.AllowValueOverride&&effective.Source.Contains("operator-selected")&&effective.Items[0].Comparator is "==" or "exact","Custom values were not resolved as explicit policy intent");
  Check(ProductionGpoMappings.Require(selection.Setting)==baseline,"Custom values mutated the canonical mapping");

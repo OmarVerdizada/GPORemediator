@@ -43,7 +43,7 @@
       "requiresGpUpdate": true,
       "requiresRestart": false,
       "warnings": [
-        "Domain user password/lockout policy must be written to Default Domain Policy and linked at the domain root."
+        "Domain user password/lockout policy must use the domain root; the selected GPO is enabled at link order 1 so it becomes the effective domain account policy."
       ],
       "source": "operator CIS v4.0.0 + validated Windows policy mapping"
     },
@@ -81,7 +81,7 @@
       "requiresGpUpdate": true,
       "requiresRestart": false,
       "warnings": [
-        "Domain user password/lockout policy must be written to Default Domain Policy and linked at the domain root."
+        "Domain user password/lockout policy must use the domain root; the selected GPO is enabled at link order 1 so it becomes the effective domain account policy."
       ],
       "source": "operator CIS v4.0.0 + validated Windows policy mapping"
     },
@@ -119,7 +119,7 @@
       "requiresGpUpdate": true,
       "requiresRestart": false,
       "warnings": [
-        "Domain user password/lockout policy must be written to Default Domain Policy and linked at the domain root.",
+        "Domain user password/lockout policy must use the domain root; the selected GPO is enabled at link order 1 so it becomes the effective domain account policy.",
         "This CIS recipe contains benchmark notes/cautions or environment-specific exceptions. Review the imported benchmark description and application dependencies before Apply."
       ],
       "source": "operator CIS v4.0.0 + validated Windows policy mapping"
@@ -158,7 +158,7 @@
       "requiresGpUpdate": true,
       "requiresRestart": false,
       "warnings": [
-        "Domain user password/lockout policy must be written to Default Domain Policy and linked at the domain root."
+        "Domain user password/lockout policy must use the domain root; the selected GPO is enabled at link order 1 so it becomes the effective domain account policy."
       ],
       "source": "operator CIS v4.0.0 + validated Windows policy mapping"
     },
@@ -196,7 +196,7 @@
       "requiresGpUpdate": true,
       "requiresRestart": false,
       "warnings": [
-        "Domain user password/lockout policy must be written to Default Domain Policy and linked at the domain root."
+        "Domain user password/lockout policy must use the domain root; the selected GPO is enabled at link order 1 so it becomes the effective domain account policy."
       ],
       "source": "operator CIS v4.0.0 + validated Windows policy mapping"
     },
@@ -234,7 +234,7 @@
       "requiresGpUpdate": true,
       "requiresRestart": false,
       "warnings": [
-        "Domain user password/lockout policy must be written to Default Domain Policy and linked at the domain root."
+        "Domain user password/lockout policy must use the domain root; the selected GPO is enabled at link order 1 so it becomes the effective domain account policy."
       ],
       "source": "operator CIS v4.0.0 + validated Windows policy mapping"
     },
@@ -272,7 +272,7 @@
       "requiresGpUpdate": true,
       "requiresRestart": false,
       "warnings": [
-        "Domain user password/lockout policy must be written to Default Domain Policy and linked at the domain root."
+        "Domain user password/lockout policy must use the domain root; the selected GPO is enabled at link order 1 so it becomes the effective domain account policy."
       ],
       "source": "operator CIS v4.0.0 + validated Windows policy mapping"
     },
@@ -348,7 +348,7 @@
       "requiresGpUpdate": true,
       "requiresRestart": false,
       "warnings": [
-        "Domain user password/lockout policy must be written to Default Domain Policy and linked at the domain root."
+        "Domain user password/lockout policy must use the domain root; the selected GPO is enabled at link order 1 so it becomes the effective domain account policy."
       ],
       "source": "operator CIS v4.0.0 + validated Windows policy mapping"
     },
