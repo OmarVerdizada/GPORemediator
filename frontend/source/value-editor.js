@@ -20,17 +20,17 @@ function capture(form,m,s){
  s.itemValues=JSON.stringify(values)===JSON.stringify(defaults(m))?null:values;
 }
 function render(s,m){
- const {esc,text}=window.GpoComponents,t=(az,en)=>text(s,az,en);
+ const {esc,text}=window.GpoComponents,t=(_fallback,en)=>text(s,_fallback,en);
  if(!m)return '';
- if(m.requiresInput)return `<label>${esc(m.inputLabel||t('Tətbiq ediləcək dəyər','Desired value'))}<input name="customValue" value="${esc(s.selection.customValue??m.inputDefault??'')}" maxlength="4096" required></label>`;
- if(m.automation!=='Automated'||m.handler==='Manual')return `<p>${t('Bu qayda rol üzrə manual baxış tələb edir.','This control requires role-specific manual review.')}</p>`;
+ if(m.requiresInput)return `<label>${esc(m.inputLabel||'Desired value')}<input name="customValue" value="${esc(s.selection.customValue??m.inputDefault??'')}" maxlength="4096" required></label>`;
+ if(m.automation!=='Automated'||m.handler==='Manual')return `<p>${'This control requires role-specific manual review.'}</p>`;
  const recommended=defaults(m),values=s.selection.itemValues||recommended;
- return `<section class="policy-value-editor"><header><strong>${t('Tətbiq ediləcək dəyər','Desired value')}</strong><button type="button" data-recommended-values>${t('Tövsiyəni bərpa et','Restore recommendation')}</button></header><p>${t('Tövsiyə ilkin dəyərdir; onu dəyişə bilərsiniz. Fərdi seçim preview və manual skriptə də ötürülür.','The recommendation is the initial value; you can change it. Custom choices are used in preview and the manual script.')}</p>${m.items.map((item,i)=>{
+ return `<section class="policy-value-editor"><header><strong>${'Desired value'}</strong><button type="button" data-recommended-values>${'Restore recommendation'}</button></header><p>${'The recommendation is the initial value; you can change it. Custom choices are used in preview and the manual script.'}</p>${m.items.map((item,i)=>{
  const name=m.allowValueOverride&&i===0?'value':'policyValue'+i,value=values[i]||[],type=item.type||'String';
  const attrs=`name="${name}" data-policy-value="${i}" maxlength="4096"`;
  const input=m.handler==='AdvancedAudit'?`<select ${attrs}>${['No Auditing','Success','Failure','Success and Failure'].map((label,mask)=>`<option value="${mask}" ${String(value[0])===String(mask)?'selected':''}>${label} · ${mask}</option>`).join('')}</select>`:['MultiString','Principals'].includes(type)?`<textarea ${attrs} rows="3">${esc(value.join('\n'))}</textarea>`:`<input ${attrs} value="${esc(value[0]??'')}" ${['DWORD','Integer'].includes(type)?'inputmode="numeric" pattern="[0-9]+" required':''}>`;
- return `<label>${m.items.length===1?'':esc(item.name||item.key||item.guid)}${input}<small>${esc(item.name||item.key||item.guid)} · ${esc(type)} · ${t('Tövsiyə','Recommended')}: ${esc(recommended[i].join(' / ')||t('Boş siyahı','Empty list'))}${['MultiString','Principals'].includes(type)?` · ${t('Hər sətrə bir dəyər; boş siyahı ayarı təmizləyir.','One value per line; an empty list clears the assignment.')}`:''}</small></label>`;
- }).join('')}${s.selection.itemValues?`<p class="custom-value-note">${t('Fərdi dəyər seçilib. Uğurlu tətbiq CIS tövsiyəsinə uyğunluq demək deyil.','Custom values selected. Successful application does not establish CIS recommendation compliance.')}</p>`:''}</section>`;
+ return `<label>${m.items.length===1?'':esc(item.name||item.key||item.guid)}${input}<small>${esc(item.name||item.key||item.guid)} · ${esc(type)} · ${'Recommended'}: ${esc(recommended[i].join(' / ')||'Empty list')}${['MultiString','Principals'].includes(type)?` · ${'One value per line; an empty list clears the assignment.'}`:''}</small></label>`;
+ }).join('')}${s.selection.itemValues?`<p class="custom-value-note">${'Custom values selected. Successful application does not establish CIS recommendation compliance.'}</p>`:''}</section>`;
 }
 window.GpoValueEditor=Object.freeze({defaults,effective,capture,render});
 })();

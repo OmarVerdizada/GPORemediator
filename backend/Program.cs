@@ -244,8 +244,7 @@ app.MapGet("/api/gpo/settings",()=>ProductionGpoMappings.Settings.Select(x=>new 
     x.Id,x.ControlId,x.Title,x.Category,x.Level,x.Automation,x.Handler,x.Items,x.Recommended,x.Scope,x.RequiresInput,x.InputType,x.InputLabel,x.InputDefault,
     x.AllowValueOverride,x.Minimum,x.Maximum,x.Suggested,x.Unit,x.Comparator,x.DomainPolicySensitive,x.RequiresGpUpdate,x.RequiresRestart,x.Warnings,x.Source,x.Writable,
     operationalImpact=x.DomainPolicySensitive||x.RequiresRestart?"HIGH":x.RequiresGpUpdate||x.Handler is "SecurityTemplate" or "AdvancedAudit"?"MEDIUM":"LOW",
-    impactReason=x.DomainPolicySensitive?"Domain-wide authentication or lockout behavior may change.":x.RequiresRestart?"A restart-sensitive policy is involved.":x.RequiresGpUpdate?"Endpoint policy refresh and staged verification are required.":"The mapping is scoped and still requires preview and verification.",
-    impactReasonAz=x.DomainPolicySensitive?"Domen üzrə autentifikasiya və ya kilidlənmə davranışı dəyişə bilər.":x.RequiresRestart?"Restart-a həssas siyasət iştirak edir.":x.RequiresGpUpdate?"Endpoint siyasət yenilənməsi və mərhələli yoxlama tələb olunur.":"Mapping məhdud scope üçündür, lakin preview və sonrakı yoxlama yenə tələb olunur."
+    impactReason=x.DomainPolicySensitive?"Domain-wide authentication or lockout behavior may change.":x.RequiresRestart?"A restart-sensitive policy is involved.":x.RequiresGpUpdate?"Endpoint policy refresh and staged verification are required.":"The mapping is scoped and still requires preview and verification."
 }));
 app.MapGet("/api/gpo/history",(HttpContext context,GpoWorkflowService service)=>service.History(Operator(context)));
 app.MapGet("/api/gpo/{id}/evidence",(string id,HttpContext context,GpoWorkflowService service)=>service.Evidence(id,Operator(context)));

@@ -18,6 +18,6 @@ Validation: frontend system, recipe workspace, deterministic CSS build and produ
 
 ## Use
 
-Extract the complete package into a new folder and start `GpoRemediator.cmd`. Connect to Windows / AD as usual. Open **Əməliyyatlar → Geri qaytar**, review the GPO and backup, type `ROLLBACK`, then confirm. Rollback still requires the existing production write gate and server authorization.
+Extract the complete package into a new folder and start `GpoRemediator.cmd`. Connect to Windows / AD as usual. Open **Operations → Roll back**, review the GPO and backup, type `ROLLBACK`, then confirm. Rollback still requires the existing production write gate and server authorization.
 
 The backend and verified self-contained Windows runtime are unchanged. Both frontend source and distribution are synchronized, including the source fingerprint.

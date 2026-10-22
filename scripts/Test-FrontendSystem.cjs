@@ -43,7 +43,7 @@ s.expandedTop=new Set();s.settings=[];
 assert.equal((c.benchmarkView().match(/data-domain=/g)||[]).length,19);
 assert.ok(ui.breadcrumb(s,s.catalog.rules.find(r=>r.id==='1.2.1')).includes('Account Lockout Policy'));
 const index=fs.readFileSync(path.join(source,'index.html'),'utf8');
-assert.deepEqual([...index.matchAll(/rel="stylesheet" href="\/([^?]+)/g)].map(m=>m[1]),['app.css','gpo-scope-picker.css','ux-pro.css','wave1-reliability.css','enterprise-center.css','studio-design.css']);
+assert.deepEqual([...index.matchAll(/rel="stylesheet" href="\/([^?]+)/g)].map(m=>m[1]),['app.css','gpo-scope-picker.css','ux-pro.css','wave1-reliability.css','enterprise-center.css','studio-design.css','theme-polish.css']);
 for(const name of [...index.matchAll(/(?:src|href)="\/([^"?]+)(?:\?[^" ]+)?"/g)].map(m=>m[1]))if(!name.startsWith('#'))assert.ok(fs.existsSync(path.join(source,name)),`Missing asset ${name}`);
 const css=fs.readFileSync(path.join(source,'app.css'),'utf8');
 assert.ok(!css.includes('!important'));

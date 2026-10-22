@@ -8,11 +8,11 @@ const mapping=JSON.parse(fs.readFileSync(path.join(root,'backend/data/gpo-produc
 const commands=[];
 for(const id of ids){
  const guide=guides.get(id),m=mapping.find(x=>x.id===id);assert.notEqual(m.automation,'Automated');
- for(const lang of ['az','en']){
-  const html=guides.render(id,{state:{lang},esc,say:(az,en)=>lang==='az'?az:en});
+ for(const lang of ['en']){
+  const html=guides.render(id,{state:{lang},esc,say:(_fallback,en)=>en});
   assert.ok(html.includes(`data-remediation-guide="${id}"`));assert.ok(!/<form|<script|data-verify=|data-enable-write|data-confirm-run|<[^>]*\son\w+=/.test(html));
   assert.ok(html.includes('data-guide-command="read"'));assert.ok(html.includes('data-guide-command="apply"'));
-  assert.ok(html.includes(lang==='az'?'avtomatik Apply bağlıdır':'automatic Apply remains blocked'));
+  assert.ok(html.includes('automatic Apply remains blocked'));
   assert.ok(html.includes('rel="noopener noreferrer"'));
  }
  for(const key of ['read','apply','restore'])if(guide[key])commands.push({id,key,text:guide[key]});
@@ -29,4 +29,4 @@ if(process.platform==='win32'){
  const script=`$ErrorActionPreference='Stop'; $commands=Get-Content -LiteralPath '${input.replaceAll("'","''")}' -Raw | ConvertFrom-Json; foreach($entry in $commands){$tokens=$null;$errors=$null;[void][System.Management.Automation.Language.Parser]::ParseInput($entry.text,[ref]$tokens,[ref]$errors);if($errors.Count){throw ($entry.id+':'+$entry.key+':'+($errors.Message -join '; '))}}; Write-Output 'PowerShell guide syntax: PASS'`;
  const result=cp.spawnSync('powershell.exe',['-NoProfile','-NonInteractive','-Command',script],{encoding:'utf8'});assert.equal(result.status,0,result.stdout+result.stderr);process.stdout.write(result.stdout);
 }
-console.log('Guided remediation: PASS (four blocked controls, AZ/EN guides, backup-before-write, endpoint/drift/type guards, official links and corrected mapping).');
+console.log('Guided remediation: PASS (four blocked controls, English guides, backup-before-write, endpoint/drift/type guards, official links and corrected mapping).');

@@ -1,4 +1,4 @@
-# GPO Remediator 3.14.1
+# GPO Remediator 3.14.2
 
 Target visibility and access update (2026-10-20): all discovered GPOs/OUs remain visible. Incompatible controls get a separate explanation; remediation planning checks effective GPO, SYSVOL and required link access and displays targeted delegation steps when blocked. Read-only scans remain available without edit delegation. See [target access and guidance](docs/TARGET-ACCESS-2026-10-20.md).
 
@@ -8,15 +8,15 @@ Authentication update (2026-10-20): application operator roles and account allow
 
 Responsiveness maintenance (2026-10-19) reduces background rendering, preserves text selections and allows rollback inspection to finish within the server deadline. The portable Windows runtime is rebuilt. See [changes and validation](docs/RESPONSIVENESS-2026-10-19.md).
 
-3.14.1 makes recommended policy values editable with typed per-field overrides and applies user GPOs to a selected OU without requiring individual usernames. See [changes and upgrade instructions](docs/RELEASE-3.14.1.md).
+3.14.2 provides an English interface and documentation, migrates old language preferences, and fixes light/dark theme consistency and mobile settings layout. See [changes and upgrade instructions](docs/RELEASE-3.14.2.md) and the [user guide](USER-GUIDE.md).
 
 The full source and synthetic audit is in [docs/audit/FULL_PROJECT_AUDIT.md](docs/audit/FULL_PROJECT_AUDIT.md), with one evidence-bounded row for all 405 controls. This release fixes the shared auditpol argument, numeric bounds, active firewall verification, replication content checks, stale evidence and refresh result handling. Five independent assurance stages distinguish stored configuration, applicability, replication, client processing and sampled endpoint configuration. **Live AD enforcement and unrestricted production readiness remain unverified; no live AD GPO was modified during this audit.**
 
 Developers can reproduce the individually logged checks with `scripts/Invoke-FullAuditTests.ps1`, then generate the audit inventory using `python scripts/Build-FullAuditReport.py --evidence work/audit/final`. Test fixture results must not be presented as live Windows/AD validation.
 
-Vahid Windows/Active Directory tətbiqi: Studio interfeysinin altı yenilənməsi, vizual GPO/OU seçimi, hesabat və diaqnostika, audit HMAC qorunması və domain/GPO üzrə skript izolyasiyası bir source ağacında birləşdirilib. ZIP patch-lərini ayrıca tətbiq etmək lazım deyil.
+One Windows / Active Directory application combines the Studio interface, visual GPO/OU selection, reporting, diagnostics, HMAC audit protection and domain/GPO script isolation in one source tree. Install the complete package; separate ZIP patches are unnecessary.
 
-The integrated release combines the six-wave Studio UI with the cumulative targeting, reliability, reporting, security and domain/GPO isolation updates. The catalog contains **405 controls: 394 automated mappings and 11 manual/review-only controls**. Seven role-sensitive user-right controls remain blocked from automatic writes. Four of the eleven controls have dedicated offline AZ/EN guides; the other seven display role-specific review warnings.
+The integrated release combines the six-wave Studio UI with the cumulative targeting, reliability, reporting, security and domain/GPO isolation updates. The catalog contains **405 controls: 394 automated mappings and 11 manual/review-only controls**. Seven role-sensitive user-right controls remain blocked from automatic writes. Four of the eleven controls have dedicated offline English guides; the other seven display role-specific review warnings.
 
 3.11.1 clarifies `gpupdate /force` as a separate confirmed operation, exposes the same action after a completed rollback, and adds a copyable mapping-specific PowerShell check beneath every endpoint result. It also records an intentional stop marker before the backend exits so the Windows launcher does not misclassify a requested shutdown as a startup failure.
 
@@ -32,7 +32,7 @@ See [3.11 integration and validation](docs/INTEGRATION-3.11.0.md) for provenance
 
 The application uses one domain-account sign-in to open the workspace and connect to AD. The duplicate dashboard password form is removed; expiry/disconnect returns to the same sign-in screen. Startup still requires explicit sign-in, and Application roles were removed in the 2026-10-20 authentication update. It retains compact colored dashboard metrics and supplemental review guidance for empty policy categories. At 3.10, the catalog contained 401 automated mappings and four guided controls; 3.11 applies the conservative 394/11 boundary above.
 
-3.7.1 provides offline AZ/EN remediation guides for the four blocked controls, with local/central policy paths, read commands, guarded operator-run Defender backup/apply/rollback examples and honest verification limits. The catalog remains 401 automatic GPO mappings plus four guided controls. See [guided procedures and execution boundaries](docs/GUIDED-REMEDIATION.md).
+3.7.1 provides offline English remediation guides for the four blocked controls, with local/central policy paths, read commands, guarded operator-run Defender backup/apply/rollback examples and honest verification limits. The catalog remains 401 automatic GPO mappings plus four guided controls. See [guided procedures and execution boundaries](docs/GUIDED-REMEDIATION.md).
 
 3.7.0 adds server-managed operations, live observed phases, read-only scans, reviewed batches, verified pilot promotion, scheduled checks, recovery and HTML/print-to-PDF reports. See [workflow release notes](RELEASE-NOTES-WORKFLOWS-3.7.0.md) for use and limits.
 
@@ -44,7 +44,7 @@ The new Recipes view lists all controls in numeric order with descriptions, reco
 
 The redesigned frontend has a current-environment dashboard, clearer catalog statistics, consistent controls and refined mobile/dark layouts. See `RELEASE-NOTES-DESIGN-3.3.0.md`.
 
-The product workspace now includes an actionable dashboard, recent controls, catalog hierarchy/list views, filtered CSV export, operation detail panels, notification access and an AZ/EN field guide. Operations refresh from recorded server state while being viewed. PowerShell transport uses bounded output buffers, aligned timeouts and structured input validation; rejected stop requests no longer terminate an active operation. See `RELEASE-NOTES-PRODUCT-3.2.0.md` for product improvements and `RELEASE-NOTES-WORKFLOW-3.2.1.md` for discovery, preview and rollback refresh fixes.
+The product workspace now includes an actionable dashboard, recent controls, catalog hierarchy/list views, filtered CSV export, operation detail panels, notification access and an English field guide. Operations refresh from recorded server state while being viewed. PowerShell transport uses bounded output buffers, aligned timeouts and structured input validation; rejected stop requests no longer terminate an active operation. See `RELEASE-NOTES-PRODUCT-3.2.0.md` for product improvements and `RELEASE-NOTES-WORKFLOW-3.2.1.md` for discovery, preview and rollback refresh fixes.
 
 > **3.1.3 workflow maintenance:** The delegated execution account is now entered once per active browser workflow, survives the single managed change-gate restart through memory-only tab recovery, and the final preview is automatically regenerated after restart so the first Apply cannot use a stale pre-authorization plan. The password is never written to browser storage or disk.
 >
@@ -81,7 +81,7 @@ Do not delete `Backups`, `Data`, or `Recovery` while troubleshooting.
 
 ## Windows / AD mode recovery
 
-3.1.2 removes the operator-facing Setup loop. If the browser is running in configuration mode while Domain/DC are already saved, use **Windows / AD-ni başlat** on the connection banner. The UI re-saves the canonical configuration and the launcher itself owns the handoff:
+3.1.2 removes the operator-facing Setup loop. If the browser is running in configuration mode while Domain/DC are already saved, use **Start Windows / AD** on the connection banner. The UI re-saves the canonical configuration and the launcher itself owns the handoff:
 
 `Configuration service → launcher stop → port release → Windows / AD service → readiness`
 
@@ -165,6 +165,6 @@ The backend serves embedded frontend resources. After changing frontend source, 
 
 Edit `frontend/source/styles/tokens.css` for theme colors, typography, spacing and radii. Component sources live in `frontend/source/styles/`; `premium.css` defines material, density and accent variants. `premium.js` renders the recorded control map, compact header and copy actions. The unmodified local font files in `frontend/source/fonts/` include their upstream revision and SIL Open Font License. `scripts/Build-Styles.cjs` compiles styles deterministically into the single served `app.css`, retaining selector order and removing exact duplicate blocks. New styles do not use `!important`. Node.js with built-in modules is required only for this developer build step; there are no npm packages or remote runtime assets. `Build-Portable.ps1` compiles CSS before source/dist synchronization.
 
-Shared render components are in `components.js`, preferences in `preferences.js`, catalog rendering in `catalog-view.js`, control/plan rendering in `control-view.js`, and operations/audit rendering in `operation-view.js`. Authentication, mutation guards and API orchestration remain in `workspace.js`. Imported CIS titles, recommendations and descriptions retain the benchmark's English source text; product navigation, labels, guidance and status vocabulary support AZ/EN.
+Shared render components are in `components.js`, preferences in `preferences.js`, catalog rendering in `catalog-view.js`, control/plan rendering in `control-view.js`, and operations/audit rendering in `operation-view.js`. Authentication, mutation guards and API orchestration remain in `workspace.js`. Imported CIS titles, recommendations and descriptions retain the benchmark's English source text; product navigation, labels, guidance and status vocabulary use English.
 
 Run `node scripts/Test-FrontendSystem.cjs`, `node scripts/Test-RecipeWorkspace.cjs`, and `node scripts/Build-Styles.cjs --check` before packaging. Recorded outcomes and automation coverage are not a domain compliance score. Stage animation never invents backup/write/verification completion.

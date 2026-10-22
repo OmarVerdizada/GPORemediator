@@ -32,111 +32,36 @@
     set(key, value) { try { sessionStorage.setItem(key, value); } catch { /* Storage may be disabled. */ } },
     favorites() { try { const value = JSON.parse(this.get('gr-favorites', '[]')); return Array.isArray(value) ? value.filter(x => typeof x === 'string') : []; } catch { return []; } }
   };
-  const words = {
-    'LIVE CHANGE RESULT':'CANLI DƏYİŞİKLİK NƏTİCƏSİ','REQUESTED':'İSTƏNİLƏN','LIVE GPO VALUE':'CANLI GPO DƏYƏRİ','GPO CONFIGURATION':'GPO KONFİQURASİYASI','GPO LINK':'GPO ƏLAQƏSİ','MISMATCH':'UYĞUN DEYİL','NOT VERIFIED':'TƏSDİQLƏNMƏYİB','EFFECTIVE POLICY':'FAKTİKİ SİYASƏT','STAGE 1':'MƏRHƏLƏ 1','STAGE 2':'MƏRHƏLƏ 2','STAGE 3':'MƏRHƏLƏ 3','STAGE 4':'MƏRHƏLƏ 4','STAGE 5':'MƏRHƏLƏ 5','Requested value':'İstənilən dəyər','Evidence is generated from the latest recorded operation for this control.':'Hesabat bu qaydanın son qeydə alınmış əməliyyatından hazırlanır.','Every status below is calculated from the live GPO/link state. A previous successful run is not treated as current truth.':'Aşağıdakı statuslar canlı GPO və əlaqə yoxlamasına əsaslanır. Əvvəlki uğurlu əməliyyat cari vəziyyətin təsdiqi sayılmır.','CATALOG COVERAGE':'KATALOQ ƏHATƏSİ','OPERATION JOURNAL':'ƏMƏLİYYAT JURNALI','READY':'HAZIR','AUTO':'AVTOMATİK','CONTROL PLANE':'İDARƏETMƏ MÜHİTİ','WORKSPACE':'İŞ SAHƏSİ','Runs read-only AD/GPO readiness checks':'AD və GPO hazırlığını yalnız baxış rejimində yoxlayır','Clears delegated credentials from memory':'Qoşulma hesabının məlumatlarını yaddaşdan silir','Reads live GPO, link, replication metadata and endpoint evidence again':'Canlı GPO, əlaqə, replikasiya və kompüter sübutlarını yenidən yoxlayır','Schedules gpupdate /force on selected targets':'Seçilmiş hədəflər üçün gpupdate /force planlaşdırır',
-    'Existing link':'Mövcud əlaqə','New link':'Yeni əlaqə','Reference only; not identity proof':'Yalnız istinad; şəxsiyyət təsdiqi deyil','PRODUCTION CHANGE GATE':'DƏYİŞİKLİK İCAZƏSİ','Automated':'Avtomatlaşdırılan','Manual':'Əl ilə','Level filter':'Səviyyə filtri','Automation filter':'İcra növü filtri','Preview and post-change verification are still required.':'Əvvəlcədən plan və dəyişiklikdən sonra yoxlama tələb olunur.','BEFORE':'ƏVVƏL','EXPECTED':'GÖZLƏNİLƏN','Approved':'Təsdiqlənib','Applied':'Tətbiq edilib','Remediate again':'Yenidən planla','Evidence':'Sübut','NOTIFICATION CENTER':'BİLDİRİŞLƏR','Attention & status':'Diqqət və vəziyyət','Search controls or actions…':'Qayda və əmrləri axtarın…','CONTROLS':'QAYDALAR','NAVIGATION':'NAVİQASİYA','ACTIONS':'ƏMƏLİYYATLAR','Open Dashboard':'İdarə panelini aç','Open Benchmark':'Benchmark-i aç','Open Operations':'Əməliyyatları aç','Show Favorites':'Seçilmişləri göstər','Refresh environment':'Mühiti yenilə',
-
-    'Main navigation':'Əsas menyu','Security operations':'Təhlükəsizlik idarəetməsi',
-    'Loading application data':'Məlumatlar yüklənir','Processing request':'Sorğu icra olunur','Please keep this window open.':'Pəncərəni açıq saxlayın.','Stop waiting':'Gözləməyi dayandır',
-    'Overview':'Ümumi məlumat','Remediation':'Dəyişiklik','Impact':'Təsir','Verification':'Yoxlama','Audit':'Tarixçə',
-    'Target & policy':'Siyasət və hədəf','Generate plan':'Planı göstər','Change approval':'Dəyişikliyin təsdiqi',
-    'CIS BENCHMARK LIBRARY':'CIS QAYDALARI','Navigate by domain, use saved views, and favorite recurring controls without flattening the benchmark hierarchy.':'Qaydanın nömrəsi və ya adı ilə axtarın, sonra bölməni açın.',
-    'All controls':'Bütün qaydalar','★ Favorites':'★ Seçilmişlər','Remediation ready':'Avtomatlaşdırılan','High impact':'Yüksək təsir',
-    'High':'Yüksək','Medium':'Orta','Low':'Aşağı','Manual / read-only control':'Əl ilə yoxlanılan qayda','Mapping unavailable':'Hazırda əlçatan deyil',
-    'CONTROL INTENT':'QAYDANIN MƏQSƏDİ','What this control changes':'Qayda nəyi dəyişir','RECOMMENDED STATE':'TÖVSİYƏ EDİLƏN DƏYƏR',
-    'This value comes from the imported CIS Benchmark v4.0.0 recipe.':'Dəyər CIS Benchmark v4.0.0 sənədindən götürülüb.',
-    'OPERATIONAL RISK':'DƏYİŞİKLİYİN TƏSİRİ','IMPLEMENTATION':'İCRA ÜSULU','Automated remediation ready':'Avtomatik tətbiq mümkündür',
-    'This control has a server-authoritative production mapping and can generate a real GPO preview.':'Bu qayda üçün GPO seçib dəyişiklik planını hazırlaya bilərsiniz.',
-    'The imported CIS catalog does not classify this control as safely automated. The product keeps it visible but blocks automatic writes.':'Bu qayda əl ilə yoxlanılmalıdır. Avtomatik tətbiq mümkün deyil.',
-    'No server-authoritative mapping is available for this control.':'Qaydanın tətbiqi hazırda əlçatan deyil. Domen bağlantısını yoxlayın.',
-    'CLASSIFICATION':'TƏSNİFAT','Level':'Səviyyə','Type':'Növ','Section':'Bölmə','CONTEXTUAL GUIDANCE':'İSTİFADƏ QAYDASI',
-    'When to use':'Nə vaxt tətbiq etməli','Before change':'Dəyişiklikdən əvvəl','After change':'Dəyişiklikdən sonra',
-    'Apply when this control belongs to the intended server/workstation baseline and the selected GPO scope is correct.':'Qaydanın seçdiyiniz serverlərə və GPO hədəfinə uyğun olduğunu yoxlayın.',
-    'Review application dependencies, policy precedence and affected objects. Generate a read-only plan first.':'Əvvəlcə planı hazırlayın və təsir edəcək obyektləri yoxlayın.',
-    'Verify GPO publication, link state, gpupdate and effective policy. Pending probes must remain pending.':'Tətbiqdən sonra siyasətin və hədəf kompüterlərdəki nəticənin yoxlanmasını izləyin.',
-    'May affect authentication, access, remote administration, or production connectivity.':'Girişə, autentifikasiyaya və uzaqdan idarəetməyə təsir edə bilər.',
-    'Validate scope and application dependencies before broad rollout.':'Tətbiqdən əvvəl hədəfi və proqram asılılıqlarını yoxlayın.',
-    'Lower expected operational impact, but preview and verification are still required.':'Gözlənilən təsir azdır. Yenə də planı və nəticəni yoxlayın.',
-    'Control':'Qayda','Target':'Hədəf','Preview':'Plan','Approval':'Təsdiq','Apply':'Tətbiq','Verify':'Yoxla',
-    'Connect to Active Directory to select a real GPO and target scope.':'GPO və hədəf seçmək üçün domenə qoşulun.',
-    'Selected GPO':'Seçilmiş GPO','Choose a Group Policy Object':'GPO seçin','Search GPO by name…':'GPO adı ilə axtarın…','No matching GPO':'Uyğun GPO tapılmadı',
-    'Selectable':'Seçmək olar','Unavailable for this workflow':'Bu əməliyyat üçün əlçatan deyil','Protected':'Qorunan',
-    'Policy target':'Siyasətin növü','Link target':'Tətbiq ediləcək hədəf','Desired value':'Yeni dəyər','Desired benchmark state':'Tövsiyə edilən vəziyyət',
-    'Policy refresh':'Kompüterlərdə yenilənmə','Do not force update':'Avtomatik yenilənməni gözlə','PDC emulator only':'Yalnız PDC üzərində yoxla','Selected scope computers':'Seçilmiş scope kompüterlərini yenilə',
-    'Highest link priority':'Ən yüksək tətbiq prioriteti','Move the selected link to first position. Existing Enforced and filtering settings are not changed.':'Seçilmiş GPO əlaqəsini ilk yerə keçir. Digər məcburilik və filtr sazlamaları saxlanılır.',
-    'DRY RUN / WHAT-IF':'DƏYİŞİKLİK PLANI','No read-only plan generated yet.':'Plan hələ hazırlanmayıb.','Select a GPO and target, then generate a plan. The preview performs no domain write.':'GPO və hədəfi seçin, sonra planı hazırlayın. Bu mərhələdə siyasət dəyişmir.',
-    'Before/after diff':'Əvvəlki və yeni dəyər','Link intent':'Tətbiq hədəfi','Warning aggregation':'Xəbərdarlıqlar','Rollback context':'Geri qaytarma',
-    'DRY RUN · READ-ONLY PREVIEW':'YALNIZ BAXIŞ','Change plan ready':'Dəyişiklik planı hazırdır','NO WRITE YET':'HƏLƏ TƏTBİQ EDİLMƏYİB',
-    'BEFORE / AFTER DIFF':'DƏYƏRİN DƏYİŞMƏSİ','CURRENT':'CARİ','DESIRED':'YENİ','Not configured':'Təyin edilməyib',
-    'Link':'Əlaqə','Execution':'İcra hesabı','Rollback':'Geri qaytarma','Backup before write':'Dəyişiklikdən əvvəl ehtiyat nüsxə','Not requested':'Seçilməyib',
-    'GOVERNANCE':'TƏSDİQ','Change / Ticket ID':'Dəyişiklik nömrəsi','Reviewed / Approved by':'Təsdiqləyən istinad','Operator-entered approver reference (optional)':'Təsdiqləyən istinad (opsional)','Name or operator':'Ad, qeyd və ya istinad',
-    'Impact reviewed and approved':'Planı və təsiri yoxlayıb təsdiqlədim','I reviewed the target, GPO, scope and potential precedence impact.':'Seçilmiş GPO-nu, hədəfi və prioritetin təsirini yoxladım.',
-    'Confirm production impact':'Dəyişikliyin təsirini təsdiqləyin','Backup will be created before the GPO write.':'GPO dəyişməzdən əvvəl ehtiyat nüsxə yaradılacaq.',
-    'Protected GPO confirmation':'Qorunan GPO təsdiqi','I explicitly approve changing this protected/default policy.':'Qorunan və ya standart siyasətin dəyişdirilməsini təsdiqləyirəm.',
-    'Type APPLY to continue':'Davam etmək üçün APPLY yazın','Backup → Apply → Link → Verify':'Ehtiyat nüsxə → Tətbiq → Yoxlama',
-    'IMPACT ANALYSIS':'TƏSİRİN TƏHLİLİ','SELECTED GPO':'SEÇİLMİŞ GPO','TARGET SCOPE':'HƏDƏF','Not selected':'Seçilməyib','Yes':'Bəli','No':'Xeyr',
-    'Choose a domain/OU target in Remediation.':'Dəyişiklik bölməsində domen və ya OU seçin.','POLICY CONFLICT GRAPH':'SİYASƏTLƏRİN TƏTBİQ ARDICILLIĞI',
-    'Inheritance & precedence path':'İrsilik və prioritet','LIVE ANALYSIS':'YOXLANILIB','PREVIEW REQUIRED':'PLAN TƏLƏB OLUNUR','Domain root':'Domen','Target scope':'Hədəf',
-    'Effective policy':'Faktiki siyasət','Verification after Apply':'Tətbiqdən sonra yoxlama','Preview required':'Plan tələb olunur','Not connected':'Qoşulmayıb',
-    'No conflicting definition was detected in the analyzed inheritance path.':'Yoxlanılan siyasət ardıcıllığında ziddiyyət tapılmadı.',
-    'Generate a read-only plan to run live inheritance, precedence, security filtering and WMI analysis.':'İrsilik, prioritet və filtrləri yoxlamaq üçün plan hazırlayın.',
-    'AFFECTED OBJECTS EXPLORER':'TƏSİR EDİLƏN OBYEKTLƏR','Scope inventory':'Hədəfdəki obyektlər','LIVE INVENTORY':'YOXLANILIB','Computers':'Kompüterlər','Servers':'Serverlər','Workstations':'İş stansiyaları','Disabled':'Deaktiv',
-    'Generate a plan to load the directory scope inventory.':'Hədəfdəki obyektləri görmək üçün plan hazırlayın.',
-    'POST-CHANGE ASSURANCE':'TƏTBİQDƏN SONRA YOXLAMA','Verification pipeline':'Yoxlama nəticələri','Each stage must be independently confirmed. Pending probes are never displayed as passed.':'Hər mərhələnin nəticəsi ayrıca göstərilir. Gözləyən yoxlama uğurlu sayılmır.',
-    'No verification run for this control yet':'Bu qayda hələ yoxlanılmayıb','After Apply, this workspace will show GPO write, link, gpupdate, replication and effective-policy status.':'Tətbiqdən sonra siyasətin, əlaqənin və kompüterlərdəki nəticənin vəziyyəti burada görünəcək.',
-    'GPO write':'GPO dəyişikliyi','Link verification':'Hədəflə əlaqə','AD / SYSVOL replication':'Kontrollerlər arasında yayılma','Verified':'Yoxlanılıb','Not confirmed':'Təsdiqlənməyib','Pending':'Gözlənilir','Not checked':'Yoxlanılmayıb',
-    'EVIDENCE PACK':'HESABAT','Change evidence & audit bundle':'Dəyişiklik və yoxlama hesabatı','Prepare JSON evidence':'Hesabatı endir','Before value':'Əvvəlki dəyər','After value':'Yeni dəyər','GPO & target':'GPO və hədəf','Operator':'İstifadəçi','Backup ID':'Ehtiyat nüsxə',
-    'Evidence can be generated from the recorded operation currently loaded in the browser.':'Hesabat serverdə saxlanılan əməliyyat qeydindən hazırlanır.',
-    'Apply and record an operation before generating evidence.':'Hesabat üçün əvvəlcə əməliyyat icra edilməlidir.','CONTROL AUDIT TRAIL':'QAYDANIN TARİXÇƏSİ',
-    'Operator, target, backup and recovery context for this control.':'İcra hesabı, hədəf, ehtiyat nüsxə və geri qaytarma məlumatları.',
-    'Operation':'Əməliyyat','State':'Vəziyyət','Backup':'Ehtiyat nüsxə','Action':'Əməliyyat','Re-verify':'Yenidən yoxla','No operation has been recorded for this control.':'Bu qayda üzrə əməliyyat yoxdur.',
-    'CHANGE & RECOVERY CENTER':'ƏMƏLİYYATLAR','Review completed changes, verification state, backups and rollback availability.':'Dəyişiklikləri, yoxlama nəticələrini və geri qaytarma imkanlarını izləyin.',
-    'All':'Hamısı','Successful':'Tətbiq edilib','Review':'Diqqət tələb edir','Rolled back':'Geri qaytarılıb','Replication':'Yayılma','Effective':'Faktiki nəticə',
-    'Kerberos / WinRM session':'Kerberos / WinRM bağlantısı','DNS resolution':'Domen adının tapılması','DC-side DNS resolution':'DC tərəfində DNS yoxlaması','Writable domain controller':'Yazıla bilən domen kontrolleri','ActiveDirectory PowerShell module':'ActiveDirectory PowerShell modulu','GroupPolicy PowerShell module':'GroupPolicy PowerShell modulu','Active Directory / LDAP':'Domen məlumatları','Backup repository':'Ehtiyat nüsxə qovluğu','AD replication':'Domen sinxronizasiyası',
-    'PUBLISHED':'GPO-ya tətbiq edilib','PUBLISHED_REFRESH_FAILED':'GPO dəyişib, kompüter yenilənməsi alınmayıb','NO_CHANGE':'Dəyişiklik tələb olunmur','VERIFY_MISMATCH':'Yoxlama nəticəsi uyğun deyil','REVIEW_REQUIRED':'Əl ilə yoxlama tələb olunur','FAILED_SAFE':'Tətbiq edilmədi','ROLLED_BACK':'Geri qaytarılıb','ROLLBACK_REVIEW_REQUIRED':'Geri qaytarma yoxlanılmalıdır','ROLLBACK_DRIFT_DETECTED':'Rollback-dan sonra dəyişiklik aşkarlanıb','REPLICATION_PENDING':'Kontrollerlər arasında yayılma gözlənilir','ENDPOINT_VERIFICATION_PENDING':'Kompüterdə yoxlama gözlənilir','VERIFIED_ON_SAMPLE':'Yoxlanılan kompüterlərdə təsdiqlənib',
-    'DOMAIN_VALUE_MATCHES_ON_SELECTED_DC':'Seçilmiş kontrollerdə dəyər uyğundur','DOMAIN_VALUE_PENDING_OR_OVERRIDDEN':'Domen dəyəri hələ uyğun deyil','ROLLBACK_ENDPOINT_PENDING':'Geri qaytarılıb, kompüter yenilənməsi gözlənilir',
-    '☆ Save':'☆ Seçilmişlərə əlavə et','★ Saved':'★ Seçilmişlərdədir','Light':'Açıq','Dark':'Tünd','Retry':'Yenidən cəhd et','Settings':'Sazlamalar','Loading benchmark catalog…':'Qaydalar yüklənir…',
-    'Authenticated remote session':'Domen hesabı ilə giriş alınıb','Backup directory is writable':'Ehtiyat nüsxə qovluğuna yazmaq mümkündür'
-  };
-  function localize(root) {
-    const language=storage.get('gr-lang','az') === 'az' ? 'az' : 'en';
-    document.documentElement.lang=language;
-    if (language !== 'az' || !root) return;
-    const walker=document.createTreeWalker(root,NodeFilter.SHOW_TEXT);
-    while(walker.nextNode()) {const node=walker.currentNode,key=node.nodeValue.trim();if(words[key])node.nodeValue=node.nodeValue.replace(key,words[key]);}
-    for(const element of root.querySelectorAll('[placeholder],[title],[aria-label]'))for(const attr of ['placeholder','title','aria-label']){const value=element.getAttribute(attr);if(words[value])element.setAttribute(attr,words[value]);}
-  }
+  function localize() { document.documentElement.lang='en'; storage.set('gr-lang','en'); }
   const errors = {
-    GPO_EDIT_ACCESS_DENIED:'Seçilmiş GPO-nu redaktə etmək icazəsi yoxdur. Administrator GPMC → Group Policy Objects → seçilmiş GPO → Delegation → Add bölməsində icra hesabına və ya uyğun qrupa Edit settings icazəsi verməlidir. Read və Apply Group Policy redaktə icazəsi deyil. Sonra çıxış edib yenidən daxil olun və planı təkrarlayın.',
-    OU_LINK_ACCESS_DENIED:'Seçilmiş OU/domain üçün GPO linkini dəyişmək icazəsi yoxdur. Administrator GPMC-də həmin OU/domain → Delegation → Link GPOs bölməsindən icra hesabına və ya uyğun qrupa hədəfə aid icazə verməlidir. Bu, GPO-nun özünün Edit settings icazəsindən ayrıdır. Sonra yenidən daxil olun.',
-    SYSVOL_WRITE_ACCESS_DENIED:'Seçilmiş GPO-nun SYSVOL fayllarına yazmaq icazəsi yoxdur. Administrator GPMC → seçilmiş GPO → Delegation bölməsində Edit settings icazəsini və həmin GPO-nun SYSVOL NTFS Effective Access nəticəsini yoxlamalıdır. Bütün SYSVOL-a geniş icazə verməyin; yalnız seçilmiş GPO-nun delegation və ACL uyğunluğunu bərpa edin. Sonra yenidən daxil olun.',
-    GPO_ACCESS_UNVERIFIED:'Effektiv yazma icazəsi təsdiqlənmədi; plan yaradılmadı. Bu, icazənin mütləq olmaması demək deyil. Administrator seçilmiş GPO-nun Edit settings delegation-ını, SYSVOL Effective Access-i və hədəf OU/domain üçün Link GPOs icazəsini yoxlamalıdır. Metadata oxuma icazəsini və DC bağlantısını da yoxlayın, sonra yenidən daxil olun.',
-    DOMAIN_POLICY_PRIORITY_REQUIRED:'Domain parol/lockout siyasəti seçilmiş GPO-nun domain kökündə aktiv və prioritet 1 olmasını tələb edir.',
-    DOMAIN_REFRESH_SCOPE_INVALID:'Domain hesab siyasəti üçün kompüter OU yenilənməsi yoxdur. PDC-ni yeniləyin və ya normal policy dövrünü gözləyin.',
-    PASSWORD_SCOPE_MISMATCH:'Bu qayda domain kökü tələb edir. OU hədəfi uyğun deyil; bu, access xətası deyil.',
-    GPO_OU_REQUIRED:'Bu kompüter/user qaydası OU tələb edir. Domain kökü əvəzinə uyğun OU seçin; bu, access xətası deyil.',
-    INVALID_OPERATOR_ALLOWLIST:'Hesabı DOMEN\\istifadəçi formasında yazın və ya aşkarlanan Windows hesabını seçin.',
-    OPERATOR_SELF_LOCKOUT:'Hazırda istifadə etdiyiniz Windows hesabı icazəli hesablar siyahısında qalmalıdır.',
-    GPO_LOGIN_REQUIRED:'İcra sessiyası bitib və ya tətbiq yenidən başlayıb. Vahid giriş ekranı açılacaq.',
-    GPO_AUTH_FAILED:'Delegated icra hesabı qəbul edilmədi. DOMAIN\\user (və ya düzgün UPN), şifrə və DC-də PowerShell remoting icazəsini yoxlayın.',
-    GPO_DNS_FAILED:'DC-nin FQDN-i bu management hostdan resolve olunmur. Kompüterin DNS serverini AD DNS-ə yönəldin və domen/DC adlarını yoxlayın.',
-    GPO_WINRM_UNREACHABLE:'DC resolve olunur, amma TCP/5985 bağlıdır. DC-də WinRM/PowerShell Remoting-i və Windows Remote Management (HTTP-In) firewall qaydasını aktiv edin.',
-    GPO_WINRM_HTTP_REQUIRED:'DC-də yalnız 5986 əlçatandır. Bu versiya Kerberos + WinRM HTTP/5985 istifadə edir; 5985 listener/firewall qaydasını aktiv edin.',
-    GPO_KERBEROS_FAILED:'WinRM işləyir, amma Kerberos autentifikasiyası alınmır. AD DNS, saat sinxronizasiyası, TCP/88 və DC FQDN üçün WSMAN/HTTP SPN-ləri yoxlayın.',
-    GPO_REMOTING_FAILED:'DC-də TCP/5985 açıqdır, amma PowerShell remoting sessiyası qurulmur. WinRM listener, endpoint permission və delegated hesabı yoxlayın.',
-    GPO_READINESS_FAILED:'Domenə giriş alınıb, amma hazırlıq yoxlaması tamamlanmadı. Tətbiqi yeniləyin və bağlantını yenidən yoxlayın.',
-    GPO_DISCOVERY_FAILED:'GPO siyahısı alınmadı. Kontrollerdə GroupPolicy və ActiveDirectory modullarını, hesabın oxuma icazəsini yoxlayın.',
-    GPO_PREVIEW_FAILED:'Plan hazırlana bilmədi. GPO və hədəfi yenidən seçin, SYSVOL oxuma icazəsini yoxlayın.',
-    WRITES_DISABLED:'Production change gate bağlıdır. Explicit GPO və OU scope-u təsdiqləyin, sonra gate-i aktivləşdirin.',
-    ENVIRONMENT_NOT_READY:'Əvvəlcə bağlantı yoxlamasında göstərilən problemləri aradan qaldırın.',
-    WRITE_SCOPE_UNRESTRICTED:'Production write scope məhdudlaşdırılmayıb. * əvəzinə konkret GPO GUID-ləri və konkret OU/domain DN-ləri daxil edin.',
-    WRITE_GATE_TRANSITION_BLOCKED:'Əvvəlki change-gate keçidi uğurla tamamlanmayıb. Avtomatik təkrar bloklanıb; Settings və Local Control Center-də service/config vəziyyətini yoxlayın.',
-    WINDOWS_MODE_REQUIRED:'Tətbiq konfiqurasiya rejimindədir; bu rejim AD əməliyyatı icra etmir. Domain/DC saxlanılıbsa Local Control Center-də Start Windows / AD seçin. Windows rejimi açılmasa windows-startup-error.log və bootstrap.log-u yoxlayın.',
-    SERVICE_RESTARTED:'Windows / AD xidməti yenidən başlayıb. Delegated domen parolu diskdə saxlanmadığı üçün təhlükəsizlik məqsədilə domen sessiyasına yenidən qoşulmaq lazımdır.',
-    SERVICE_RESTARTING:'Windows / AD xidməti idarəli şəkildə yenidən başladılır. Xidmət qayıdana qədər gözləyin.',
-    SERVICE_UNREACHABLE:'GPO Remediator backend xidməti ilə əlaqə kəsilib. Local Control Center-də xidmətin işlədiyini və windows-startup-error.log / server-error.log / bootstrap.log fayllarını yoxlayın.',
-    CSRF_INVALID:'Sessiya yenilənməlidir. Səhifəni yeniləyib təkrar cəhd edin.',
-    INVALID_DOMAIN:'Domeni və həmin domenə aid kontrollerin tam adını daxil edin: məsələn, example.local və dc01.example.local.'
+    GPO_EDIT_ACCESS_DENIED:"You cannot edit the selected GPO. Ask an administrator to open GPMC > Group Policy Objects > selected GPO > Delegation > Add and grant your execution account or group Edit settings. Read and Apply Group Policy do not grant editing rights. Sign out and back in before retrying.",
+    OU_LINK_ACCESS_DENIED:"You cannot change GPO links on this OU/domain. Ask an administrator to grant Link GPOs on the selected OU/domain in GPMC > Delegation. This permission is separate from Edit settings on the GPO. Sign in again after delegation changes.",
+    SYSVOL_WRITE_ACCESS_DENIED:"You cannot write the selected GPO files in SYSVOL. Ask an administrator to check Edit settings delegation and NTFS Effective Access for this GPO. Repair permissions only for the selected GPO, then sign in again.",
+    GPO_ACCESS_UNVERIFIED:"Effective write access could not be verified, so no plan was created. Check GPO Edit settings delegation, SYSVOL Effective Access, Link GPOs on the selected OU/domain, metadata read access and DC connectivity. Sign in again and retry.",
+    DOMAIN_POLICY_PRIORITY_REQUIRED:"Domain password/lockout policy requires the selected GPO to be enabled at link order 1 on the domain root.",
+    DOMAIN_REFRESH_SCOPE_INVALID:"Computer OU refresh does not apply to domain account policy. Refresh the PDC or wait for the normal policy cycle.",
+    PASSWORD_SCOPE_MISMATCH:"This control requires the domain root. Choose a compatible target; this is a scope mismatch.",
+    GPO_OU_REQUIRED:"This computer/user control requires an OU. Choose the appropriate OU instead of the domain root.",
+    GPO_LOGIN_REQUIRED:"The execution session expired or the service restarted. The sign-in screen will open.",
+    GPO_AUTH_FAILED:"The delegated account was rejected. Check DOMAIN\\user or UPN, the password and PowerShell remoting access on the DC.",
+    GPO_DNS_FAILED:"The DC FQDN cannot be resolved from this host. Configure AD DNS and check the domain and DC names.",
+    GPO_WINRM_UNREACHABLE:"The DC resolves, but TCP/5985 is unreachable. Enable WinRM/PowerShell Remoting and the Windows Remote Management HTTP-In firewall rule on the DC.",
+    GPO_WINRM_HTTP_REQUIRED:"Only TCP/5986 is available. This version uses Kerberos with WinRM HTTP/5985. Enable the 5985 listener and firewall rule.",
+    GPO_KERBEROS_FAILED:"WinRM is reachable, but Kerberos authentication failed. Check AD DNS, synchronized time, TCP/88 and WSMAN/HTTP SPNs for the DC FQDN.",
+    GPO_REMOTING_FAILED:"TCP/5985 is reachable, but the PowerShell session failed. Check the WinRM listener, endpoint permissions and delegated account.",
+    GPO_READINESS_FAILED:"Domain sign-in succeeded, but readiness checks did not complete. Refresh the application and check readiness again.",
+    GPO_DISCOVERY_FAILED:"The GPO inventory could not be loaded. Check the ActiveDirectory and GroupPolicy modules and read permissions on the DC.",
+    GPO_PREVIEW_FAILED:"The plan could not be generated. Reselect the GPO and target, and check SYSVOL read access.",
+    WRITES_DISABLED:"The production change gate is disabled. Approve the specific GPO and OU scope, then enable writes.",
+    ENVIRONMENT_NOT_READY:"Resolve the issues reported by the readiness checks first.",
+    WRITE_SCOPE_UNRESTRICTED:"Production write scope must be restricted to specific GPO GUIDs and OU/domain DNs instead of wildcards.",
+    WRITE_GATE_TRANSITION_BLOCKED:"The previous change-gate transition did not complete. Automatic retry is blocked. Check service and configuration status in Settings and the Local Control Center.",
+    WINDOWS_MODE_REQUIRED:"The application is in configuration mode. Save the domain/DC settings and choose Start Windows / AD. Check windows-startup-error.log and bootstrap.log if startup fails.",
+    SERVICE_RESTARTED:"The Windows / AD service restarted. Sign in again because delegated credentials are stored only in memory.",
+    SERVICE_RESTARTING:"The Windows / AD service is restarting. Wait for it to become available.",
+    SERVICE_UNREACHABLE:"The backend is unreachable. Check service status and windows-startup-error.log, server-error.log and bootstrap.log in the Local Control Center.",
+    CSRF_INVALID:"Your session needs to be refreshed. Reload the page and try again.",
+    INVALID_DOMAIN:"Enter a domain and its DC FQDN, for example example.local and dc01.example.local.",
   };
   function policy(path) {
     if (/\/gpo\/[^/]+\/(apply|rollback)$/.test(path)) return { timeout: 980000, label: 'Backup, policy change and verification', cancelable: false };
@@ -166,7 +91,7 @@
         throw new Error(response.status === 401 ? 'Windows authentication is required. Reopen the app with an allowed Windows account.' : `The server returned an invalid response (HTTP ${response.status}). Check the service and reload.`);
       }
       if (!response.ok) {
-        const error = new Error((storage.get('gr-lang','az')==='az'&&errors[data.code]) || data.message || `Request failed (HTTP ${response.status}).`);
+        const error = new Error(errors[data.code] || data.message || `Request failed (HTTP ${response.status}).`);
         error.code = data.code; error.status = response.status;
         if(data.code==='OPERATOR_CONFIRMATION_REQUIRED')window.GpoOperatorSignIn?.reconfirm();
         error.correlationId = data.correlationId || response.headers.get('X-Correlation-ID');
@@ -183,10 +108,7 @@
         throw e;
       }
       if (error instanceof TypeError) {
-        const az = storage.get('gr-lang','az') === 'az';
-        const e = new Error(az
-          ? 'GPO Remediator backend xidməti ilə əlaqə kəsildi. Xidmət yenidən başlayırsa gözləyin; əks halda Local Control Center-də service status, windows-startup-error.log və bootstrap.log-u yoxlayın.'
-          : 'The GPO Remediator backend connection was lost. If the service is restarting, wait for it to return; otherwise check service status, windows-startup-error.log and bootstrap.log in Local Control Center.');
+        const e = new Error('The GPO Remediator backend connection was lost. If the service is restarting, wait for it to return; otherwise check service status, windows-startup-error.log and bootstrap.log in Local Control Center.');
         e.code = 'SERVICE_UNREACHABLE';
         throw e;
       }

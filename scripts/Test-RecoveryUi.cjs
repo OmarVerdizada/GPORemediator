@@ -8,11 +8,13 @@ gpos.push({id:'11111111-1111-1111-1111-111111111111',name:'GPO-Pilot-Computers',
 const run={id:'recovery-test',startedAt:'2026-10-06T08:00:00Z',updatedAt:'2026-10-09T08:00:34Z',plan:{selection:{setting:'1.1.4',gpoId:gpos[0].id,scopeDn:'DC=test,DC=local'},preview:{gpo:gpos[0],scope:{dn:'DC=test,DC=local'},previousValue:0,desiredValue:14},executionUser:'TEST\\operator'},result:{state:'PUBLISHED',backupId:'test-backup-id',gpoPublished:true,linkVerified:true}};
 const inventory={gpos,scopes:[{dn:'DC=test,DC=local',name:'test.local',kind:'Domain'},{dn:'OU=Users,DC=test,DC=local',name:'Users',kind:'OU'},{dn:'OU=Endpoints,DC=test,DC=local',name:'Endpoints',kind:'OU'}],domain:'test.local'};
 let writes=[],refreshRequests=[],rollbackState='ROLLED_BACK',refreshFailure=false,workflowJobs=[];
-const allPosts=[],manualMappings=JSON.parse(fs.readFileSync(path.resolve(__dirname,'../backend/data/gpo-production-mappings.json'),'utf8')).mappings;
+const jobPosts=[],manualMappings=JSON.parse(fs.readFileSync(path.resolve(__dirname,'../backend/data/gpo-production-mappings.json'),'utf8')).mappings;
 const previewSelections=[];let previewDenied=null,accessDenied=null,accessDelay=0;const accessRequests=[];
 inventory.domainController='dc.test.local';inventory.executionUser='TEST\\operator';
 const server=http.createServer(async(req,res)=>{
- if(req.method==='POST')allPosts.push(req.url);
+ // The target-access POST is a read-only probe that can finish after a tab switch.
+ // Keep it out of the job counter while still rejecting previews or actual writes.
+ if(req.method==='POST'&&new URL(req.url,'http://localhost').pathname!=='/api/gpo/target-access')jobPosts.push(req.url);
  let body='';for await(const chunk of req)body+=chunk;
  const payload=body?JSON.parse(body):{};
  const url=new URL(req.url,'http://localhost');
@@ -60,7 +62,7 @@ const server=http.createServer(async(req,res)=>{
  const browser=await chromium.launch({headless:true,...(process.env.PLAYWRIGHT_CHANNEL?{channel:process.env.PLAYWRIGHT_CHANNEL}:{})});
  try{
   const page=await browser.newPage({viewport:{width:1440,height:1000}}),errors=[];
-  page.on('pageerror',e=>errors.push(e.message));
+  page.setDefaultTimeout(20000);page.on('pageerror',e=>errors.push(e.message));
   await page.goto(`http://127.0.0.1:${server.address().port}/#/benchmark`);
   const largeDomain=page.locator('[data-domain="18"]');await largeDomain.scrollIntoViewIfNeeded();
   await largeDomain.click();assert.equal(await largeDomain.getAttribute('aria-expanded'),'true');
@@ -103,7 +105,7 @@ const server=http.createServer(async(req,res)=>{
   await page.locator('.ds-recovery input').fill('ROLLBACK');
   await page.locator('.ds-recovery button[type=submit]').click();
   await page.locator('[data-confirm-run]').click();
-  await page.waitForFunction(()=>['Rolled back','Geri qaytarılıb'].some(x=>document.querySelector('.ds-table')?.textContent.includes(x)));
+  await page.waitForFunction(()=>['Rolled back','Rolled back'].some(x=>document.querySelector('.ds-table')?.textContent.includes(x)));
   assert.deepEqual(writes,['/api/gpo/recovery-test/rollback']);
   await page.locator('[data-ops-layout=cards]').click();
   assert.equal(await page.locator('[data-rollback]').count(),1,'Restored run must offer another confirmed restore');
@@ -159,7 +161,7 @@ const server=http.createServer(async(req,res)=>{
   await page.locator(`[data-gpo="${gpos[1].id}"]`).click();
   await page.locator('#gpo-selection [name=value]').fill('20');
   await page.locator('[data-tab=overview]').click();
-  const postsBeforeManual=allPosts.length;
+  const postsBeforeManual=jobPosts.length;
   assert.ok((await page.locator('.manual-script-source').textContent()).includes("$Action = 'Preview'"));
   assert.ok((await page.locator('.manual-script-source').textContent()).includes(`$GpoId = '${gpos[1].id}'`));
   assert.ok((await page.locator('.manual-script-source').textContent()).includes('operator-selected values'),'Edited values did not reach the manual script');
@@ -184,7 +186,7 @@ const server=http.createServer(async(req,res)=>{
   assert.ok(manualBounds.x>=0&&manualBounds.x+manualBounds.width<=390,'Manual procedure escapes mobile viewport');
   await page.locator('.manual-procedure').screenshot({path:path.join(screens,'manual-procedure-mobile.png'),style:'#service-bar,.sidebar,.skip-link,.toast,.ds-toast{visibility:hidden !important}'});
   await page.setViewportSize({width:1440,height:1000});
-  assert.equal(allPosts.length,postsBeforeManual,'Viewing, switching, copying and downloading manual scripts must never submit a server job');
+  assert.equal(jobPosts.length,postsBeforeManual,'Viewing, switching, copying and downloading manual scripts must never submit a server job');
   await page.locator('[data-tab=remediation]').click();
   await page.locator('.policy-value-editor').screenshot({path:path.join(screens,'custom-policy-value.png')});
   await page.locator('[data-recommended-values]').click();
@@ -286,7 +288,7 @@ const server=http.createServer(async(req,res)=>{
   await page.goto(`http://127.0.0.1:${server.address().port}/#/benchmark`);
   await page.locator('#catalog-search').fill('1.1.1');await page.locator('[data-rule="1.1.1"]').first().click();
   await page.locator('[data-tab=remediation]').click();
-  assert.ok((await page.locator('.target-scope-note').textContent()).includes('Domain hesab siyasəti'));
+  assert.ok((await page.locator('.target-scope-note').textContent()).includes('Domain account policy'));
   assert.equal(await page.locator('#gpo-selection input[name=refresh][value=Scope]').count(),0);
   assert.equal(await page.locator('#gpo-selection input[name=firstLink]').count(),0);
   assert.equal(await page.locator('#gpo-selection>.primary-action').isDisabled(),true);
@@ -294,7 +296,7 @@ const server=http.createServer(async(req,res)=>{
   await page.locator('[data-gpo="11111111-1111-1111-1111-111111111111"]').click();
   assert.equal(await page.locator('.target-access-error').count(),0);assert.equal(await page.locator('#gpo-selection>.primary-action').isDisabled(),false);
   await page.locator('[data-scope-open="scopeDn"]').click();
-  assert.ok((await page.locator('.visual-scope-head p').textContent()).includes('Bütün aşkarlanan'));
+  assert.ok((await page.locator('.visual-scope-head p').textContent()).includes('All discovered'));
   assert.ok(await page.locator('[data-scope-choose^="OU="]').count()>0);
   await page.locator('[data-scope-choose="OU=Endpoints,DC=test,DC=local"]').click();assert.equal(await page.locator('#gpo-selection>.primary-action').isDisabled(),true);await page.locator('[data-scope-open="scopeDn"]').click();
   await page.locator('[data-scope-choose="DC=test,DC=local"]').click();
@@ -316,14 +318,14 @@ const server=http.createServer(async(req,res)=>{
   await page.waitForFunction(()=>document.querySelector('#target-access-feedback')?.textContent.includes('Edit settings'));
   assert.equal(previewSelections.length,plansBeforeAccess);assert.ok(accessRequests.length>0);assert.ok((await page.locator('#target-access-feedback').textContent()).includes(inventory.executionUser));
   accessDenied=null;await page.locator('[data-scope-open="scopeDn"]').click();await page.locator('[data-scope-choose="OU=Endpoints,DC=test,DC=local"]').click();
-  await page.waitForFunction(()=>document.querySelector('#target-access-feedback')?.textContent.includes('İlkin yazma'));
+  await page.waitForFunction(()=>document.querySelector('#target-access-feedback')?.textContent.includes('Initial write'));
   // An old target's delayed denial must not overwrite a new target's result.
   accessDenied='OU_LINK_ACCESS_DENIED';accessDelay=600;
   await page.locator('[data-scope-open="scopeDn"]').click();await page.locator('[data-scope-choose="OU=Users,DC=test,DC=local"]').click();
   await page.waitForRequest(r=>new URL(r.url()).pathname==='/api/gpo/target-access');
   accessDenied=null;accessDelay=0;await page.locator('[data-scope-open="scopeDn"]').click();await page.locator('[data-scope-choose="OU=Endpoints,DC=test,DC=local"]').click();
-  await page.waitForFunction(()=>document.querySelector('#target-access-feedback')?.textContent.includes('İlkin yazma'));await page.waitForTimeout(700);assert.equal(await page.locator('#target-access-feedback .target-access-error').count(),0);
-  for(const [code,needle] of [['GPO_EDIT_ACCESS_DENIED','Edit settings'],['OU_LINK_ACCESS_DENIED','Link GPOs'],['SYSVOL_WRITE_ACCESS_DENIED','SYSVOL'],['GPO_ACCESS_UNVERIFIED','təsdiqlənmədi']]){
+  await page.waitForFunction(()=>document.querySelector('#target-access-feedback')?.textContent.includes('Initial write'));await page.waitForTimeout(700);assert.equal(await page.locator('#target-access-feedback .target-access-error').count(),0);
+  for(const [code,needle] of [['GPO_EDIT_ACCESS_DENIED','Edit settings'],['OU_LINK_ACCESS_DENIED','Link GPOs'],['SYSVOL_WRITE_ACCESS_DENIED','SYSVOL'],['GPO_ACCESS_UNVERIFIED','could not be verified']]){
    previewDenied=code;await page.locator('#gpo-selection>.primary-action').click();
    await page.waitForFunction(text=>[...document.querySelectorAll('.target-access-error')].some(el=>el.textContent.includes(text)),needle);
    assert.equal(await page.locator('.plan-card').count(),0);

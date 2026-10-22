@@ -6,17 +6,17 @@ vm.createContext(context);vm.runInContext(source,context,{filename:'studio-ui.js
 const ui=context.window.GpoStudioUI;
 assert(ui);
 const run=(s,e,ok=false)=>({updatedAt:'2026-10-14T10:00:00Z',result:{state:s,effectiveStatus:e,gpoPublished:ok,linkVerified:ok,verification:{replicationConverged:ok}}});
-const state={lang:'az',history:[run('COMPLETED','VERIFIED_ON_SAMPLE',true),run('VERIFY_MISMATCH','NO_SAMPLE'),run('PUBLISHED','PENDING')],
+const state={lang:'en',history:[run('COMPLETED','VERIFIED_ON_SAMPLE',true),run('VERIFY_MISMATCH','NO_SAMPLE'),run('PUBLISHED','PENDING')],
   catalog:{rules:[{id:'1.1.1',implementation:'live'},{id:'2.2.1',implementation:'manual'}]},
   inventory:{domain:'example.local',gpos:[{id:'a',name:'<script>alert(1)</script>'}],scopes:[{dn:'OU=Sales,DC=example,DC=local',name:'Sales'}]},
   session:{operator:'LAB\\admin'},gpoSession:{connected:true},selection:{gpoId:'a',scopeDn:'OU=Sales,DC=example,DC=local'},
   selectedRule:{id:'2.2.1',title:'Test policy'},approval:{reviewed:false}};
 const dashboard=ui.dashboard(state),catalog=ui.catalog(state),remediation=ui.remediation(state),ops=ui.operations(state),workflow=ui.workflow(state);
-assert(dashboard.includes('Sübutla təsdiqlənmiş')&&dashboard.includes('Avtomatik CIS mapping'));
-assert(dashboard.includes('Uyğunluq faizi deyil'));
-assert(catalog.includes('qayda real GPO mapping'));
+assert(dashboard.includes('Evidence verified')&&dashboard.includes('Automated CIS mappings'));
+assert(dashboard.includes('Not compliance rate'));
+assert(catalog.includes('controls currently have real GPO mappings'));
 assert(remediation.includes('&lt;script&gt;alert(1)&lt;/script&gt;')&&!remediation.includes('<script>alert(1)</script>'));
-assert(ops.includes('ƏMƏLİYYAT KONTROLU'));
+assert(ops.includes('OPERATION ASSURANCE'));
 assert(workflow.includes('Preview → Approval → Apply → Verify'));
 assert.equal(ui.status(state.history[0]),'verified');
 assert.equal(ui.status(state.history[1]),'review');

@@ -14,13 +14,13 @@ for(const marker of ['ux-status-bar','ux-kpi-grid','ux-recent','ux-advanced-bloc
   assert.ok(workspace.includes(marker),'Dashboard lost '+marker);
 for(const marker of ['ux-overview-layout','ux-more-tabs','data-control-start','function impactTab','function auditTab','GpoScopePicker.field'])
   assert.ok(control.includes(marker),'Control flow lost '+marker);
-for(const marker of ['ux-catalog-strip','CIS bölmələri AD domenləri deyil','${state.favorites.size}'])
+for(const marker of ['ux-catalog-strip','CIS sections are not AD domains','${state.favorites.size}'])
   assert.ok(catalog.includes(marker),'Catalog lost '+marker);
 assert.ok(batch.includes('visibleControls=controls.slice(0,80)'),'Batch list must render no more than 80 controls initially');
 assert.ok(batch.includes('noncomputer')||batch.includes('Scope')||batch.includes('mapping?.scope'),'Batch safety flow unexpectedly missing');
 for(const file of ['workspace.js','control-view.js','product.js','catalog-view.js','workflow-center.js','index.html','ux-pro.css'])
   assert.equal(read('source',file),read('dist',file),'Frontend/dist stale: '+file);
-for(const marker of ['/ux-pro.css?v=3.10.2','/gpo-scope-picker.js','/workspace.js?v='+(/buildLabel:'([^']+)'/.exec(workspace)||[])[1]])
+for(const marker of ['/ux-pro.css?v=3.14.2','/gpo-scope-picker.js','/workspace.js?v='+(/buildLabel:'([^']+)'/.exec(workspace)||[])[1]])
   assert.ok(index.includes(marker),'Missing frontend asset '+marker);
 assert.ok(!read('source','ux-pro.css').includes('!important'),'No !important allowed in UX overrides');
 console.log('PASS professional UX regression: single control form, compact dashboard, 80-row batch, dist sync, retained policy analysis');

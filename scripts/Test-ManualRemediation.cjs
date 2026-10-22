@@ -26,9 +26,9 @@ for(const m of mappings){
   }else assert(!generated.script.includes('Write-Mapping')&&!generated.script.includes('Set-GP'));
   rows.push({id:m.id,action,script:generated.script});
  }
- const offline=api.generate({settings:[],selection:{},lang:'az'},r);
- if(offline.guide){assert.equal(offline.script,window.GpoRemediationGuides.get(r.id).read);assert(!api.render({settings:[],selection:{},lang:'az'},r).includes('REPLACE_WITH_GPO_GUID'));}
- else{assert(offline.script.includes('REPLACE_WITH_DOMAIN'));assert(api.render({settings:[],selection:{},lang:'az'},r).includes('Şablon görünür'));}
+ const offline=api.generate({settings:[],selection:{},lang:'en'},r);
+ if(offline.guide){assert.equal(offline.script,window.GpoRemediationGuides.get(r.id).read);assert(!api.render({settings:[],selection:{},lang:'en'},r).includes('REPLACE_WITH_GPO_GUID'));}
+ else{assert(offline.script.includes('REPLACE_WITH_DOMAIN'));assert(api.render({settings:[],selection:{},lang:'en'},r).includes('Template shown'));}
 }
 assert.equal(rows.length,799);
 const r=catalog.rules.find(x=>x.id==='2.3.7.4'),evil="'; throw 'INJECTED' #\n</code><img src=x onerror=alert(1)>\n@'";

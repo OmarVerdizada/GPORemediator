@@ -2,7 +2,7 @@
 
 ## Operation center
 
-Open **Əməliyyat mərkəzi / Workflow center** after connecting a delegated account on Dashboard. Stored work remains available after closing the browser. Windows authentication, roles, antiforgery protection, write authorization and GPO/OU boundaries remain mandatory.
+Open **Workflow center** after connecting a delegated account on Dashboard. Stored work remains available after closing the browser. Windows authentication, roles, antiforgery protection, write authorization and GPO/OU boundaries remain mandatory.
 
 - Review up to 20 distinct controls against one GPO and scope, including previous/desired values, link order, enabled/enforced state, affected computers and warnings. Organization-specific values require input.
 - Apply requires the reviewed batch, ticket/reference, impact acknowledgement, protected-policy acknowledgement where applicable, typed APPLY and a final confirmation. Rollback is a separate, explicitly approved operation requiring ROLLBACK.

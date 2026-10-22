@@ -105,3 +105,5 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           node scripts/Test-EndpointTargetingUi.cjs
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          node scripts/Test-EnglishThemes.cjs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
