@@ -28,7 +28,7 @@ assert.ok(!domain.includes('data-scope-choose="OU=Users'));
 assert.ok(domain.includes('Only the domain is shown'));
 assert.ok(!domain.includes('This tree contains only discovered AD OUs'));
 const all=p.modal(dir,'scopeDn','',expanded,{scopeDn:dir[0].dn},'az',true,true);
-assert.ok(all.includes('data-scope-choose="DC=prosol,DC=local"'));assert.ok(all.includes('data-scope-choose="OU=Users'));assert.ok(all.includes('All discovered'));
+assert.ok(all.includes('data-scope-choose="DC=prosol,DC=local"'));assert.ok(all.includes('OU=Users'));assert.ok(!all.includes('data-scope-choose="OU=Users'));assert.ok(all.includes('can select only the domain root'));
 const unsafe=p.field([{kind:'OU',dn:'OU=<script>,DC=local',name:'<img src=x onerror=1>'}],'OU=<script>,DC=local','scopeDn','OU','az');
 assert.ok(unsafe.includes('&lt;img'));assert.ok(!unsafe.includes('<img'));
 console.log('PASS visual OU scope catalog: AD inventory, filtering, DN escaping, parent tree, selection, and HTML encoding');

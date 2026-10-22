@@ -297,8 +297,8 @@ const server=http.createServer(async(req,res)=>{
   assert.equal(await page.locator('.target-access-error').count(),0);assert.equal(await page.locator('#gpo-selection>.primary-action').isDisabled(),false);
   await page.locator('[data-scope-open="scopeDn"]').click();
   assert.ok((await page.locator('.visual-scope-head p').textContent()).includes('All discovered'));
-  assert.ok(await page.locator('[data-scope-choose^="OU="]').count()>0);
-  await page.locator('[data-scope-choose="OU=Endpoints,DC=test,DC=local"]').click();assert.equal(await page.locator('#gpo-selection>.primary-action').isDisabled(),true);await page.locator('[data-scope-open="scopeDn"]').click();
+  assert.ok(await page.locator('.visual-scope-item:has-text("Endpoints")').count()>0);
+  assert.equal(await page.locator('[data-scope-choose^="OU="]').count(),0,'Domain control allowed an OU target');
   await page.locator('[data-scope-choose="DC=test,DC=local"]').click();
   await page.locator('.refresh-choice:has(input[value=Pdc])').click();
   await page.screenshot({path:path.join(screens,'domain-account-targeting.png'),fullPage:true});
@@ -308,7 +308,7 @@ const server=http.createServer(async(req,res)=>{
   await page.goto(`http://127.0.0.1:${server.address().port}/#/benchmark`);
   await page.locator('#catalog-search').fill('2.3.1.1');await page.locator('[data-rule="2.3.1.1"]').first().click();await page.locator('[data-tab=remediation]').click();
   await page.locator('[data-gpo-toggle]').click();await page.locator('[data-gpo="11111111-1111-1111-1111-111111111111"]').click();
-  await page.locator('[data-scope-open="scopeDn"]').click();assert.equal(await page.locator('[data-scope-choose="DC=test,DC=local"]').count(),1);
+  await page.locator('[data-scope-open="scopeDn"]').click();assert.equal(await page.locator('[data-scope-choose="DC=test,DC=local"]').count(),0,'Computer control allowed the domain root');
   await page.locator('[data-scope-choose="OU=Endpoints,DC=test,DC=local"]').click();
   assert.equal(await page.locator('#gpo-selection input[value=Pdc]').count(),0);assert.equal(await page.locator('#gpo-selection input[value=Scope]').count(),1);
   await page.screenshot({path:path.join(screens,'computer-ou-targeting.png'),fullPage:true});

@@ -43,6 +43,14 @@ public static class PrivateFiles
         directory.SetAccessControl(acl);
     }
 
+    public static void EnsureDirectoryPreservingAcl(string path)
+    {
+        if(!OperatingSystem.IsWindows())throw new PlatformNotSupportedException("Windows is required.");
+        RejectLinks(path);
+        Directory.CreateDirectory(path);
+        RejectLinks(path);
+    }
+
     public static void ProtectTree(string root)
     {
         if(!OperatingSystem.IsWindows())throw new PlatformNotSupportedException("Windows is required.");

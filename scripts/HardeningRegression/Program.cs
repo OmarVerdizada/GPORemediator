@@ -20,6 +20,7 @@ static class Tests
     }
     public static int Main()
     {
+        if(!OperatingSystem.IsWindows())throw new PlatformNotSupportedException("Windows is required.");
         var gpo=Guid.NewGuid().ToString("D");
         var userOu="OU=Users,DC=lab,DC=test";
         var endpointOu="OU=Endpoints,DC=lab,DC=test";
@@ -106,6 +107,23 @@ static class Tests
             var denied=false;
             try{using var _=new Store(db);}catch(InvalidOperationException){denied=true;}
             Check(denied,"missing persisted MAC key blocks startup");
+
+            var backup=Path.Combine(temp,"delegated-backup");
+            Directory.CreateDirectory(backup);
+            var delegateSid=new System.Security.Principal.SecurityIdentifier("S-1-5-21-111111111-222222222-333333333-4444");
+            var backupAcl=new System.Security.AccessControl.DirectorySecurity();
+            var currentSid=System.Security.Principal.WindowsIdentity.GetCurrent().User!;
+            backupAcl.SetOwner(currentSid);
+            backupAcl.SetAccessRuleProtection(true,false);
+            backupAcl.AddAccessRule(new System.Security.AccessControl.FileSystemAccessRule(currentSid,System.Security.AccessControl.FileSystemRights.FullControl,System.Security.AccessControl.InheritanceFlags.ContainerInherit|System.Security.AccessControl.InheritanceFlags.ObjectInherit,System.Security.AccessControl.PropagationFlags.None,System.Security.AccessControl.AccessControlType.Allow));
+            backupAcl.AddAccessRule(new System.Security.AccessControl.FileSystemAccessRule(delegateSid,System.Security.AccessControl.FileSystemRights.Modify,System.Security.AccessControl.InheritanceFlags.ContainerInherit|System.Security.AccessControl.InheritanceFlags.ObjectInherit,System.Security.AccessControl.PropagationFlags.None,System.Security.AccessControl.AccessControlType.Allow));
+            new DirectoryInfo(backup).SetAccessControl(backupAcl);
+            PrivateFiles.EnsureDirectoryPreservingAcl(backup);
+            var rules=new DirectoryInfo(backup).GetAccessControl().GetAccessRules(true,true,typeof(System.Security.Principal.SecurityIdentifier));
+            var preserved=false;
+            foreach(System.Security.AccessControl.FileSystemAccessRule rule in rules)
+                if(rule.IdentityReference==delegateSid&&(rule.FileSystemRights&System.Security.AccessControl.FileSystemRights.Modify)!=0){preserved=true;break;}
+            Check(preserved,"backup directory initialization preserves delegated ACL");
         }
         finally {try{Directory.Delete(temp,true);}catch(IOException){}}
         Console.WriteLine($"SECURITY REGRESSIONS PASSED: {passed}");

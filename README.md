@@ -1,4 +1,6 @@
-# GPO Remediator 3.14.2
+# GPO Remediator 3.14.3
+
+3.14.3 preserves the administrator-managed backup repository ACL across application restarts and normalizes each control to a compatible domain/OU target. Domain account controls now select the domain root automatically while keeping the OU inventory visible as read-only context. See [changes and upgrade instructions](docs/RELEASE-3.14.3.md).
 
 Target visibility and access update (2026-10-20): all discovered GPOs/OUs remain visible. Incompatible controls get a separate explanation; remediation planning checks effective GPO, SYSVOL and required link access and displays targeted delegation steps when blocked. Read-only scans remain available without edit delegation. See [target access and guidance](docs/TARGET-ACCESS-2026-10-20.md).
 

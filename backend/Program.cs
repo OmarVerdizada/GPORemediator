@@ -17,7 +17,11 @@ var builder=WebApplication.CreateBuilder(args);
 if(!OperatingSystem.IsWindows())throw new PlatformNotSupportedException("GPO Remediator requires Windows.");
 var protectedStateRoot=Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),"GpoRemediator");
 PrivateFiles.ProtectDirectory(protectedStateRoot);
-foreach(var name in new[]{"Config","State","Data","Backups","Recovery","Scripts"})PrivateFiles.ProtectTree(Path.Combine(protectedStateRoot,name));
+foreach(var name in new[]{"Config","State","Data","Recovery","Scripts"})PrivateFiles.ProtectTree(Path.Combine(protectedStateRoot,name));
+// Backup operations run on the selected DC as the delegated execution identity.
+// Preserve the administrator-managed ACL so restarting the control plane does not
+// remove that identity's access. Readiness separately rejects broad write grants.
+PrivateFiles.EnsureDirectoryPreservingAcl(Path.Combine(protectedStateRoot,"Backups"));
 // Recovery setup must remain reachable even when the saved JSON or HTTPS configuration is broken.
 builder.Configuration.AddEnvironmentVariables().AddCommandLine(args);
 var localSetup=builder.Configuration.GetValue<bool>("LocalSetup");
