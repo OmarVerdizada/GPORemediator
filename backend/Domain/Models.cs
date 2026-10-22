@@ -8,6 +8,7 @@ namespace GpoRemediator.Domain;
 public record GpoLink(string Target, int Order, bool Enforced, bool Enabled);
 public record AuditEvent(long Id, string Event, string Operator, string? JobId, string? ControlId, string? GpoId,
     string Details, string CreatedAt, string PreviousHash, string Hash);
+[JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public record SetupConfigRequest(string Urls, string Domain, string DomainController, string[] ApprovedGpoIds,
     string[] AuthorizedOus, string[] AllowedHosts, string BackupPath, bool AutoRestart = true, string? EndpointTargeting = null);
 public record WriteModeRequest(bool Enable, string Confirmation, bool AutoRestart = true);

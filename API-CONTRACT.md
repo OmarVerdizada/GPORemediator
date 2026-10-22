@@ -1,6 +1,8 @@
 # GPO Remediator API contract — production backend
 
-All endpoints are local-only and served from the same origin. In Windows mode the request must also pass Windows Integrated Authentication and the configured operator allowlist. Non-GET API requests require the exact Origin and `X-CSRF-Token` returned by `/api/session`.
+All endpoints are local-only and served from the same origin. In Windows mode the request must also pass Windows Integrated Authentication; there is no application role or operator allowlist. Non-GET API requests require the exact Origin and `X-CSRF-Token` returned by `/api/session`.
+
+`GET /api/v1/health/live` returns the API contract version and the running product assembly version. `GET /api/v1/health/ready` reports process readiness and mode.
 
 ## Session / setup
 
@@ -22,7 +24,7 @@ All endpoints are local-only and served from the same origin. In Windows mode th
 
 - `GET /api/gpo/settings` — server-authoritative CIS mapping metadata. The client must not invent registry keys/desired values.
 - `POST /api/gpo/preview` — validated read-only plan. Request uses discovered GPO/scope IDs plus control ID and approved option fields.
-- `POST /api/gpo/{planId}/apply` — requires `APPLY`, impact acknowledgment, Change/Ticket ID and Approver; protected default GPO additionally requires protected acknowledgment. Write mode must be enabled.
+- `POST /api/gpo/{planId}/apply` — requires `APPLY`, impact acknowledgment and a Change/Ticket ID; the operator-entered approver reference is optional. A protected built-in GPO additionally requires protected acknowledgment. Write mode must be enabled.
 - `POST /api/gpo/{planId}/verify` — read-only verification of an existing/no-change operation.
 - `POST /api/gpo/{planId}/rollback` — requires `ROLLBACK` and write mode; restores only when backup/post-write fingerprint safety checks pass.
 - `GET /api/gpo/history` — current operator's workflow runs.

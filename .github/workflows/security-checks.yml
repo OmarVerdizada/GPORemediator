@@ -38,15 +38,22 @@ jobs:
         shell: powershell
         run: |
           ./scripts/Test-SecurityFiles.ps1
+          ./scripts/Test-DomainSignIn.ps1
+          ./scripts/Test-EndpointTargeting.ps1
+          ./scripts/Test-SelectionAccess.ps1
+          ./scripts/Test-SysvolDiscovery.ps1
           ./scripts/Test-RuntimeIntegrity.ps1
           ./scripts/Test-GpoMappings.ps1
           ./scripts/Test-EndpointEvidence.ps1
           ./scripts/Test-AllEndpointMappings.ps1
           ./scripts/Test-VerificationLifecycle.ps1
+          ./scripts/Test-PowerShellSyntax.ps1
           ./scripts/Test-ServiceControl.ps1
           python scripts/Build-ProductionMappings.py --check
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python scripts/Test-ProductionMappings.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python scripts/Validate-ProductionPackage.py
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Integrated security and scope checks
         shell: pwsh
@@ -81,10 +88,20 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           node scripts/Test-GuidedRemediation.cjs
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          node scripts/Test-GpoScopePicker.cjs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          node scripts/Test-ControlTargeting.cjs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          node scripts/Test-ValueEditor.cjs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          node scripts/Test-ManualRemediation.cjs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           npm install --no-save --ignore-scripts playwright@1.62.1
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $env:PLAYWRIGHT_CHANNEL='msedge'
           node scripts/Test-RecoveryUi.cjs
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           node scripts/Test-WorkflowUi.cjs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          node scripts/Test-EndpointTargetingUi.cjs
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

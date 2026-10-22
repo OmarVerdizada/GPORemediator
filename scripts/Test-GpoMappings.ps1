@@ -4,8 +4,11 @@ param([string]$ReportPath)
 $ErrorActionPreference='Stop'
 Set-StrictMode -Version Latest
 $root=Split-Path $PSScriptRoot -Parent
-$sandbox=Join-Path $root ('work\mapping-tests-'+[guid]::NewGuid().ToString('N'))
+# Keep the fixture path short because Windows PowerShell 5.1 and legacy GPO
+# tooling can still hit MAX_PATH when policy subdirectories are appended.
+$sandbox=Join-Path ([IO.Path]::GetTempPath()) ('gpm-map-'+[guid]::NewGuid().ToString('N'))
 $null=New-Item -ItemType Directory -Path $sandbox
+try {
 Import-Module (Join-Path $root 'backend\PowerShell\SecurityTemplate.psm1') -Force
 $tokens=$null;$parseErrors=$null
 $ast=[Management.Automation.Language.Parser]::ParseFile((Join-Path $root 'backend\PowerShell\GpoWorkflow.Worker.ps1'),[ref]$tokens,[ref]$parseErrors)
@@ -217,3 +220,9 @@ $failures=@($report|Where-Object{$_.state -eq 'FAIL'})
 $report|ForEach-Object{[pscustomobject]$_}|Group-Object handler|ForEach-Object{Write-Output ($_.Name+': '+$_.Count+' controls')}
 Write-Output ('Offline mapping results: '+@($report|Where-Object{$_.state -eq 'PASS'}).Count+' PASS, '+@($report|Where-Object{$_.state -eq 'MANUAL_BLOCKED'}).Count+' manual, '+$failures.Count+' FAIL')
 if($failures.Count){$failures|ForEach-Object{Write-Output ($_.id+': '+$_.error)};exit 1}
+} finally {
+    $resolved=[IO.Path]::GetFullPath($sandbox)
+    $tempRoot=[IO.Path]::GetFullPath([IO.Path]::GetTempPath()).TrimEnd('\')+'\'
+    if(!$resolved.StartsWith($tempRoot,[StringComparison]::OrdinalIgnoreCase)){throw 'Mapping-test cleanup path escaped the temporary directory.'}
+    Remove-Item -LiteralPath $resolved -Recurse -Force -ErrorAction SilentlyContinue
+}

@@ -100,7 +100,7 @@ async function startWindowsModeFromSetup(){
   const cfg=await api('/setup/config');
   if(!cfg?.domain||!cfg?.domainController){state.modeRecoveryBusy=false;window.dispatchEvent(new CustomEvent('gr:open'));throw Object.assign(new Error(say('Domen və yazıla bilən DC saxlanmayıb. Əvvəlcə Sazlamalarda bu iki sahəni tamamlayın.','Domain and writable DC are not saved. Complete these two fields in Settings first.')),{code:'WINDOWS_CONFIG_REQUIRED'});}
   const previous=state.service?.processId;
-  const payload={domain:cfg.domain,domainController:cfg.domainController,backupPath:cfg.backupPath,urls:location.origin,approvedGpoIds:Array.isArray(cfg.approvedGpoIds)?cfg.approvedGpoIds:['*'],authorizedOus:Array.isArray(cfg.authorizedOus)?cfg.authorizedOus:[],allowedHosts:Array.isArray(cfg.allowedHosts)?cfg.allowedHosts:[],allowedOperators:Array.isArray(cfg.allowedOperators)?cfg.allowedOperators:[],remediators:Array.isArray(cfg.remediators)?cfg.remediators:[],auditors:Array.isArray(cfg.auditors)?cfg.auditors:[],viewers:Array.isArray(cfg.viewers)?cfg.viewers:[],autoRestart:true};
+  const payload={domain:cfg.domain,domainController:cfg.domainController,backupPath:cfg.backupPath,urls:location.origin,approvedGpoIds:Array.isArray(cfg.approvedGpoIds)?cfg.approvedGpoIds:['*'],authorizedOus:Array.isArray(cfg.authorizedOus)?cfg.authorizedOus:[],allowedHosts:Array.isArray(cfg.allowedHosts)?cfg.allowedHosts:[],autoRestart:true};
   state.notice=say('Konfiqurasiya saxlanır və launcher Windows / AD rejiminə keçir. Bu keçid bir dəfə aparılacaq.','Configuration is being saved and the launcher is switching to Windows / AD mode. This transition will run once.');render();
   try{await api('/setup/config',payload);}catch(e){state.modeRecoveryBusy=false;throw e;}
   await waitForWindowsPromotion(previous);
@@ -118,7 +118,7 @@ async function enableWritesAndContinue(){
   saveWriteResume();
   if(needsNarrowing){
     state.notice=say('Bu plan üçün production icazəsi avtomatik hazırlanır: yalnız seçilmiş GPO və seçilmiş AD scope yazıla biləcək. GUID/OU-nu Sazlamalarda əl ilə yazmağa ehtiyac yoxdur. Sonra service bir dəfə idarəli restart olacaq.','Production authorization is being prepared automatically for this plan: only the selected GPO and AD scope will be writable. You do not need to enter GUID/OU values manually in Settings. The service will then restart once.');render();
-    const payload={domain:cfg.domain,domainController:cfg.domainController,backupPath:cfg.backupPath,urls:location.origin,approvedGpoIds:[state.plan.selection.gpoId],authorizedOus:selectedScopes,allowedHosts:Array.isArray(cfg.allowedHosts)?cfg.allowedHosts:[],allowedOperators:Array.isArray(cfg.allowedOperators)?cfg.allowedOperators:[],remediators:Array.isArray(cfg.remediators)?cfg.remediators:[],auditors:Array.isArray(cfg.auditors)?cfg.auditors:[],viewers:Array.isArray(cfg.viewers)?cfg.viewers:[],autoRestart:false};
+    const payload={domain:cfg.domain,domainController:cfg.domainController,backupPath:cfg.backupPath,urls:location.origin,approvedGpoIds:[state.plan.selection.gpoId],authorizedOus:selectedScopes,allowedHosts:Array.isArray(cfg.allowedHosts)?cfg.allowedHosts:[],autoRestart:false};
     await api('/setup/config',payload);
   }
   state.notice=say('Change gate aktivləşdirilir. Plan və seçimlər saxlanılıb; service yalnız bir dəfə idarəli restart olacaq.','The change gate is being enabled. The plan and selections are preserved; the service will perform exactly one managed restart.');

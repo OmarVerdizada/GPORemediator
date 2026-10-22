@@ -189,7 +189,10 @@ SetupConfigView CurrentSetupConfig()
     var section=builder.Configuration.GetSection("Windows");
     return new SetupConfigView(builder.Configuration["Urls"]??"http://127.0.0.1:5080",section["Domain"]??"",section["DomainController"]??"",section.GetSection("ApprovedGpoIds").Get<string[]>()??[],section.GetSection("AuthorizedOus").Get<string[]>()??[],section.GetSection("AllowedHosts").Get<string[]>()??[],section["BackupPath"]??@"C:\ProgramData\GpoRemediator\Backups",section.GetValue<bool>("EnableWrites"),localConfigPath,false,EndpointTargeting.Resolve(section["EndpointTargeting"],section.GetSection("AllowedHosts").Get<string[]>()??[]));
 }
-app.MapGet("/api/v1/health/live",()=>Results.Ok(new{status="live",version="1.0"})).WithMetadata(new OperatorBootstrap());
+app.MapGet("/api/v1/health/live",()=>Results.Ok(new{
+    status="live",apiVersion="1.0",
+    productVersion=typeof(GpoLoginRequest).Assembly.GetName().Version?.ToString(3)??"unknown"
+})).WithMetadata(new OperatorBootstrap());
 app.MapGet("/api/v1/health/ready",()=>Results.Ok(new{status="ready",mode,database=true})).WithMetadata(new OperatorBootstrap());
 app.MapGet("/api/session",(HttpContext context,IAntiforgery csrf,OperatorConfirmation confirmation)=>new {mode,@operator=Operator(context),csrfToken=csrf.GetAndStoreTokens(context).RequestToken,operatorConfirmationRequired=!confirmation.Confirmed(context),domainSignIn=real,identityStrategy="Windows identity for audit and a single domain sign-in; AD enforces execution permissions",realModeEnabled=real,setupRequired=localSetup}).WithMetadata(new OperatorBootstrap());
 OperatorConfirmation.MapEndpoints(app,real?async(request,context,ct)=>{

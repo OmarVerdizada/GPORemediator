@@ -1,5 +1,7 @@
 const assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm'),path=require('node:path');
 const source=path.join(__dirname,'../frontend/source'),window={GpoClient:{storage:{get:()=> '[]',set(){}}}};
+const workspaceSource=fs.readFileSync(path.join(source,'workspace.js'),'utf8');
+assert(!/allowedOperators|remediators|auditors|viewers/.test(workspaceSource),'Legacy application role fields remain in frontend setup payloads');
 const context=vm.createContext({window,Date,JSON,String,Number,Boolean});
 for(const name of ['ui-domain.js','components.js','product.js','premium.js','studio-ui.js','catalog-view.js','operation-view.js'])vm.runInContext(fs.readFileSync(path.join(source,name),'utf8'),context);
 const ui=window.GpoComponents,s={lang:'en',history:[],favorites:new Set(),query:'',level:'ALL',automation:'ALL',savedView:'ALL',catalog:JSON.parse(fs.readFileSync(path.join(source,'benchmark-v4.json'),'utf8'))};

@@ -8,6 +8,10 @@ using Microsoft.AspNetCore.DataProtection;
 
 static void Check(bool value,string message){if(!value)throw new Exception(message);}
 static void Reject(Action action,string code){try{action();throw new Exception("Expected "+code);}catch(PolicyException e){Check(e.Code==code,"Wrong rejection "+e.Code);}}
+try{
+  JsonDefaults.Deserialize<SetupConfigRequest>("{\"urls\":\"http://127.0.0.1:5080\",\"domain\":\"example.local\",\"domainController\":\"dc.example.local\",\"approvedGpoIds\":[],\"authorizedOus\":[],\"allowedHosts\":[],\"backupPath\":\"C:\\\\Backups\",\"allowedOperators\":[\"legacy\"]}");
+  throw new Exception("Legacy application role fields were accepted in setup JSON");
+}catch(System.Text.Json.JsonException){}
 const string gpo="11111111-1111-1111-1111-111111111111",other="22222222-2222-2222-2222-222222222222",dn="DC=example,DC=local";
 var selected=new GpoSelection(gpo,dn,"1.2.1",15,FirstLink:true);
 ProductionGpoMappings.Validate(selected with{GpoId=other});

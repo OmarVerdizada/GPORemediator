@@ -55,7 +55,7 @@ function Invoke-RemediatorServiceAction {
         if($Action -eq 'restart'){ throw }
         if($_.Exception.Response -and [int]$_.Exception.Response.StatusCode -ge 400 -and [int]$_.Exception.Response.StatusCode -lt 500){
             $status=[int]$_.Exception.Response.StatusCode
-            if($status -eq 403){throw 'Service control was denied. Use the configured Administrator Windows identity and the current release; the Control Panel does not share browser login cookies.'}
+            if($status -eq 403){throw 'Service control was denied. Use the authenticated Windows identity and the current release; the Control Panel does not share browser login cookies.'}
             if($status -eq 423){throw 'Service control is blocked by an active operation or maintenance. Wait for it to finish, then retry Stop.'}
             throw
         }
