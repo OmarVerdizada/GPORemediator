@@ -35,7 +35,7 @@ $runtimeMarker = Join-Path $runtimeRoot 'production-backend-v4.ready'
 $runtimeInstallManifest = Join-Path $runtimeRoot 'runtime-install.json'
 $runtimeArchive = Join-Path $PSScriptRoot 'release\GpoRemediator-runtime-win-x64.zip'
 $runtimeArchiveHash = $runtimeArchive + '.sha256'
-$releaseVersion = '3.14.1'
+$releaseVersion = '3.14.6'
 # 3.1.2 keeps the 3.0 durable schema. It hardens startup recovery, removes the Setup->Windows restart race, and makes early backend failures self-diagnosing.
 # 3.1.2 intentionally uses fresh Setup/Windows state databases so incompatible serialized records from earlier preview builds cannot crash startup. Older databases are left untouched in ProgramData for archival/review.
 $stateSchemaVersion = '3.1.2'
@@ -56,8 +56,11 @@ function Write-Log([string]$Message,[ConsoleColor]$Color=[ConsoleColor]::Gray) {
 }
 
 function Initialize-SecureState {
-    Initialize-ProtectedDirectory -Path $stateRoot
-    foreach($path in @($workRoot,$configRoot,$dataRoot,$backupRoot,$recoveryRoot)) { Initialize-ProtectedDirectory -Path $path }
+    # Backups are written on the selected DC by the delegated execution account.
+    # Preserve the administrator-managed operator ACE across launcher restarts.
+    Initialize-ProtectedDirectory -Path $stateRoot -PreserveAclPaths @($backupRoot)
+    foreach($path in @($workRoot,$configRoot,$dataRoot,$recoveryRoot)) { Initialize-ProtectedDirectory -Path $path }
+    Initialize-ProtectedDirectory -Path $backupRoot -PreserveAclPaths @($backupRoot)
 }
 
 function Trim-Log([string]$Path,[int]$MaxBytes=3145728,[int]$TailLines=1800) {
