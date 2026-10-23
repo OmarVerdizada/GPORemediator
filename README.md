@@ -1,4 +1,6 @@
-# GPO Remediator 3.14.3
+# GPO Remediator 3.14.4
+
+3.14.4 accepts the standard SYSVOL rights created by GPMC **Edit settings** delegation (`Read & execute`, `Write`, and `Delete child`) without requiring per-file Modify/Delete. The publisher retains atomic replacement where available and uses a flushed in-place write after the durable backup/manifest when standard GPMC ACLs do not permit `ReplaceFile`. See [release notes](docs/RELEASE-3.14.4.md).
 
 3.14.3 preserves the administrator-managed backup repository ACL across application restarts and normalizes each control to a compatible domain/OU target. Domain account controls now select the domain root automatically while keeping the OU inventory visible as read-only context. See [changes and upgrade instructions](docs/RELEASE-3.14.3.md).
 

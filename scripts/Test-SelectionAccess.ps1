@@ -20,13 +20,21 @@ try{
   ([IO.FileInfo]::new($file)).SetAccessControl($acl)
  }
  Set-FixtureAcl ([Security.AccessControl.FileSystemRights]::ReadAndExecute)
- Check (!(Test-FileSystemModify $file)) 'Native AccessCheck treated read-only as modify'
+ Check (!(Test-FileSystemWrite $file)) 'Native AccessCheck treated read-only as writable'
+ $gpmcRights=[Security.AccessControl.FileSystemRights]::ReadAndExecute -bor [Security.AccessControl.FileSystemRights]::Write -bor [Security.AccessControl.FileSystemRights]::DeleteSubdirectoriesAndFiles
+ Set-FixtureAcl $gpmcRights
+ Check (Test-FileSystemWrite $file) 'Native AccessCheck rejected standard GPMC Edit settings rights'
+ $directoryAcl=[Security.AccessControl.DirectorySecurity]::new();$directoryAcl.SetAccessRuleProtection($true,$false)
+ $directoryAcl.AddAccessRule([Security.AccessControl.FileSystemAccessRule]::new($sid,$gpmcRights,'ContainerInherit,ObjectInherit','None','Allow'))
+ ([IO.DirectoryInfo]::new($sandbox)).SetAccessControl($directoryAcl)
+ Atomic-Text $file 'updated through standard GPMC rights' ([Text.UTF8Encoding]::new($false))
+ Check ([IO.File]::ReadAllText($file) -eq 'updated through standard GPMC rights') 'Standard GPMC rights could not publish policy content'
  Set-FixtureAcl ([Security.AccessControl.FileSystemRights]::Modify)
- Check (Test-FileSystemModify $file) 'Native AccessCheck rejected modify'
+ Check (Test-FileSystemWrite $file) 'Native AccessCheck rejected modify'
  Set-FixtureAcl ([Security.AccessControl.FileSystemRights]::Modify) $true
- Check (!(Test-FileSystemModify $file)) 'Native AccessCheck ignored matching deny'
+ Check (!(Test-FileSystemWrite $file)) 'Native AccessCheck ignored matching deny'
  Set-FixtureAcl ([Security.AccessControl.FileSystemRights]::FullControl)
- Write-Output 'PASS native Windows effective file access: read-only, modify and deny-over-allow'
+ Write-Output 'PASS native Windows effective file access: read-only, standard GPMC edit, durable write fallback, modify and deny-over-allow'
  $cfg=@{domainController='dc.example.local';domain='example.local'};$domainDn='DC=example,DC=local'
  $selection=@{gpoId='11111111-1111-1111-1111-111111111111';scopeDn='OU=Pilot,'+$domainDn};$mapping=@{scope='Computer'}
  $script:existingLink=$null
@@ -39,7 +47,7 @@ try{
   [pscustomobject]@{allowedAttributesEffective=$(if($Identity -like 'CN=*'){$script:gpoAttributes}else{$script:ouAttributes})}
  }
  function Gpo-Folder {param($Id) return $sandbox}
- function Test-FileSystemModify {param($Path) if($script:fileError){throw 'Fixture ACL unavailable'};return $script:fileAllowed}
+ function Test-FileSystemWrite {param($Path) if($script:fileError){throw 'Fixture ACL unavailable'};return $script:fileAllowed}
  Check (@((Assert-SelectionAccess $selection $mapping).checks|Where-Object{$_.state -eq 'ALLOWED'}).Count -eq 3) 'Allowed selection was blocked'
  $script:gpoAttributes=@('gPCMachineExtensionNames');Reject {Assert-SelectionAccess $selection $mapping} 'GPO_EDIT_ACCESS_DENIED'
  $script:gpoAttributes=@('versionNumber','gPCMachineExtensionNames');$script:ouAttributes=@('description');Reject {Assert-SelectionAccess $selection $mapping} 'OU_LINK_ACCESS_DENIED'
@@ -74,5 +82,6 @@ try{
  $full=[IO.Path]::GetFullPath($sandbox);$allowed=[IO.Path]::GetFullPath((Join-Path $repo 'work'))+'\'
  if(!$full.StartsWith($allowed,[StringComparison]::OrdinalIgnoreCase)){throw 'Unsafe fixture cleanup'}
  if(Test-Path -LiteralPath $file){Set-FixtureAcl ([Security.AccessControl.FileSystemRights]::FullControl)}
+ $directoryAcl=[Security.AccessControl.DirectorySecurity]::new();$directoryAcl.SetAccessRuleProtection($true,$false);$directoryAcl.AddAccessRule([Security.AccessControl.FileSystemAccessRule]::new($sid,[Security.AccessControl.FileSystemRights]::FullControl,'ContainerInherit,ObjectInherit','None','Allow'));([IO.DirectoryInfo]::new($sandbox)).SetAccessControl($directoryAcl)
  Remove-Item -LiteralPath $full -Recurse -Force
 }

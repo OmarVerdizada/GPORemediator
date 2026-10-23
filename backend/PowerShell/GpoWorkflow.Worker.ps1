@@ -296,7 +296,7 @@ function Environment-Status {
     $ready=@($checks|Where-Object{$_.required -and $_.state -eq 'FAIL'}).Count -eq 0
     return @{domain=$domain.DNSRoot;domainController=$dc.HostName;executionUser=[Security.Principal.WindowsIdentity]::GetCurrent().Name;ready=$ready;checks=$checks.ToArray();checkedAt=[DateTimeOffset]::UtcNow.ToString('O')}
 }
-function Test-FileSystemModify([string]$Path){
+function Test-FileSystemWrite([string]$Path){
     # Ask Windows AccessCheck with the real remoting token. Do not infer access
     # by adding allow ACEs: deny ACEs, inheritance and token group flags matter.
     if(!('GpoRemediator.EffectiveFileAccess' -as [type])){
@@ -311,7 +311,7 @@ namespace GpoRemediator {
   [DllImport("advapi32.dll",SetLastError=true)] static extern bool DuplicateToken(IntPtr token,int level,out IntPtr copy);
   [DllImport("kernel32.dll")] static extern bool CloseHandle(IntPtr handle);
   [DllImport("advapi32.dll",SetLastError=true)] static extern bool AccessCheck(byte[] descriptor,IntPtr token,uint desired,ref Mapping mapping,IntPtr privileges,ref uint size,out uint granted,[MarshalAs(UnmanagedType.Bool)] out bool allowed);
-  public static bool Modify(byte[] descriptor) {
+  public static bool Write(byte[] descriptor) {
    using(var identity=WindowsIdentity.GetCurrent()) {
     IntPtr token;
     if(!DuplicateToken(identity.Token,2,out token))throw new Win32Exception(Marshal.GetLastWin32Error());
@@ -322,7 +322,8 @@ namespace GpoRemediator {
       IntPtr buffer=Marshal.AllocHGlobal((int)size);
       try {
        uint granted;bool allowed;
-       if(AccessCheck(descriptor,token,(uint)System.Security.AccessControl.FileSystemRights.Modify,ref mapping,buffer,ref size,out granted,out allowed))return allowed;
+       uint desired=(uint)(System.Security.AccessControl.FileSystemRights.ReadAndExecute|System.Security.AccessControl.FileSystemRights.Write);
+       if(AccessCheck(descriptor,token,desired,ref mapping,buffer,ref size,out granted,out allowed))return allowed;
        int error=Marshal.GetLastWin32Error();if(error!=122)throw new Win32Exception(error);
       } finally { Marshal.FreeHGlobal(buffer); }
      }
@@ -335,7 +336,7 @@ namespace GpoRemediator {
 '@
     }
     $acl=Get-Acl -LiteralPath $Path -ErrorAction Stop
-    return [GpoRemediator.EffectiveFileAccess]::Modify($acl.GetSecurityDescriptorBinaryForm())
+    return [GpoRemediator.EffectiveFileAccess]::Write($acl.GetSecurityDescriptorBinaryForm())
 }
 function Attribute-WriteState([string]$Dn,[string[]]$Required){
     try{
@@ -371,7 +372,7 @@ function Selection-Access($S,$Map){
         if(Test-Path -LiteralPath $branch){$paths+=@($branch);$children=@(Get-ChildItem -LiteralPath $branch -Recurse -Force -ErrorAction Stop|Select-Object -First 5001 -ExpandProperty FullName);$tooLarge=$children.Count -gt 5000;$paths+=$children}
         if(!$tooLarge){
             $fileState='ALLOWED'
-            foreach($path in $paths){if(!(Test-FileSystemModify $path)){$fileState='DENIED';break}}
+            foreach($path in $paths){if(!(Test-FileSystemWrite $path)){$fileState='DENIED';break}}
         }
     }catch{$fileState='UNKNOWN'}
     $checks+=@{id='sysvol-write';state=$fileState;code='SYSVOL_WRITE_ACCESS_DENIED';label='SYSVOL GPO write authority'}
@@ -449,7 +450,21 @@ function Preview($S,$Map,[bool]$RequireWriteAccess=$true){
     $contentMatches=Mapping-Matches $S.gpoId $Map $S;$linkMatches=$null -ne $existing -and $existing.enabled -and (!$S.firstLink -or $existing.order -eq 1);$desired=Mapping-Display $S.gpoId $Map $S $true
     return @{gpo=(Gpo-Choice $gpo);scope=$scope;previousValue=(Mapping-Display $S.gpoId $Map $S $false);desiredValue=$desired;noChange=($contentMatches -and $linkMatches);fingerprint=(Fingerprint $S.gpoId $scope.dn);scopeLinks=$raw;existingLink=$existing;refreshComputers=$computers;warnings=$warnings;impact=$impact;preflight=$preflight}
 }
-function Atomic-Text([string]$Path,[string]$Text,[Text.Encoding]$Encoding){$null=[IO.Directory]::CreateDirectory([IO.Path]::GetDirectoryName($Path));$temp=$Path+'.'+[guid]::NewGuid().ToString('N')+'.tmp';try{[IO.File]::WriteAllText($temp,$Text,$Encoding);if([IO.File]::Exists($Path)){[IO.File]::Replace($temp,$Path,[System.Management.Automation.Language.NullString]::Value)}else{[IO.File]::Move($temp,$Path)}}finally{if([IO.File]::Exists($temp)){[IO.File]::Delete($temp)}}}
+function Atomic-Text([string]$Path,[string]$Text,[Text.Encoding]$Encoding){
+    $null=[IO.Directory]::CreateDirectory([IO.Path]::GetDirectoryName($Path));$temp=$Path+'.'+[guid]::NewGuid().ToString('N')+'.tmp'
+    try{
+        [IO.File]::WriteAllText($temp,$Text,$Encoding)
+        try{if([IO.File]::Exists($Path)){[IO.File]::Replace($temp,$Path,[System.Management.Automation.Language.NullString]::Value)}else{[IO.File]::Move($temp,$Path)}}
+        catch [UnauthorizedAccessException]{
+            # Standard GPMC "Edit settings" SYSVOL ACLs grant RX, W and DC,
+            # but not DELETE on each existing file. ReplaceFile requires that
+            # extra right, so use a durable in-place write after the backup and
+            # manifest have already been committed.
+            $bytes=$Encoding.GetBytes($Text);$stream=[IO.File]::Open($Path,[IO.FileMode]::Create,[IO.FileAccess]::Write,[IO.FileShare]::None)
+            try{$stream.Write($bytes,0,$bytes.Length);$stream.Flush($true)}finally{$stream.Dispose()}
+        }
+    }finally{if([IO.File]::Exists($temp)){[IO.File]::Delete($temp)}}
+}
 function Assert-VersionSync([string]$Id){$ad=Gpo-Ad $Id;$gptPath=Join-Path (Gpo-Folder $Id) 'GPT.INI';$gpt=[IO.File]::ReadAllText($gptPath);$adVersion=[BitConverter]::ToUInt32([BitConverter]::GetBytes([int]$ad.versionNumber),0);$gptVersion=[uint32](Get-TemplateEntry $gpt 'General' 'Version');if($gptVersion -ne $adVersion){Fail 'REPLICATION_PENDING' 'AD and SYSVOL GPO versions differ. Wait for replication before applying.'};return @{ad=$ad;gptPath=$gptPath;gpt=$gpt;version=$adVersion}}
 function Bump-ComputerVersion([string]$Id,[ValidateSet('Security','Audit')][string]$Extension){
     $v=Assert-VersionSync $Id;$next=Get-NextComputerVersion ([uint32]$v.version)
