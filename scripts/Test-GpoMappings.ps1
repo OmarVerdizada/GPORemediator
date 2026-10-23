@@ -152,7 +152,10 @@ $content=Get-NormalizedGpoContentFingerprint $script:folder
 $manifest=@{phase='ROLLED_BACK';beforeContent=$content;beforeExtensions='security';backupId='fixture';directory=$script:folder}
 $plan=[pscustomobject]@{selection=[pscustomobject]@{gpoId='31b2f340-016d-11d2-945f-00c04fb984f9';scopeDn='DC=example,DC=local';refresh='None'};preview=[pscustomobject]@{scopeLinks='old links'}}
 function Run-Directory {param($Plan) return $script:folder}
-function Gpo-Ad {param($Id) return @{gPCMachineExtensionNames='security'}}
+function Gpo-Ad {param($Id) return @{gPCMachineExtensionNames='security';gPCUserExtensionNames=''}}
+Assert-Test (!(Snapshot-ExtensionsMatch @{beforeExtensions='security'} 'fixture' @{accountScope='Users'})) 'Legacy user rollback claimed an unrecorded user CSE baseline'
+Assert-Test (Snapshot-ExtensionsMatch @{beforeExtensions='security';beforeUserExtensions=''} 'fixture' @{accountScope='Users'}) 'Recorded empty user CSE baseline was rejected'
+Assert-Test (!(Snapshot-ExtensionsMatch @{beforeExtensions='security';beforeUserExtensions='user CSE'} 'fixture' @{accountScope='Users'})) 'Changed user CSE metadata passed rollback verification'
 function Scope-Links {param($Dn) return 'old links'}
 function Verification-Metadata {param($S) return @{versionsMatch=$true}}
 function Mapping-Display {param($Id,$Map,$S,$Desired) return 'restored'}

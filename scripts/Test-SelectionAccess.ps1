@@ -36,7 +36,11 @@ try{
  Set-FixtureAcl ([Security.AccessControl.FileSystemRights]::FullControl)
  Write-Output 'PASS native Windows effective file access: read-only, standard GPMC edit, durable write fallback, modify and deny-over-allow'
  $cfg=@{domainController='dc.example.local';domain='example.local'};$domainDn='DC=example,DC=local'
- $selection=@{gpoId='11111111-1111-1111-1111-111111111111';scopeDn='OU=Pilot,'+$domainDn};$mapping=@{scope='Computer'}
+ $selection=@{gpoId='11111111-1111-1111-1111-111111111111';scopeDn='OU=Pilot,'+$domainDn};$mapping=@{scope='Computer';handler='Registry'}
+ [IO.File]::WriteAllText((Join-Path $sandbox 'GPT.INI'),'[General]')
+ $machine=Join-Path $sandbox 'Machine';$null=New-Item -ItemType Directory -Path $machine
+ $unrelated=Join-Path $machine 'unrelated-policy.xml';[IO.File]::WriteAllText($unrelated,'unrelated')
+ $script:checkedPaths=@();$script:denyPath=$unrelated
  $script:existingLink=$null
  function Selected-Link {param($Dn,$Id) return $script:existingLink}
  $script:gpoAttributes=@('versionNumber','gPCMachineExtensionNames','gPCUserExtensionNames');$script:ouAttributes=@('gPLink');$script:directoryError=$false;$script:fileAllowed=$true;$script:fileError=$false
@@ -47,8 +51,12 @@ try{
   [pscustomobject]@{allowedAttributesEffective=$(if($Identity -like 'CN=*'){$script:gpoAttributes}else{$script:ouAttributes})}
  }
  function Gpo-Folder {param($Id) return $sandbox}
- function Test-FileSystemWrite {param($Path) if($script:fileError){throw 'Fixture ACL unavailable'};return $script:fileAllowed}
+ function Test-FileSystemWrite {param($Path) $script:checkedPaths+=@($Path);if($script:fileError){throw 'Fixture ACL unavailable'};return ($script:fileAllowed -and $Path -ine $script:denyPath)}
  Check (@((Assert-SelectionAccess $selection $mapping).checks|Where-Object{$_.state -eq 'ALLOWED'}).Count -eq 3) 'Allowed selection was blocked'
+ Check ($script:checkedPaths -notcontains $unrelated) 'Unrelated SYSVOL file was included in selected-target preflight'
+ $target=Join-Path $machine 'Registry.pol';[IO.File]::WriteAllText($target,'policy');$script:denyPath=$target
+ Reject {Assert-SelectionAccess $selection $mapping} 'SYSVOL_WRITE_ACCESS_DENIED'
+ $script:denyPath=$unrelated
  $script:gpoAttributes=@('gPCMachineExtensionNames');Reject {Assert-SelectionAccess $selection $mapping} 'GPO_EDIT_ACCESS_DENIED'
  $script:gpoAttributes=@('versionNumber','gPCMachineExtensionNames');$script:ouAttributes=@('description');Reject {Assert-SelectionAccess $selection $mapping} 'OU_LINK_ACCESS_DENIED'
  $script:existingLink=@{enabled=$true;order=3};$null=Assert-SelectionAccess $selection $mapping

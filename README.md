@@ -1,4 +1,6 @@
-# GPO Remediator 3.14.4
+# GPO Remediator 3.14.5
+
+3.14.5 checks write access only on the selected control's SYSVOL target and its parent directory, avoiding false denials from unrelated files in the same GPO. User-policy rollback verification now records and compares user CSE metadata. The preview and rollback inspection explicitly state that `Restore-GPO` rights are not proven by the ordinary Edit settings check. See [release notes](docs/RELEASE-3.14.5.md).
 
 3.14.4 accepts the standard SYSVOL rights created by GPMC **Edit settings** delegation (`Read & execute`, `Write`, and `Delete child`) without requiring per-file Modify/Delete. The publisher retains atomic replacement where available and uses a flushed in-place write after the durable backup/manifest when standard GPMC ACLs do not permit `ReplaceFile`. See [release notes](docs/RELEASE-3.14.4.md).
 

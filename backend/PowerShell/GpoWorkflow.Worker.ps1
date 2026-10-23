@@ -354,6 +354,26 @@ function Link-ChangeRequired($S,$Link){
     if($null -eq $Link){return $true}
     return (!$Link.enabled -or ([bool](Read-Field $S 'firstLink' $false) -and [int]$Link.order -ne 1))
 }
+function Policy-WritePaths($S,$Map){
+    $folder=Gpo-Folder $S.gpoId
+    $branch=if([string]$Map.scope -eq 'User'){'User'}else{'Machine'}
+    $target=switch([string]$Map.handler){
+        'SecurityTemplate' { Security-Path $S.gpoId }
+        'AdvancedAudit' { Audit-Path $S.gpoId }
+        {$_ -in @('Registry','RegistrySet')} { Join-Path $folder ($branch+'\Registry.pol') }
+        default { Fail 'GPO_HANDLER_UNSUPPORTED' 'The selected remediation handler has no known SYSVOL write target.' }
+    }
+    $paths=@((Join-Path $folder 'GPT.INI'))
+    if(!(Test-Path -LiteralPath $paths[0] -PathType Leaf)){Fail 'GPO_GPT_MISSING' 'The selected GPO has no GPT.INI on the writable DC.'}
+    $parent=Split-Path -Path $target -Parent
+    while(!(Test-Path -LiteralPath $parent -PathType Container)){
+        if($parent -ieq $folder -or !$parent.StartsWith($folder+'\',[StringComparison]::OrdinalIgnoreCase)){Fail 'SYSVOL_TARGET_INVALID' 'The selected policy target is outside the GPO folder.'}
+        $parent=Split-Path -Path $parent -Parent
+    }
+    if(Test-Path -LiteralPath $target){$paths+=@($target)}
+    $paths+=@($parent)
+    return @($paths|Select-Object -Unique)
+}
 function Selection-Access($S,$Map){
     $checks=@()
     $gpoDn='CN='+([guid]$S.gpoId).ToString('B').ToUpperInvariant()+',CN=Policies,CN=System,'+$domainDn
@@ -364,16 +384,8 @@ function Selection-Access($S,$Map){
     $checks+=@{id='link-write';state=$linkState;code='OU_LINK_ACCESS_DENIED';label='GPO link authority or unchanged link'}
     $fileState='UNKNOWN'
     try{
-        $folder=Gpo-Folder $S.gpoId
-        $branch=Join-Path $folder $(if([string]$Map.scope -eq 'User'){'User'}else{'Machine'})
-        $paths=@($folder)
-        $gpt=Join-Path $folder 'GPT.INI';if(Test-Path -LiteralPath $gpt){$paths+=@($gpt)}
-        $tooLarge=$false
-        if(Test-Path -LiteralPath $branch){$paths+=@($branch);$children=@(Get-ChildItem -LiteralPath $branch -Recurse -Force -ErrorAction Stop|Select-Object -First 5001 -ExpandProperty FullName);$tooLarge=$children.Count -gt 5000;$paths+=$children}
-        if(!$tooLarge){
-            $fileState='ALLOWED'
-            foreach($path in $paths){if(!(Test-FileSystemWrite $path)){$fileState='DENIED';break}}
-        }
+        $fileState='ALLOWED'
+        foreach($path in @(Policy-WritePaths $S $Map)){if(!(Test-FileSystemWrite $path)){$fileState='DENIED';break}}
     }catch{$fileState='UNKNOWN'}
     $checks+=@{id='sysvol-write';state=$fileState;code='SYSVOL_WRITE_ACCESS_DENIED';label='SYSVOL GPO write authority'}
     return @{checks=@($checks);executionUser=[Security.Principal.WindowsIdentity]::GetCurrent().Name}
@@ -433,7 +445,7 @@ function Preview($S,$Map,[bool]$RequireWriteAccess=$true){
     $endpointScope=[string](Read-Field $S 'endpointScopeDn' '')
     $computers=@(Refresh-Targets ([string]$S.refresh) ([string]$scope.dn) $endpointScope ([string]$Map.scope))
     $links=@();foreach($candidateScope in All-LinkScopes){if(Link $candidateScope.rawLinks $S.gpoId $candidateScope.dn){$links+=$candidateScope.dn}}
-    $preflight=Selection-Preflight $S $Map $access;$impact=Impact-Details $S $Map $gpo $scope $links;$warnings=@('Changing this GPO affects all of its existing links, not only the selected link.',('Existing links: '+$(if($links.Count){$links -join '; '}else{'none'})),'Security filtering, WMI filtering, inheritance and precedence are analyzed but are never silently changed.','gpupdate scheduling does not by itself prove effective endpoint compliance.','A full GPO backup is created before any policy write; rollback is blocked after external changes.')+@($Map.warnings)
+    $preflight=Selection-Preflight $S $Map $access;$impact=Impact-Details $S $Map $gpo $scope $links;$warnings=@('Changing this GPO affects all of its existing links, not only the selected link.',('Existing links: '+$(if($links.Count){$links -join '; '}else{'none'})),'Security filtering, WMI filtering, inheritance and precedence are analyzed but are never silently changed.','gpupdate scheduling does not by itself prove effective endpoint compliance.','A full GPO backup is created before any policy write; rollback is blocked after external changes.','Rollback uses Restore-GPO, which restores GPO ACLs. Edit settings access does not prove restore authority; pilot recovery with the delegated account or arrange administrator-assisted recovery.')+@($Map.warnings)
     if([string]$Map.handler -eq 'AdvancedAudit'){$warnings+='AUDIT_DEPENDENCY: Review control 2.3.2.1: SCENoApplyLegacyAuditPolicy=1 on the endpoint prevents legacy category policy overriding audit subcategories. This separate control is not silently changed.';$warnings+='AUDIT_FORMAT: Applying an audit control also normalizes legacy system audit CSV rows without changing their other numeric settings. The full GPO backup preserves the original file.'}
     foreach($c in @($impact.conflicts|Where-Object{$_.severity -eq 'HIGH'})){$warnings+=('High-impact conflict: '+$c.message)}
     if([string]$Map.scope -eq 'User' -and [int]$impact.affectedObjects.users -eq 0){$warnings+='TARGET_EMPTY: No enabled users were discovered under the selected user OU. Writing the GPO is not proof it will affect any user.'}
@@ -489,8 +501,15 @@ function Rollback-ExpectedFingerprint($Plan,$Manifest,[string]$Current){
     # Old releases did not save a post-restore fingerprint. Accept that baseline
     # only after comparing the full recorded snapshot, CSE and original links.
     $s=$Plan.selection
-    if((Get-NormalizedGpoContentFingerprint (Gpo-Folder $s.gpoId)) -ceq [string]$Manifest.beforeContent -and [string](Gpo-Ad $s.gpoId).gPCMachineExtensionNames -ceq [string]$Manifest.beforeExtensions -and (Scope-Links $s.scopeDn) -ceq [string]$Plan.preview.scopeLinks){return $Current}
+    if((Get-NormalizedGpoContentFingerprint (Gpo-Folder $s.gpoId)) -ceq [string]$Manifest.beforeContent -and (Snapshot-ExtensionsMatch $Manifest $s.gpoId $s) -and (Scope-Links $s.scopeDn) -ceq [string]$Plan.preview.scopeLinks){return $Current}
     return $null
+}
+function Snapshot-ExtensionsMatch($Manifest,[string]$Id,$Selection){
+    $ad=Gpo-Ad $Id
+    if([string]$ad.gPCMachineExtensionNames -cne [string]$Manifest.beforeExtensions){return $false}
+    $userBefore=Read-Field $Manifest 'beforeUserExtensions' $null
+    if($null -eq $userBefore){return [string](Read-Field $Selection 'accountScope' '') -ne 'Users'}
+    return [string]$ad.gPCUserExtensionNames -ceq [string]$userBefore
 }
 function Remote-GpoFolder([string]$Server,[string]$Id){return ('\\'+$Server+'\SYSVOL\'+$domain.DNSRoot+'\Policies\'+([guid]$Id).ToString('B').ToUpperInvariant())}
 function Verification-Metadata($S){
@@ -646,7 +665,7 @@ function Verify-Published($Plan,$Map,[bool]$CheckEndpoints=$false){
 function Verify-Rollback($Plan,$Map,$Manifest){
     $s=$Plan.selection
     $matches=(Get-NormalizedGpoContentFingerprint (Gpo-Folder $s.gpoId)) -ceq [string]$Manifest.beforeContent
-    $matches=$matches -and ([string](Gpo-Ad $s.gpoId).gPCMachineExtensionNames -ceq [string]$Manifest.beforeExtensions) -and ((Scope-Links $s.scopeDn) -ceq [string]$Plan.preview.scopeLinks)
+    $matches=$matches -and (Snapshot-ExtensionsMatch $Manifest $s.gpoId $s) -and ((Scope-Links $s.scopeDn) -ceq [string]$Plan.preview.scopeLinks)
     return @{restored=[bool]$matches;published=$false;linked=$false;effective='ROLLBACK_ENDPOINT_PENDING';verification=(Verification-Metadata $s);endpointChecks=@();currentValue=(Mapping-Display $s.gpoId $Map $s $false)}
 }
 function Filter-EndpointHosts([string[]]$Hosts){
@@ -700,7 +719,8 @@ switch($Operation){
             $fresh=Preview $s $map;if(!$fresh.preflight.ready){Fail 'ENVIRONMENT_NOT_READY' 'Required environment preflight checks must pass before Apply.'}
             if($fresh.fingerprint -cne $plan.preview.fingerprint -or (@($fresh.refreshComputers)-join '|') -cne (@($plan.preview.refreshComputers)-join '|')){Fail 'GPO_CHANGED' 'GPO, links or refresh targets changed after preview. Prepare a new plan.'}
             if([bool]$fresh.noChange){$v=Verify-Published $plan $map $true;$state=if($v.published -and $v.linked){'NO_CHANGE'}else{'VERIFY_MISMATCH'};return Result $state 'No policy write was required. Live content, link and AD/SYSVOL versions were checked; inspect the verification result before claiming publication.' $null $v @()}
-            $manifest=[ordered]@{plan=$plan;mappingId=[string]$map.id;mappingSource=[string]$map.source;approval=$Data.consent;backupId=$null;directory=$directory;preFingerprint=$fresh.fingerprint;postFingerprint=$null;phase='BACKUP_STARTED';beforeContent=(Get-NormalizedGpoContentFingerprint (Gpo-Folder $s.gpoId));beforeExtensions=[string](Gpo-Ad $s.gpoId).gPCMachineExtensionNames};Save-Manifest $manifest $directory
+            $beforeAd=Gpo-Ad $s.gpoId
+            $manifest=[ordered]@{plan=$plan;mappingId=[string]$map.id;mappingSource=[string]$map.source;approval=$Data.consent;backupId=$null;directory=$directory;preFingerprint=$fresh.fingerprint;postFingerprint=$null;phase='BACKUP_STARTED';beforeContent=(Get-NormalizedGpoContentFingerprint (Gpo-Folder $s.gpoId));beforeExtensions=[string]$beforeAd.gPCMachineExtensionNames;beforeUserExtensions=[string]$beforeAd.gPCUserExtensionNames};Save-Manifest $manifest $directory
             Emit-Stage 'BACKUP'
             $backup=Backup-GPO -Guid ([guid]$s.gpoId) -Path $directory -Domain $cfg.domain -Server $cfg.domainController -Comment ('GpoRemediator '+$plan.id)
             $manifest.backupId=$backup.Id.ToString();$manifest.phase='BACKED_UP';Save-Manifest $manifest $directory
@@ -737,7 +757,7 @@ switch($Operation){
         $manifest=Get-Content -LiteralPath (Join-Path $directory 'manifest.json') -Raw|ConvertFrom-Json
         if([string]$manifest.phase -in @('ROLLING_BACK','ROLLED_BACK','ROLLBACK_REVIEW_REQUIRED','ROLLBACK_DRIFT_DETECTED')){
             $contentMatches=(Get-NormalizedGpoContentFingerprint (Gpo-Folder $plan.selection.gpoId)) -ceq [string]$manifest.beforeContent
-            $extensionMatches=([string](Gpo-Ad $plan.selection.gpoId).gPCMachineExtensionNames -ceq [string]$manifest.beforeExtensions)
+            $extensionMatches=Snapshot-ExtensionsMatch $manifest $plan.selection.gpoId $plan.selection
             $linkMatches=((Scope-Links $plan.selection.scopeDn) -ceq [string]$plan.preview.scopeLinks)
             $rolledBack=$contentMatches -and $extensionMatches -and $linkMatches
             $v=@{published=$false;linked=$false;effective='ROLLBACK_ENDPOINT_PENDING';verification=(Verification-Metadata $plan.selection);endpointChecks=@();currentValue=(Mapping-Display $plan.selection.gpoId $map $plan.selection $false)}
@@ -793,7 +813,7 @@ switch($Operation){
         $drift=(!$expected -or $current -cne [string]$expected)
         $gpo=Get-GPO -Guid ([guid]$s.gpoId) -Domain $cfg.domain -Server $cfg.domainController
         $direct=Selected-Link $s.scopeDn $s.gpoId
-        return @{canRestore=(-not $drift);driftDetected=[bool]$drift;reason=$(if($drift){'ROLLBACK_CONFLICT'}else{'READY'});message=$(if($drift){'The live GPO or its link changed since Apply; automatic rollback must not overwrite the external change.'}else{'Live fingerprint matches the saved post-apply state. Recheck occurs under the write lock before any restore.'});gpoName=[string]$gpo.DisplayName;gpoId=[string]$s.gpoId;scopeDn=[string]$s.scopeDn;backupId=[string]$m.backupId;controlId=[string]$m.mappingId;beforeValue=[string]$plan.preview.previousValue;afterValue=[string]$plan.preview.desiredValue;beforeLink=$plan.preview.existingLink;currentLink=$direct;otherLinkedScopes=@($plan.preview.impact.existingLinkScopes);fullGpoRestore=$true;checkedAt=[DateTimeOffset]::UtcNow.ToString('O')}
+        return @{canRestore=(-not $drift);driftDetected=[bool]$drift;restorePermissionVerified=$false;reason=$(if($drift){'ROLLBACK_CONFLICT'}else{'READY'});message=$(if($drift){'The live GPO or its link changed since Apply; automatic rollback must not overwrite the external change.'}else{'Live fingerprint matches the saved post-apply state. Restore-GPO permission is not verified by this read-only check; Edit settings alone may be insufficient. Recheck occurs under the write lock before any restore.'});gpoName=[string]$gpo.DisplayName;gpoId=[string]$s.gpoId;scopeDn=[string]$s.scopeDn;backupId=[string]$m.backupId;controlId=[string]$m.mappingId;beforeValue=[string]$plan.preview.previousValue;afterValue=[string]$plan.preview.desiredValue;beforeLink=$plan.preview.existingLink;currentLink=$direct;otherLinkedScopes=@($plan.preview.impact.existingLinkScopes);fullGpoRestore=$true;checkedAt=[DateTimeOffset]::UtcNow.ToString('O')}
     }
     'gpoRollback'{
         $plan=$Data.plan;$map=$Data.mapping;$s=$plan.selection;$directory=Run-Directory $plan;if(!(Test-Path -LiteralPath (Join-Path $directory 'manifest.json'))){Fail 'ROLLBACK_NOT_AVAILABLE' 'No backup exists because this operation did not change the GPO.'};$manifest=Get-Content -LiteralPath (Join-Path $directory 'manifest.json') -Raw|ConvertFrom-Json;if(!$manifest.backupId){Fail 'ROLLBACK_BACKUP_INCOMPLETE' 'The operation manifest exists but no completed Backup-GPO ID was recorded. Verify current policy and inspect the operation directory; automatic rollback is unavailable.'};if(!$manifest.postFingerprint){Fail 'ROLLBACK_VERSION_UNKNOWN' 'A completed post-write fingerprint is missing. Recover the recorded Backup-GPO snapshot manually after inspecting AD/SYSVOL.'};$lock=$null
@@ -823,7 +843,7 @@ switch($Operation){
             else{Set-GPLink -Guid ([guid]$s.gpoId) -Target $s.scopeDn -Domain $cfg.domain -Server $cfg.domainController -Order ([int]$before.order) -LinkEnabled $(if($before.enabled){'Yes'}else{'No'}) -Enforced $(if($before.enforced){'Yes'}else{'No'})|Out-Null}
             Emit-Stage 'RESTORE_CHECK'
             $matches=(Get-NormalizedGpoContentFingerprint (Gpo-Folder $s.gpoId)) -ceq $manifest.beforeContent
-            $matches=$matches -and ([string](Gpo-Ad $s.gpoId).gPCMachineExtensionNames -ceq [string]$manifest.beforeExtensions) -and ((Scope-Links $s.scopeDn) -ceq [string]$plan.preview.scopeLinks)
+            $matches=$matches -and (Snapshot-ExtensionsMatch $manifest $s.gpoId $s) -and ((Scope-Links $s.scopeDn) -ceq [string]$plan.preview.scopeLinks)
             $manifest.phase=if($matches){'ROLLED_BACK'}else{'ROLLBACK_REVIEW_REQUIRED'}
             if($matches){$manifest | Add-Member -NotePropertyName rollbackFingerprint -NotePropertyValue (Fingerprint $s.gpoId $s.scopeDn) -Force}
             Save-Manifest $manifest $directory
