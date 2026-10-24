@@ -2,6 +2,7 @@
 (()=>{'use strict';
 function defaults(m){return m.items.map(x=>m.handler==='AdvancedAudit'?[String(x.mask)]:m.allowValueOverride?[String(m.suggested??0)]:(x.value||[]).map(String));}
 function effective(m,s){
+ if(m.domainPolicySensitive&&s?.accountScope==='LocalComputers')m={...m,scope:'Computer',domainPolicySensitive:false,warnings:[...(m.warnings||[]).filter(w=>!w.startsWith('Domain user password/lockout policy must use')),'LOCAL_ACCOUNTS_ONLY: This OU policy affects local accounts on member computers. Domain users require domain-root policy or fine-grained password policies for users/global groups.']};
  if(!s?.itemValues)return m;
  if(m.automation!=='Automated'||m.handler==='Manual'||m.requiresInput||s.itemValues.length!==m.items.length)throw Error('Invalid custom policy values');
  const items=m.items.map((item,i)=>{

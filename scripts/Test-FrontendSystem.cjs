@@ -51,7 +51,7 @@ assert.ok(!/--(?:accent|cc-|ink|muted|green)\b/.test(css));
 for(const s of ['prefers-reduced-motion','data-large-text','data-contrast','data-gr-theme=dark','.ds-field-error','.ds-toast'])assert.ok(css.includes(s));
 const controlView=fs.readFileSync(path.join(source,'control-view.js'),'utf8');
 for(const marker of ['endpointScopeDn','verificationUser','User Configuration','/target:user'])assert.ok(controlView.includes(marker),`Missing user-policy UI marker ${marker}`);
-assert.ok(controlView.includes("${!st?.domainPolicySensitive?'':`<label class=\"refresh-choice"),'PDC refresh must be conditionally limited to domain-account controls');
+// Domain-vs-local PDC/Scope behavior is exercised by Test-ControlTargeting.cjs.
 require('./Test-GpoScopePicker.cjs');
 console.log('Frontend system: PASS (honest evidence, status tones, escaping, grouping, audit mismatch, breadcrumb, packaged assets and canonical tokens).');
 // Publication alone and rollback must not become verification on the map.

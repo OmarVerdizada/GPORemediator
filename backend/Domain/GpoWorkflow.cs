@@ -22,7 +22,9 @@ public record GpoEnvironmentStatus(string Domain, string DomainController, strin
     bool Ready, GpoHealthCheck[] Checks, string CheckedAt);
 public record GpoConflictInfo(string Severity, string Code, string Message, string? GpoId = null, string? GpoName = null, string? Scope = null);
 public record GpoAffectedObjects(int Computers, int Servers, int Workstations, int Disabled, string[] SampleHosts, bool Truncated,
-    int Users = 0, string[]? SampleUsers = null);
+    int Users = 0, string[]? SampleUsers = null,
+    [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] string? TargetKind = null,
+    [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] string? ScopeDn = null);
 public record GpoImpactDetails(string Inheritance, bool BlockInheritance, GpoConflictInfo[] Conflicts,
     GpoAffectedObjects AffectedObjects, string[] ExistingLinkScopes, string[] SecurityFiltering, string? WmiFilter);
 public record GpoDcVersionStatus(string DomainController, string? AdVersion, string? GptVersion, bool Reachable, bool VersionsMatch, string Message);

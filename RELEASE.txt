@@ -1,6 +1,6 @@
-GPO Remediator 3.5.1 - graphite premium workspace
+GPO Remediator 3.14.7 - backup access and remediation workflow repair
 
-See RELEASE-NOTES-PREMIUM-3.5.1.md for UI changes and validation.
+See docs/RELEASE-3.14.7.md for changes and validation boundaries.
 The self-contained backend/runtime archive is rebuilt from current source.
 The frontend ships offline with one compiled stylesheet and local SVG icons.
 No credentials are persisted in browser storage or configuration files.

@@ -235,7 +235,7 @@ function Validate-Selection($S,$Map){
     if([string]$Map.scope -ne 'User' -and $status -eq 'ComputerSettingsDisabled'){Fail 'COMPUTER_POLICY_DISABLED' 'Computer settings are disabled in this GPO.'}
     if([string]$Map.scope -eq 'Computer' -and [string]$S.refresh -eq 'Pdc'){Fail 'PDC_REFRESH_SCOPE_INVALID' 'This computer policy targets the computer OU, not the PDC. Use scoped computer refresh.'}
     if([string]$Map.scope -eq 'User'){
-      if($scope.kind -ne 'OU'){Fail 'USER_OU_REQUIRED' 'User policy must target a selected user OU; choose a narrower user container.'}
+      if($scope.kind -notin @('OU','Domain')){Fail 'USER_OU_REQUIRED' 'Choose a discovered user OU or domain.'}
       if([string]$S.refresh -eq 'Pdc'){Fail 'USER_REFRESH_TARGET_INVALID' 'User policy is processed in a user session, not on the PDC. Choose an endpoint OU or wait for the normal policy cycle.'}
       if([string]$S.refresh -eq 'Scope'){
         $endpointDn=[string](Read-Field $S 'endpointScopeDn' '')
@@ -249,7 +249,8 @@ function Validate-Selection($S,$Map){
         }
       }
     }elseif((Read-Field $S 'endpointScopeDn' $null) -or (Read-Field $S 'verificationUser' $null)){Fail 'USER_TARGET_NOT_ALLOWED' 'Endpoint OU and verification user are only valid for user-scoped policy.'}
-    if([string]$Map.scope -eq 'Computer' -and $scope.kind -ne 'OU'){Fail 'COMPUTER_OU_REQUIRED' 'Choose a computer OU from the discovered directory. The domain root is reserved for account policies.'}
+    if([string]$Map.scope -eq 'Computer' -and $scope.kind -notin @('OU','Domain')){Fail 'COMPUTER_OU_REQUIRED' 'Choose a discovered computer OU or domain.'}
+    if([string](Read-Field $S 'accountScope' '') -eq 'LocalComputers' -and [string]$Map.id -match '^1\.[12]\.' -and $scope.kind -ne 'OU'){Fail 'LOCAL_ACCOUNT_OU_REQUIRED' 'Local account policy must target a computer OU.'}
     if([bool]$Map.domainPolicySensitive){
       if($scope.kind -ne 'Domain'){Fail 'ACCOUNT_SCOPE_MISMATCH' 'Domain password and lockout policy requires the domain root.'}
       if(![bool](Read-Field $S 'firstLink' $false)){Fail 'DOMAIN_POLICY_PRIORITY_REQUIRED' 'Domain password/lockout policy must be enabled at link order 1 on the domain root.'}
@@ -266,6 +267,36 @@ function Validate-Selection($S,$Map){
       if($duration -and $reset -and [int]$reset -gt [int]$duration){Fail 'LOCKOUT_INTERVAL_CONFLICT' 'Reset lockout counter interval cannot exceed lockout duration.'}
     }
 }
+function Backup-AclIsUnsafe($Acl){
+    # FullControl/Modify include READ bits and must not be used as an overlap
+    # mask: broad read-only grants are valid, broad mutation grants are not.
+    $mask=[int64]([Security.AccessControl.FileSystemRights]::Write -bor [Security.AccessControl.FileSystemRights]::Delete -bor [Security.AccessControl.FileSystemRights]::DeleteSubdirectoriesAndFiles -bor [Security.AccessControl.FileSystemRights]::ChangePermissions -bor [Security.AccessControl.FileSystemRights]::TakeOwnership)
+    foreach($rule in @($Acl.Access)){
+        if([string]$rule.AccessControlType -ne 'Allow'){continue}
+        if(([int]$rule.PropagationFlags -band [int][Security.AccessControl.PropagationFlags]::InheritOnly) -ne 0){continue}
+        $sid='';try{$sid=[string]$rule.IdentityReference.Translate([Security.Principal.SecurityIdentifier]).Value}catch{}
+        $broad=$sid -in @('S-1-1-0','S-1-5-11','S-1-5-32-545') -or $sid -match '^S-1-5-21-\d+-\d+-\d+-513$'
+        if($broad -and (([int64]$rule.FileSystemRights -band $mask) -ne 0)){return $true}
+    }
+    return $false
+}
+function Test-BackupRepository([string]$Root){
+    $root=[IO.Path]::GetFullPath($Root)
+    if($root -notmatch '^[A-Za-z]:\\'){Fail 'BACKUP_PATH_INVALID' 'Backup path must be a local drive path on the selected DC.'}
+    $work=Join-Path $root 'GpoWorkflow'
+    $null=[IO.Directory]::CreateDirectory($work)
+    foreach($path in @($root,$work)){
+        if(((Get-Item -LiteralPath $path -Force).Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0){Fail 'BACKUP_PATH_INVALID' 'Backup repository cannot use junctions or symbolic links.'}
+    }
+    $probe=Join-Path $work ('.write-probe-'+[guid]::NewGuid().ToString('N'))
+    try{
+        $null=[IO.Directory]::CreateDirectory($probe)
+        $file=Join-Path $probe 'probe.tmp'
+        [IO.File]::WriteAllText($file,'probe')
+        [IO.File]::Delete($file)
+    }finally{if([IO.Directory]::Exists($probe)){[IO.Directory]::Delete($probe,$false)}}
+    return $work
+}
 function Environment-Status {
     $checks=New-Object 'System.Collections.Generic.List[object]'
     function Add-Check([string]$Id,[string]$Label,[string]$State,[string]$Message,[bool]$Required=$true){$checks.Add([pscustomobject]@{id=$Id;label=$Label;state=$State;message=$Message;required=$Required})|Out-Null}
@@ -275,23 +306,15 @@ function Environment-Status {
     try{$resolved=@(Resolve-DnsName -Name $cfg.domainController -Type A -ErrorAction Stop);Add-Check 'dns' 'DNS resolution' 'PASS' (($resolved|Where-Object IPAddress|Select-Object -ExpandProperty IPAddress)-join ', ')}catch{Add-Check 'dns' 'DNS resolution' 'FAIL' 'Writable DC name could not be resolved.'}
     try{$null=Get-ADDomain -Identity $cfg.domain -Server $cfg.domainController -ErrorAction Stop;Add-Check 'ldap' 'Active Directory / LDAP' 'PASS' 'Domain query succeeded on the selected DC.'}catch{Add-Check 'ldap' 'Active Directory / LDAP' 'FAIL' 'Domain query failed on the selected DC.'}
     try{$policies=Sysvol-Policies;Add-Check 'sysvol' 'SYSVOL' 'PASS' ('Local SYSVOL Policies directory is accessible: '+$policies)}catch{Add-Check 'sysvol' 'SYSVOL' 'FAIL' ('Local SYSVOL check failed for '+[Security.Principal.WindowsIdentity]::GetCurrent().Name+': '+$_.Exception.Message)}
-    try{$root=[IO.Path]::GetFullPath([string]$cfg.backupPath);if($root -match '^[A-Za-z]:\\'){if(!(Test-Path -LiteralPath $root)){New-Item -ItemType Directory -Path $root -Force|Out-Null};$probe=Join-Path $root ('.write-probe-'+[guid]::NewGuid().ToString('N'));[IO.File]::WriteAllText($probe,'probe');Remove-Item -LiteralPath $probe -Force;Add-Check 'backup' 'Backup repository' 'PASS' $root}else{Add-Check 'backup' 'Backup repository' 'FAIL' 'Backup path must be a local drive path on the selected DC.'}}catch{Add-Check 'backup' 'Backup repository' 'FAIL' 'Backup directory is not writable by the execution identity.'}
+    try{$work=Test-BackupRepository ([string]$cfg.backupPath);Add-Check 'backup' 'Backup repository' 'PASS' ('Execution workspace is writable on '+$dc.HostName+': '+$work)}catch{Add-Check 'backup' 'Backup repository' 'FAIL' ('Cannot create/delete backup workspace files on '+$dc.HostName+' as '+[Security.Principal.WindowsIdentity]::GetCurrent().Name+'. Check Modify and inheritance on '+[string]$cfg.backupPath+' and its GpoWorkflow child. Upgrade the complete Control Panel/launcher folder to migrate old private backup ACLs, then reconnect.')}
     try{
       $root=[IO.Path]::GetFullPath([string]$cfg.backupPath)
       $acl=Get-Acl -LiteralPath $root -ErrorAction Stop
-      $mask=[int64]([Security.AccessControl.FileSystemRights]::Write -bor [Security.AccessControl.FileSystemRights]::Modify -bor [Security.AccessControl.FileSystemRights]::FullControl -bor [Security.AccessControl.FileSystemRights]::ChangePermissions)
-      $weak=@($acl.Access|Where-Object{
-        if([string]$_.AccessControlType -ne 'Allow'){return $false}
-        $principal=[string]$_.IdentityReference
-        $sid='';try{$sid=[string]$_.IdentityReference.Translate([Security.Principal.SecurityIdentifier]).Value}catch{}
-        $broad=$sid -in @('S-1-1-0','S-1-5-11','S-1-5-32-545') -or $principal -match '(?i)\\Domain Users$'
-        return $broad -and (([int64]$_.FileSystemRights -band $mask) -ne 0)
-      })
-      if($weak.Count){Add-Check 'backup-acl' 'Backup repository ACL' 'FAIL' 'Broad user groups have write/modify permissions on the GPO backup directory. Remove unsafe ACEs before Apply.'}
+      if(Backup-AclIsUnsafe $acl){Add-Check 'backup-acl' 'Backup repository ACL' 'FAIL' 'Broad user groups have write/modify permissions on the GPO backup directory. Remove unsafe ACEs before Apply.'}
       else{Add-Check 'backup-acl' 'Backup repository ACL' 'PASS' 'No broad user group has write/modify permissions on the backup root.'}
-    }catch{Add-Check 'backup-acl' 'Backup repository ACL' 'FAIL' 'Could not establish protected backup directory ACL.'}
+    }catch{Add-Check 'backup-acl' 'Backup repository ACL' 'FAIL' ('Cannot read backup ACL on '+$dc.HostName+' as '+[Security.Principal.WindowsIdentity]::GetCurrent().Name+'. Check Read permissions and Modify delegation on '+[string]$cfg.backupPath+'.')}
 
-    try{$backupRoot=[IO.Path]::GetFullPath([string]$cfg.backupPath);$drive=Get-PSDrive -Name $backupRoot.Substring(0,1) -PSProvider FileSystem -ErrorAction Stop;$free=[long]$drive.Free;if($free -le 0){Add-Check 'disk' 'Backup volume free space' 'WARN' 'Backup drive free space could not be established.' $false}elseif($free -lt 2GB){Add-Check 'disk' 'Backup volume free space' 'WARN' ('Only '+[math]::Round($free/1GB,2)+' GB free; review backup capacity.') $false}else{Add-Check 'disk' 'Backup volume free space' 'PASS' ([math]::Round($free/1GB,2).ToString()+' GB free on backup volume.') $false}}catch{Add-Check 'disk' 'Backup volume free space' 'WARN' 'Could not inspect the local backup disk.' $false}
+    try{$backupRoot=[IO.Path]::GetFullPath([string]$cfg.backupPath);$drive=[IO.DriveInfo]::new([IO.Path]::GetPathRoot($backupRoot));$free=[long]$drive.AvailableFreeSpace;if($free -le 0){Add-Check 'disk' 'Backup volume free space' 'WARN' 'Backup drive free space could not be established.' $false}elseif($free -lt 2GB){Add-Check 'disk' 'Backup volume free space' 'WARN' ('Only '+[math]::Round($free/1GB,2)+' GB free; review backup capacity.') $false}else{Add-Check 'disk' 'Backup volume free space' 'PASS' ([math]::Round($free/1GB,2).ToString()+' GB free on backup volume.') $false}}catch{Add-Check 'disk' 'Backup volume free space' 'WARN' 'Could not inspect the local backup disk.' $false}
     try{$bad=@(Get-ADReplicationPartnerMetadata -Target $env:COMPUTERNAME -Scope Server -ErrorAction Stop|Where-Object{$_.LastReplicationResult -ne 0});if($bad.Count){Add-Check 'replication' 'AD replication' 'WARN' ($bad.Count.ToString()+' replication partner(s) report a non-zero last result.') $false}else{Add-Check 'replication' 'AD replication' 'PASS' 'Local DC replication metadata reports no failed last result.' $false}}catch{Add-Check 'replication' 'AD replication' 'WARN' 'Replication metadata could not be read; Apply will still verify AD/SYSVOL versions for the selected GPO.' $false}
     $ready=@($checks|Where-Object{$_.required -and $_.state -eq 'FAIL'}).Count -eq 0
     return @{domain=$domain.DNSRoot;domainController=$dc.HostName;executionUser=[Security.Principal.WindowsIdentity]::GetCurrent().Name;ready=$ready;checks=$checks.ToArray();checkedAt=[DateTimeOffset]::UtcNow.ToString('O')}
@@ -704,13 +727,34 @@ function Result([string]$State,[string]$Message,$Manifest,$V,$Refresh){
     return @{state=$State;message=$Message;backupId=$backupId;backupDirectory=$backupDirectory;postFingerprint=$postFingerprint;gpoPublished=[bool](Read-Field $V 'published' $false);linkVerified=[bool](Read-Field $V 'linked' $false);refreshResults=@($Refresh);effectiveStatus=[string](Read-Field $V 'effective' 'UNKNOWN');verification=$verification;endpointChecks=$endpointChecks;currentValue=Read-Field $V 'currentValue' $null}
 }
 
-function Emit-Stage([string]$Name){if([bool](Read-Field $cfg 'emitProgress' $false)){Write-Output ([pscustomobject]@{gpoStage=$Name})}}
+function Operation-Failure($Record,[string]$Stage){
+    $message=[string]$Record.Exception.Message
+    if($message -match '^([A-Z][A-Z0-9_]+)\|(.+)$'){return @{code=$Matches[1];message=$Matches[2];stage=$Stage}}
+    $denied=$Record.CategoryInfo.Category -eq 'PermissionDenied' -or $message -match '(?i)access.*denied|unauthorized|0x80070005'
+    $code=if($denied){'GPO_NATIVE_ACCESS_DENIED'}else{'GPO_NATIVE_FAILURE'}
+    $guidance=switch -Regex ($Stage){
+        '^BACKUP' {'Check Modify access on the backup repository on the selected DC for the execution account, including GpoWorkflow and existing child files.';break}
+        '^WRITING' {'Check Edit settings on the selected GPO, SYSVOL policy file write access, and AD version/CSE attribute write access.';break}
+        '^LINK' {'Check Link GPOs delegation on the selected OU/domain.';break}
+        '^RESTOR' {'Check Restore-GPO permissions and the retained backup. Verify live state before retrying recovery.';break}
+        default {'Inspect the selected GPO, target link and DC connectivity. Use Verify before retrying a write.'}
+    }
+    # Product-owned context only: no raw exception text, data values or credentials.
+    $reason=([string]$Record.CategoryInfo.Reason) -replace '[^A-Za-z0-9_.]',''
+    $command=([string](Read-Field $Record.InvocationInfo.MyCommand 'Name' 'native operation')) -replace '[^A-Za-z0-9_.-]',''
+    $line=[int]$Record.InvocationInfo.ScriptLineNumber
+    return @{code=$code;stage=$Stage;message=('Stage '+$Stage+' failed ('+$reason+', '+$command+', worker line '+$line+'). '+$guidance)}
+}
+function Emit-Stage([string]$Name){$script:workerStage=$Name;if([bool](Read-Field $cfg 'emitProgress' $false)){Write-Output ([pscustomobject]@{gpoStage=$Name})}}
+$script:workerStage='VALIDATING'
+try {
 switch($Operation){
     'gpoReadiness'{return Environment-Status}
     'gpoInventory'{$gpos=@(Get-GPO -All -Domain $cfg.domain -Server $cfg.domainController|Sort-Object DisplayName|ForEach-Object{Gpo-Choice $_});if($gpos.Count -gt 5000){Fail 'DIRECTORY_TOO_LARGE' 'More than 5000 GPOs exist. Narrow the configured domain.'};return @{domain=$domain.DNSRoot;domainController=$dc.HostName;executionUser=[Security.Principal.WindowsIdentity]::GetCurrent().Name;gpos=$gpos;scopes=@(Scopes)}}
     'gpoPreview'{if([bool](Read-Field $Data 'accessOnly' $false)){$access=Assert-SelectionAccess $Data.selection $Data.mapping;return @{authorized=$true;executionUser=$access.executionUser}};return Preview $Data.selection $Data.mapping ([bool](Read-Field $Data 'requireWriteAccess' $true))}
     'gpoApply'{
-        $plan=$Data.plan;$map=$Data.mapping;$s=$plan.selection;Validate-Selection $s $map;$null=Assert-SelectionAccess $s $map;$directory=Run-Directory $plan;$null=New-Item -ItemType Directory -Path $directory -Force;$lockRoot=Split-Path $directory -Parent;$lock=$null
+        Emit-Stage 'PREFLIGHT'
+        $plan=$Data.plan;$map=$Data.mapping;$s=$plan.selection;Validate-Selection $s $map;$null=Assert-SelectionAccess $s $map;Emit-Stage 'BACKUP_DIRECTORY';$directory=Run-Directory $plan;$null=New-Item -ItemType Directory -Path $directory -Force;$lockRoot=Split-Path $directory -Parent;$lock=$null
         try{$lock=[IO.File]::Open((Join-Path $lockRoot (([guid]$s.gpoId).ToString()+'.lock')),[IO.FileMode]::OpenOrCreate,[IO.FileAccess]::ReadWrite,[IO.FileShare]::None)}catch{Fail 'GPO_BUSY' 'Another operation is writing this GPO.'}
         $manifest=$null
         try{
@@ -727,6 +771,7 @@ switch($Operation){
             if((Fingerprint $s.gpoId $s.scopeDn) -cne $plan.preview.fingerprint){Fail 'GPO_CHANGED' 'GPO changed during backup; no policy write started.'}
             Emit-Stage 'WRITING'
             $manifest.phase='WRITING';Save-Manifest $manifest $directory;$null=Write-Mapping $plan $map
+            Emit-Stage 'LINKING'
             if(Link-ChangeRequired $s $fresh.existingLink){
             if($null -eq $fresh.existingLink){$p=@{Guid=[guid]$s.gpoId;Target=$s.scopeDn;Domain=$cfg.domain;Server=$cfg.domainController;LinkEnabled='Yes'};if($s.firstLink){$p.Order=1};New-GPLink @p|Out-Null}else{$p=@{Guid=[guid]$s.gpoId;Target=$s.scopeDn;Domain=$cfg.domain;Server=$cfg.domainController;LinkEnabled='Yes'};if($s.firstLink){$p.Order=1};Set-GPLink @p|Out-Null}
             }
@@ -736,11 +781,13 @@ switch($Operation){
             # intentionally separate operator decisions so the change result is visible first.
             $state=if(!$v.published -or !$v.linked){'VERIFY_MISMATCH'}else{'PUBLISHED'};return Result $state 'GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.' $manifest $v @()
         }catch{
+            $failure=Operation-Failure $_ $script:workerStage
             if($manifest){
+                $manifest['failure']=$failure
                 $preWrite=([string]$manifest.phase -in @('BACKUP_STARTED','BACKED_UP'))
                 $manifest.phase=if($preWrite){'FAILED_SAFE'}else{'REVIEW_REQUIRED'};Save-Manifest $manifest $directory
                 $message=if($preWrite){'Apply stopped before the policy write began. The backup/manifest were retained and no policy change should be assumed.'}else{'Operation did not finish after the write phase began. The full Backup-GPO snapshot and manifest are on the selected DC. Use Verify; partial writes require administrator review.'}
-                return Result $manifest.phase $message $manifest @{published=$false;linked=$false;effective='UNKNOWN';currentValue=$null} @()
+                return Result $manifest.phase ($message+' '+$failure.message) $manifest @{published=$false;linked=$false;effective='UNKNOWN';currentValue=$null} @()
             }
             throw
         }finally{if($lock){$lock.Dispose()}}
@@ -855,4 +902,8 @@ switch($Operation){
         }finally{if($lock){$lock.Dispose()}}
     }
     default{Fail 'OPERATION_DENIED' 'Unknown GPO operation.'}
+}
+} catch {
+    $failure=Operation-Failure $_ $script:workerStage
+    Fail $failure.code $failure.message
 }

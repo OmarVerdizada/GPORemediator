@@ -296,9 +296,15 @@ const server=http.createServer(async(req,res)=>{
   await page.locator('[data-gpo="11111111-1111-1111-1111-111111111111"]').click();
   assert.equal(await page.locator('.target-access-error').count(),0);assert.equal(await page.locator('#gpo-selection>.primary-action').isDisabled(),false);
   await page.locator('[data-scope-open="scopeDn"]').click();
-  assert.ok((await page.locator('.visual-scope-head p').textContent()).includes('All discovered'));
+  assert.ok((await page.locator('.visual-scope-head p').textContent()).includes('Select a domain or OU'));
   assert.ok(await page.locator('.visual-scope-item:has-text("Endpoints")').count()>0);
-  assert.equal(await page.locator('[data-scope-choose^="OU="]').count(),0,'Domain control allowed an OU target');
+  assert.equal(await page.locator('[data-scope-choose^="OU="]').count(),2,'Local account OU targets are missing');
+  await page.locator('[data-scope-choose="OU=Endpoints,DC=test,DC=local"]').click();
+  assert.equal(await page.locator('#gpo-selection input[name=refresh][value=Pdc]').count(),0);
+  await page.locator('.refresh-choice:has(input[value=Scope])').click();
+  await page.locator('#gpo-selection>.primary-action').click();await page.waitForFunction(()=>!!document.querySelector('.plan-card'));
+  assert.equal(previewSelections.at(-1).accountScope,'LocalComputers');assert.equal(previewSelections.at(-1).scopeDn,'OU=Endpoints,DC=test,DC=local');assert.equal(previewSelections.at(-1).refresh,'Scope');
+  await page.locator('[data-scope-open="scopeDn"]').click();
   await page.locator('[data-scope-choose="DC=test,DC=local"]').click();
   await page.locator('.refresh-choice:has(input[value=Pdc])').click();
   await page.screenshot({path:path.join(screens,'domain-account-targeting.png'),fullPage:true});
@@ -308,7 +314,7 @@ const server=http.createServer(async(req,res)=>{
   await page.goto(`http://127.0.0.1:${server.address().port}/#/benchmark`);
   await page.locator('#catalog-search').fill('2.3.1.1');await page.locator('[data-rule="2.3.1.1"]').first().click();await page.locator('[data-tab=remediation]').click();
   await page.locator('[data-gpo-toggle]').click();await page.locator('[data-gpo="11111111-1111-1111-1111-111111111111"]').click();
-  await page.locator('[data-scope-open="scopeDn"]').click();assert.equal(await page.locator('[data-scope-choose="DC=test,DC=local"]').count(),0,'Computer control allowed the domain root');
+  await page.locator('[data-scope-open="scopeDn"]').click();assert.equal(await page.locator('[data-scope-choose="DC=test,DC=local"]').count(),1,'Computer domain target missing');
   await page.locator('[data-scope-choose="OU=Endpoints,DC=test,DC=local"]').click();
   assert.equal(await page.locator('#gpo-selection input[value=Pdc]').count(),0);assert.equal(await page.locator('#gpo-selection input[value=Scope]').count(),1);
   await page.screenshot({path:path.join(screens,'computer-ou-targeting.png'),fullPage:true});
@@ -332,6 +338,23 @@ const server=http.createServer(async(req,res)=>{
   }
   await page.screenshot({path:path.join(screens,'target-access-guidance.png'),fullPage:true});
   previewDenied=null;await page.locator('#gpo-selection>.primary-action').click();await page.waitForFunction(()=>!!document.querySelector('.plan-card'));assert.equal(await page.locator('.target-access-error').count(),0);
+  // A delayed probe on the SAME target cannot delete a newer successful plan.
+  accessDenied='OU_LINK_ACCESS_DENIED';accessDelay=800;
+  await page.locator('[data-gpo-toggle]').click();await page.locator('[data-gpo="11111111-1111-1111-1111-111111111111"]').click();
+  await page.waitForRequest(r=>new URL(r.url()).pathname==='/api/gpo/target-access');
+  await page.locator('#gpo-selection>.primary-action').click();await page.waitForFunction(()=>!!document.querySelector('.plan-card'));
+  await page.waitForTimeout(900);assert.equal(await page.locator('.plan-card').count(),1,'Delayed access probe deleted the plan');
+  accessDenied=null;accessDelay=0;
+  // The same selection/submit chain must work for audit and organization-input controls.
+  for(const id of ['17.1.1','2.3.7.4']){
+   await page.goto(`http://127.0.0.1:${server.address().port}/#/benchmark`);
+   await page.locator('#catalog-search').fill(id);await page.locator(`[data-rule="${id}"]`).first().click();await page.locator('[data-tab=remediation]').click();
+   await page.locator('[data-gpo-toggle]').click();await page.locator('[data-gpo="11111111-1111-1111-1111-111111111111"]').click();
+   await page.locator('[data-scope-open="scopeDn"]').click();await page.locator('[data-scope-choose="OU=Endpoints,DC=test,DC=local"]').click();
+   if(id==='2.3.7.4')await page.locator('[name=customValue]').fill('Authorized use only');
+   await page.locator('#gpo-selection>.primary-action').click();await page.waitForFunction(()=>!!document.querySelector('.plan-card'));
+   assert.equal(previewSelections.at(-1).setting,id);assert.equal(previewSelections.at(-1).scopeDn,'OU=Endpoints,DC=test,DC=local');
+  }
   assert.deepEqual(errors,[]);
   console.log('Recovery UI: PASS (desktop/mobile, recovery refresh, user OU/endpoint OU/verification identity targeting, and user PDC exclusion).');
  }finally{await browser.close();server.close();}

@@ -144,7 +144,7 @@ $script:targetCount=2
 Write-Output 'PASS refresh options: None / Domain-Pdc / Scope, host allowlist and 5,000-host bound'
 
 # Execute the actual refresh branch after rollback, including both-policy refresh.
-$switchAst=$ast.EndBlock.Statements|Where-Object{$_ -is [Management.Automation.Language.SwitchStatementAst]}|Select-Object -Last 1
+$switchAst=$ast.FindAll({param($n)$n -is [Management.Automation.Language.SwitchStatementAst] -and $n.Condition.Extent.Text -eq '$Operation'},$true)|Select-Object -Last 1
 $refreshBlock=$switchAst.Clauses|Where-Object{$_.Item1.Extent.Text -eq "'gpoRefresh'"}|ForEach-Object{$_.Item2}
 $script:folder=Join-Path $sandbox 'rollback';$null=New-Item -ItemType Directory -Path $script:folder
 [IO.File]::WriteAllText((Join-Path $script:folder 'policy.txt'),'restored snapshot')

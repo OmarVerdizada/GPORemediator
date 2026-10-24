@@ -1,6 +1,6 @@
-# GPO Remediator 3.14.6
+# GPO Remediator 3.14.7
 
-3.14.6 preserves the administrator-managed ACL on the delegated backup repository when the launcher starts or restarts. Other application state remains locked to the launcher identity, SYSTEM, and local Administrators. See [release notes](docs/RELEASE-3.14.6.md).
+3.14.7 fixes backup ACL resets from the Control Panel and migrates legacy private backup children so root delegation can reach them. Account controls support local computer accounts in an OU and domain accounts at the domain root. Delayed target-access responses no longer discard a newer plan; native failures include the failed operation stage. See [release notes](docs/RELEASE-3.14.7.md).
 
 3.14.4 accepts the standard SYSVOL rights created by GPMC **Edit settings** delegation (`Read & execute`, `Write`, and `Delete child`) without requiring per-file Modify/Delete. The publisher retains atomic replacement where available and uses a flushed in-place write after the durable backup/manifest when standard GPMC ACLs do not permit `ReplaceFile`. See [release notes](docs/RELEASE-3.14.4.md).
 

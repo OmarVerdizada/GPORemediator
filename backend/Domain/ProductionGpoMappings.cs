@@ -77,6 +77,11 @@ public static class ProductionGpoMappings
     public static GpoRuleMapping Effective(GpoSelection selection)
     {
         var mapping=Require(selection.Setting);
+        // Account policies linked below the domain configure member computers'
+        // local accounts. They never change passwords/lockout for domain users.
+        if(mapping.DomainPolicySensitive && selection.AccountScope=="LocalComputers")
+            mapping=mapping with{Scope="Computer",DomainPolicySensitive=false,
+                Warnings=[..mapping.Warnings.Where(w=>!w.StartsWith("Domain user password/lockout policy must use",StringComparison.Ordinal)),"LOCAL_ACCOUNTS_ONLY: This OU policy affects local accounts on member computers. Domain users require domain-root policy or fine-grained password policies for users/global groups."]};
         if(selection.ItemValues is null)return mapping;
         if(!mapping.Writable)throw new PolicyException("GPO_MANUAL_ONLY","This control requires manual review.");
         if(mapping.RequiresInput||selection.ItemValues.Length!=mapping.Items.Length)
@@ -107,6 +112,16 @@ public static class ProductionGpoMappings
         return mapping with{Items=items,AllowValueOverride=false,RequiresInput=false,Comparator=null,
             Source=mapping.Source+" | operator-selected values",
             Warnings=[..mapping.Warnings,"CUSTOM_VALUES: These are operator-selected values, not a CIS benchmark compliance assertion."]};
+    }
+
+    public static void ValidateTarget(GpoRuleMapping mapping,GpoScope scope,GpoSelection selection)
+    {
+        if(mapping.DomainPolicySensitive && scope.Kind!="Domain")
+            throw new PolicyException("PASSWORD_SCOPE_MISMATCH","Domain account policy requires the domain root. For a computer OU choose local computer accounts; for selected AD users use fine-grained password policy.");
+        if(!mapping.DomainPolicySensitive && scope.Kind is not ("OU" or "Domain"))
+            throw new PolicyException("GPO_SCOPE_REQUIRED","Select a discovered OU or domain.");
+        if(Require(selection.Setting).DomainPolicySensitive && selection.AccountScope=="LocalComputers" && scope.Kind!="OU")
+            throw new PolicyException("LOCAL_ACCOUNT_OU_REQUIRED","Choose a computer OU for local account policy.");
     }
 
     public static void Validate(GpoSelection selection)

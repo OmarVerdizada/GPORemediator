@@ -38,3 +38,5 @@ All endpoints are local-only and served from the same origin. In Windows mode th
 ## State rules
 
 `Preview` expires after 10 minutes. Mapping hash, environment context and GPO/link fingerprint are revalidated before Apply. A write interruption is never automatically replayed; durable/local recovery moves ambiguous runs to `REVIEW_REQUIRED`. `NO_CHANGE` means the mapped value and required direct link already satisfy the plan and no new backup/write was created.
+
+For account-policy controls, AccountScope=LocalComputers with a discovered computer OU resolves to local-account policy; AccountScope=Domain requires the domain root and FirstLink=true. These intents have different mapping hashes and verification behavior. The access-only probe checks the selected objects independently of unfinished policy input values. Native worker errors include their failed stage; post-backup interrupted writes retain the manifest and do not become success results.

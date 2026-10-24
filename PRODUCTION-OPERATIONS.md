@@ -15,7 +15,9 @@ Open the console with an authorized Windows operator account. Connect separately
 5. Apply. The DC worker creates a full GPO backup before writing and reads back the policy and selected link.
 6. Review publication, AD/SYSVOL replication and effective endpoint results separately. Publication alone does not establish endpoint compliance. Refresh is a separate explicit action.
 
-Domain password and lockout controls accept any selected active GPO and apply it at link order 1 on the domain root. Other controls use the selected remediation GPO and intended OU. No control requires a GPO by built-in name or GUID. Wildcards are discovery-only and cannot authorize writes.
+Password and lockout controls accept any selected active GPO. Select a computer OU to configure local accounts on member computers, or the domain root to configure AD domain accounts at link order 1. Different password policies for selected domain users require fine-grained password policies assigned to users/global security groups, not an OU GPO. Other controls use the selected remediation GPO and discovered OU/domain. No control requires a GPO by built-in name or GUID. Wildcards are discovery-only and cannot authorize writes.
+
+Upgrade the complete application folder. Both Control Panel and launcher preserve the backup root ACL and migrate descendants that match the old private-state ACL. Readiness checks file/directory creation in the actual GpoWorkflow execution workspace on the selected DC. Custom backup ACLs remain administrator-managed. See docs/UPGRADE-3.14.7.md.
 
 ## Verify and recover
 

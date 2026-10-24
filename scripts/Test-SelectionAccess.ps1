@@ -7,6 +7,11 @@ if($errors.Count){throw ($errors|Out-String)}
 foreach($fn in $ast.FindAll({param($n)$n -is [Management.Automation.Language.FunctionDefinitionAst]},$false)){. ([scriptblock]::Create($fn.Extent.Text))}
 function Check($ok,$message){if(!$ok){throw $message}}
 function Reject($action,$code){try{& $action|Out-Null;throw ('Expected '+$code)}catch{if($_.Exception.Message -notlike ($code+'|*')){throw}}}
+$readAcl=[Security.AccessControl.DirectorySecurity]::new()
+$readAcl.AddAccessRule([Security.AccessControl.FileSystemAccessRule]::new([Security.Principal.SecurityIdentifier]::new('S-1-5-11'),'ReadAndExecute','Allow'))
+Check (!(Backup-AclIsUnsafe $readAcl)) 'Broad read-only backup ACL was incorrectly rejected'
+$readAcl.AddAccessRule([Security.AccessControl.FileSystemAccessRule]::new([Security.Principal.SecurityIdentifier]::new('S-1-5-11'),'Write','Allow'))
+Check (Backup-AclIsUnsafe $readAcl) 'Broad backup write ACL was accepted'
 $sandbox=Join-Path $repo ('work/access-'+[guid]::NewGuid().ToString('N'));$null=New-Item -ItemType Directory -Path $sandbox
 try{
  $file=Join-Path $sandbox 'fixture.txt';[IO.File]::WriteAllText($file,'fixture')
@@ -34,6 +39,15 @@ try{
  Set-FixtureAcl ([Security.AccessControl.FileSystemRights]::Modify) $true
  Check (!(Test-FileSystemWrite $file)) 'Native AccessCheck ignored matching deny'
  Set-FixtureAcl ([Security.AccessControl.FileSystemRights]::FullControl)
+ $workspace=Join-Path $sandbox 'GpoWorkflow';$null=New-Item -ItemType Directory -Path $workspace
+ $private=[Security.AccessControl.DirectorySecurity]::new();$private.SetAccessRuleProtection($true,$false)
+ $private.AddAccessRule([Security.AccessControl.FileSystemAccessRule]::new($sid,'ReadAndExecute','ContainerInherit,ObjectInherit','None','Allow'))
+ ([IO.DirectoryInfo]::new($workspace)).SetAccessControl($private)
+ $blocked=$false;try{$null=Test-BackupRepository $sandbox}catch{$blocked=$true}
+ Check $blocked 'Readiness passed a writable root whose GpoWorkflow child is not writable'
+ $private.AddAccessRule([Security.AccessControl.FileSystemAccessRule]::new($sid,'FullControl','ContainerInherit,ObjectInherit','None','Allow'))
+ ([IO.DirectoryInfo]::new($workspace)).SetAccessControl($private)
+ Check ((Test-BackupRepository $sandbox) -eq $workspace) 'Writable execution workspace was rejected'
  Write-Output 'PASS native Windows effective file access: read-only, standard GPMC edit, durable write fallback, modify and deny-over-allow'
  $cfg=@{domainController='dc.example.local';domain='example.local'};$domainDn='DC=example,DC=local'
  $selection=@{gpoId='11111111-1111-1111-1111-111111111111';scopeDn='OU=Pilot,'+$domainDn};$mapping=@{scope='Computer';handler='Registry'}
@@ -76,7 +90,7 @@ try{
  $script:directoryCalls=0
  function Run-Directory {param($Plan) $script:directoryCalls++;throw 'UNEXPECTED|Directory creation reached'}
  $Data=@{plan=@{selection=$selection};mapping=$mapping}
- $switch=$ast.EndBlock.Statements|Where-Object{$_ -is [Management.Automation.Language.SwitchStatementAst]}|Select-Object -Last 1
+ $switch=$ast.FindAll({param($n)$n -is [Management.Automation.Language.SwitchStatementAst] -and $n.Condition.Extent.Text -eq '$Operation'},$true)|Select-Object -Last 1
  $apply=$switch.Clauses|Where-Object{$_.Item1.Extent.Text -eq "'gpoApply'"}|ForEach-Object{$_.Item2}
  Reject {& ([scriptblock]::Create($apply.Extent.Text.TrimStart('{').TrimEnd('}')))} 'GPO_EDIT_ACCESS_DENIED'
  Check ($script:directoryCalls -eq 0) 'Apply created operation files before effective access recheck'

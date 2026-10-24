@@ -15,6 +15,15 @@ try{
 const string gpo="11111111-1111-1111-1111-111111111111",other="22222222-2222-2222-2222-222222222222",dn="DC=example,DC=local";
 var selected=new GpoSelection(gpo,dn,"1.2.1",15,FirstLink:true);
 ProductionGpoMappings.Validate(selected with{GpoId=other});
+var localAccount=selected with{ScopeDn="OU=Pilot,"+dn,AccountScope="LocalComputers",FirstLink=false,Refresh="Scope"};
+ProductionGpoMappings.Validate(localAccount);
+var localMapping=ProductionGpoMappings.Effective(localAccount);
+Check(localMapping.Scope=="Computer"&&!localMapping.DomainPolicySensitive,"OU account policy did not resolve to local computer policy");
+var domainInventory=JsonDefaults.Deserialize<GpoAffectedObjects>("{\"computers\":0,\"servers\":0,\"workstations\":0,\"disabled\":0,\"sampleHosts\":[],\"truncated\":false,\"targetKind\":\"DomainAccount\",\"scopeDn\":\"DC=example,DC=local\"}");
+Check(domainInventory!.TargetKind=="DomainAccount"&&domainInventory.ScopeDn==dn,"Live account scope metadata was lost during transport");
+ProductionGpoMappings.ValidateTarget(localMapping,new(localAccount.ScopeDn,"Pilot","OU"),localAccount);
+Reject(()=>ProductionGpoMappings.ValidateTarget(ProductionGpoMappings.Effective(selected),new(localAccount.ScopeDn,"Pilot","OU"),selected),"PASSWORD_SCOPE_MISMATCH");
+Reject(()=>ProductionGpoMappings.ValidateTarget(localMapping,new(dn,"Domain","Domain"),localAccount),"LOCAL_ACCOUNT_OU_REQUIRED");
 Reject(()=>ProductionGpoMappings.Validate(selected with{FirstLink=false}),"DOMAIN_POLICY_PRIORITY_REQUIRED");
 ProductionGpoMappings.Validate(selected with{GpoId="{"+gpo.ToUpperInvariant()+"}"});
 GpoWorkflowRules.ValidateWriteSelection([gpo],[dn],selected);

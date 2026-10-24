@@ -19,4 +19,4 @@ Run git pull --ff-only, then restart using GpoRemediator.cmd. The launcher repla
 - Review each failed readiness check. Grant backup access to the execution account on the selected DC.
 - If a write loses connectivity, inspect Operations before retrying. Stopping a read-only wait does not cancel server work.
 
-Domain password/lockout controls use the domain root and link order 1; no particular GPO name or GUID is mandatory. See PRODUCTION-OPERATIONS.md. Pending evidence is not a successful verification result.
+Password/lockout controls support local accounts in a computer OU and domain accounts at the domain root with link order 1. An OU GPO does not change AD domain-user passwords; use fine-grained password policy for selected users/global security groups. No particular GPO name or GUID is mandatory. See PRODUCTION-OPERATIONS.md. Pending evidence is not a successful verification result.

@@ -1,4 +1,4 @@
-GPO Remediator 3.5.1 — production package
+GPO Remediator 3.14.7 — full source and offline runtime package
 
 Top-level runtime/operator files:
 - GpoRemediator.cmd
@@ -7,6 +7,7 @@ Top-level runtime/operator files:
 - Start-Windows.ps1
 - Stop-GpoRemediator.ps1
 - scripts/ServiceControl.ps1
+- scripts/Secure-Files.ps1
 - scripts/Start-ControlPanel.ps1
 - frontend/dist/*
 - release/GpoRemediator-runtime-win-x64.zip
@@ -20,4 +21,4 @@ Documentation:
 - VALIDATION.txt
 
 Persistent runtime state is intentionally outside the release folder under C:\ProgramData\GpoRemediator.
-Development-only folders, SDK caches, node_modules, backend source, tests, bin/obj, PDB/debug payloads, and temporary runtime-install directories are not included in this production package.
+The full ZIP includes tracked source, tests, documentation and the verified offline runtime archive. It excludes .git, SDK caches, node_modules, bin/obj, temporary work files and live ProgramData state. The launcher extracts its bundled runtime without downloading tools.

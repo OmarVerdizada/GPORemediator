@@ -160,7 +160,7 @@ public sealed class WorkspaceWorkflows(Store store,IWorkflowOperations service,O
     private async Task ProcessPreview(Work work,WorkflowJob job,CancellationToken ct){
         var plans=new List<GpoWorkflowPlan>();
         foreach(var selection in job.Selections??[]){
-            if(ProductionGpoMappings.Require(selection.Setting).Scope!="Computer") throw new PolicyException("NONCOMPUTER_BATCH_UNSUPPORTED","User and Domain account policies require an individual scope-aware workflow, not a computer OU batch.");
+            if(ProductionGpoMappings.Effective(selection).Scope!="Computer") throw new PolicyException("NONCOMPUTER_BATCH_UNSUPPORTED","User and Domain account policies require an individual scope-aware workflow, not a computer OU batch.");
              var plan=await service.PreviewAsync(work.Token,job.Actor,selection,ct);
             if(job.Pilot)WorkspaceRules.ValidatePilot(plan,job.PilotLimit);
             if(plans.Count>0&&plans[0].Preview.Fingerprint!=plan.Preview.Fingerprint)throw new PolicyException("BATCH_DRIFT","The GPO changed during preview; generate a new batch.");
@@ -172,11 +172,12 @@ public sealed class WorkspaceWorkflows(Store store,IWorkflowOperations service,O
     private async Task ProcessScan(Work work,WorkflowJob job,CancellationToken ct){
         var rows=new List<ScanRow>();
         foreach(var control in job.ScanControls??[]){
-            ct.ThrowIfCancellationRequested();var mapping=ProductionGpoMappings.Require(control);
+            ct.ThrowIfCancellationRequested();var original=ProductionGpoMappings.Require(control);
+            var selection=job.ScanTarget! with{Setting=control,Value=original.Suggested??0,Refresh="None",AccountScope="LocalComputers",FirstLink=false,CustomValue=null,ItemValues=null};
+            var mapping=ProductionGpoMappings.Effective(selection);
             try{
                 if(!mapping.Writable||mapping.RequiresInput||mapping.Scope!="Computer")rows.Add(new(control,"NOT_CHECKED",null,null,"Manual, user-session targeting or organization-specific input requires individual review; no compliance claim was made.",PolicyValues.Now()));
                 else{
-                    var selection=job.ScanTarget! with{Setting=control,Value=mapping.Suggested??0,Refresh="None",AccountScope=mapping.DomainPolicySensitive?"Domain":"LocalComputers",FirstLink=mapping.DomainPolicySensitive,CustomValue=null,ItemValues=null};
                     var plan=await service.PreviewAsync(work.Token,job.Actor,selection,ct,requireWriteAccess:false);
                     rows.Add(new(control,plan.Preview.NoChange?"GPO_MATCH":"DIFFERENT",plan.Preview.PreviousValue,plan.Preview.DesiredValue,"Read-only GPO content/link comparison; effective endpoint compliance is not inferred.",PolicyValues.Now(),plan.Id));
                 }

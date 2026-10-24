@@ -33,7 +33,7 @@ __GR_FUNCTIONS__
         throw 'Run on the selected writable DC in the selected domain'
     }
     $domainDn=[string]$domain.DistinguishedName
-    $s=[pscustomobject]@{gpoId=$GpoId;scopeDn=$TargetDn;setting=$map.id;value=$PolicyValue;customValue=$CustomValue;firstLink=$FirstLink;refresh='None';endpointScopeDn='';verificationUser=''}
+    $s=[pscustomobject]@{gpoId=$GpoId;scopeDn=$TargetDn;setting=$map.id;value=$PolicyValue;customValue=$CustomValue;firstLink=$FirstLink;refresh='None';accountScope=$(if($map.domainPolicySensitive){'Domain'}elseif($map.scope -eq 'User'){'Users'}else{'LocalComputers'});endpointScopeDn='';verificationUser=''}
     Validate-Selection $s $map
     $null=Assert-VersionSync $GpoId
     $gpo=Get-GPO -Guid $parsedId -Domain $DomainName -Server $DomainController
