@@ -61,6 +61,19 @@ foreach(var mapping in ProductionGpoMappings.Settings){
   if(mapping.RequiresInput)Reject(()=>ProductionGpoMappings.Validate(selection with{CustomValue=""}),"GPO_CUSTOM_VALUE_REQUIRED");
 }
 Check(cases==8*2+386*4&&manual==11,"Catalog coverage incomplete");
+foreach(var mapping in ProductionGpoMappings.Settings.Where(x=>!x.Writable)){
+    var s=new GpoSelection(gpo,"OU=Pilot,"+dn,mapping.Id,0,"LocalComputers",ItemValues:mapping.Items.Select(x=>x.Value??[]).ToArray(),ReviewContext:"Reviewed Windows version, roles, service accounts and approved exceptions.");
+    ProductionGpoMappings.Validate(s);
+    Check(ProductionGpoMappings.Effective(s).Writable,"Reviewed control did not produce an executable mapping: "+mapping.Id);
+    Reject(()=>ProductionGpoMappings.Validate(s with{ItemValues=null}),"CONTROL_REVIEW_REQUIRED");
+    Reject(()=>ProductionGpoMappings.Validate(s with{ReviewContext="short"}),"CONTROL_REVIEW_REQUIRED");
+}
+var passwordPolicy=new FineGrainedPasswordRequest("OU=Users,"+dn,"GPOR-Test");
+FineGrainedPasswordRules.Validate(passwordPolicy);
+Reject(()=>FineGrainedPasswordRules.Validate(passwordPolicy with{ScopeDn=dn}),"FGPP_OU_REQUIRED");
+Reject(()=>FineGrainedPasswordRules.Validate(passwordPolicy with{MinPasswordAgeDays=100,MaxPasswordAgeDays=90}),"FGPP_VALUES_INVALID");
+Reject(()=>FineGrainedPasswordRules.Validate(passwordPolicy with{Name="../other"}),"FGPP_VALUES_INVALID");
+Console.WriteLine("PASS 11 controls require explicit values/environment review; FGPP rejects invalid scope and policy data");
 Console.WriteLine($"PASS {cases} control/refresh/priority combinations on a non-default GPO; {manual} controls block automatic writes");
 
 using(var auditStore=new Store(":memory:")) {

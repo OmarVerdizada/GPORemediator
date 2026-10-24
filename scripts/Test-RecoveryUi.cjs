@@ -23,6 +23,7 @@ const server=http.createServer(async(req,res)=>{
   if(url.pathname==='/api/session')data={mode:'WINDOWS',csrfToken:'test'};
   else if(url.pathname==='/api/service')data={mode:'WINDOWS',writesEnabled:true,processId:1};
   else if(url.pathname==='/api/gpo/history')data=[run];
+  else if(url.pathname==='/api/password-policies')data=[];
   else if(url.pathname==='/api/gpo/settings')data=manualMappings;
   else if(url.pathname==='/api/gpo/target-access'){accessRequests.push(payload);const denied=accessDenied,delay=accessDelay;if(delay)await new Promise(r=>setTimeout(r,delay));if(denied){res.statusCode=403;res.end(JSON.stringify({code:denied,message:'Fixture permission denied'}));return;}data={authorized:true,executionUser:'TEST\\operator'};}
   else if(url.pathname==='/api/gpo/preview'){
@@ -355,6 +356,26 @@ const server=http.createServer(async(req,res)=>{
    await page.locator('#gpo-selection>.primary-action').click();await page.waitForFunction(()=>!!document.querySelector('.plan-card'));
    assert.equal(previewSelections.at(-1).setting,id);assert.equal(previewSelections.at(-1).scopeDn,'OU=Endpoints,DC=test,DC=local');
   }
+  // Review-gated controls use the same actual GPO picker and preview submission.
+  for(const m of manualMappings.filter(x=>x.automation!=='Automated')){
+   await page.goto(`http://127.0.0.1:${server.address().port}/#/benchmark`);
+   await page.locator('#catalog-search').fill(m.id);await page.locator(`[data-rule="${m.id}"]`).first().click();await page.locator('[data-tab=remediation]').click();
+   await page.locator('[data-reviewed-execution]').click();
+   await page.locator('[name=reviewContext]').fill('Reviewed endpoint OS, server roles and explicit principal exceptions.');
+   await page.locator('[data-gpo-toggle]').click();await page.locator('[data-gpo="11111111-1111-1111-1111-111111111111"]').click();
+   await page.locator('[data-scope-open="scopeDn"]').click();await page.locator('[data-scope-choose="OU=Endpoints,DC=test,DC=local"]').click();
+   await page.locator('#gpo-selection>.primary-action').click();await page.waitForFunction(()=>!!document.querySelector('.plan-card'));
+   assert.equal(previewSelections.at(-1).setting,m.id);assert.ok(previewSelections.at(-1).reviewContext.length>=10);assert.equal(previewSelections.at(-1).itemValues.length,m.items.length);
+  }
+  await page.goto(`http://127.0.0.1:${server.address().port}/#/password-policies`);
+  await page.locator('#fgpp-preview').waitFor();
+  await page.waitForFunction(()=>!document.querySelector('#main-content')?.getAttribute('aria-busy')||document.querySelector('#main-content').getAttribute('aria-busy')==='false');
+  await page.evaluate(()=>window.scrollTo({top:0,left:0,behavior:'instant'}));
+  assert.ok(await page.evaluate(()=>document.querySelector('h1').getBoundingClientRect().top>=document.querySelector('#service-bar').getBoundingClientRect().bottom),'Password policy heading is obscured by the sticky toolbar');
+  await page.screenshot({path:path.join(screens,'fgpp-workspace-desktop.png'),fullPage:true});
+  await page.setViewportSize({width:390,height:844});
+  assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),'Password policy workspace overflows on mobile');
+  await page.screenshot({path:path.join(screens,'fgpp-workspace-mobile.png'),fullPage:true});
   assert.deepEqual(errors,[]);
   console.log('Recovery UI: PASS (desktop/mobile, recovery refresh, user OU/endpoint OU/verification identity targeting, and user PDC exclusion).');
  }finally{await browser.close();server.close();}

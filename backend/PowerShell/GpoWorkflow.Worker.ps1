@@ -1,5 +1,5 @@
 # Runs on the pinned writable DC using the authenticated remoting identity.
-param([string]$Operation,$Configuration,$Data,[string]$SecurityModule)
+param([string]$Operation,$Configuration,$Data,[string]$SecurityModule,[Management.Automation.PSCredential]$EndpointCredential=$null)
 $ErrorActionPreference='Stop';$ProgressPreference='SilentlyContinue';$WarningPreference='SilentlyContinue';$InformationPreference='SilentlyContinue'
 Set-StrictMode -Version Latest
 function Fail([string]$Code,[string]$Message){throw ($Code+'|'+$Message)}
@@ -468,7 +468,8 @@ function Preview($S,$Map,[bool]$RequireWriteAccess=$true){
     $endpointScope=[string](Read-Field $S 'endpointScopeDn' '')
     $computers=@(Refresh-Targets ([string]$S.refresh) ([string]$scope.dn) $endpointScope ([string]$Map.scope))
     $links=@();foreach($candidateScope in All-LinkScopes){if(Link $candidateScope.rawLinks $S.gpoId $candidateScope.dn){$links+=$candidateScope.dn}}
-    $preflight=Selection-Preflight $S $Map $access;$impact=Impact-Details $S $Map $gpo $scope $links;$warnings=@('Changing this GPO affects all of its existing links, not only the selected link.',('Existing links: '+$(if($links.Count){$links -join '; '}else{'none'})),'Security filtering, WMI filtering, inheritance and precedence are analyzed but are never silently changed.','gpupdate scheduling does not by itself prove effective endpoint compliance.','A full GPO backup is created before any policy write; rollback is blocked after external changes.','Rollback uses Restore-GPO, which restores GPO ACLs. Edit settings access does not prove restore authority; pilot recovery with the delegated account or arrange administrator-assisted recovery.')+@($Map.warnings)
+    $verificationComputers=@();if(![bool]$Map.domainPolicySensitive -and ([string]$Map.scope -ne 'User' -or $endpointScope)){$verificationComputers=@(Refresh-Targets 'Scope' ([string]$scope.dn) $endpointScope ([string]$Map.scope))}
+    $preflight=Selection-Preflight $S $Map $access;$impact=Impact-Details $S $Map $gpo $scope $links;$warnings=@('Changing this GPO affects all of its existing links, not only the selected link.',('Existing links: '+$(if($links.Count){$links -join '; '}else{'none'})),'Security filtering, WMI filtering, inheritance and precedence are analyzed but are never silently changed.','gpupdate scheduling does not by itself prove effective endpoint compliance.','A full GPO backup is created before any policy write; rollback is blocked after external changes.','Rollback imports the saved policy settings into the same GPO and restores the selected link. Security filtering, GPO ACLs and WMI filter ownership are preserved; Edit settings and any required link delegation are checked again.')+@($Map.warnings)
     if([string]$Map.handler -eq 'AdvancedAudit'){$warnings+='AUDIT_DEPENDENCY: Review control 2.3.2.1: SCENoApplyLegacyAuditPolicy=1 on the endpoint prevents legacy category policy overriding audit subcategories. This separate control is not silently changed.';$warnings+='AUDIT_FORMAT: Applying an audit control also normalizes legacy system audit CSV rows without changing their other numeric settings. The full GPO backup preserves the original file.'}
     foreach($c in @($impact.conflicts|Where-Object{$_.severity -eq 'HIGH'})){$warnings+=('High-impact conflict: '+$c.message)}
     if([string]$Map.scope -eq 'User' -and [int]$impact.affectedObjects.users -eq 0){$warnings+='TARGET_EMPTY: No enabled users were discovered under the selected user OU. Writing the GPO is not proof it will affect any user.'}
@@ -483,7 +484,7 @@ function Preview($S,$Map,[bool]$RequireWriteAccess=$true){
     $impact.affectedObjects.sampleHosts=@(Filter-EndpointHosts @($impact.affectedObjects.sampleHosts))
     if([string]$S.refresh -eq 'Scope' -and @($computers).Count -eq 0){$warnings+='NO_REFRESH_HOSTS: No enabled endpoint matched the selected OU and endpoint targeting mode.'}
     $contentMatches=Mapping-Matches $S.gpoId $Map $S;$linkMatches=$null -ne $existing -and $existing.enabled -and (!$S.firstLink -or $existing.order -eq 1);$desired=Mapping-Display $S.gpoId $Map $S $true
-    return @{gpo=(Gpo-Choice $gpo);scope=$scope;previousValue=(Mapping-Display $S.gpoId $Map $S $false);desiredValue=$desired;noChange=($contentMatches -and $linkMatches);fingerprint=(Fingerprint $S.gpoId $scope.dn);scopeLinks=$raw;existingLink=$existing;refreshComputers=$computers;warnings=$warnings;impact=$impact;preflight=$preflight}
+    return @{gpo=(Gpo-Choice $gpo);scope=$scope;previousValue=(Mapping-Display $S.gpoId $Map $S $false);desiredValue=$desired;noChange=($contentMatches -and $linkMatches);fingerprint=(Fingerprint $S.gpoId $scope.dn);scopeLinks=$raw;existingLink=$existing;refreshComputers=$computers;verificationComputers=$verificationComputers;warnings=$warnings;impact=$impact;preflight=$preflight}
 }
 function Atomic-Text([string]$Path,[string]$Text,[Text.Encoding]$Encoding){
     $null=[IO.Directory]::CreateDirectory([IO.Path]::GetDirectoryName($Path));$temp=$Path+'.'+[guid]::NewGuid().ToString('N')+'.tmp'
@@ -561,20 +562,52 @@ function Endpoint-Expected($Map,$S){
       $items+=@{section=[string]$item.section;key=[string]$item.key;name=[string]$item.name;type=[string]$item.type;guid=[string]$item.guid;expected=$expected;comparator=[string](Read-Field $item 'comparator' $Map.comparator)}
     };return @($items)
 }
+function Endpoint-CredentialOptions {
+    $credential=Get-Variable -Name EndpointCredential -ValueOnly -ErrorAction SilentlyContinue
+    if($credential){return @{Credential=$credential}}
+    return @{}
+}
+function Refresh-ComputerPolicy([string[]]$Computer){
+    $credential=Endpoint-CredentialOptions
+    # Run on the endpoint with an explicit delegated credential: no Kerberos
+    # second-hop dependency. /wait:-1 plus the process deadline distinguish
+    # actual process completion from mere RPC task scheduling.
+    return Invoke-Command -ComputerName $Computer -Authentication Kerberos @credential -ThrottleLimit 16 -ScriptBlock {
+        $process=[Diagnostics.Process]::new()
+        $process.StartInfo=[Diagnostics.ProcessStartInfo]::new((Join-Path $env:SystemRoot 'System32\gpupdate.exe'),'/target:computer /force /wait:-1')
+        $process.StartInfo.UseShellExecute=$false;$process.StartInfo.CreateNoWindow=$true
+        $process.StartInfo.RedirectStandardOutput=$true;$process.StartInfo.RedirectStandardError=$true
+        try{
+            $null=$process.Start()
+            $stdout=$process.StandardOutput.ReadToEndAsync();$stderr=$process.StandardError.ReadToEndAsync()
+            if(!$process.WaitForExit(120000)){try{$process.Kill()}catch{};return @{state='FAILED';message='gpupdate did not complete before the 120-second deadline; client processing may still be running.'}}
+            if($process.ExitCode -ne 0){return @{state='FAILED';message=('gpupdate exited with code '+$process.ExitCode+'. Review GroupPolicy Operational events.')}}
+            return @{state='COMPLETED';message='gpupdate /target:computer /force /wait:-1 exited successfully. Verify values and winning GPO separately.'}
+        }finally{$process.Dispose()}
+    } -ErrorAction SilentlyContinue
+}
+function Verification-Page($Plan,$Fallback){
+    $all=Read-Field $Plan.preview 'verificationComputers' $null
+    if($null -eq $all){return @($Fallback|Sort-Object -Unique|Select-Object -First 5)}
+    $requestData=Get-Variable -Name Data -ValueOnly -ErrorAction SilentlyContinue
+    $offset=[int](Read-Field $requestData 'verificationOffset' 0)
+    if($offset -lt 0){Fail 'INVALID_REQUEST' 'Invalid verification offset.'}
+    return @($all|Select-Object -Skip $offset -First 25)
+}
 function Verify-EffectiveSamples($Plan,$Map){
-    $s=$Plan.selection;$checks=@()
+    $s=$Plan.selection;$checks=@();$remoteCredential=Endpoint-CredentialOptions
     if([bool]$Map.domainPolicySensitive){return @()}
     if([string]$Map.scope -eq 'User'){
       $identity=[string](Read-Field $s 'verificationUser' '')
-      $hosts=@($Plan.preview.refreshComputers|Sort-Object -Unique|Select-Object -First 5)
+      $hosts=@(Verification-Page $Plan @($Plan.preview.refreshComputers))
       if([string]::IsNullOrWhiteSpace($identity) -or !$hosts.Count){return @(@{hostname='<user-session>';state='PENDING';message='The GPO targets the entire selected user OU. A verification user is optional and only enables a sampled HKCU check on authorized session endpoints; no per-user Apply is required.';actualValue=$null})}
       try{$user=Verification-User $identity;if(!$user.Enabled -or !([string]$user.DistinguishedName).EndsWith(','+[string]$s.scopeDn,[StringComparison]::OrdinalIgnoreCase)){throw 'User is outside the current enabled target scope'};$sid=[string]$user.SID.Value}catch{return @(@{hostname='<user-session>';state='UNAVAILABLE';message='The verification user could not be resolved.';actualValue=$null})}
-      $currentHosts=@(Refresh-Targets 'Scope' $s.scopeDn ([string](Read-Field $s 'endpointScopeDn' '')) 'User');$hosts=@($hosts|Where-Object{$_ -in $currentHosts})
+      $currentHosts=@(Refresh-Targets 'Scope' $s.scopeDn ([string](Read-Field $s 'endpointScopeDn' '')) 'User');foreach($removed in @($hosts|Where-Object{$_ -notin $currentHosts})){$checks+=@{hostname=$removed;state='OUTSIDE_SCOPE';message='The pinned endpoint is no longer in the enabled authorized scope.';actualValue=$null}};$hosts=@($hosts|Where-Object{$_ -in $currentHosts})
       if(!$hosts.Count){return @(@{hostname='<user-session>';state='PENDING';message='No preview endpoint remains in the current authorized endpoint scope.';actualValue=$null})}
       $expected=@(Endpoint-Expected $Map $s)
       foreach($hostName in $hosts){
         try{
-          $probe=Invoke-Command -ComputerName $hostName -Authentication Kerberos -ArgumentList $sid,$expected -ScriptBlock {
+          $probe=Invoke-Command -ComputerName $hostName -Authentication Kerberos @remoteCredential -ArgumentList $sid,$expected -ScriptBlock {
             param($UserSid,$ExpectedItems)
             $ErrorActionPreference='Stop';$actual=@();$ok=$true
             if(!(Test-Path -LiteralPath ('Registry::HKEY_USERS\'+$UserSid))){return @{supported=$false;match=$false;actual='';message='The selected user profile hive is not loaded on this endpoint. The user must have an active or loaded profile before HKCU policy can be verified.'}}
@@ -592,14 +625,14 @@ function Verify-EffectiveSamples($Plan,$Map){
       }
       return @($checks)
     }
-    $hosts=@();if($Plan.preview.impact -and $Plan.preview.impact.affectedObjects){$hosts+=@($Plan.preview.impact.affectedObjects.sampleHosts)};$hosts=@(Filter-EndpointHosts $hosts|Sort-Object -Unique|Select-Object -First 5)
+    $hosts=@();if($Plan.preview.impact -and $Plan.preview.impact.affectedObjects){$hosts+=@($Plan.preview.impact.affectedObjects.sampleHosts)};$hosts=@(Filter-EndpointHosts @(Verification-Page $Plan $hosts)|Sort-Object -Unique)
     if(!$hosts.Count){return @(@{hostname='<scope>';state='PENDING';message='No concrete endpoint is available for effective-policy verification in the selected scope.';actualValue=$null})}
-    try{$liveHosts=@(Get-ADComputer -SearchBase $s.scopeDn -SearchScope Subtree -Filter {Enabled -eq $true} -Server $cfg.domainController -Properties DNSHostName -ResultSetSize 5001 -ErrorAction Stop|ForEach-Object{[string]$_.DNSHostName});$hosts=@($hosts|Where-Object{$_ -in $liveHosts})}catch{return @(@{hostname='<scope>';state='UNAVAILABLE';message='Current endpoint scope membership could not be established.';actualValue=$null})}
+    try{$liveHosts=@(Get-ADComputer -SearchBase $s.scopeDn -SearchScope Subtree -Filter {Enabled -eq $true} -Server $cfg.domainController -Properties DNSHostName -ResultSetSize 5001 -ErrorAction Stop|ForEach-Object{[string]$_.DNSHostName});foreach($removed in @($hosts|Where-Object{$_ -notin $liveHosts})){$checks+=@{hostname=$removed;state='OUTSIDE_SCOPE';message='The pinned endpoint is no longer in the enabled target scope.';actualValue=$null}};$hosts=@($hosts|Where-Object{$_ -in $liveHosts})}catch{return @(@{hostname='<scope>';state='UNAVAILABLE';message='Current endpoint scope membership could not be established.';actualValue=$null})}
     if(!$hosts.Count){return @(@{hostname='<scope>';state='PENDING';message='Preview sample endpoints no longer belong to the enabled target scope.';actualValue=$null})}
     $expected=@(Endpoint-Expected $Map $s);$handler=[string]$Map.handler
     foreach($hostName in $hosts){
       try{
-        $probe=Invoke-Command -ComputerName $hostName -Authentication Kerberos -ArgumentList $handler,$expected,([string]$Map.comparator) -ScriptBlock {
+        $probe=Invoke-Command -ComputerName $hostName -Authentication Kerberos @remoteCredential -ArgumentList $handler,$expected,([string]$Map.comparator) -ScriptBlock {
           param($Handler,$ExpectedItems,$Comparator)
           $ErrorActionPreference='Stop'
           function Read-IniValue([string]$Text,[string]$Section,[string]$Key){$inside=$false;foreach($line in ($Text -split "`r?`n")){$t=$line.Trim();if($t -match '^\[(.+)\]$'){$inside=($Matches[1] -ieq $Section);continue};if($inside -and $t -match '^([^=]+)=(.*)$' -and $Matches[1].Trim() -ieq $Key){return $Matches[2].Trim()}};return $null}
@@ -678,12 +711,14 @@ function Verify-EffectiveSamples($Plan,$Map){
 function Verify-Published($Plan,$Map,[bool]$CheckEndpoints=$false){
     $s=$Plan.selection;$metadata=Verification-Metadata $s;$published=(Mapping-Matches $s.gpoId $Map $s) -and [bool]$metadata.versionsMatch;$link=Selected-Link $s.scopeDn $s.gpoId;$linked=$null -ne $link -and $link.enabled -and (!$s.firstLink -or $link.order -eq 1);$effective='GPO_VALUE_VERIFIED_ENDPOINT_PENDING';$endpointChecks=@()
     if([bool]$Map.domainPolicySensitive){$policy=Get-ADDefaultDomainPasswordPolicy -Identity $domainDn -Server $cfg.domainController;$actual=$null;switch([string]$Map.id){'1.1.1'{$actual=$policy.PasswordHistoryCount}'1.1.3'{$actual=$policy.MinPasswordAge.TotalDays}'1.1.4'{$actual=$policy.MinPasswordLength}'1.1.5'{$actual=[int][bool]$policy.ComplexityEnabled}'1.1.6'{$actual=[int][bool]$policy.ReversibleEncryptionEnabled}'1.2.1'{$actual=$policy.LockoutDuration.TotalMinutes}'1.2.2'{$actual=$policy.LockoutThreshold}'1.2.4'{$actual=$policy.LockoutObservationWindow.TotalMinutes}};if($null -eq $actual){$effective='DOMAIN_VALUE_NOT_EXPOSED_BY_AD_CMDLET'}elseif(Numeric-Complies $actual (Desired-Normalized $Map @($Map.items)[0] $s) ([string]$Map.comparator)){$effective='DOMAIN_VALUE_MATCHES_ON_SELECTED_DC'}else{$effective='DOMAIN_VALUE_PENDING_OR_OVERRIDDEN'}}elseif($CheckEndpoints){$endpointChecks=@(Verify-EffectiveSamples $Plan $Map);if(@($endpointChecks|Where-Object{$_.state -eq 'MISMATCH'}).Count){$effective='ENDPOINT_MISMATCH'}elseif(@($endpointChecks|Where-Object{$_.state -eq 'VERIFIED'}).Count -gt 0 -and @($endpointChecks|Where-Object{$_.state -ne 'VERIFIED'}).Count -eq 0){$effective='VERIFIED_ON_SAMPLE'}else{$effective='ENDPOINT_VERIFICATION_PENDING'}}
+    $coverage=$null;$all=Read-Field $Plan.preview 'verificationComputers' $null
+    if($CheckEndpoints -and $null -ne $all -and ![bool]$Map.domainPolicySensitive){$offset=[int](Read-Field (Get-Variable Data -ValueOnly -ErrorAction SilentlyContinue) 'verificationOffset' 0);$count=@($all).Count;$coverage=@{total=$count;checked=[math]::Min($offset+25,$count);complete=($offset+25 -ge $count)};if(!$coverage.complete -and $effective -eq 'VERIFIED_ON_SAMPLE'){$effective='ENDPOINT_VERIFICATION_PENDING'}}
     # Never display endpoint effectiveness as verified when the source GPO or target link is wrong.
     # A matching sample is evidence only for inspected hosts; a scheduled gpupdate is not evidence.
     if(!$published){$effective='GPO_PUBLICATION_MISMATCH'}
     elseif(!$linked){$effective='GPO_LINK_MISMATCH'}
     elseif(!$metadata.replicationConverged -and $effective -ne 'ENDPOINT_MISMATCH'){$effective='REPLICATION_PENDING'}
-    return @{published=[bool]$published;linked=[bool]$linked;effective=$effective;verification=$metadata;endpointChecks=@($endpointChecks);currentValue=(Mapping-Display $s.gpoId $Map $s $false)}
+    return @{published=[bool]$published;linked=[bool]$linked;effective=$effective;verification=$metadata;endpointChecks=@($endpointChecks);endpointCoverage=$coverage;currentValue=(Mapping-Display $s.gpoId $Map $s $false)}
 }
 function Verify-Rollback($Plan,$Map,$Manifest){
     $s=$Plan.selection
@@ -724,7 +759,7 @@ function Result([string]$State,[string]$Message,$Manifest,$V,$Refresh){
     $backupId=Read-Field $Manifest 'backupId' $null
     $backupDirectory=Read-Field $Manifest 'directory' $null
     $postFingerprint=Read-Field $Manifest 'postFingerprint' $null
-    return @{state=$State;message=$Message;backupId=$backupId;backupDirectory=$backupDirectory;postFingerprint=$postFingerprint;gpoPublished=[bool](Read-Field $V 'published' $false);linkVerified=[bool](Read-Field $V 'linked' $false);refreshResults=@($Refresh);effectiveStatus=[string](Read-Field $V 'effective' 'UNKNOWN');verification=$verification;endpointChecks=$endpointChecks;currentValue=Read-Field $V 'currentValue' $null}
+    return @{state=$State;message=$Message;backupId=$backupId;backupDirectory=$backupDirectory;postFingerprint=$postFingerprint;gpoPublished=[bool](Read-Field $V 'published' $false);linkVerified=[bool](Read-Field $V 'linked' $false);refreshResults=@($Refresh);effectiveStatus=[string](Read-Field $V 'effective' 'UNKNOWN');verification=$verification;endpointChecks=$endpointChecks;currentValue=Read-Field $V 'currentValue' $null;endpointCoverage=Read-Field $V 'endpointCoverage' $null}
 }
 
 function Operation-Failure($Record,[string]$Stage){
@@ -736,7 +771,7 @@ function Operation-Failure($Record,[string]$Stage){
         '^BACKUP' {'Check Modify access on the backup repository on the selected DC for the execution account, including GpoWorkflow and existing child files.';break}
         '^WRITING' {'Check Edit settings on the selected GPO, SYSVOL policy file write access, and AD version/CSE attribute write access.';break}
         '^LINK' {'Check Link GPOs delegation on the selected OU/domain.';break}
-        '^RESTOR' {'Check Restore-GPO permissions and the retained backup. Verify live state before retrying recovery.';break}
+        '^RESTOR' {'Check GPO Edit settings, link delegation and the retained backup. Verify live state before retrying recovery.';break}
         default {'Inspect the selected GPO, target link and DC connectivity. Use Verify before retrying a write.'}
     }
     # Product-owned context only: no raw exception text, data values or credentials.
@@ -746,9 +781,14 @@ function Operation-Failure($Record,[string]$Stage){
     return @{code=$code;stage=$Stage;message=('Stage '+$Stage+' failed ('+$reason+', '+$command+', worker line '+$line+'). '+$guidance)}
 }
 function Emit-Stage([string]$Name){$script:workerStage=$Name;if([bool](Read-Field $cfg 'emitProgress' $false)){Write-Output ([pscustomobject]@{gpoStage=$Name})}}
+# FGPP_FUNCTIONS
 $script:workerStage='VALIDATING'
 try {
 switch($Operation){
+    'fgppPreview'{return Fgpp-Preview $Data.request}
+    'fgppApply'{return Fgpp-Execute 'apply' $Data.plan}
+    'fgppVerify'{return Fgpp-Execute 'verify' $Data.plan}
+    'fgppRollback'{return Fgpp-Execute 'rollback' $Data.plan}
     'gpoReadiness'{return Environment-Status}
     'gpoInventory'{$gpos=@(Get-GPO -All -Domain $cfg.domain -Server $cfg.domainController|Sort-Object DisplayName|ForEach-Object{Gpo-Choice $_});if($gpos.Count -gt 5000){Fail 'DIRECTORY_TOO_LARGE' 'More than 5000 GPOs exist. Narrow the configured domain.'};return @{domain=$domain.DNSRoot;domainController=$dc.HostName;executionUser=[Security.Principal.WindowsIdentity]::GetCurrent().Name;gpos=$gpos;scopes=@(Scopes)}}
     'gpoPreview'{if([bool](Read-Field $Data 'accessOnly' $false)){$access=Assert-SelectionAccess $Data.selection $Data.mapping;return @{authorized=$true;executionUser=$access.executionUser}};return Preview $Data.selection $Data.mapping ([bool](Read-Field $Data 'requireWriteAccess' $true))}
@@ -837,14 +877,29 @@ switch($Operation){
         if(!$strategy){$strategy=[string]$plan.selection.refresh}
          $endpointScope=[string](Read-Field $plan.selection 'endpointScopeDn' '')
          $computers=@(Refresh-Targets $strategy $plan.selection.scopeDn $endpointScope ([string]$map.scope))
+        $liveComputers=@($computers);$pinned=Read-Field $plan.preview 'verificationComputers' $null
+        if(!$rollback -and $strategy -eq 'Scope' -and $null -ne $pinned){$computers=@($pinned)}
         if(!$computers.Count){return Result $(if($rollback){'ROLLED_BACK'}else{'REFRESH_NOT_CONFIGURED'}) 'No authorized refresh hosts are available. Choose the endpoint OU and automatic OU targeting, or configure explicit hosts in Settings.' $manifest $before @()}
         Emit-Stage 'GPUPDATE'
         $refresh=@();$target=if($rollback){'Both'}elseif([string]$map.scope -eq 'User'){'User'}else{'Computer'}
-        foreach($computer in $computers){try{$options=@{Computer=$computer;Force=$true;RandomDelayInMinutes=0;ErrorAction='Stop'};if(!$rollback){$options.Target=$target};Invoke-GPUpdate @options|Out-Null;$refresh+=@{computer=$computer;state='SCHEDULED';message=('gpupdate /target:'+$target.ToLowerInvariant()+' /force scheduled.')}}catch{$refresh+=@{computer=$computer;state='FAILED';message='Remote gpupdate could not be scheduled. Check RPC/task-scheduler firewall and permissions.'}}}
+        $refreshCoverage=$null
+        if(!$rollback -and $target -eq 'Computer' -and (Endpoint-CredentialOptions).Count){
+            $offset=[int](Read-Field $Data 'refreshOffset' 0);if($offset -lt 0){Fail 'INVALID_REQUEST' 'Invalid refresh offset.'}
+            $total=$computers.Count;$computers=@($computers|Select-Object -Skip $offset -First 64)
+            $runTargets=@($computers|Where-Object{$_ -in $liveComputers})
+            $done=@();if($runTargets.Count){$done=@(Refresh-ComputerPolicy $runTargets)}
+            foreach($computer in $computers){$entry=@($done|Where-Object{[string]$_.PSComputerName -ieq $computer}|Select-Object -Last 1);if($entry.Count){$refresh+=@{computer=$computer;state=[string]$entry[0].state;message=[string]$entry[0].message}}else{$refresh+=@{computer=$computer;state='FAILED';message='No completion result. Check endpoint WinRM/Kerberos and execution permissions.'}}}
+            $refreshCoverage=@{total=$total;checked=[math]::Min($offset+64,$total);complete=($offset+64 -ge $total)}
+        }else{
+            foreach($computer in $computers){try{$options=@{Computer=$computer;Force=$true;RandomDelayInMinutes=0;ErrorAction='Stop'};if(!$rollback){$options.Target=$target};Invoke-GPUpdate @options|Out-Null;$refresh+=@{computer=$computer;state='SCHEDULED';message=('gpupdate /target:'+$target.ToLowerInvariant()+' /force scheduled.')}}catch{$refresh+=@{computer=$computer;state='FAILED';message='Remote gpupdate could not be scheduled. Check RPC/task-scheduler firewall and permissions.'}}}
+        }
         # Invoke-GPUpdate schedules a task; it does not wait for policy processing.
         $v=if($rollback){Verify-Rollback $plan $map $manifest}else{Verify-Published $plan $map $false};$failed=@($refresh|Where-Object{$_.state -eq 'FAILED'}).Count
-        $state=if($rollback){if($v.restored){'ROLLED_BACK'}else{'ROLLBACK_DRIFT_DETECTED'}}elseif(!$v.published -or !$v.linked){'DRIFT_DETECTED'}elseif($failed){'REFRESH_PARTIAL'}else{'REFRESH_SCHEDULED'}
-        return Result $state $(if($failed){'One or more gpupdate /force targets failed. Review the per-host results.'}else{'gpupdate /force was scheduled. Endpoint convergence still requires verification.'}) $manifest $v $refresh
+        $completed=$refresh.Count -gt 0 -and @($refresh|Where-Object state -ne 'COMPLETED').Count -eq 0
+        $state=if($rollback){if($v.restored){'ROLLED_BACK'}else{'ROLLBACK_DRIFT_DETECTED'}}elseif(!$v.published -or !$v.linked){'DRIFT_DETECTED'}elseif($failed){'REFRESH_PARTIAL'}elseif($completed){'REFRESH_COMPLETED'}else{'REFRESH_SCHEDULED'}
+        $output=Result $state $(if($failed){'One or more gpupdate /force targets failed. Review the per-host results.'}elseif($completed){'Computer policy processing completed on every refresh target. Verify resultant values and winning GPO separately.'}else{'gpupdate /force was scheduled. Endpoint convergence still requires verification.'}) $manifest $v $refresh
+        if($refreshCoverage){$output.refreshCoverage=$refreshCoverage}
+        return $output
     }
     'gpoRollbackInspect'{
         # Read-only assessment; actual rollback will independently lock and verify the fingerprint.
@@ -860,7 +915,7 @@ switch($Operation){
         $drift=(!$expected -or $current -cne [string]$expected)
         $gpo=Get-GPO -Guid ([guid]$s.gpoId) -Domain $cfg.domain -Server $cfg.domainController
         $direct=Selected-Link $s.scopeDn $s.gpoId
-        return @{canRestore=(-not $drift);driftDetected=[bool]$drift;restorePermissionVerified=$false;reason=$(if($drift){'ROLLBACK_CONFLICT'}else{'READY'});message=$(if($drift){'The live GPO or its link changed since Apply; automatic rollback must not overwrite the external change.'}else{'Live fingerprint matches the saved post-apply state. Restore-GPO permission is not verified by this read-only check; Edit settings alone may be insufficient. Recheck occurs under the write lock before any restore.'});gpoName=[string]$gpo.DisplayName;gpoId=[string]$s.gpoId;scopeDn=[string]$s.scopeDn;backupId=[string]$m.backupId;controlId=[string]$m.mappingId;beforeValue=[string]$plan.preview.previousValue;afterValue=[string]$plan.preview.desiredValue;beforeLink=$plan.preview.existingLink;currentLink=$direct;otherLinkedScopes=@($plan.preview.impact.existingLinkScopes);fullGpoRestore=$true;checkedAt=[DateTimeOffset]::UtcNow.ToString('O')}
+        return @{canRestore=(-not $drift);driftDetected=[bool]$drift;restoreMethod='Import-GPO';restorePermissionVerified=$false;reason=$(if($drift){'ROLLBACK_CONFLICT'}else{'READY'});message=$(if($drift){'The live GPO or its link changed since Apply; automatic rollback must not overwrite the external change.'}else{'Live fingerprint matches the saved post-apply state. Recovery imports the saved settings into the same GPO and preserves its ACL. Edit settings, backup read access and required link authority are checked again before import.'});gpoName=[string]$gpo.DisplayName;gpoId=[string]$s.gpoId;scopeDn=[string]$s.scopeDn;backupId=[string]$m.backupId;controlId=[string]$m.mappingId;beforeValue=[string]$plan.preview.previousValue;afterValue=[string]$plan.preview.desiredValue;beforeLink=$plan.preview.existingLink;currentLink=$direct;otherLinkedScopes=@($plan.preview.impact.existingLinkScopes);fullGpoRestore=$true;checkedAt=[DateTimeOffset]::UtcNow.ToString('O')}
     }
     'gpoRollback'{
         $plan=$Data.plan;$map=$Data.mapping;$s=$plan.selection;$directory=Run-Directory $plan;if(!(Test-Path -LiteralPath (Join-Path $directory 'manifest.json'))){Fail 'ROLLBACK_NOT_AVAILABLE' 'No backup exists because this operation did not change the GPO.'};$manifest=Get-Content -LiteralPath (Join-Path $directory 'manifest.json') -Raw|ConvertFrom-Json;if(!$manifest.backupId){Fail 'ROLLBACK_BACKUP_INCOMPLETE' 'The operation manifest exists but no completed Backup-GPO ID was recorded. Verify current policy and inspect the operation directory; automatic rollback is unavailable.'};if(!$manifest.postFingerprint){Fail 'ROLLBACK_VERSION_UNKNOWN' 'A completed post-write fingerprint is missing. Recover the recorded Backup-GPO snapshot manually after inspecting AD/SYSVOL.'};$lock=$null
@@ -880,10 +935,11 @@ switch($Operation){
                 $expectedFingerprint=[string]$anchorManifest.postFingerprint
             }
             if((Fingerprint $s.gpoId $s.scopeDn) -cne $expectedFingerprint){Fail 'ROLLBACK_CONFLICT' 'The GPO or links changed after Apply. Automatic full-GPO restore is blocked.'}
+            $null=Assert-SelectionAccess $s $map
             Emit-Stage 'RESTORING_GPO'
             $manifest | Add-Member -NotePropertyName rollbackAttempts -NotePropertyValue ([int](Read-Field $manifest 'rollbackAttempts' 0)+1) -Force
             $manifest.phase='ROLLING_BACK';Save-Manifest $manifest $directory
-            Restore-GPO -BackupId ([guid]$manifest.backupId) -Path $directory -Domain $cfg.domain -Server $cfg.domainController|Out-Null
+            Import-GPO -BackupId ([guid]$manifest.backupId) -TargetGuid ([guid]$s.gpoId) -Path $directory -Domain $cfg.domain -Server $cfg.domainController|Out-Null
             Emit-Stage 'RESTORING_LINK'
             $before=$plan.preview.existingLink
             if($null -eq $before){Remove-GPLink -Guid ([guid]$s.gpoId) -Target $s.scopeDn -Domain $cfg.domain -Server $cfg.domainController -Confirm:$false|Out-Null}

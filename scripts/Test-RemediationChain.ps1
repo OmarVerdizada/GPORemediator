@@ -57,7 +57,7 @@ function Backup-GPO {param($Guid,$Path,$Domain,$Server,$Comment)
  $script:snapshot=@{version=$script:version;extensions=$script:extensions;userExtensions=$script:userExtensions;registry=$script:registry.Clone()}
  [pscustomobject]@{Id=[guid]::NewGuid()}
 }
-function Restore-GPO {param($BackupId,$Path,$Domain,$Server)
+function Import-GPO {param($BackupId,$TargetGuid,$Path,$Domain,$Server)
  Get-ChildItem -LiteralPath $script:folder -Force|Remove-Item -Recurse -Force
  Copy-Item -Path (Join-Path $Path 'snapshot/*') -Destination $script:folder -Recurse
  $script:version=$script:snapshot.version;$script:extensions=$script:snapshot.extensions;$script:userExtensions=$script:snapshot.userExtensions;$script:registry=$script:snapshot.registry.Clone()
@@ -65,9 +65,12 @@ function Restore-GPO {param($BackupId,$Path,$Domain,$Server)
 function Invoke-GPUpdate {param($Computer,$Force,$RandomDelayInMinutes,$ErrorAction,$Target) $script:refreshes++}
 $catalog=(Get-Content (Join-Path $repo 'backend/data/gpo-production-mappings.json') -Raw|ConvertFrom-Json).mappings
 try{
- foreach($case in @(@('1.1.1','LocalComputers'),@('1.1.1','Domain'),@('2.3.1.1','LocalComputers'),@('18.4.4','LocalComputers'),@('17.1.1','LocalComputers'),@('19.5.1.1','Users'))){
+ $cases=@(@('1.1.1','LocalComputers'),@('1.1.1','Domain'),@('2.3.1.1','LocalComputers'),@('18.4.4','LocalComputers'),@('17.1.1','LocalComputers'),@('19.5.1.1','Users'))
+ foreach($manual in @($catalog|Where-Object automation -ne 'Automated')){$cases+=,@([string]$manual.id,'LocalComputers')}
+ foreach($case in $cases){
   $map=($catalog|Where-Object id -eq $case[0])|ConvertTo-Json -Depth 15|ConvertFrom-Json
   Check ($null -ne $map) ('mapping exists '+$case[0])
+  if($map.automation -ne 'Automated'){$map.automation='Automated';if($map.handler -eq 'Manual'){$map.handler='SecurityTemplate'}}
   if($case[1] -eq 'LocalComputers' -and $map.domainPolicySensitive){$map.scope='Computer';$map.domainPolicySensitive=$false}
   foreach($item in $map.items){foreach($field in @('section','key','name','guid','state','mask','value')){if(!$item.PSObject.Properties[$field]){$item|Add-Member -NotePropertyName $field -NotePropertyValue $null}}}
   if(Test-Path $script:folder){Remove-Item -LiteralPath $script:folder -Recurse -Force}

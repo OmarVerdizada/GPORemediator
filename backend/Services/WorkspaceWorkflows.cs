@@ -43,7 +43,7 @@ public sealed class WorkspaceWorkflows(Store store,IWorkflowOperations service,O
         if(request.PilotSourceId is not null){
             var pilot=Get(request.PilotSourceId,actor);var source=store.Require<BatchPlan>("batch_plans",pilot.BatchId??"");
             var runs=pilot.CompletedIds.Select(id=>store.Require<GpoWorkflowRun>("gpo_runs",id)).ToArray();
-            if(!source.Pilot||pilot.Action!="apply"||pilot.State!="COMPLETED"||runs.Length==0||runs.Any(run=>!WorkspaceRules.Published(run)||run.Result.Verification?.ReplicationConverged!=true||run.Result.EffectiveStatus!="VERIFIED_ON_SAMPLE"||
+            if(!source.Pilot||pilot.Action!="apply"||pilot.State!="COMPLETED"||runs.Length==0||runs.Any(run=>!WorkspaceRules.Published(run)||run.Result.Verification?.ReplicationConverged!=true||run.Result.EffectiveStatus is not ("VERIFIED_ON_SAMPLE" or "VERIFIED_ON_ALL_TARGETS")||
                 !DateTimeOffset.TryParse(run.Result.Verification.CheckedAt,out var checkedAt)||DateTimeOffset.UtcNow-checkedAt>TimeSpan.FromMinutes(30)))
                 throw new PolicyException("PILOT_NOT_VERIFIED","Promotion requires a completed pilot with replication convergence and effective sample verification for every applied control.");
             if(!selections.Select(x=>x.Setting).Order().SequenceEqual(runs.Select(x=>x.Plan.Selection.Setting).Order()))throw new PolicyException("PILOT_CONTROL_MISMATCH","Promotion must preview the same control set as the verified pilot.");

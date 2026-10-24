@@ -124,6 +124,14 @@ static class Tests
             foreach(System.Security.AccessControl.FileSystemAccessRule rule in rules)
                 if(rule.IdentityReference==delegateSid&&(rule.FileSystemRights&System.Security.AccessControl.FileSystemRights.Modify)!=0){preserved=true;break;}
             Check(preserved,"backup directory initialization preserves delegated ACL");
+            var anotherSid=new System.Security.Principal.SecurityIdentifier("S-1-5-21-111111111-222222222-333333333-4445");
+            PrivateFiles.GrantBackupModify(backup,anotherSid);
+            PrivateFiles.GrantBackupModify(backup,anotherSid);
+            var finalRules=new DirectoryInfo(backup).GetAccessControl().GetAccessRules(true,true,typeof(System.Security.Principal.SecurityIdentifier)).Cast<System.Security.AccessControl.FileSystemAccessRule>().ToArray();
+            var oldGrant=false;var newGrantCount=0;
+            foreach(var rule in finalRules){if(rule.IdentityReference==delegateSid)oldGrant=true;if(rule.IdentityReference==anotherSid)newGrantCount++;}
+            Check(oldGrant&&newGrantCount==1,"backup repair preserves delegation and is idempotent");
+            try{PrivateFiles.GrantBackupModify(backup,new("S-1-5-21-111111111-222222222-333333333-513"));throw new Exception("Broad domain users grant accepted");}catch(InvalidOperationException){}
         }
         finally {try{Directory.Delete(temp,true);}catch(IOException){}}
         Console.WriteLine($"SECURITY REGRESSIONS PASSED: {passed}");

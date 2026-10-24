@@ -28,6 +28,8 @@
 }
 :root[data-contrast=true]{--color-border:var(--color-text-muted);--color-border-strong:var(--color-text)}
 body.operator-custom-page{font-family:var(--studio-font);background:var(--color-background);color:var(--color-text);-webkit-font-smoothing:antialiased}
+.skip-link{position:fixed;top:8px;left:16px;z-index:200;transform:translateY(-200%);padding:10px 16px;border-radius:8px;background:var(--color-primary);color:var(--color-on-primary)}
+.skip-link:focus{transform:translateY(0)}
 body.operator-custom-page .workspace{background:var(--color-background)}
 body.operator-custom-page #operator-modules{min-width:0}
 body.operator-custom-page :is(h1,h2,h3,.summary-card strong,.signal-card strong){letter-spacing:-.035em}

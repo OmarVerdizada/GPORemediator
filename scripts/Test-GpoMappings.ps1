@@ -196,7 +196,8 @@ $firstManifest|ConvertTo-Json -Depth 5|Set-Content (Join-Path $script:batchFirst
 @{phase='PUBLISHED';postFingerprint='batch-last'}|ConvertTo-Json|Set-Content (Join-Path $script:batchLast 'manifest.json')
 $script:currentFingerprint='batch-last';$script:restoreCalls=0
 function Fingerprint {param($Id,$ScopeDn) return $script:currentFingerprint}
-function Restore-GPO {param($BackupId,$Path,$Domain,$Server) $script:restoreCalls++;$script:currentFingerprint='restored-'+$script:restoreCalls;[IO.File]::WriteAllText((Join-Path $script:folder 'policy.txt'),'restored snapshot')}
+function Import-GPO {param($BackupId,$TargetGuid,$Path,$Domain,$Server) $script:restoreCalls++;$script:currentFingerprint='restored-'+$script:restoreCalls;[IO.File]::WriteAllText((Join-Path $script:folder 'policy.txt'),'restored snapshot')}
+function Assert-SelectionAccess {param($S,$Map) @{executionUser='fixture';checks=@()}}
 function Remove-GPLink {param($Guid,$Target,$Domain,$Server,[switch]$Confirm)}
 $Data=[pscustomobject]@{plan=$plan;mapping=@{};rollbackAnchor=$null}
 try{$null=& ([scriptblock]::Create($rollbackBlock.Extent.Text.TrimStart('{').TrimEnd('}')));throw 'Unanchored old snapshot was accepted'}catch{if($_.Exception.Message -notlike 'ROLLBACK_CONFLICT*'){throw}}

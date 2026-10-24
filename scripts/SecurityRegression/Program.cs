@@ -32,7 +32,7 @@ context.Request.Host=new HostString("localhost");context.Connection.RemoteIpAddr
 var sandbox=Path.Combine(Path.GetTempPath(),"gpo-security-tests-"+Guid.NewGuid().ToString("N"));Directory.CreateDirectory(sandbox);
 try{
  var scripts=Path.Combine(sandbox,"scripts");Directory.CreateDirectory(scripts);
- foreach(var name in new[]{"Invoke-GpoWorkflow.ps1","GpoWorkflow.Worker.ps1","SecurityTemplate.psm1"})File.WriteAllBytes(Path.Combine(scripts,name),BundledAssets.Read("Scripts/"+name));
+ foreach(var name in new[]{"Invoke-GpoWorkflow.ps1","GpoWorkflow.Worker.ps1","SecurityTemplate.psm1","FineGrainedPassword.ps1"})File.WriteAllBytes(Path.Combine(scripts,name),BundledAssets.Read("Scripts/"+name));
  BundledAssets.VerifyScripts(scripts);
  File.AppendAllText(Path.Combine(scripts,"GpoWorkflow.Worker.ps1"),"#tampered");
  Reject(()=>BundledAssets.VerifyScripts(scripts),"SCRIPT_INTEGRITY_FAILED");

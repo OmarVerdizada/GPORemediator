@@ -64,6 +64,7 @@ builder.Services.AddRateLimiter(OperatorSecurity.ConfigureLoginRateLimit);
 builder.Services.AddSingleton(new Store(dbPath));
 builder.Services.AddSingleton<OperationGate>();
 builder.Services.AddSingleton<GpoWorkflowService>();
+builder.Services.AddSingleton<FineGrainedPasswordService>();
 builder.Services.AddSingleton<IWorkflowOperations>(sp=>sp.GetRequiredService<GpoWorkflowService>());
 builder.Services.AddSingleton<WorkspaceWorkflows>();
 builder.Services.AddSingleton(TimeProvider.System);
@@ -243,6 +244,28 @@ app.MapPost("/api/gpo/disconnect",(HttpContext context,GpoWorkflowService servic
 app.MapGet("/api/gpo/inventory",(HttpContext context,GpoWorkflowService service)=>service.Inventory(GpoToken(context),Operator(context)));
 app.MapGet("/api/gpo/session",(HttpContext context,GpoWorkflowService service)=>service.SessionStatus(GpoToken(context),Operator(context)));
 app.MapGet("/api/gpo/readiness",async(HttpContext context,GpoWorkflowService service,CancellationToken ct)=>await service.ReadinessAsync(GpoToken(context),Operator(context),ct));
+app.MapPost("/api/gpo/backup-access",(BackupAccessRequest request,HttpContext context,GpoWorkflowService service)=>{
+    if(!OperatingSystem.IsWindows())throw new PolicyException("WINDOWS_MODE_REQUIRED","Backup ACL repair requires Windows.");
+    if(context.User.Identity is not WindowsIdentity identity || !new WindowsPrincipal(identity).IsInRole(WindowsBuiltInRole.Administrator))
+        throw new PolicyException("BACKUP_ADMIN_REQUIRED","An authenticated local administrator must grant backup access. Sign in to the control plane with an administrator account.");
+    if(request.Confirmation!="GRANT BACKUP MODIFY")throw new PolicyException("CONFIRMATION_REQUIRED","Confirm the backup Modify grant.");
+    var inventory=service.Inventory(GpoToken(context),Operator(context));
+    if(!Environment.MachineName.Equals(inventory.DomainController.Split('.')[0],StringComparison.OrdinalIgnoreCase))
+        throw new PolicyException("BACKUP_REPAIR_ON_DC_REQUIRED","Open the updated application on the selected DC to grant its local backup access. The management host's C: drive is a separate filesystem.");
+    if(string.IsNullOrWhiteSpace(request.Identity)||request.Identity.Length>256||request.Identity.IndexOfAny(['\r','\n','\0'])>=0)
+        throw new PolicyException("INVALID_REQUEST","Enter a domain execution user or delegated group.");
+    SecurityIdentifier sid,executionSid;
+    try{
+        sid=(SecurityIdentifier)new NTAccount(request.Identity).Translate(typeof(SecurityIdentifier));
+        executionSid=(SecurityIdentifier)new NTAccount(inventory.ExecutionUser).Translate(typeof(SecurityIdentifier));
+    }catch(IdentityNotMappedException){throw new PolicyException("BACKUP_IDENTITY_NOT_FOUND","That domain user/group could not be resolved. Enter DOMAIN\\name and check AD DNS/domain connectivity.");}
+    if(sid.AccountDomainSid is null||executionSid.AccountDomainSid is null||!sid.AccountDomainSid.Equals(executionSid.AccountDomainSid))throw new PolicyException("INVALID_REQUEST","Choose an identity in the connected execution domain.");
+    if(sid.Value.EndsWith("-513",StringComparison.Ordinal))throw new PolicyException("BACKUP_BROAD_IDENTITY_DENIED","Choose the execution user or a specific delegated group instead of Domain Users.");
+    var path=builder.Configuration["Windows:BackupPath"]??Path.Combine(protectedStateRoot,"Backups");
+    PrivateFiles.GrantBackupModify(path,sid);
+    store.Audit("BACKUP_MODIFY_GRANTED",Operator(context),details:new{request.Identity,sid=sid.Value,path});
+    return new{granted=true,path,identity=request.Identity};
+});
 app.MapPost("/api/gpo/discover",async(HttpContext context,GpoWorkflowService service,CancellationToken ct)=>await service.DiscoverAsync(GpoToken(context),Operator(context),ct));
 app.MapGet("/api/gpo/settings",()=>ProductionGpoMappings.Settings.Select(x=>new {
     x.Id,x.ControlId,x.Title,x.Category,x.Level,x.Automation,x.Handler,x.Items,x.Recommended,x.Scope,x.RequiresInput,x.InputType,x.InputLabel,x.InputDefault,
@@ -251,6 +274,9 @@ app.MapGet("/api/gpo/settings",()=>ProductionGpoMappings.Settings.Select(x=>new 
     impactReason=x.DomainPolicySensitive?"Domain-wide authentication or lockout behavior may change.":x.RequiresRestart?"A restart-sensitive policy is involved.":x.RequiresGpUpdate?"Endpoint policy refresh and staged verification are required.":"The mapping is scoped and still requires preview and verification."
 }));
 app.MapGet("/api/gpo/history",(HttpContext context,GpoWorkflowService service)=>service.History(Operator(context)));
+app.MapGet("/api/password-policies",(HttpContext context,FineGrainedPasswordService service)=>service.History(Operator(context)));
+app.MapPost("/api/password-policies/preview",async(FineGrainedPasswordRequest request,HttpContext context,FineGrainedPasswordService service,CancellationToken ct)=>await service.Preview(GpoToken(context),Operator(context),request,ct));
+app.MapPost("/api/password-policies/{id}/{action}",async(string id,string action,FineGrainedPasswordAction request,HttpContext context,FineGrainedPasswordService service,CancellationToken ct)=>await service.Execute(id,action,GpoToken(context),Operator(context),request.Confirmation,ct));
 app.MapGet("/api/gpo/{id}/evidence",(string id,HttpContext context,GpoWorkflowService service)=>service.Evidence(id,Operator(context)));
 app.MapPost("/api/gpo/target-access",async(GpoSelection request,HttpContext context,GpoWorkflowService service,CancellationToken ct)=>await service.CheckTargetAccessAsync(GpoToken(context),Operator(context),request,ct));
 app.MapPost("/api/gpo/preview",async(GpoSelection request,HttpContext context,GpoWorkflowService service,CancellationToken ct)=>await service.PreviewAsync(GpoToken(context),Operator(context),request,ct));

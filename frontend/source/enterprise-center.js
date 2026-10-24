@@ -16,7 +16,7 @@
     const p=run?.plan||{},s=p.selection||{},v=p.preview||{},result=run?.result||{},meta=result.verification||{};
     const effective=String(result.effectiveStatus||'UNKNOWN'), state=String(result.state||'UNKNOWN');
     const verified=!!(result.gpoPublished===true&&result.linkVerified===true&&meta.replicationConverged===true&&
-      (effective==='VERIFIED_ON_SAMPLE'||effective==='DOMAIN_VALUE_MATCHES_ON_SELECTED_DC')&&!bad(state)&&state!=='ROLLED_BACK');
+      (effective==='VERIFIED_ON_SAMPLE'||effective==='VERIFIED_ON_ALL_TARGETS'||effective==='DOMAIN_VALUE_MATCHES_ON_SELECTED_DC')&&!bad(state)&&state!=='ROLLED_BACK');
     const status=bad(state)||bad(effective)?'NEEDS_REVIEW':verified?'EVIDENCE_VERIFIED':'NOT_FULLY_VERIFIED';
     return {id:String(run?.id||''),controlId:String(s.setting||''),date:String(run?.updatedAt||run?.startedAt||''),
       operator:String(p.actor||''),executionUser:String(p.executionUser||''),domain:String(p.domain||''),

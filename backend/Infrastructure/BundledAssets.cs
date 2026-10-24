@@ -16,7 +16,7 @@ public static class BundledAssets
     {
         // A junction in the published runtime path must not redirect trusted script reads.
         PrivateFiles.RejectLinks(directory);
-        foreach(var name in new[]{"Invoke-GpoWorkflow.ps1","GpoWorkflow.Worker.ps1","SecurityTemplate.psm1"}){
+        foreach(var name in new[]{"Invoke-GpoWorkflow.ps1","GpoWorkflow.Worker.ps1","SecurityTemplate.psm1","FineGrainedPassword.ps1"}){
             var path=Path.Combine(directory,name);
             if(!File.Exists(path)||(File.GetAttributes(path)&FileAttributes.ReparsePoint)!=0||
                 !CryptographicOperations.FixedTimeEquals(SHA256.HashData(File.ReadAllBytes(path)),SHA256.HashData(Read("Scripts/"+name))))

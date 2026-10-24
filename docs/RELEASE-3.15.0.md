@@ -1,0 +1,19 @@
+# 3.15.0
+
+The complete release folder is required. Replace the Control Panel, launcher, scripts, frontend, and bundled runtime together; old entry points can still reset backup ACLs.
+
+- **Persistent backup access:** existing delegation and legacy-child migration are retained. Settings adds a one-time, audited inheritable Modify grant for a specified execution user/group. This action requires a local administrator and must run on the selected DC, where the backup path exists. It preserves existing ACEs and rejects broad Domain Users grants. Custom protected child ACLs remain intentional administrator configuration.
+- **OU domain users:** Password policies opens a separate fine-grained password policy workflow. Preview pins every enabled user in the OU and descendants (maximum 5,000). Apply rechecks membership and the previous PSO, saves its previous state, writes explicit settings/subjects, then checks every resultant user policy. It creates or updates only its own managed PSO. Existing unmanaged names are rejected. A new preview/apply reconciles membership changes; this is not an automatic OU-membership service. Other policies can win by precedence and produce a review status.
+- **GPO account policy:** a computer OU still controls its members' local accounts; domain-root GPO policy controls domain accounts. Neither requires Default Domain Policy specifically. FGPP changes domain users without changing the domain-root GPO.
+- **Endpoint coverage:** new previews pin the full authorized endpoint population. Verify reads pages of 25, retains partial evidence, rechecks live membership and checks all pages. Legacy plans keep their original sample semantics; regenerate them for full coverage. Matching values do not identify the winning GPO or prove runtime enforcement.
+- **Computer refresh:** explicit credentials are carried through encrypted Kerberos remoting to avoid the second-hop problem. Computer refresh uses bounded batches of 64, at most 16 concurrent endpoint sessions, and a 120-second gpupdate process deadline per endpoint. Completed, failed and scheduled states stay separate. User/rollback refresh retains task-scheduling semantics; user logon and unloaded HKCU hives can remain pending.
+- **Rollback:** imports all backed-up policy settings into the existing GPO with Import-GPO, preserves GPO security filtering/ACLs and WMI filtering, and restores the selected link. Edit/link authority is rechecked before mutation. This avoids Restore-GPO's broader security-descriptor restoration requirements. Drift and batch recovery anchors remain enforced. It is still an entire policy-settings snapshot, not a single-setting undo.
+- **Eleven reviewed controls:** their default automatic status remains blocked. Operators can open a reviewed GPO workflow, record OS/role/service-account exceptions, explicitly approve every field, then use Preview/Apply/Verify/Rollback. Native Windows and AD permissions still apply. Registry equality does not certify Defender tamper protection or feature support.
+
+FGPP needs separate delegated PSO creation/edit/subject/deletion permissions on the Password Settings Container. Link GPOs and GPO Edit settings do not grant these. Apply/Rollback also require the production change gate and an authorized OU. Interrupted writes retain a DC manifest and require review; writes are never retried automatically.
+
+References:
+- [Fine-grained password policies](https://learn.microsoft.com/en-us/windows-server/identity/ad-ds/get-started/adac/fine-grained-password-policies)
+- [Assign policy subjects](https://learn.microsoft.com/en-us/powershell/module/activedirectory/add-adfinegrainedpasswordpolicysubject)
+- [Import-GPO](https://learn.microsoft.com/en-us/powershell/module/grouppolicy/import-gpo)
+- [gpupdate completion behavior](https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/gpupdate)

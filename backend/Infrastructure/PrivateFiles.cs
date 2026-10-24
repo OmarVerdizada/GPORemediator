@@ -51,6 +51,17 @@ public static class PrivateFiles
         RejectLinks(path);
     }
 
+    public static void GrantBackupModify(string path,SecurityIdentifier sid)
+    {
+        if(!OperatingSystem.IsWindows())throw new PlatformNotSupportedException("Windows is required.");
+        if(sid.AccountDomainSid is null || sid.Value.EndsWith("-513",StringComparison.Ordinal))
+            throw new InvalidOperationException("Choose a specific domain execution user or delegated group, not a broad user group.");
+        EnsureDirectoryPreservingAcl(path);
+        var directory=new DirectoryInfo(path);var acl=directory.GetAccessControl();
+        acl.AddAccessRule(new FileSystemAccessRule(sid,FileSystemRights.Modify,InheritanceFlags.ContainerInherit|InheritanceFlags.ObjectInherit,PropagationFlags.None,AccessControlType.Allow));
+        directory.SetAccessControl(acl);
+    }
+
     public static void ProtectTree(string root)
     {
         if(!OperatingSystem.IsWindows())throw new PlatformNotSupportedException("Windows is required.");

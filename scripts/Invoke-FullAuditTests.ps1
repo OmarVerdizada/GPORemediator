@@ -25,6 +25,9 @@ try{
   Run-Check $script 'powershell.exe' $arguments
  }
  Run-Check 'frontend-syntax' $node @('-e',"const fs=require('fs'),cp=require('child_process');for(const x of fs.readdirSync('frontend/source').filter(x=>x.endsWith('.js'))){const r=cp.spawnSync(process.execPath,['--check','frontend/source/'+x],{stdio:'inherit'});if(r.status)process.exit(r.status)}") 'syntax'
+ Run-Check 'Test-FineGrainedPassword' 'powershell.exe' @('-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-File','scripts/Test-FineGrainedPassword.ps1')
+ Run-Check 'Test-EndpointBatching' 'powershell.exe' @('-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-File','scripts/Test-EndpointBatching.ps1')
+ Run-Check 'Test-PasswordPolicyUi' $node @('scripts/Test-PasswordPolicyUi.cjs')
  Run-Check 'stylesheet-build' $node @('scripts/Build-Styles.cjs','--check')
  foreach($test in @('Test-Responsiveness','Test-FrontendSystem','Test-RemediationEvidence','Test-RecipeWorkspace','Test-GuidedRemediation','Test-GpoScopePicker','Test-ControlTargeting','Test-UX-Contract','Test-Studio-UI','Test-EnterpriseCenter','Test-ManualVerification','Test-ValueEditor','Test-ManualRemediation','Test-RecoveryUi','Test-WorkflowUi','Test-EndpointTargetingUi','Test-EnglishThemes')){Run-Check $test $node @('scripts/'+$test+'.cjs')}
  Run-Check 'mapping-generation' $python @('scripts/Build-ProductionMappings.py','--check')

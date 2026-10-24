@@ -1,0 +1,10 @@
+Manual engine: 47 shared production functions; generated. No domain commands executed.
+Styles: 9 component sources → app.css; 18 exact duplicate blocks removed.
+Restoring .NET/NuGet dependencies for win-x64 (attempt 1/3)...
+  Determining projects to restore...
+  Restored C:\Users\omar.verdizada\Documents\Codex\2026-10-20\https-github-com-omarverdizada-gporemediator-https\work\GPORemediator\backend\GpoRemediator.csproj (in 353 ms).
+Publishing self-contained Windows x64 backend...
+  GpoRemediator -> C:\Users\omar.verdizada\Documents\Codex\2026-10-20\https-github-com-omarverdizada-gporemediator-https\work\GPORemediator\backend\bin\Release\net10.0\win-x64\GpoRemediator.dll
+  GpoRemediator -> C:\Users\omar.verdizada\Documents\Codex\2026-10-20\https-github-com-omarverdizada-gporemediator-https\work\GPORemediator\work\runtime-build-bef17390523a4867abcf7e2e97015c05\
+Portable Windows x64 application ready. No Node.js/pnpm/npm registry is required.
+Run GpoRemediator.cmd. For real AD/GPO use, complete Setup in the built-in Automation Center.

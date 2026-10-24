@@ -53,7 +53,7 @@ try {
     & $dotnet publish $project -c Release -r win-x64 --self-contained true -o $stage --nologo --no-restore
     Assert-Exit
 
-    foreach ($required in @('GpoRemediator.exe','GpoRemediator.dll','GpoRemediator.deps.json','GpoRemediator.runtimeconfig.json','PowerShell\Invoke-GpoWorkflow.ps1','PowerShell\GpoWorkflow.Worker.ps1','PowerShell\SecurityTemplate.psm1')) {
+    foreach ($required in @('GpoRemediator.exe','GpoRemediator.dll','GpoRemediator.deps.json','GpoRemediator.runtimeconfig.json','PowerShell\Invoke-GpoWorkflow.ps1','PowerShell\GpoWorkflow.Worker.ps1','PowerShell\SecurityTemplate.psm1','PowerShell\FineGrainedPassword.ps1')) {
         if (!(Test-Path -LiteralPath (Join-Path $stage $required))) { throw "Published runtime is incomplete: $required is missing." }
     }
 

@@ -77,6 +77,17 @@ public static class ProductionGpoMappings
     public static GpoRuleMapping Effective(GpoSelection selection)
     {
         var mapping=Require(selection.Setting);
+        if(!mapping.Writable && !string.IsNullOrWhiteSpace(selection.ReviewContext))
+        {
+            if(selection.ReviewContext.Trim().Length<10||selection.ReviewContext.Length>2048||selection.ReviewContext.Contains('\0'))
+                throw new PolicyException("CONTROL_REVIEW_REQUIRED","Record the reviewed OS support, server roles and approved principal exceptions (10–2048 characters).");
+            if(selection.ItemValues is null)
+                throw new PolicyException("CONTROL_REVIEW_REQUIRED","Explicitly approve every policy field for this reviewed control.");
+            mapping=mapping with{Automation="Automated",Handler=mapping.Handler=="Manual"?"SecurityTemplate":mapping.Handler,
+                Source=mapping.Source+" | explicit environment review",
+                Warnings=[..mapping.Warnings.Where(w=>!w.Contains("automatic writes remain blocked",StringComparison.OrdinalIgnoreCase)&&!w.Contains("Auto-write is disabled",StringComparison.OrdinalIgnoreCase)),
+                    "ENVIRONMENT_REVIEW: "+selection.ReviewContext.Trim(),"Reviewed execution uses explicit operator values. OS/role compatibility and runtime enforcement still require endpoint evidence; do not disable Defender tamper protection."]};
+        }
         // Account policies linked below the domain configure member computers'
         // local accounts. They never change passwords/lockout for domain users.
         if(mapping.DomainPolicySensitive && selection.AccountScope=="LocalComputers")

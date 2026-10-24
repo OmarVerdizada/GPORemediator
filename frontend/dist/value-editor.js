@@ -2,6 +2,7 @@
 (()=>{'use strict';
 function defaults(m){return m.items.map(x=>m.handler==='AdvancedAudit'?[String(x.mask)]:m.allowValueOverride?[String(m.suggested??0)]:(x.value||[]).map(String));}
 function effective(m,s){
+ if(m.automation!=='Automated'&&s?.reviewContext?.trim().length>=10&&s.itemValues)m={...m,automation:'Automated',handler:m.handler==='Manual'?'SecurityTemplate':m.handler,source:m.source+' | explicit environment review',warnings:[...(m.warnings||[]),'ENVIRONMENT_REVIEW: '+s.reviewContext.trim()]};
  if(m.domainPolicySensitive&&s?.accountScope==='LocalComputers')m={...m,scope:'Computer',domainPolicySensitive:false,warnings:[...(m.warnings||[]).filter(w=>!w.startsWith('Domain user password/lockout policy must use')),'LOCAL_ACCOUNTS_ONLY: This OU policy affects local accounts on member computers. Domain users require domain-root policy or fine-grained password policies for users/global groups.']};
  if(!s?.itemValues)return m;
  if(m.automation!=='Automated'||m.handler==='Manual'||m.requiresInput||s.itemValues.length!==m.items.length)throw Error('Invalid custom policy values');
@@ -18,7 +19,7 @@ function capture(form,m,s){
  if(!m||m.requiresInput){s.itemValues=null;return;}
  const inputs=[...form.querySelectorAll('[data-policy-value]')];if(inputs.length!==m.items.length)return;
  const values=inputs.map((input,i)=>['MultiString','Principals'].includes(m.items[i].type)?input.value.split(/\r?\n/).filter(x=>x.length):[input.value]);
- s.itemValues=JSON.stringify(values)===JSON.stringify(defaults(m))?null:values;
+ s.itemValues=s.reviewContext!=null?values:JSON.stringify(values)===JSON.stringify(defaults(m))?null:values;
 }
 function render(s,m){
  const {esc,text}=window.GpoComponents,t=(_fallback,en)=>text(s,_fallback,en);

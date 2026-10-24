@@ -1,0 +1,1 @@
+All endpoint fixtures: 394 PASS, 0 FAIL, 11 unsupported; 806 synthetic cases; no live AD validation.

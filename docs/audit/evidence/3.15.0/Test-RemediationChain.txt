@@ -1,0 +1,120 @@
+PASS mapping exists 1.1.1
+PASS readiness 1.1.1 LocalComputers
+PASS backup/write/link/publication 1.1.1 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS Apply does not schedule unrequested endpoint refresh
+PASS explicit refresh schedules exactly one target 1.1.1
+PASS snapshot rollback 1.1.1
+PASS rollback read-back 1.1.1
+PASS mapping exists 1.1.1
+PASS readiness 1.1.1 Domain
+PASS backup/write/link/publication 1.1.1 Domain: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS Apply does not schedule unrequested endpoint refresh
+PASS explicit refresh schedules exactly one target 1.1.1
+PASS snapshot rollback 1.1.1
+PASS rollback read-back 1.1.1
+PASS mapping exists 2.3.1.1
+PASS readiness 2.3.1.1 LocalComputers
+PASS backup/write/link/publication 2.3.1.1 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS Apply does not schedule unrequested endpoint refresh
+PASS explicit refresh schedules exactly one target 2.3.1.1
+PASS snapshot rollback 2.3.1.1
+PASS rollback read-back 2.3.1.1
+PASS mapping exists 18.4.4
+PASS readiness 18.4.4 LocalComputers
+PASS backup/write/link/publication 18.4.4 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS Apply does not schedule unrequested endpoint refresh
+PASS explicit refresh schedules exactly one target 18.4.4
+PASS snapshot rollback 18.4.4
+PASS rollback read-back 18.4.4
+PASS mapping exists 17.1.1
+PASS readiness 17.1.1 LocalComputers
+PASS backup/write/link/publication 17.1.1 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS Apply does not schedule unrequested endpoint refresh
+PASS explicit refresh schedules exactly one target 17.1.1
+PASS snapshot rollback 17.1.1
+PASS rollback read-back 17.1.1
+PASS mapping exists 19.5.1.1
+PASS readiness 19.5.1.1 Users
+PASS backup/write/link/publication 19.5.1.1 Users: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS Apply does not schedule unrequested endpoint refresh
+PASS snapshot rollback 19.5.1.1
+PASS rollback read-back 19.5.1.1
+PASS mapping exists 1.2.3
+PASS readiness 1.2.3 LocalComputers
+PASS backup/write/link/publication 1.2.3 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS Apply does not schedule unrequested endpoint refresh
+PASS explicit refresh schedules exactly one target 1.2.3
+PASS snapshot rollback 1.2.3
+PASS rollback read-back 1.2.3
+PASS mapping exists 2.2.6
+PASS readiness 2.2.6 LocalComputers
+PASS backup/write/link/publication 2.2.6 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS Apply does not schedule unrequested endpoint refresh
+PASS explicit refresh schedules exactly one target 2.2.6
+PASS snapshot rollback 2.2.6
+PASS rollback read-back 2.2.6
+PASS mapping exists 2.2.16
+PASS readiness 2.2.16 LocalComputers
+PASS backup/write/link/publication 2.2.16 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS Apply does not schedule unrequested endpoint refresh
+PASS explicit refresh schedules exactly one target 2.2.16
+PASS snapshot rollback 2.2.16
+PASS rollback read-back 2.2.16
+PASS mapping exists 2.2.31
+PASS readiness 2.2.31 LocalComputers
+PASS backup/write/link/publication 2.2.31 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS Apply does not schedule unrequested endpoint refresh
+PASS explicit refresh schedules exactly one target 2.2.31
+PASS snapshot rollback 2.2.31
+PASS rollback read-back 2.2.31
+PASS mapping exists 2.2.33
+PASS readiness 2.2.33 LocalComputers
+PASS backup/write/link/publication 2.2.33 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS Apply does not schedule unrequested endpoint refresh
+PASS explicit refresh schedules exactly one target 2.2.33
+PASS snapshot rollback 2.2.33
+PASS rollback read-back 2.2.33
+PASS mapping exists 2.2.36
+PASS readiness 2.2.36 LocalComputers
+PASS backup/write/link/publication 2.2.36 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS Apply does not schedule unrequested endpoint refresh
+PASS explicit refresh schedules exactly one target 2.2.36
+PASS snapshot rollback 2.2.36
+PASS rollback read-back 2.2.36
+PASS mapping exists 2.2.39
+PASS readiness 2.2.39 LocalComputers
+PASS backup/write/link/publication 2.2.39 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS Apply does not schedule unrequested endpoint refresh
+PASS explicit refresh schedules exactly one target 2.2.39
+PASS snapshot rollback 2.2.39
+PASS rollback read-back 2.2.39
+PASS mapping exists 2.2.45
+PASS readiness 2.2.45 LocalComputers
+PASS backup/write/link/publication 2.2.45 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS Apply does not schedule unrequested endpoint refresh
+PASS explicit refresh schedules exactly one target 2.2.45
+PASS snapshot rollback 2.2.45
+PASS rollback read-back 2.2.45
+PASS mapping exists 2.3.11.6
+PASS readiness 2.3.11.6 LocalComputers
+PASS backup/write/link/publication 2.3.11.6 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS Apply does not schedule unrequested endpoint refresh
+PASS explicit refresh schedules exactly one target 2.3.11.6
+PASS snapshot rollback 2.3.11.6
+PASS rollback read-back 2.3.11.6
+PASS mapping exists 18.10.43.10.1
+PASS readiness 18.10.43.10.1 LocalComputers
+PASS backup/write/link/publication 18.10.43.10.1 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS Apply does not schedule unrequested endpoint refresh
+PASS explicit refresh schedules exactly one target 18.10.43.10.1
+PASS snapshot rollback 18.10.43.10.1
+PASS rollback read-back 18.10.43.10.1
+PASS mapping exists 18.10.43.10.2
+PASS readiness 18.10.43.10.2 LocalComputers
+PASS backup/write/link/publication 18.10.43.10.2 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS Apply does not schedule unrequested endpoint refresh
+PASS explicit refresh schedules exactly one target 18.10.43.10.2
+PASS snapshot rollback 18.10.43.10.2
+PASS rollback read-back 18.10.43.10.2
+PASS backup denial returns failed-safe stage and recovery guidance
+PASS real worker chain: preview, readiness, backup, write, link, publication, rollback and re-verification with mocked directory APIs only

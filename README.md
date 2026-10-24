@@ -1,6 +1,6 @@
-# GPO Remediator 3.14.7
+# GPO Remediator 3.15.0
 
-3.14.7 fixes backup ACL resets from the Control Panel and migrates legacy private backup children so root delegation can reach them. Account controls support local computer accounts in an OU and domain accounts at the domain root. Delayed target-access responses no longer discard a newer plan; native failures include the failed operation stage. See [release notes](docs/RELEASE-3.14.7.md).
+3.15.0 adds reviewed OU user password policies (FGPP), full pinned endpoint verification, bounded computer refresh with completion evidence, settings-only snapshot rollback, a persistent backup delegation action, and explicit review workflows for the eleven environment-sensitive controls. See [release notes](docs/RELEASE-3.15.0.md) and [validation](docs/VALIDATION-3.15.0.md). Live AD execution is not certified by the offline suite.
 
 3.14.4 accepts the standard SYSVOL rights created by GPMC **Edit settings** delegation (`Read & execute`, `Write`, and `Delete child`) without requiring per-file Modify/Delete. The publisher retains atomic replacement where available and uses a flushed in-place write after the durable backup/manifest when standard GPMC ACLs do not permit `ReplaceFile`. See [release notes](docs/RELEASE-3.14.4.md).
 

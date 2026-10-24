@@ -64,6 +64,8 @@
     INVALID_DOMAIN:"Enter a domain and its DC FQDN, for example example.local and dc01.example.local.",
   };
   function policy(path) {
+    if (/\/password-policies\/[^/]+\/(apply|rollback)$/.test(path)) return { timeout: 980000, label: 'Backing up and changing the reviewed user password policy', cancelable: false };
+    if (/\/password-policies\/(preview|[^/]+\/verify)$/.test(path)) return { timeout: 620000, label: 'Reading OU users and resultant password policies', cancelable: true };
     if (/\/gpo\/[^/]+\/(apply|rollback)$/.test(path)) return { timeout: 980000, label: 'Backup, policy change and verification', cancelable: false };
     if (/\/gpo\/[^/]+\/refresh$/.test(path)) return { timeout: 760000, label: 'Scheduling gpupdate and re-verifying policy', cancelable: false };
     if (/\/gpo\/(target-access|preview|[^/]+\/(verify|replan|rollback-preview))$/.test(path)) return { timeout: 620000, label: 'Reading policy and verifying scope', cancelable: true };

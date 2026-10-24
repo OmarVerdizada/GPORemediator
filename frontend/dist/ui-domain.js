@@ -2,7 +2,7 @@
   'use strict';
   const upper = value => String(value || '').toUpperCase();
   const bad = value => /FAIL|MISMATCH|REVIEW|PARTIAL|DRIFT|ERROR/.test(upper(value));
-  const effectiveVerified = value => /^(VERIFIED_ON_SAMPLE|DOMAIN_VALUE_MATCHES_ON_SELECTED_DC)$/.test(upper(value));
+  const effectiveVerified = value => /^(VERIFIED_ON_SAMPLE|VERIFIED_ON_ALL_TARGETS|DOMAIN_VALUE_MATCHES_ON_SELECTED_DC)$/.test(upper(value));
   function classify(run) {
     const result = run?.result || {};
     const publication = result.gpoPublished === true ? 'published' : bad(result.state) ? 'failed' : 'pending';

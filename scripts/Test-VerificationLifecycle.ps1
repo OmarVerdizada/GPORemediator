@@ -19,6 +19,11 @@ function Get-ADObject {param($Identity,$Server,$Properties,$ErrorAction) if($scr
 function Remote-GpoFolder {param($Server,$Id) Join-Path $temp 'remote'}
 $selection=@{gpoId='11111111-1111-1111-1111-111111111111'}
 try{
+ $pagePlan=@{preview=@{verificationComputers=@(1..201|ForEach-Object{'ws'+$_+'.example.test'})}}
+ $seen=@();for($offset=0;$offset -lt 201;$offset+=25){$Data=@{verificationOffset=$offset};$page=@(Verification-Page $pagePlan @());Assert-Test ($page.Count -le 25) 'verification page remains bounded';$seen+=$page}
+ Assert-Test ($seen.Count -eq 201 -and @($seen|Sort-Object -Unique).Count -eq 201) 'every pinned endpoint is checked exactly once across pages'
+ $Data=@{verificationOffset=-1};try{$null=Verification-Page $pagePlan @();throw 'negative offset accepted'}catch{if($_.Exception.Message -notlike 'INVALID_REQUEST*'){throw}}
+ $Data=@{}
  Assert-Test ((Verification-Metadata $selection).replicationConverged) 'equal versions and content converge'
  [IO.File]::WriteAllText((Join-Path $temp 'remote/policy.txt'),'different')
  Assert-Test (!(Verification-Metadata $selection).replicationConverged) 'equal versions with different SYSVOL content cannot converge'

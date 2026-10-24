@@ -15,7 +15,8 @@ public record GpoInventory(string Domain, string DomainController, string Execut
 public record GpoSelection(string GpoId, string ScopeDn, string Setting, int Value,
     string AccountScope = "Domain", string Refresh = "None", bool FirstLink = false, string? CustomValue = null,
     string? EndpointScopeDn = null, string? VerificationUser = null,
-    [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] string[][]? ItemValues = null);
+    [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] string[][]? ItemValues = null,
+    [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] string? ReviewContext = null);
 
 public record GpoHealthCheck(string Id, string Label, string State, string Message, bool Required = true);
 public record GpoEnvironmentStatus(string Domain, string DomainController, string ExecutionUser,
@@ -36,17 +37,22 @@ public record GpoVerificationDetails(string AdVersion, string GptVersion, bool V
 
 public record GpoPreview(GpoChoice Gpo, GpoScope Scope, string? PreviousValue, string Fingerprint, string ScopeLinks,
     GpoLink? ExistingLink, string[] RefreshComputers, string[] Warnings,
-    GpoImpactDetails? Impact = null, GpoEnvironmentStatus? Preflight = null, string? DesiredValue = null, bool NoChange = false);
+    GpoImpactDetails? Impact = null, GpoEnvironmentStatus? Preflight = null, string? DesiredValue = null, bool NoChange = false,
+    [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] string[]? VerificationComputers = null);
 
 public record GpoWorkflowPlan(string Id, string Actor, string ExecutionUser, string Mode, string Domain, string DomainController,
     GpoSelection Selection, GpoPreview Preview, string CreatedAt, string? MappingHash = null, string? ConfigHash = null, bool WriteAuthorized = false);
 [System.Text.Json.Serialization.JsonUnmappedMemberHandling(System.Text.Json.Serialization.JsonUnmappedMemberHandling.Disallow)]
 public record GpoRefreshRequest(string Refresh);
+public record BackupAccessRequest(string Identity,string Confirmation);
 public record GpoConsent(string Confirmation, bool AcknowledgeImpact = false, bool AcknowledgeProtected = false, string? ChangeReference = null, string? ApprovedBy = null, string? Refresh = null);
 public record GpoRefreshResult(string Computer, string State, string Message);
+public record EndpointCoverage(int Total,int Checked,bool Complete);
 public record GpoWorkflowResult(string State, string Message, string? BackupId, string? BackupDirectory, string? PostFingerprint,
     bool GpoPublished, bool LinkVerified, GpoRefreshResult[] RefreshResults, string EffectiveStatus,
-    GpoVerificationDetails? Verification = null, GpoEndpointCheck[]? EndpointChecks = null, string? CurrentValue = null)
+    GpoVerificationDetails? Verification = null, GpoEndpointCheck[]? EndpointChecks = null, string? CurrentValue = null,
+    [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] EndpointCoverage? EndpointCoverage = null,
+    [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] EndpointCoverage? RefreshCoverage = null)
 {
     public GpoAssuranceStage[] VerificationStages => GpoAssurance.Stages(this);
     public string[] Diagnosis => GpoAssurance.Diagnose(this);

@@ -84,6 +84,12 @@ public sealed class GpoWorkflowService(IConfiguration config,Store store,Operati
         finally{CryptographicOperations.ZeroMemory(bytes);}
     }
     public GpoInventory Inventory(string token,string actor)=>Get(token,actor).Inventory;
+    public Task<T> RunDirectoryOperation<T>(string operation,string token,string actor,object data,CancellationToken ct)
+    {
+        RequireReal();
+        if(operation is not ("fgppPreview" or "fgppApply" or "fgppVerify" or "fgppRollback"))throw new PolicyException("OPERATION_DENIED","Unsupported password policy operation.");
+        return Run<T>(operation,Get(token,actor),data,ct);
+    }
     public void ValidateConnection(string token,string actor){RequireReal();Get(token,actor);}
 
     public object SessionStatus(string token,string actor)
@@ -120,7 +126,8 @@ public sealed class GpoWorkflowService(IConfiguration config,Store store,Operati
     {
         // Access depends on the selected object/scope, not unfinished policy
         // input fields. Value validation belongs to the explicit Preview call.
-        RequireReal();var c=Get(token,actor);var mapping=ProductionGpoMappings.Effective(selection with{ItemValues=null});
+        RequireReal();var c=Get(token,actor);var mapping=ProductionGpoMappings.Effective(selection with{ItemValues=null,ReviewContext=null});
+        if(!mapping.Writable&&selection.ReviewContext is not null)mapping=mapping with{Automation="Automated",Handler=mapping.Handler=="Manual"?"SecurityTemplate":mapping.Handler};
         if(!mapping.Writable)throw new PolicyException("GPO_MANUAL_ONLY","This control requires manual review.");
         var gpo=c.Inventory.Gpos.SingleOrDefault(x=>string.Equals(x.Id,selection.GpoId,StringComparison.OrdinalIgnoreCase));
         var scope=c.Inventory.Scopes.SingleOrDefault(x=>string.Equals(x.Dn,selection.ScopeDn,StringComparison.OrdinalIgnoreCase));
@@ -242,6 +249,43 @@ public sealed class GpoWorkflowService(IConfiguration config,Store store,Operati
                 }
                 Progress(operation.ToUpperInvariant()+"_STARTED");
                 result=await Run<GpoWorkflowResult>("gpo"+char.ToUpperInvariant(operation[0])+operation[1..],c,new{plan,mapping,previous=previous?.Result,refresh=operation=="refresh"?consent.Refresh:null,consent=operation=="apply"?consent:previous?.Approval,rollbackAnchor},CancellationToken.None,Progress);
+                if(operation=="verify" && result.EndpointCoverage is not null)
+                {
+                    var checks=(result.EndpointChecks??[]).ToList();
+                    while(result.EndpointCoverage is {Complete:false} coverage && result.GpoPublished && result.LinkVerified)
+                    {
+                        var offset=coverage.Checked;
+                        Progress("ENDPOINT_PAGE");
+                        result=result with{EndpointChecks=checks.ToArray()};
+                        run=run with{Result=result with{State="VERIFYING"},UpdatedAt=PolicyValues.Now()};
+                        store.Put("gpo_runs",id,run,"VERIFYING");
+                        result=await Run<GpoWorkflowResult>("gpoVerify",c,new{plan,mapping,verificationOffset=offset},CancellationToken.None,Progress);
+                        checks.AddRange(result.EndpointChecks??[]);
+                        if(result.EndpointCoverage is null || result.EndpointCoverage.Checked<=offset)
+                            throw new PolicyException("ENDPOINT_VERIFICATION_STALLED","Endpoint verification did not advance; partial evidence was retained.");
+                    }
+                    var unique=checks.GroupBy(x=>x.Hostname,StringComparer.OrdinalIgnoreCase).Select(g=>g.Last()).ToArray();
+                    var complete=result.EndpointCoverage is {Complete:true} finished && finished.Total>0 && unique.Length==finished.Total;
+                    var status=unique.Any(x=>x.State=="MISMATCH")?"ENDPOINT_MISMATCH":complete&&unique.All(x=>x.State=="VERIFIED")?"VERIFIED_ON_ALL_TARGETS":"ENDPOINT_VERIFICATION_PENDING";
+                    result=result with{EndpointChecks=unique,EffectiveStatus=result.GpoPublished&&result.LinkVerified&&result.Verification?.ReplicationConverged==true?status:result.EffectiveStatus};
+                }
+                if(operation=="refresh" && result.RefreshCoverage is not null)
+                {
+                    var refreshResults=result.RefreshResults.ToList();
+                    while(result.RefreshCoverage is {Complete:false} coverage && result.GpoPublished && result.LinkVerified)
+                    {
+                        var offset=coverage.Checked;result=result with{RefreshResults=refreshResults.ToArray()};
+                        run=run with{Result=result with{State="REFRESHING"},UpdatedAt=PolicyValues.Now()};store.Put("gpo_runs",id,run,"REFRESHING");
+                        Progress("REFRESH_PAGE");
+                        result=await Run<GpoWorkflowResult>("gpoRefresh",c,new{plan,mapping,previous=previous?.Result,refresh=consent.Refresh,refreshOffset=offset},CancellationToken.None,Progress);
+                        refreshResults.AddRange(result.RefreshResults);
+                        if(result.RefreshCoverage is null || result.RefreshCoverage.Checked<=offset)throw new PolicyException("ENDPOINT_REFRESH_STALLED","Refresh did not advance. Partial evidence was retained.");
+                    }
+                    var unique=refreshResults.GroupBy(x=>x.Computer,StringComparer.OrdinalIgnoreCase).Select(g=>g.Last()).ToArray();
+                    var completed=result.RefreshCoverage is {Complete:true} finished && finished.Total>0 && unique.Length==finished.Total && unique.All(x=>x.State=="COMPLETED");
+                    result=result with{RefreshResults=unique,State=result.GpoPublished&&result.LinkVerified?(completed?"REFRESH_COMPLETED":"REFRESH_PARTIAL"):result.State,
+                        Message=completed?"Computer policy processing completed on every pinned refresh target. Verify resultant values and winning GPO separately.":"Refresh did not complete on every pinned target. Review per-host results."};
+                }
                 if(stages.Count>0){stages[^1]=stages[^1] with{FinishedAt=PolicyValues.Now()};run=run with{Stages=stages.ToArray()};}
                 if(operation=="verify" && previous is not null && result.RefreshResults.Length==0 && previous.Result.RefreshResults.Length>0)
                     result=result with{RefreshResults=previous.Result.RefreshResults};
