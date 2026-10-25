@@ -4,6 +4,7 @@ const fs=require('node:fs');
 const path=require('node:path');
 const source=fs.readFileSync(path.join(__dirname,'../frontend/source/enterprise-center.js'),'utf8');
 const ctx={window:{},Date,Blob};
+vm.runInNewContext(fs.readFileSync(path.join(__dirname,'../frontend/source/ui-domain.js'),'utf8'),ctx);
 vm.runInNewContext(source,ctx,{filename:'enterprise-center.js'});
 const {record,collect,csv,html,diagnosis}=ctx.window.GpoEnterpriseCenter;
 const base={id:'abc',updatedAt:'2026-10-14T09:00:00Z',correlationId:'cor1',
@@ -11,6 +12,14 @@ const base={id:'abc',updatedAt:'2026-10-14T09:00:00Z',correlationId:'cor1',
  result:{state:'PUBLISHED',effectiveStatus:'VERIFIED_ON_SAMPLE',gpoPublished:true,linkVerified:true,verification:{replicationConverged:true},endpointChecks:[{hostname:'srv1',state:'VERIFIED',message:'observed'}],backupId:'backup-001',currentValue:'B',message:'ok'}};
 const run=structuredClone(base);
 const out=record(run);assert.equal(out.status,'EVIDENCE_VERIFIED');
+const full=structuredClone(base);
+full.result.effectiveStatus='VERIFIED_ON_ALL_TARGETS';full.result.endpointCoverage={total:201,checked:201,complete:true};
+full.result.endpointChecks=Array.from({length:201},(_,i)=>({hostname:'ws'+i,state:'VERIFIED',actualValue:'value'+i}));
+assert.equal(record(full).endpointChecks.length,201,'JSON evidence must retain all endpoints, not silently truncate at 20');assert.equal(record(full).endpointChecks[200].actualValue,'value200');
+assert.equal(record(full).status,'EVIDENCE_VERIFIED');assert.equal(ctx.window.GpoUiDomain.classify(full).compliant,true);
+full.result.endpointCoverage.complete=false;assert.notEqual(record(full).status,'EVIDENCE_VERIFIED');assert.equal(ctx.window.GpoUiDomain.classify(full).compliant,false);
+full.result.endpointCoverage.complete=true;full.result.endpointChecks[200].hostname='ws0';assert.notEqual(record(full).status,'EVIDENCE_VERIFIED','duplicated endpoint rows must not establish full coverage');
+assert.equal(ctx.window.GpoUiDomain.classify({...base,result:{...base.result,state:'ROLLED_BACK'}}).compliant,false,'rollback must not count as compliant with stale publication flags');
 for(const mod of [
  r=>r.result.gpoPublished=false,
  r=>r.result.linkVerified=false,

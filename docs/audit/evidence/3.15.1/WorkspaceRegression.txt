@@ -1,0 +1,1 @@
+PASS workspace: production async HTTP/identity isolation/idempotency, server refresh chain, serialized batch/rebase/first-snapshot rollback, scheduled checks, read-only scan, pilot boundaries, report escaping, streaming limits and restart recovery.

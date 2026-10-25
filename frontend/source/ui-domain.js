@@ -3,14 +3,20 @@
   const upper = value => String(value || '').toUpperCase();
   const bad = value => /FAIL|MISMATCH|REVIEW|PARTIAL|DRIFT|ERROR/.test(upper(value));
   const effectiveVerified = value => /^(VERIFIED_ON_SAMPLE|VERIFIED_ON_ALL_TARGETS|DOMAIN_VALUE_MATCHES_ON_SELECTED_DC)$/.test(upper(value));
+  function coverageVerified(result){
+    if(upper(result.effectiveStatus)!=='VERIFIED_ON_ALL_TARGETS')return true;
+    const c=result.endpointCoverage,checks=result.endpointChecks;
+    return !!(c?.complete===true&&Number.isSafeInteger(c.total)&&c.total>0&&c.checked===c.total&&Array.isArray(checks)&&checks.length===c.total&&
+      new Set(checks.map(x=>String(x.hostname||'').toLowerCase())).size===c.total&&checks.every(x=>x.hostname&&x.state==='VERIFIED'));
+  }
   function classify(run) {
     const result = run?.result || {};
     const publication = result.gpoPublished === true ? 'published' : bad(result.state) ? 'failed' : 'pending';
     const replication = result.verification?.replicationConverged ? 'converged' : (result.verification ? 'pending' : 'not_checked');
-    const effective = effectiveVerified(result.effectiveStatus) ? 'verified' : bad(result.effectiveStatus) ? 'failed' : 'pending';
+    const effective = effectiveVerified(result.effectiveStatus)&&coverageVerified(result) ? 'verified' : bad(result.effectiveStatus) ? 'failed' : 'pending';
     const attention = bad(result.state) || publication === 'failed' || effective === 'failed';
     const custom=!!run?.plan?.selection?.itemValues;
-    const compliant = !custom && !attention && publication === 'published' && result.linkVerified === true && replication === 'converged' && effective === 'verified';
+    const compliant = !upper(result.state).startsWith('ROLLED_BACK') && !custom && !attention && publication === 'published' && result.linkVerified === true && replication === 'converged' && effective === 'verified';
     return { publication, replication, effective, attention, compliant, custom };
   }
   function workflowStep({ plan, approvalReviewed, run }) {
@@ -34,5 +40,5 @@
         ? { name: 'Medium', cls: 'medium', copy: mapping?.impactReason || 'Validate scope and application dependencies before broad rollout.' }
         : { name: 'Low', cls: 'low', copy: mapping?.impactReason || 'Preview and post-change verification are still required.' };
   }
-  window.GpoUiDomain = Object.freeze({ classify, workflowStep, impact, bad, effectiveVerified });
+  window.GpoUiDomain = Object.freeze({ classify, workflowStep, impact, bad, effectiveVerified, coverageVerified });
 })();

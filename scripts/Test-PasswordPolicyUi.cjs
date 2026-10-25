@@ -15,8 +15,8 @@ const server=http.createServer((req,res)=>{
  const esc=x=>String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
  function render(){root.innerHTML=controller.view();}
  async function run(fn){state.busy=true;render();try{await fn();}finally{state.busy=false;render();}}
- async function api(path,body){window.calls.push({path,body});if(path==='/password-policies')return [];if(path.endsWith('/preview'))return {id:'fixture',request:body,executionUser:'TEST\\operator',preview:{users:[{name:'alice'},{name:'bob'}],warnings:[],before:{exists:false}}};return {state:path.endsWith('/rollback')?'ROLLED_BACK':'VERIFIED',message:'Fixture only',users:[]};}
- controller=window.GpoPasswordPolicies.create({state,esc,api,run,render});root.addEventListener('input',controller.handleInput);root.addEventListener('click',controller.handleClick);root.addEventListener('submit',controller.handleSubmit);render();
+ async function api(path,body){window.calls.push({path,body});if(path==='/password-policies')return window.historyFail?{}:[];if(path.endsWith('/preview'))return {id:'fixture',request:body,executionUser:'TEST\\operator',preview:{users:[{name:'alice'},{name:'bob'}],warnings:[],before:{exists:false}}};return {state:path.endsWith('/rollback')?'ROLLED_BACK':'VERIFIED',message:'Fixture only',users:Array.from({length:201},(_,i)=>({user:i===0?'<unsafe>':'user'+i,policy:'GPOR-Reviewed',state:'VERIFIED'}))};}
+ window.uiState=state;window.repaint=render;controller=window.GpoPasswordPolicies.create({state,esc,api,run,render});root.addEventListener('input',controller.handleInput);root.addEventListener('click',controller.handleClick);root.addEventListener('submit',controller.handleSubmit);render();
  });
  assert.equal(await page.locator('[name=scopeDn] option').count(),2,'domain must not be an FGPP OU option');
  await page.selectOption('[name=scopeDn]','OU=Users,DC=test,DC=local');await page.fill('[name=name]','GPOR-Reviewed');await page.fill('[name=minPasswordLength]','16');
@@ -25,11 +25,20 @@ const server=http.createServer((req,res)=>{
  await page.fill('#fgpp-action [name=confirmation]','APPLY FGPP');await page.locator('#fgpp-action [value=apply]').click();
  await page.waitForFunction(()=>window.calls.some(x=>x.path.endsWith('/apply')));
  let calls=await page.evaluate(()=>window.calls);assert.equal(calls.find(x=>x.path.endsWith('/preview')).body.minPasswordLength,16);assert.equal(calls.find(x=>x.path.endsWith('/apply')).body.confirmation,'APPLY FGPP');
+ assert.equal(await page.locator('.ps-evidence-table tbody tr').count(),100);assert.ok((await page.locator('.ps-evidence-table tbody').textContent()).includes('<unsafe>'));assert.equal(await page.locator('.ps-evidence-table unsafe').count(),0);
+ await page.locator('[data-fgpp-more]').click();assert.equal(await page.locator('.ps-evidence-table tbody tr').count(),200);
+ await page.locator('[data-fgpp-more]').click();assert.equal(await page.locator('.ps-evidence-table tbody tr').count(),201);
  await page.locator('#fgpp-action [value=verify]').click();await page.waitForFunction(()=>window.calls.some(x=>x.path.endsWith('/verify')));
- await page.fill('#fgpp-action [name=confirmation]','ROLLBACK FGPP');await page.locator('#fgpp-action [value=rollback]').click();await page.waitForFunction(()=>document.body.textContent.includes('ROLLED_BACK'));
+ await page.fill('#fgpp-action [name=confirmation]','ROLLBACK FGPP');await page.locator('#fgpp-action [value=rollback]').click();await page.locator('[data-policy-state=ROLLED_BACK]').waitFor();
  for(const width of [1280,390]){await page.setViewportSize({width,height:900});assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),'FGPP page overflows');}
  await page.fill('[name=name]','GPOR-NewReview');const before=(await page.evaluate(()=>window.calls)).length;
  assert.equal(await page.locator('#fgpp-action').count(),0,'editing removes stale confirmation controls');assert.equal((await page.evaluate(()=>window.calls)).length,before,'editing invalidates previous approved snapshot');
+ await page.fill('[name=minPasswordAgeDays]','100');assert.equal(await page.locator('[name=minPasswordAgeDays]').evaluate(el=>el.validity.customError),true);await page.locator('#fgpp-preview button').click();assert.equal((await page.evaluate(()=>window.calls)).length,before,'invalid ages must not reach the API');await page.fill('[name=minPasswordAgeDays]','1');
+ await page.fill('[name=lockoutObservationWindowMinutes]','30');assert.equal(await page.locator('[name=lockoutObservationWindowMinutes]').evaluate(el=>el.validity.customError),true);await page.fill('[name=lockoutDurationMinutes]','30');assert.equal(await page.locator('[name=lockoutObservationWindowMinutes]').evaluate(el=>el.validity.customError),false);
+ await page.evaluate(()=>window.historyFail=true);await page.locator('[data-fgpp-history]').click();await page.locator('.ps-history [role=alert]').waitFor();assert.equal(await page.locator('#fgpp-preview').count(),1,'malformed history must not crash the workspace');
+ await page.evaluate(()=>window.historyFail=false);await page.locator('[data-fgpp-history]').click();await page.waitForFunction(()=>!document.querySelector('.ps-history [role=alert]'));
+ await page.locator('#fgpp-preview button').click();await page.locator('#fgpp-action').waitFor();await page.evaluate(()=>window.historyFail=true);await page.locator('[data-fgpp-history]').click();await page.locator('.ps-history [role=alert]').waitFor();
+ await page.evaluate(()=>{window.uiState.inventory.domain='other.test';window.repaint();});assert.equal(await page.locator('#fgpp-action').count(),0,'connection changes must invalidate old plans even after a failed history request');assert.ok((await page.locator('[role=alert]').first().textContent()).includes('Connection changed'));
  assert.deepEqual(errors,[]);console.log('PASS FGPP UI: OU-only picker, values, preview/apply/verify/rollback, stale review invalidation and narrow viewport.');
  }finally{if(browser)await browser.close();server.close();}
 })().catch(e=>{console.error(e);process.exitCode=1;});

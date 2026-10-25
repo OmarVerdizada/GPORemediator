@@ -1,0 +1,512 @@
+﻿[
+    {
+        "name":  "build-portable",
+        "kind":  "build/package",
+        "status":  "PASS",
+        "exitCode":  0,
+        "validationStage":  "final affected rerun",
+        "log":  "docs/audit/evidence/3.15.1/build-portable.txt",
+        "logSha256":  "939B88AB7EE859608B5790862042A9C84F1E425F2F3C95E7566A3E3E2E8B33EF",
+        "logEncoding":  "UTF-8 with LF"
+    },
+    {
+        "name":  "SecurityRegression",
+        "kind":  "offline regression",
+        "status":  "PASS",
+        "exitCode":  0,
+        "validationStage":  "complete audit",
+        "log":  "docs/audit/evidence/3.15.1/SecurityRegression.txt",
+        "logSha256":  "6DE0A82223F4DB88D93DD4F21AE3CD26FFFAB0BE19CC611493C43D9B67532D53",
+        "logEncoding":  "UTF-8 with LF"
+    },
+    {
+        "name":  "WorkflowRegression",
+        "kind":  "offline regression",
+        "status":  "PASS",
+        "exitCode":  0,
+        "validationStage":  "complete audit",
+        "log":  "docs/audit/evidence/3.15.1/WorkflowRegression.txt",
+        "logSha256":  "D7CBD3F237682F8F28B4ED34E655616421084C7EC8BA62E0BE5677DB42F20A9F",
+        "logEncoding":  "UTF-8 with LF"
+    },
+    {
+        "name":  "WorkspaceRegression",
+        "kind":  "offline regression",
+        "status":  "PASS",
+        "exitCode":  0,
+        "validationStage":  "complete audit",
+        "log":  "docs/audit/evidence/3.15.1/WorkspaceRegression.txt",
+        "logSha256":  "EA694D587AC308E9ECD2DF0976DDA887D383C4E3D09D35C73247994D45F0B13B",
+        "logEncoding":  "UTF-8 with LF"
+    },
+    {
+        "name":  "HardeningRegression",
+        "kind":  "offline regression",
+        "status":  "PASS",
+        "exitCode":  0,
+        "validationStage":  "complete audit",
+        "log":  "docs/audit/evidence/3.15.1/HardeningRegression.txt",
+        "logSha256":  "792D1D72E1FF30F78CBA2FF7B1479F07F92582CFA7B4A9446CC4F099175B1109",
+        "logEncoding":  "UTF-8 with LF"
+    },
+    {
+        "name":  "Test-SecurityFiles",
+        "kind":  "offline regression",
+        "status":  "PASS",
+        "exitCode":  0,
+        "validationStage":  "complete audit",
+        "log":  "docs/audit/evidence/3.15.1/Test-SecurityFiles.txt",
+        "logSha256":  "9425FDDA6F87D769A9AFD4CF7824CC56676A4FB6A80BAA2D44E31C85564B0C79",
+        "logEncoding":  "UTF-8 with LF"
+    },
+    {
+        "name":  "Test-DomainSignIn",
+        "kind":  "offline regression",
+        "status":  "PASS",
+        "exitCode":  0,
+        "validationStage":  "complete audit",
+        "log":  "docs/audit/evidence/3.15.1/Test-DomainSignIn.txt",
+        "logSha256":  "4EF1F6542C2D0FB1D7210084ADAEFD751F9E439AF473969C808AE3F93C1EB7BE",
+        "logEncoding":  "UTF-8 with LF"
+    },
+    {
+        "name":  "Test-EndpointTargeting",
+        "kind":  "offline regression",
+        "status":  "PASS",
+        "exitCode":  0,
+        "validationStage":  "complete audit",
+        "log":  "docs/audit/evidence/3.15.1/Test-EndpointTargeting.txt",
+        "logSha256":  "129C4C064DA1265315D2523043370A6CAD0C6388A97CF45F9B486C7F293D2B51",
+        "logEncoding":  "UTF-8 with LF"
+    },
+    {
+        "name":  "Test-SelectionAccess",
+        "kind":  "offline regression",
+        "status":  "PASS",
+        "exitCode":  0,
+        "validationStage":  "complete audit",
+        "log":  "docs/audit/evidence/3.15.1/Test-SelectionAccess.txt",
+        "logSha256":  "9E2D20D8CFAC246946853DD42E70EBBEEE78A4CE1320EC3888D64619DF351EFB",
+        "logEncoding":  "UTF-8 with LF"
+    },
+    {
+        "name":  "Test-SysvolDiscovery",
+        "kind":  "offline regression",
+        "status":  "PASS",
+        "exitCode":  0,
+        "validationStage":  "complete audit",
+        "log":  "docs/audit/evidence/3.15.1/Test-SysvolDiscovery.txt",
+        "logSha256":  "4FBA5753386AF9A3064A22797107C41377384047168A25872167105775701D5C",
+        "logEncoding":  "UTF-8 with LF"
+    },
+    {
+        "name":  "Test-RemediationChain",
+        "kind":  "offline regression",
+        "status":  "PASS",
+        "exitCode":  0,
+        "validationStage":  "complete audit",
+        "log":  "docs/audit/evidence/3.15.1/Test-RemediationChain.txt",
+        "logSha256":  "459F9A0790B0A910ADC59DC9A5802E0CC0A2332605130CF7FF2B99B94B7B75B5",
+        "logEncoding":  "UTF-8 with LF"
+    },
+    {
+        "name":  "Test-RuntimeIntegrity",
+        "kind":  "offline regression",
+        "status":  "PASS",
+        "exitCode":  0,
+        "validationStage":  "complete audit",
+        "log":  "docs/audit/evidence/3.15.1/Test-RuntimeIntegrity.txt",
+        "logSha256":  "CD24A94791894F4558C78918C7095B3C668AC2F586EADD12734BF3635EF2B0C8",
+        "logEncoding":  "UTF-8 with LF"
+    },
+    {
+        "name":  "Test-GpoMappings",
+        "kind":  "offline regression",
+        "status":  "PASS",
+        "exitCode":  0,
+        "validationStage":  "complete audit",
+        "log":  "docs/audit/evidence/3.15.1/Test-GpoMappings.txt",
+        "logSha256":  "BC98C7F2DBBC4CEE15C6AAD0DC6500E3AC062E6DCC2998A491569DD3CF47BDCC",
+        "logEncoding":  "UTF-8 with LF"
+    },
+    {
+        "name":  "Test-EndpointEvidence",
+        "kind":  "offline regression",
+        "status":  "PASS",
+        "exitCode":  0,
+        "validationStage":  "complete audit",
+        "log":  "docs/audit/evidence/3.15.1/Test-EndpointEvidence.txt",
+        "logSha256":  "ADB18704682DAF3CB129F101C4B553157C16C5F88CA9AD9B205052B736D5C01E",
+        "logEncoding":  "UTF-8 with LF"
+    },
+    {
+        "name":  "Test-AllEndpointMappings",
+        "kind":  "offline regression",
+        "status":  "PASS",
+        "exitCode":  0,
+        "validationStage":  "complete audit",
+        "log":  "docs/audit/evidence/3.15.1/Test-AllEndpointMappings.txt",
+        "logSha256":  "991A9B79F36EF28F249C3720F9358526BDF7958F1BE87120F7199FC4EF7E26DA",
+        "logEncoding":  "UTF-8 with LF"
+    },
+    {
+        "name":  "Test-VerificationLifecycle",
+        "kind":  "offline regression",
+        "status":  "PASS",
+        "exitCode":  0,
+        "validationStage":  "complete audit",
+        "log":  "docs/audit/evidence/3.15.1/Test-VerificationLifecycle.txt",
+        "logSha256":  "8BC14029794CDF8535839198A6C0329C60FE24A788A75E1298448191BB919CF2",
+        "logEncoding":  "UTF-8 with LF"
+    },
+    {
+        "name":  "Test-PowerShellSyntax",
+        "kind":  "offline regression",
+        "status":  "PASS",
+        "exitCode":  0,
+        "validationStage":  "complete audit",
+        "log":  "docs/audit/evidence/3.15.1/Test-PowerShellSyntax.txt",
+        "logSha256":  "47C2DFB42D6EF37440E92468F616D605F21FA54495EA6EB88F541B5C1E61353F",
+        "logEncoding":  "UTF-8 with LF"
+    },
+    {
+        "name":  "Test-ServiceControl",
+        "kind":  "offline regression",
+        "status":  "PASS",
+        "exitCode":  0,
+        "validationStage":  "complete audit",
+        "log":  "docs/audit/evidence/3.15.1/Test-ServiceControl.txt",
+        "logSha256":  "4FCD056080BF0E4DDB4DCBDA53CE4017E3298FCB75B6317995ED33D899439280",
+        "logEncoding":  "UTF-8 with LF"
+    },
+    {
+        "name":  "frontend-syntax",
+        "kind":  "syntax",
+        "status":  "PASS",
+        "exitCode":  0,
+        "validationStage":  "complete audit",
+        "log":  "docs/audit/evidence/3.15.1/frontend-syntax.txt",
+        "logSha256":  "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855",
+        "logEncoding":  "UTF-8 with LF"
+    },
+    {
+        "name":  "Test-FineGrainedPassword",
+        "kind":  "offline regression",
+        "status":  "PASS",
+        "exitCode":  0,
+        "validationStage":  "complete audit",
+        "log":  "docs/audit/evidence/3.15.1/Test-FineGrainedPassword.txt",
+        "logSha256":  "5ACE60638E08DAB0FB5C3E8A450FAD0938DAB2E10B3D5E9CFF5B3B213B40B8E6",
+        "logEncoding":  "UTF-8 with LF"
+    },
+    {
+        "name":  "Test-EndpointBatching",
+        "kind":  "offline regression",
+        "status":  "PASS",
+        "exitCode":  0,
+        "validationStage":  "complete audit",
+        "log":  "docs/audit/evidence/3.15.1/Test-EndpointBatching.txt",
+        "logSha256":  "A0861949E9076B0B644A50CFBE967C43EE49BCA68559E05FB827DA63D7956D66",
+        "logEncoding":  "UTF-8 with LF"
+    },
+    {
+        "name":  "Test-PasswordPolicyUi",
+        "kind":  "offline regression",
+        "status":  "PASS",
+        "exitCode":  0,
+        "validationStage":  "complete audit",
+        "log":  "docs/audit/evidence/3.15.1/Test-PasswordPolicyUi.txt",
+        "logSha256":  "2DE2EFCA9AFCFF0C90053FE8BF5678775F0510F766005F82095ED3D31838887F",
+        "logEncoding":  "UTF-8 with LF"
+    },
+    {
+        "name":  "Test-FrontendPolish",
+        "kind":  "offline regression",
+        "status":  "PASS",
+        "exitCode":  0,
+        "validationStage":  "final affected rerun",
+        "log":  "docs/audit/evidence/3.15.1/Test-FrontendPolish.txt",
+        "logSha256":  "63360BDC61FAD7A5522502F8F71AA3B1BAC81F922BC4740B25ABB596B4954057",
+        "logEncoding":  "UTF-8 with LF"
+    },
+    {
+        "name":  "stylesheet-build",
+        "kind":  "offline regression",
+        "status":  "PASS",
+        "exitCode":  0,
+        "validationStage":  "complete audit",
+        "log":  "docs/audit/evidence/3.15.1/stylesheet-build.txt",
+        "logSha256":  "775C1A09AEBC7CA4E60E265EB7A08DE3318871A231972CACDB8C0DF77C48D321",
+        "logEncoding":  "UTF-8 with LF"
+    },
+    {
+        "name":  "Test-Responsiveness",
+        "kind":  "offline regression",
+        "status":  "PASS",
+        "exitCode":  0,
+        "validationStage":  "complete audit",
+        "log":  "docs/audit/evidence/3.15.1/Test-Responsiveness.txt",
+        "logSha256":  "02B37A00C989C56151F39EE687AC157403ECB2B01070E02FD41C2E1FAF223DF9",
+        "logEncoding":  "UTF-8 with LF"
+    },
+    {
+        "name":  "Test-FrontendSystem",
+        "kind":  "offline regression",
+        "status":  "PASS",
+        "exitCode":  0,
+        "validationStage":  "complete audit",
+        "log":  "docs/audit/evidence/3.15.1/Test-FrontendSystem.txt",
+        "logSha256":  "F5F015C08A44D17DC4F580EEF32CB8752BD1511853A801DD2B6DA062594CB896",
+        "logEncoding":  "UTF-8 with LF"
+    },
+    {
+        "name":  "Test-RemediationEvidence",
+        "kind":  "offline regression",
+        "status":  "PASS",
+        "exitCode":  0,
+        "validationStage":  "complete audit",
+        "log":  "docs/audit/evidence/3.15.1/Test-RemediationEvidence.txt",
+        "logSha256":  "0A594F208CCB0F8E46D68549F2500B961FF8301DB50099E61429DA2B30B2FC34",
+        "logEncoding":  "UTF-8 with LF"
+    },
+    {
+        "name":  "Test-RecipeWorkspace",
+        "kind":  "offline regression",
+        "status":  "PASS",
+        "exitCode":  0,
+        "validationStage":  "complete audit",
+        "log":  "docs/audit/evidence/3.15.1/Test-RecipeWorkspace.txt",
+        "logSha256":  "588D9E9B4D377E94D0DB6E9F67483981A837B243CE8F3E807564EB06FE646EEA",
+        "logEncoding":  "UTF-8 with LF"
+    },
+    {
+        "name":  "Test-GuidedRemediation",
+        "kind":  "offline regression",
+        "status":  "PASS",
+        "exitCode":  0,
+        "validationStage":  "complete audit",
+        "log":  "docs/audit/evidence/3.15.1/Test-GuidedRemediation.txt",
+        "logSha256":  "95A4AA854F690CEAD957A5395411A0E9075453630B964C8EADB74768C2BF596D",
+        "logEncoding":  "UTF-8 with LF"
+    },
+    {
+        "name":  "Test-GpoScopePicker",
+        "kind":  "offline regression",
+        "status":  "PASS",
+        "exitCode":  0,
+        "validationStage":  "complete audit",
+        "log":  "docs/audit/evidence/3.15.1/Test-GpoScopePicker.txt",
+        "logSha256":  "99161E7AF39CBDD4236768B2D8DB9206A0D4E345D231CA5C98940A6F0E8C2684",
+        "logEncoding":  "UTF-8 with LF"
+    },
+    {
+        "name":  "Test-ControlTargeting",
+        "kind":  "offline regression",
+        "status":  "PASS",
+        "exitCode":  0,
+        "validationStage":  "complete audit",
+        "log":  "docs/audit/evidence/3.15.1/Test-ControlTargeting.txt",
+        "logSha256":  "372EF4A7FB2D6E042849607CD12C57E0CCBFF5AC27ACB61DA0D56261FA6F93CA",
+        "logEncoding":  "UTF-8 with LF"
+    },
+    {
+        "name":  "Test-UX-Contract",
+        "kind":  "offline regression",
+        "status":  "PASS",
+        "exitCode":  0,
+        "validationStage":  "complete audit",
+        "log":  "docs/audit/evidence/3.15.1/Test-UX-Contract.txt",
+        "logSha256":  "1DC8244C6D17DEDEB8327DE768A51FA1E1A5F5D06BEE9AA1C1DECE46F3FF036E",
+        "logEncoding":  "UTF-8 with LF"
+    },
+    {
+        "name":  "Test-Studio-UI",
+        "kind":  "offline regression",
+        "status":  "PASS",
+        "exitCode":  0,
+        "validationStage":  "complete audit",
+        "log":  "docs/audit/evidence/3.15.1/Test-Studio-UI.txt",
+        "logSha256":  "2954CEB1983CFFC170DC4BAA671DEBD62BAE7774777322EAF40F35BFE2A4C225",
+        "logEncoding":  "UTF-8 with LF"
+    },
+    {
+        "name":  "Test-EnterpriseCenter",
+        "kind":  "offline regression",
+        "status":  "PASS",
+        "exitCode":  0,
+        "validationStage":  "complete audit",
+        "log":  "docs/audit/evidence/3.15.1/Test-EnterpriseCenter.txt",
+        "logSha256":  "D52C300E3CCC02403B0B9FA749931E48D1746FA4745B1F71CE1398572C8B5DE8",
+        "logEncoding":  "UTF-8 with LF"
+    },
+    {
+        "name":  "Test-ManualVerification",
+        "kind":  "offline regression",
+        "status":  "PASS",
+        "exitCode":  0,
+        "validationStage":  "complete audit",
+        "log":  "docs/audit/evidence/3.15.1/Test-ManualVerification.txt",
+        "logSha256":  "9FFAD591F2E5052777CF8DAF1CE974E21BC4F1CE1D5CB5EA796E2725EF78DD9C",
+        "logEncoding":  "UTF-8 with LF"
+    },
+    {
+        "name":  "Test-ValueEditor",
+        "kind":  "offline regression",
+        "status":  "PASS",
+        "exitCode":  0,
+        "validationStage":  "complete audit",
+        "log":  "docs/audit/evidence/3.15.1/Test-ValueEditor.txt",
+        "logSha256":  "2D21A7B56411F00676411B17D26CB06EE1EF589357CA68382FCF744C67DCDDAB",
+        "logEncoding":  "UTF-8 with LF"
+    },
+    {
+        "name":  "Test-ManualRemediation",
+        "kind":  "offline regression",
+        "status":  "PASS",
+        "exitCode":  0,
+        "validationStage":  "complete audit",
+        "log":  "docs/audit/evidence/3.15.1/Test-ManualRemediation.txt",
+        "logSha256":  "B190BF7EC79AA9D031FF42BC65C329FBC34775BF82BFA9F10F3E0DB10F3E4C8F",
+        "logEncoding":  "UTF-8 with LF"
+    },
+    {
+        "name":  "Test-RecoveryUi",
+        "kind":  "offline regression",
+        "status":  "PASS",
+        "exitCode":  0,
+        "validationStage":  "complete audit",
+        "log":  "docs/audit/evidence/3.15.1/Test-RecoveryUi.txt",
+        "logSha256":  "7BDCE4AFF7A132C25FB13C9C8D0C47C3142D2D7C79EE67049B7C4FEDF0F550B4",
+        "logEncoding":  "UTF-8 with LF"
+    },
+    {
+        "name":  "Test-WorkflowUi",
+        "kind":  "offline regression",
+        "status":  "PASS",
+        "exitCode":  0,
+        "validationStage":  "complete audit",
+        "log":  "docs/audit/evidence/3.15.1/Test-WorkflowUi.txt",
+        "logSha256":  "4D36A651723D7FF62F77AD6064FED97BE50BCD59BF79B1432E1815F4D36DA435",
+        "logEncoding":  "UTF-8 with LF"
+    },
+    {
+        "name":  "Test-EndpointTargetingUi",
+        "kind":  "offline regression",
+        "status":  "PASS",
+        "exitCode":  0,
+        "validationStage":  "complete audit",
+        "log":  "docs/audit/evidence/3.15.1/Test-EndpointTargetingUi.txt",
+        "logSha256":  "AA1C9836CF4E6E5504699CBA2E66B3A054BB7285FC1B12270ED7843FCA64C392",
+        "logEncoding":  "UTF-8 with LF"
+    },
+    {
+        "name":  "Test-EnglishThemes",
+        "kind":  "offline regression",
+        "status":  "PASS",
+        "exitCode":  0,
+        "validationStage":  "complete audit",
+        "log":  "docs/audit/evidence/3.15.1/Test-EnglishThemes.txt",
+        "logSha256":  "D4EC754C79F2D6CC073790C992675FE2B4B412DBC7518B4070A409266D8CDEC4",
+        "logEncoding":  "UTF-8 with LF"
+    },
+    {
+        "name":  "mapping-generation",
+        "kind":  "offline regression",
+        "status":  "PASS",
+        "exitCode":  0,
+        "validationStage":  "complete audit",
+        "log":  "docs/audit/evidence/3.15.1/mapping-generation.txt",
+        "logSha256":  "A9545FFF9A595E8287C20FCD7FCAE55A7A1B5A04D35A5194CA045F8494AA2E18",
+        "logEncoding":  "UTF-8 with LF"
+    },
+    {
+        "name":  "Test-ProductionMappings",
+        "kind":  "offline regression",
+        "status":  "PASS",
+        "exitCode":  0,
+        "validationStage":  "complete audit",
+        "log":  "docs/audit/evidence/3.15.1/Test-ProductionMappings.txt",
+        "logSha256":  "C8D78BC88EDD9838CBC941B7B40C3D33C296C9C13F5FFDC1475FAEFD33B53A1C",
+        "logEncoding":  "UTF-8 with LF"
+    },
+    {
+        "name":  "Audit-PolicyScopes",
+        "kind":  "offline regression",
+        "status":  "PASS",
+        "exitCode":  0,
+        "validationStage":  "complete audit",
+        "log":  "docs/audit/evidence/3.15.1/Audit-PolicyScopes.txt",
+        "logSha256":  "102803EF9A7FC1E197D2F1A89EA34BC148420748B501F67545DBBBB3CFF1C8FA",
+        "logEncoding":  "UTF-8 with LF"
+    },
+    {
+        "name":  "Validate-ProductionPackage",
+        "kind":  "offline regression",
+        "status":  "PASS",
+        "exitCode":  0,
+        "validationStage":  "complete audit",
+        "log":  "docs/audit/evidence/3.15.1/Validate-ProductionPackage.txt",
+        "logSha256":  "B995F4F06663192C11927DD3B96588A3A2B31D62F136A8527C79553C31F4AF5F",
+        "logEncoding":  "UTF-8 with LF"
+    },
+    {
+        "name":  "installed-admx-review",
+        "kind":  "local ADMX comparison; not policy execution",
+        "status":  "PASS",
+        "exitCode":  0,
+        "validationStage":  "complete audit",
+        "log":  "docs/audit/evidence/3.15.1/installed-admx-review.txt",
+        "logSha256":  "C774FA168619B11EBBCF1FBA383FAAAB600F9F54C867FF71F2C7FA9CFD52E3E1",
+        "logEncoding":  "UTF-8 with LF"
+    },
+    {
+        "name":  "secret-guard-selftest",
+        "kind":  "offline regression",
+        "status":  "PASS",
+        "exitCode":  0,
+        "validationStage":  "complete audit",
+        "log":  "docs/audit/evidence/3.15.1/secret-guard-selftest.txt",
+        "logSha256":  "D39111249F86AAC7B29C1651B81C8DB8AA5745AF4B98D81A5CF8E48532B6CE6C",
+        "logEncoding":  "UTF-8 with LF"
+    },
+    {
+        "name":  "secret-guard",
+        "kind":  "offline regression",
+        "status":  "PASS",
+        "exitCode":  0,
+        "validationStage":  "complete audit",
+        "log":  "docs/audit/evidence/3.15.1/secret-guard.txt",
+        "logSha256":  "DAA2F560B35996AAF0556ED1225989C5EEE418A887D5E6C66D79C36D83E93066",
+        "logEncoding":  "UTF-8 with LF"
+    },
+    {
+        "name":  "domain-gpo-isolation",
+        "kind":  "offline regression",
+        "status":  "PASS",
+        "exitCode":  0,
+        "validationStage":  "complete audit",
+        "log":  "docs/audit/evidence/3.15.1/domain-gpo-isolation.txt",
+        "logSha256":  "46283D4129FD2EC354B4DA743B1F28F142E0F8ABCFF7C25E063E84F54F5829CC",
+        "logEncoding":  "UTF-8 with LF"
+    },
+    {
+        "name":  "dependency-vulnerability-query",
+        "kind":  "dependency advisory query with completeness/vulnerability checks",
+        "status":  "PASS",
+        "exitCode":  0,
+        "validationStage":  "complete audit",
+        "log":  "docs/audit/evidence/3.15.1/dependency-vulnerability-query.txt",
+        "logSha256":  "5B35B7248FB893E50AD3178927BF4E3D9F81C898AEA2F7CE789C6E44C3615BC1",
+        "logEncoding":  "UTF-8 with LF"
+    },
+    {
+        "name":  "built-source-match",
+        "kind":  "current source/distribution compatibility",
+        "status":  "PASS",
+        "exitCode":  0,
+        "validationStage":  "complete audit",
+        "log":  "docs/audit/evidence/3.15.1/built-source-match.txt",
+        "logSha256":  "BDA18A7A1E982EC47A1B0E4AB9AA3FF24144D71FBCA7CABCA2676530D8C7FC3F",
+        "logEncoding":  "UTF-8 with LF"
+    }
+]

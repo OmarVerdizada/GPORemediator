@@ -1,0 +1,1 @@
+PASS SYSVOL discovery: no CIM rights, relocated/DFSR path, expansion, local pinning, readiness and access failures. No AD commands executed.
