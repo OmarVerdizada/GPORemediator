@@ -244,6 +244,8 @@ app.MapPost("/api/gpo/disconnect",(HttpContext context,GpoWorkflowService servic
 app.MapGet("/api/gpo/inventory",(HttpContext context,GpoWorkflowService service)=>service.Inventory(GpoToken(context),Operator(context)));
 app.MapGet("/api/gpo/session",(HttpContext context,GpoWorkflowService service)=>service.SessionStatus(GpoToken(context),Operator(context)));
 app.MapGet("/api/gpo/readiness",async(HttpContext context,GpoWorkflowService service,CancellationToken ct)=>await service.ReadinessAsync(GpoToken(context),Operator(context),ct));
+app.MapPost("/api/gpo/access-report",async(GpoSelection request,HttpContext context,GpoWorkflowService service,CancellationToken ct)=>await service.AccessReportAsync(request,GpoToken(context),Operator(context),ct));
+app.MapPost("/api/gpo/{id}/explain",async(string id,GpoExplainRequest request,HttpContext context,GpoWorkflowService service,CancellationToken ct)=>await service.ExplainAsync(id,request,GpoToken(context),Operator(context),ct));
 app.MapPost("/api/gpo/backup-access",(BackupAccessRequest request,HttpContext context,GpoWorkflowService service)=>{
     if(!OperatingSystem.IsWindows())throw new PolicyException("WINDOWS_MODE_REQUIRED","Backup ACL repair requires Windows.");
     if(context.User.Identity is not WindowsIdentity identity || !new WindowsPrincipal(identity).IsInRole(WindowsBuiltInRole.Administrator))
@@ -276,6 +278,7 @@ app.MapGet("/api/gpo/settings",()=>ProductionGpoMappings.Settings.Select(x=>new 
 app.MapGet("/api/gpo/history",(HttpContext context,GpoWorkflowService service)=>service.History(Operator(context)));
 app.MapGet("/api/password-policies",(HttpContext context,FineGrainedPasswordService service)=>service.History(Operator(context)));
 app.MapPost("/api/password-policies/preview",async(FineGrainedPasswordRequest request,HttpContext context,FineGrainedPasswordService service,CancellationToken ct)=>await service.Preview(GpoToken(context),Operator(context),request,ct));
+app.MapPost("/api/password-policies/{id}/reconcile-preview",async(string id,HttpContext context,FineGrainedPasswordService service,CancellationToken ct)=>await service.Reconcile(id,GpoToken(context),Operator(context),ct));
 app.MapPost("/api/password-policies/{id}/{action}",async(string id,string action,FineGrainedPasswordAction request,HttpContext context,FineGrainedPasswordService service,CancellationToken ct)=>await service.Execute(id,action,GpoToken(context),Operator(context),request.Confirmation,ct));
 app.MapGet("/api/gpo/{id}/evidence",(string id,HttpContext context,GpoWorkflowService service)=>service.Evidence(id,Operator(context)));
 app.MapPost("/api/gpo/target-access",async(GpoSelection request,HttpContext context,GpoWorkflowService service,CancellationToken ct)=>await service.CheckTargetAccessAsync(GpoToken(context),Operator(context),request,ct));

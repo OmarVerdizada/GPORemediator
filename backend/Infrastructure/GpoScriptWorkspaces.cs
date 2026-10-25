@@ -58,7 +58,7 @@ public static class GpoScriptWorkspaces
             if($null -eq $req -or $null -eq $req.configuration -or $null -eq $req.payload -or $null -eq $req.payload.data){throw 'GPO_ISOLATION_DENIED|Missing scoped request.'}
             if([string]$req.configuration.domain -ine $expectedDomain){throw 'GPO_ISOLATION_DENIED|Domain does not match this GPO script.'}
             $operation=[string]$req.operation
-            if($operation -notin @('gpoPreview','gpoApply','gpoVerify','gpoRollback','gpoRollbackInspect','gpoRefresh')){throw 'GPO_ISOLATION_DENIED|Only a selected-GPO operation can use this script.'}
+            if($operation -notin @('gpoExplain','gpoPreview','gpoApply','gpoVerify','gpoRollback','gpoRollbackInspect','gpoRefresh')){throw 'GPO_ISOLATION_DENIED|Only a selected-GPO operation can use this script.'}
             $selected=if($operation -eq 'gpoPreview'){$req.payload.data.selection}else{$req.payload.data.plan.selection}
             if($null -eq $selected){throw 'GPO_ISOLATION_DENIED|Missing GPO selection.'}
             $guid=[guid]::Empty
@@ -165,7 +165,7 @@ public static class GpoScriptWorkspaces
     public static string SelectScript(string operation,object configuration,object payload,string trustedBootstrap)
     {
         if(operation is "gpoInventory" or "gpoReadiness" or "fgppPreview" or "fgppApply" or "fgppVerify" or "fgppRollback")return trustedBootstrap;
-        if(operation is not ("gpoPreview" or "gpoApply" or "gpoVerify" or "gpoRollback" or "gpoRollbackInspect" or "gpoRefresh"))
+        if(operation is not ("gpoExplain" or "gpoPreview" or "gpoApply" or "gpoVerify" or "gpoRollback" or "gpoRollbackInspect" or "gpoRefresh"))
             throw new PolicyException("OPERATION_DENIED","Unsupported isolated-GPO operation.");
         // Extract scope from the already typed server-owned request, not a user-supplied path.
         var cfg=JsonSerializer.SerializeToElement(configuration,JsonDefaults.Options);

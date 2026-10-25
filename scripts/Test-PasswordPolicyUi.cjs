@@ -15,13 +15,14 @@ const server=http.createServer((req,res)=>{
  const esc=x=>String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
  function render(){root.innerHTML=controller.view();}
  async function run(fn){state.busy=true;render();try{await fn();}finally{state.busy=false;render();}}
- async function api(path,body){window.calls.push({path,body});if(path==='/password-policies')return window.historyFail?{}:[];if(path.endsWith('/preview'))return {id:'fixture',request:body,executionUser:'TEST\\operator',preview:{users:[{name:'alice'},{name:'bob'}],warnings:[],before:{exists:false}}};return {state:path.endsWith('/rollback')?'ROLLED_BACK':'VERIFIED',message:'Fixture only',users:Array.from({length:201},(_,i)=>({user:i===0?'<unsafe>':'user'+i,policy:'GPOR-Reviewed',state:'VERIFIED'}))};}
+ async function api(path,body){window.calls.push({path,body});if(path==='/password-policies')return window.historyFail?{}:[];if(path.endsWith('/preview')||path.endsWith('/reconcile-preview'))return {id:'fixture',request:body?.name?body:{name:'GPOR-Reviewed',scopeDn:'OU=Users,DC=test,DC=local'},executionUser:'TEST\\operator',preview:{membership:{currentSubjects:1,desiredUsers:2,unchanged:1,add:[{name:'new-user',dn:'CN=New,OU=Users,DC=test,DC=local'}],remove:[],moved:[],departed:[],baselineAvailable:true},users:[{name:'alice'},{name:'bob'}],warnings:[],before:{exists:false}}};return {state:path.endsWith('/rollback')?'ROLLED_BACK':'VERIFIED',message:'Fixture only',users:Array.from({length:201},(_,i)=>({user:i===0?'<unsafe>':'user'+i,policy:'GPOR-Reviewed',state:'VERIFIED'}))};}
  window.uiState=state;window.repaint=render;controller=window.GpoPasswordPolicies.create({state,esc,api,run,render});root.addEventListener('input',controller.handleInput);root.addEventListener('click',controller.handleClick);root.addEventListener('submit',controller.handleSubmit);render();
  });
  assert.equal(await page.locator('[name=scopeDn] option').count(),2,'domain must not be an FGPP OU option');
  await page.selectOption('[name=scopeDn]','OU=Users,DC=test,DC=local');await page.fill('[name=name]','GPOR-Reviewed');await page.fill('[name=minPasswordLength]','16');
  await page.locator('#fgpp-preview button').click();await page.locator('#fgpp-action').waitFor();
  assert.equal(await page.locator('#fgpp-action [value=apply]').count(),1);
+ assert.match(await page.locator('.ps-membership').textContent(),/OU membership comparison/);await page.locator('[data-fgpp-reconcile]').click();await page.waitForFunction(()=>window.calls.some(x=>x.path.endsWith('/reconcile-preview')));assert.equal(await page.locator('#fgpp-action [value=apply]').isDisabled(),true,'comparison creates a fresh unapproved snapshot');
  await page.fill('#fgpp-action [name=confirmation]','APPLY FGPP');await page.locator('#fgpp-action [value=apply]').click();
  await page.waitForFunction(()=>window.calls.some(x=>x.path.endsWith('/apply')));
  let calls=await page.evaluate(()=>window.calls);assert.equal(calls.find(x=>x.path.endsWith('/preview')).body.minPasswordLength,16);assert.equal(calls.find(x=>x.path.endsWith('/apply')).body.confirmation,'APPLY FGPP');

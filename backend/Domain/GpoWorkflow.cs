@@ -45,6 +45,7 @@ public record GpoWorkflowPlan(string Id, string Actor, string ExecutionUser, str
 [System.Text.Json.Serialization.JsonUnmappedMemberHandling(System.Text.Json.Serialization.JsonUnmappedMemberHandling.Disallow)]
 public record GpoRefreshRequest(string Refresh);
 public record BackupAccessRequest(string Identity,string Confirmation);
+public record GpoExplainRequest(string Hostname);
 public record GpoConsent(string Confirmation, bool AcknowledgeImpact = false, bool AcknowledgeProtected = false, string? ChangeReference = null, string? ApprovedBy = null, string? Refresh = null);
 public record GpoRefreshResult(string Computer, string State, string Message);
 public record EndpointCoverage(int Total,int Checked,bool Complete);

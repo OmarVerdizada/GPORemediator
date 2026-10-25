@@ -1,0 +1,1 @@
+PASS Studio UI: six wave components, trusted counts, output encoding, no fabricated compliance.

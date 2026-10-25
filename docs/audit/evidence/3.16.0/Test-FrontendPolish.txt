@@ -1,0 +1,1 @@
+PASS appearance bootstrap/focus/Escape/outside click; all routes in both themes at 320/390/768/1440px; mobile labels, short sidebar, keyboard skip and no policy writes.

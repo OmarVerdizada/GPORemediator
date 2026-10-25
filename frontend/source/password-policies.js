@@ -35,6 +35,11 @@
       const [,label,min,max,hint]=fields.find(x=>x[0]===name);
       return '<label for="ps-'+name+'">'+label+'<input id="ps-'+name+'" type="number" step="1" name="'+name+'" min="'+min+'" max="'+max+'" value="'+draft[name]+'" required aria-describedby="ps-'+name+'-hint"><small id="ps-'+name+'-hint">'+hint+'</small></label>';
     }
+    function membership(){
+      const m=plan?.preview?.membership;if(!m)return '';
+      const lists=[['Add',m.add],['Remove',m.remove],['Moved within OU',m.moved],['Departed since last applied snapshot',m.departed]];
+      return '<section class="ps-membership"><h3>OU membership comparison</h3><p>'+Number(m.currentSubjects||0)+' existing subjects → '+Number(m.desiredUsers||0)+' enabled users. '+Number(m.unchanged||0)+' unchanged.</p><p>Only an explicitly approved Apply changes assignments. Moving a user in AD does not update this PSO automatically.</p>'+(!m.baselineAvailable?'<p>No previously applied user snapshot is available; current PSO subjects are still compared.</p>':'')+lists.map(([label,items])=>'<details class="ps-details"><summary>'+label+' ('+(items||[]).length+')</summary><ul class="ps-user-list">'+(items||[]).slice(0,100).map(u=>'<li><strong>'+esc(u.name||u.dn||u.guid)+'</strong><small>'+esc(u.reason||u.afterDn||u.dn||'')+'</small>'+(u.beforeDn?'<small>Previous: '+esc(u.beforeDn)+'</small>':'')+'</li>').join('')+'</ul>'+((items||[]).length>100?'<p>First 100 shown; download evidence for the full comparison.</p>':'')+'</details>').join('')+'</section>';
+    }
     function snapshot(){
       if(!plan)return '';
       const users=Array.isArray(plan.preview?.users)?plan.preview.users:[];
@@ -44,6 +49,7 @@
         '<p>Review the complete policy and user snapshot before applying. Preview expires after 10 minutes; Apply rechecks OU membership and the previous policy.</p>'+
         '<details class="ps-details"><summary>Requested values, warnings and previous policy</summary><pre>'+esc(JSON.stringify(preview,null,2))+'</pre></details>'+
         '<details class="ps-details"><summary>Users in this snapshot ('+users.length+')</summary><ul class="ps-user-list">'+users.slice(0,100).map(u=>'<li><strong>'+esc(u.name)+'</strong><small>'+esc(u.dn||'')+'</small></li>').join('')+'</ul>'+(users.length>100?'<p>Showing the first 100 users. Download the full evidence for every user.</p>':'')+'</details>'+
+        membership()+'<button type="button" data-fgpp-reconcile'+(canExecutePlan()?'':' disabled')+'>Compare current OU membership</button><p class="ps-footnote">Creates a fresh read-only preview; review and confirm APPLY FGPP to reconcile.</p>'+
         '<form id="fgpp-action"><p class="ps-footnote">'+(planContextMatches()?'':'Reconnect to the recorded domain, DC and execution account to run actions on this snapshot.')+'</p><label for="ps-confirmation">Explicit confirmation<input id="ps-confirmation" name="confirmation" autocomplete="off" spellcheck="false" placeholder="APPLY FGPP or ROLLBACK FGPP" aria-describedby="ps-confirmation-help"></label><small id="ps-confirmation-help">Type APPLY FGPP to apply, or ROLLBACK FGPP to restore this operation. Verify is read-only.</small>'+
         '<div class="ps-actions"><button class="primary" name="action" value="apply" disabled>Apply approved snapshot</button><button name="action" value="verify"'+(canExecutePlan()?'':' disabled')+'>Verify resultant policies</button><button class="ps-rollback" name="action" value="rollback" disabled>Roll back</button><button type="button" data-fgpp-export'+busy()+'>Download evidence</button></div></form>'+
         '<p class="ps-footnote">Writes require the enabled change gate and this OU in Settings → Authorized OU / domain DNs. External changes block automatic rollback.</p></section>';
@@ -93,10 +99,11 @@
       return run(async()=>{try{await action();}catch(e){error=e.message||'The operation could not finish. Verify its recorded state before retrying.';throw e;}});
     }
     function handleClick(e){
-      const button=e.target.closest('[data-fgpp-history],[data-fgpp-open],[data-fgpp-more],[data-fgpp-export]');
+      const button=e.target.closest('[data-fgpp-history],[data-fgpp-open],[data-fgpp-more],[data-fgpp-export],[data-fgpp-reconcile]');
       if(!button)return false;
       if(state.busy)return true;
       if(button.hasAttribute('data-fgpp-history'))dispatch(load);
+      if(button.hasAttribute('data-fgpp-reconcile')&&plan&&canExecutePlan())dispatch(async()=>{plan=await api('/password-policies/'+plan.id+'/reconcile-preview',{});result=null;evidenceLimit=100;await load();});
       if(button.hasAttribute('data-fgpp-more')){evidenceLimit+=100;render();}
       if(button.hasAttribute('data-fgpp-open')){
         const entry=history.find(x=>x.plan.id===button.dataset.fgppOpen);

@@ -1,0 +1,1 @@
+PASS English-only migration, light/dark/system themes, WCAG text contrast, desktop/mobile layout and no policy mutations.

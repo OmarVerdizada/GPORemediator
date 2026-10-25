@@ -18,7 +18,7 @@ Push-Location $repo
 try{
  Run-Check 'build-portable' 'powershell.exe' @('-NoProfile','-ExecutionPolicy','Bypass','-File','Build-Portable.ps1') 'build/package'
  foreach($project in @('SecurityRegression','WorkflowRegression','WorkspaceRegression','HardeningRegression')){Run-Check $project $sdk @('run','--project',('scripts/'+$project),'-c','Release')}
- foreach($script in @('Test-SecurityFiles','Test-DomainSignIn','Test-EndpointTargeting','Test-SelectionAccess','Test-SysvolDiscovery','Test-RemediationChain','Test-RuntimeIntegrity','Test-GpoMappings','Test-EndpointEvidence','Test-AllEndpointMappings','Test-VerificationLifecycle','Test-PowerShellSyntax','Test-ServiceControl')){
+ foreach($script in @('Test-SecurityFiles','Test-DomainSignIn','Test-EndpointTargeting','Test-SelectionAccess','Test-SysvolDiscovery','Test-RemediationChain','Test-RuntimeIntegrity','Test-GpoMappings','Test-EndpointEvidence','Test-AllEndpointMappings','Test-VerificationLifecycle','Test-PowerShellSyntax','Test-ServiceControl','Test-PolicyDiagnostics','Test-LivePilotSafety','Test-LivePilotFlow','Test-ReleaseInstaller')){
   $arguments=@('-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-File',('scripts/'+$script+'.ps1'))
   if($script -eq 'Test-GpoMappings'){$arguments+=@('-ReportPath',($OutputDirectory+'/remediation-controls.json'))}
   if($script -eq 'Test-AllEndpointMappings'){$arguments+=@('-ReportPath',($OutputDirectory+'/endpoint-controls.json'))}
@@ -28,6 +28,7 @@ try{
  Run-Check 'Test-FineGrainedPassword' 'powershell.exe' @('-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-File','scripts/Test-FineGrainedPassword.ps1')
  Run-Check 'Test-EndpointBatching' 'powershell.exe' @('-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-File','scripts/Test-EndpointBatching.ps1')
  Run-Check 'Test-PasswordPolicyUi' $node @('scripts/Test-PasswordPolicyUi.cjs')
+ Run-Check 'Test-AssuranceScale' $node @('scripts/Test-AssuranceScale.cjs')
  Run-Check 'Test-FrontendPolish' $node @('scripts/Test-FrontendPolish.cjs')
  Run-Check 'stylesheet-build' $node @('scripts/Build-Styles.cjs','--check')
  foreach($test in @('Test-Responsiveness','Test-FrontendSystem','Test-RemediationEvidence','Test-RecipeWorkspace','Test-GuidedRemediation','Test-GpoScopePicker','Test-ControlTargeting','Test-UX-Contract','Test-Studio-UI','Test-EnterpriseCenter','Test-ManualVerification','Test-ValueEditor','Test-ManualRemediation','Test-RecoveryUi','Test-WorkflowUi','Test-EndpointTargetingUi','Test-EnglishThemes')){Run-Check $test $node @('scripts/'+$test+'.cjs')}

@@ -1,0 +1,19 @@
+PASS verification page remains bounded
+PASS verification page remains bounded
+PASS verification page remains bounded
+PASS verification page remains bounded
+PASS verification page remains bounded
+PASS verification page remains bounded
+PASS verification page remains bounded
+PASS verification page remains bounded
+PASS verification page remains bounded
+PASS every pinned endpoint is checked exactly once across pages
+PASS equal versions and content converge
+PASS equal versions with different SYSVOL content cannot converge
+PASS equal policy files with different CSE metadata cannot converge
+PASS different user CSE metadata cannot converge
+PASS unreachable DC cannot prove convergence
+PASS truncated DC population cannot prove full convergence
+PASS exact supported DC bound is fully checked
+PASS post-readiness exit has its own diagnosis
+PASS post-readiness summary preserves observed chronology

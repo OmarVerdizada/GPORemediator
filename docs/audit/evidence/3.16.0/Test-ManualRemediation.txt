@@ -1,0 +1,32 @@
+Manual engine: 47 shared production functions; current. No domain commands executed.
+Read-only preview complete. No backup, GPO write, link change or gpupdate was performed.
+Backup ID: 22222222-2222-2222-2222-222222222222 | Path: C:\Users\omar.verdizada\AppData\Local\Temp\gpm-6b6604c34c7e4b329f74c92f9b213b98\ed4dab87\Backups\GpoWorkflow\63007494b98f4b97917ce0b453b030b3
+GPO read-back completed. Run the separate endpoint check after policy processing. Manual results are not application history.
+Selected GPO content and link already match. Endpoint processing is not verified.
+Read-only preview complete. No backup, GPO write, link change or gpupdate was performed.
+Backup ID: 22222222-2222-2222-2222-222222222222 | Path: C:\Users\omar.verdizada\AppData\Local\Temp\gpm-6b6604c34c7e4b329f74c92f9b213b98\945a1aa7\Backups\GpoWorkflow\faca1b98c5e8448a930b9e722d73e66c
+GPO read-back completed. Run the separate endpoint check after policy processing. Manual results are not application history.
+Selected GPO content and link already match. Endpoint processing is not verified.
+Read-only preview complete. No backup, GPO write, link change or gpupdate was performed.
+Backup ID: 22222222-2222-2222-2222-222222222222 | Path: C:\Users\omar.verdizada\AppData\Local\Temp\gpm-6b6604c34c7e4b329f74c92f9b213b98\68792fed\Backups\GpoWorkflow\4b2356e492b541588d104ac36766dd77
+GPO read-back completed. Run the separate endpoint check after policy processing. Manual results are not application history.
+Selected GPO content and link already match. Endpoint processing is not verified.
+Read-only preview complete. No backup, GPO write, link change or gpupdate was performed.
+Backup ID: 22222222-2222-2222-2222-222222222222 | Path: C:\Users\omar.verdizada\AppData\Local\Temp\gpm-6b6604c34c7e4b329f74c92f9b213b98\7eefcc9f\Backups\GpoWorkflow\af951a20ddeb482b9b7d45f1ab168790
+GPO read-back completed. Run the separate endpoint check after policy processing. Manual results are not application history.
+Selected GPO content and link already match. Endpoint processing is not verified.
+Read-only preview complete. No backup, GPO write, link change or gpupdate was performed.
+Backup ID: 22222222-2222-2222-2222-222222222222 | Path: C:\Users\omar.verdizada\AppData\Local\Temp\gpm-6b6604c34c7e4b329f74c92f9b213b98\fbb4cc61\Backups\GpoWorkflow\774b57c5a80c4b51b08035971185cf6a
+GPO read-back completed. Run the separate endpoint check after policy processing. Manual results are not application history.
+Selected GPO content and link already match. Endpoint processing is not verified.
+Read-only preview complete. No backup, GPO write, link change or gpupdate was performed.
+Backup ID: 22222222-2222-2222-2222-222222222222 | Path: C:\Users\omar.verdizada\AppData\Local\Temp\gpm-6b6604c34c7e4b329f74c92f9b213b98\ccec7d61\Backups\GpoWorkflow\c66bf518543549198af4a0f0a3442ac6
+GPO read-back completed. Run the separate endpoint check after policy processing. Manual results are not application history.
+Selected GPO content and link already match. Endpoint processing is not verified.
+Backup ID: 22222222-2222-2222-2222-222222222222 | Path: C:\Users\omar.verdizada\AppData\Local\Temp\gpm-6b6604c34c7e4b329f74c92f9b213b98\b0e23f61\Backups\GpoWorkflow\54bc3e61f344449e8a5c223930416864
+Backup ID: 22222222-2222-2222-2222-222222222222 | Path: C:\Users\omar.verdizada\AppData\Local\Temp\gpm-6b6604c34c7e4b329f74c92f9b213b98\678d43d0\Backups\GpoWorkflow\df8e34aed712438c9014a599b2b18bc4
+Backup ID: 22222222-2222-2222-2222-222222222222 | Path: C:\Users\omar.verdizada\AppData\Local\Temp\gpm-6b6604c34c7e4b329f74c92f9b213b98\c17497b2\Backups\GpoWorkflow\83660084cb254abb9c36f230995d72b5
+GPO read-back completed. Run the separate endpoint check after policy processing. Manual results are not application history.
+Selected GPO content and link already match. Endpoint processing is not verified.
+PASS 800 generated PowerShell 5.1 scripts parsed. Complete offline Preview/Apply: registry, registry set, security template, audit, domain account, HKCU, literal custom input; backup order, read-back, idempotence, cancellation, failed backup, drift, partial write and read-only DC rejection. Live AD: NOT RUN.
+PASS 405-control manual coverage: 394 standalone writers, 11 read-only reviews; 800 exact scripts parsed, shared-source parity, escaping and offline templates

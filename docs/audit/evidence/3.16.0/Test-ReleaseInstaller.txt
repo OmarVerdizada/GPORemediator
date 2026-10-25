@@ -1,0 +1,15 @@
+PASS wrong full-package hash rejected
+PASS failed first install can resume safely and activate complete release
+PASS active operation stop rejection retains active version
+PASS failed update does not activate partially staged files
+PASS whole-package update preserves external state
+PASS activation rollback restores previous compatible release without data rollback
+PASS incompatible state schema cannot auto activate
+PASS mixed/tampered installed component rejected
+PASS unsafe package child rejected
+PASS unsafe package child rejected
+PASS unsafe package child rejected
+PASS unsafe package child rejected
+PASS archive traversal rejected even with matching archive hash
+PASS extraction never writes outside stage
+PASS actual installer lifecycle with fixtures; no real app or ProgramData modified.

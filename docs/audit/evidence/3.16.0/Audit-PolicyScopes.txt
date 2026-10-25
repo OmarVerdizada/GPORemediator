@@ -1,0 +1,1 @@
+PASS: 405 static mappings (394 AUTO + 11 GUIDED), 19 CIS top sections; generated C:\Users\omar.verdizada\Documents\Codex\2026-10-20\https-github-com-omarverdizada-gporemediator-https\work\GPORemediator\work\policy-scope-audit.csv

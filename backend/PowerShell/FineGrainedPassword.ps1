@@ -8,7 +8,22 @@ function Fgpp-State([string]$Name){
     return [ordered]@{exists=$true;dn=[string]$p.DistinguishedName;guid=[string]$p.ObjectGUID;name=[string]$p.Name;description=[string]$p.Description;protected=[bool]$p.ProtectedFromAccidentalDeletion;precedence=[int]$p.Precedence;passwordHistoryCount=[int]$p.PasswordHistoryCount;minPasswordLength=[int]$p.MinPasswordLength;minPasswordAgeDays=[int]$p.MinPasswordAge.TotalDays;maxPasswordAgeDays=[int]$p.MaxPasswordAge.TotalDays;complexityEnabled=[bool]$p.ComplexityEnabled;reversibleEncryptionEnabled=[bool]$p.ReversibleEncryptionEnabled;lockoutThreshold=[int]$p.LockoutThreshold;lockoutDurationMinutes=[int]$p.LockoutDuration.TotalMinutes;lockoutObservationWindowMinutes=[int]$p.LockoutObservationWindow.TotalMinutes;subjects=$subjects}
 }
 function Fgpp-Tag($Request){return 'GpoRemediator FGPP:'+(Hash ([string]$Request.scopeDn).ToLowerInvariant())}
-function Fgpp-Preview($Request){
+function Fgpp-Membership($Before,$Users,$PreviousUsers,[string]$ScopeDn){
+    $subjects=[Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+    foreach($dn in @(Read-Field $Before 'subjects' @())){$null=$subjects.Add([string]$dn)}
+    $desired=[Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+    foreach($user in @($Users)){$null=$desired.Add([string]$user.dn)}
+    $added=@($Users|Where-Object{!$subjects.Contains([string]$_.dn)})
+    $removed=@($subjects|Where-Object{!$desired.Contains($_)}|Sort-Object|ForEach-Object{
+        @{dn=$_;reason=$(if(!$_.EndsWith(','+$ScopeDn,[StringComparison]::OrdinalIgnoreCase)){'OUTSIDE_SELECTED_OU'}else{'DISABLED_OR_NO_LONGER_DISCOVERED'})}
+    })
+    $old=@{};foreach($user in @($PreviousUsers)){$old[[string]$user.guid]=$user}
+    $now=@{};foreach($user in @($Users)){$now[[string]$user.guid]=$user}
+    $moved=@();foreach($id in $now.Keys){if($old.ContainsKey($id) -and [string]$old[$id].dn -ine [string]$now[$id].dn){$moved+=@{name=[string]$now[$id].name;guid=$id;beforeDn=[string]$old[$id].dn;afterDn=[string]$now[$id].dn}}}
+    $departed=@();foreach($id in $old.Keys){if(!$now.ContainsKey($id)){$departed+=$old[$id]}}
+    return @{currentSubjects=$subjects.Count;desiredUsers=$desired.Count;add=$added;remove=$removed;unchanged=($desired.Count-$added.Count);moved=$moved;departed=$departed;baselineAvailable=($old.Count -gt 0)}
+}
+function Fgpp-Preview($Request,$PreviousUsers=@()){
     $scope=Scope ([string]$Request.scopeDn)
     if($scope.kind -ne 'OU'){Fail 'FGPP_OU_REQUIRED' 'Choose a user OU.'}
     if([string]$Request.name -notmatch '^[A-Za-z][A-Za-z0-9_.-]{2,63}$'){Fail 'FGPP_VALUES_INVALID' 'Invalid policy name.'}
@@ -17,7 +32,7 @@ function Fgpp-Preview($Request){
     if($users.Count -gt 5000){Fail 'FGPP_TARGET_LIMIT' 'Select an OU with at most 5000 enabled users.'}
     $before=Fgpp-State ([string]$Request.name)
     if($before.exists -and [string]$before.description -cne (Fgpp-Tag $Request)){Fail 'FGPP_NOT_MANAGED' 'That policy name already exists outside this managed OU workflow. Choose a new name; existing policies are not adopted or overwritten.'}
-    return @{scope=$scope;users=$users;before=$before;fingerprint=(Hash (([ordered]@{request=$Request;before=$before;users=$users}|ConvertTo-Json -Depth 20 -Compress)));warnings=@('This policy is assigned DIRECTLY to the reviewed user snapshot. New or moved users are not silently synchronized; regenerate a preview to reconcile OU membership.','Other direct password policies with a lower precedence number may win. Apply verifies each user resultant policy.','Creating/editing a PSO needs delegated permissions on the Password Settings Container. GPO Link/Edit settings permissions do not grant PSO authority.','This changes domain-user authentication behavior. It does not change a GPO or computer local-account policy.')}
+    return @{scope=$scope;users=$users;before=$before;membership=(Fgpp-Membership $before $users $PreviousUsers ([string]$scope.dn));fingerprint=(Hash (([ordered]@{request=$Request;before=$before;users=$users}|ConvertTo-Json -Depth 20 -Compress)));warnings=@('This policy is assigned DIRECTLY to the reviewed user snapshot. Review the membership additions/removals before Apply. New or moved users are not silently synchronized.','Other direct password policies with a lower precedence number may win. Apply verifies each user resultant policy.','Creating/editing a PSO needs delegated permissions on the Password Settings Container. GPO Link/Edit settings permissions do not grant PSO authority.','This changes domain-user authentication behavior. It does not change a GPO or computer local-account policy.')}
 }
 function Fgpp-Parameters($Value){
     return @{Precedence=[int]$Value.precedence;PasswordHistoryCount=[int]$Value.passwordHistoryCount;MinPasswordLength=[int]$Value.minPasswordLength;MinPasswordAge=[timespan]::FromDays([int]$Value.minPasswordAgeDays);MaxPasswordAge=[timespan]::FromDays([int]$Value.maxPasswordAgeDays);ComplexityEnabled=[bool]$Value.complexityEnabled;ReversibleEncryptionEnabled=[bool]$Value.reversibleEncryptionEnabled;LockoutThreshold=[int]$Value.lockoutThreshold;LockoutDuration=[timespan]::FromMinutes([int]$Value.lockoutDurationMinutes);LockoutObservationWindow=[timespan]::FromMinutes([int]$Value.lockoutObservationWindowMinutes);Server=[string]$cfg.domainController;ErrorAction='Stop'}

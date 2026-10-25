@@ -1,0 +1,10 @@
+PASS: Domain/GPO source contracts and PowerShell template parser.
+  Determining projects to restore...
+  All projects are up-to-date for restore.
+  GpoRemediator -> C:\Users\omar.verdizada\Documents\Codex\2026-10-20\https-github-com-omarverdizada-gporemediator-https\work\GPORemediator\backend\bin\Release\net10.0\GpoRemediator.dll
+
+Build succeeded.
+    0 Warning(s)
+    0 Error(s)
+
+Time Elapsed 00:00:03.78

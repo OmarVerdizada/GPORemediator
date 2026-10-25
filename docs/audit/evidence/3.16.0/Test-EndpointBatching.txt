@@ -1,0 +1,15 @@
+PASS process completion is separate from task scheduling
+PASS refresh coverage advances across bounded pages
+PASS process completion is separate from task scheduling
+PASS refresh coverage advances across bounded pages
+PASS process completion is separate from task scheduling
+PASS refresh coverage advances across bounded pages
+PASS process completion is separate from task scheduling
+PASS refresh coverage advances across bounded pages
+PASS all 201 pinned targets refreshed once in four bounded requests
+PASS a removed endpoint is retained as a failure rather than silently shrinking coverage
+PASS rollback refresh preserves restored GPO status
+PASS rollback refresh preserves restored GPO status
+PASS rollback refresh preserves restored GPO status
+PASS rollback refresh preserves restored GPO status
+PASS rollback completes computer processing across all pinned pages

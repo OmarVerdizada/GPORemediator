@@ -1,0 +1,11 @@
+PASS logged source and current native value remain distinct evidence
+PASS higher precedence competing GPO attributed by record
+PASS explicit recorded security and WMI filter failures surfaced
+PASS unresolved attribution never claims selected GPO
+PASS inaccessible RSoP retains independent native/event evidence
+PASS out of scope rejected before remote access
+PASS access report retains exact AD/file targets and denied state
+PASS PSO creation is a separate capability and never grants implied edit/delete rights
+PASS FGPP additions removals renamed identities and departures compared without AD writes
+PASS FGPP subject comparison is case insensitive
+PASS diagnostic and membership regression; no live AD tested.

@@ -1,6 +1,6 @@
 const fs=require('node:fs'),vm=require('node:vm'),assert=require('node:assert/strict'),path=require('node:path');
 const root=path.resolve(__dirname,'../frontend/source'),window={};
-for(const file of ['gpo-scope-picker.js','control-view.js','value-editor.js'])vm.runInNewContext(fs.readFileSync(path.join(root,file),'utf8'),{window});
+for(const file of ['list-pager.js','gpo-scope-picker.js','control-view.js','value-editor.js'])vm.runInNewContext(fs.readFileSync(path.join(root,file),'utf8'),{window});
 const settings=JSON.parse(fs.readFileSync(path.resolve(root,'../../backend/data/gpo-production-mappings.json'),'utf8')).mappings;
 const domain='DC=example,DC=local',ou='OU=Pilot,'+domain,id='11111111-1111-1111-1111-111111111111';
 const state={settings,plan:{id:'stale'},approval:{reviewed:true},selectedRule:{id:'1.1.1',backendSetting:'1.1.1',implementation:'live'},selection:{gpoId:id,scopeDn:ou,accountScope:'Domain',refresh:'Scope',firstLink:false},inventory:{gpos:[{id,name:'Pilot',selectable:true}],scopes:[{dn:domain,name:'example.local',kind:'Domain'},{dn:ou,name:'Pilot',kind:'OU'}]},lang:'en',gpoSearch:'',scopeExpanded:new Set()};

@@ -91,6 +91,27 @@ public sealed class GpoWorkflowService(IConfiguration config,Store store,Operati
         return Run<T>(operation,Get(token,actor),data,ct);
     }
     public void ValidateConnection(string token,string actor){RequireReal();Get(token,actor);}
+    public async Task<object> AccessReportAsync(GpoSelection selection,string token,string actor,CancellationToken ct){
+        RequireReal();var c=Get(token,actor);
+        if(!c.Inventory.Gpos.Any(x=>x.Id.Equals(selection.GpoId,StringComparison.OrdinalIgnoreCase))||!c.Inventory.Scopes.Any(x=>x.Dn.Equals(selection.ScopeDn,StringComparison.OrdinalIgnoreCase)))
+            throw new PolicyException("GPO_SELECTION_REQUIRED","Choose a discovered GPO and OU/domain.");
+        var mapping=ProductionGpoMappings.Effective(selection with{ItemValues=null,ReviewContext=null});
+        if(mapping.Handler=="Manual")mapping=mapping with{Handler="SecurityTemplate"};
+        var report=await Run<System.Text.Json.JsonElement>("gpoPreview",c,new{selection,mapping,accessReport=true},ct);
+        store.Audit("GPO_ACCESS_REPORT",actor,gpoId:selection.GpoId,details:new{c.Inventory.ExecutionUser,selection.ScopeDn});
+        return report;
+    }
+    public async Task<object> ExplainAsync(string id,GpoExplainRequest request,string token,string actor,CancellationToken ct){
+        RequireReal();var c=Get(token,actor);var plan=store.Require<GpoWorkflowPlan>("gpo_plans",id);AssertContext(plan,c,actor);
+        var mapping=ProductionGpoMappings.Effective(plan.Selection);
+        var hosts=plan.Preview.VerificationComputers??plan.Preview.RefreshComputers;
+        var hostname=(request.Hostname??"").Trim();
+        if(!mapping.DomainPolicySensitive&&!hosts.Any(x=>x.Equals(hostname,StringComparison.OrdinalIgnoreCase)))
+            throw new PolicyException("ENDPOINT_OUTSIDE_SCOPE","Choose an endpoint pinned in this preview; generate a new preview for a different target.");
+        var result=await Run<System.Text.Json.JsonElement>("gpoExplain",c,new{plan,mapping,hostname},ct);
+        store.Put("gpo_diagnostics",id,new{actor,result});store.Audit("GPO_APPLICATION_EXPLAINED",actor,jobId:id,gpoId:plan.Selection.GpoId,details:new{hostname,c.Inventory.ExecutionUser});
+        return result;
+    }
 
     public object SessionStatus(string token,string actor)
     {
@@ -272,7 +293,7 @@ public sealed class GpoWorkflowService(IConfiguration config,Store store,Operati
                 if(operation=="refresh" && result.RefreshCoverage is not null)
                 {
                     var refreshResults=result.RefreshResults.ToList();
-                    while(result.RefreshCoverage is {Complete:false} coverage && result.GpoPublished && result.LinkVerified)
+                    while(result.RefreshCoverage is {Complete:false} coverage && (result.GpoPublished&&result.LinkVerified||result.State=="ROLLED_BACK"))
                     {
                         var offset=coverage.Checked;result=result with{RefreshResults=refreshResults.ToArray()};
                         run=run with{Result=result with{State="REFRESHING"},UpdatedAt=PolicyValues.Now()};store.Put("gpo_runs",id,run,"REFRESHING");

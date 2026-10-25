@@ -2,3 +2,4 @@
 *.cmd -text whitespace=cr-at-eol
 # Audit hashes use UTF-8/LF on Windows and in Git source archives.
 docs/audit/evidence/3.15.1/*.txt text eol=lf
+docs/audit/evidence/3.16.0/*.txt text eol=lf

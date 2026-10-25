@@ -1,6 +1,6 @@
-# GPO Remediator 3.15.1
+# GPO Remediator 3.16.0
 
-3.15.1 improves mobile navigation, appearance controls, keyboard accessibility, theme consistency, and the reviewed password-policy workspace. JSON reports retain every endpoint result; full-coverage badges require complete, unique evidence. See [frontend findings and release notes](docs/RELEASE-3.15.1.md). The 3.15.0 remediation features remain available.
+3.16.0 adds exact permission reports, logged RSoP source attribution, reviewed FGPP membership reconciliation, paged large lists, a complete-release installer/update path, and a dedicated live-pilot runner. See [release notes](docs/RELEASE-3.16.0.md) and [deployment and pilot instructions](docs/ASSURANCE-AND-UPDATES.md). Live AD validation must be run in your own test environment; local fixture tests do not certify live enforcement.
 
 3.14.4 accepts the standard SYSVOL rights created by GPMC **Edit settings** delegation (`Read & execute`, `Write`, and `Delete child`) without requiring per-file Modify/Delete. The publisher retains atomic replacement where available and uses a flushed in-place write after the durable backup/manifest when standard GPMC ACLs do not permit `ReplaceFile`. See [release notes](docs/RELEASE-3.14.4.md).
 

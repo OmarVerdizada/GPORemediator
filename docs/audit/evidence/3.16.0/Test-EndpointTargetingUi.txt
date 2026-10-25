@@ -1,0 +1,1 @@
+PASS endpoint settings UI: legacy selection, automatic/explicit toggle, automatic empty host payload, manual multiline payload, and required DC.

@@ -35,6 +35,12 @@ try{
  Check ($result.state -eq 'REFRESH_PARTIAL' -and @($result.refreshResults|Where-Object state -eq 'FAILED').Count -eq 1) 'a removed endpoint is retained as a failure rather than silently shrinking coverage'
  $Data.refreshOffset=-1
  try{$null=& $dispatch;throw 'negative refresh offset accepted'}catch{if($_.Exception.Message -notlike 'INVALID_REQUEST*'){throw}}
+ $script:missing=$null
+ function Verify-Rollback {param($Plan,$Map,$Manifest) @{restored=$true;published=$false;linked=$false;effective='ROLLBACK_ENDPOINT_PENDING'}}
+ @{phase='ROLLED_BACK'}|ConvertTo-Json|Set-Content -LiteralPath (Join-Path $temp 'manifest.json') -Encoding UTF8
+ $rollbackTargets=@();for($offset=0;$offset -lt 201;$offset+=64){$Data.refreshOffset=$offset;$result=& $dispatch;Check ($result.state -eq 'ROLLED_BACK') 'rollback refresh preserves restored GPO status';$rollbackTargets+=@($result.refreshResults)}
+ Check ($rollbackTargets.Count -eq 201 -and @($rollbackTargets|Where-Object state -ne 'COMPLETED').Count -eq 0) 'rollback completes computer processing across all pinned pages'
+
 }finally{
  $resolved=[IO.Path]::GetFullPath($temp)
  if(!$resolved.StartsWith([IO.Path]::GetTempPath(),[StringComparison]::OrdinalIgnoreCase) -or (Split-Path $resolved -Leaf) -notlike 'gpr-refresh-*'){throw 'Unsafe fixture path'}

@@ -1,0 +1,2 @@
+PASS native Windows effective file access: read-only, standard GPMC edit, durable write fallback, modify and deny-over-allow
+PASS selection access gate: separate GPO/OU/SYSVOL denial, unknown metadata, user CSE, blocked Preview/Apply and read-only scan bypass. No AD commands executed.

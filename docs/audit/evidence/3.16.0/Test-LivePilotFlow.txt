@@ -1,0 +1,4 @@
+PASS actual pilot runner / complete / CONFIGURATION_LIFECYCLE_VERIFIED; no AD contacted
+PASS actual pilot runner / baseline-denied / REVIEW_REQUIRED; no AD contacted
+PASS actual pilot runner / unknown-apply / REVIEW_REQUIRED; no AD contacted
+PASS actual pilot runner / restore-diff / RESTORED_REVIEW_REQUIRED; no AD contacted

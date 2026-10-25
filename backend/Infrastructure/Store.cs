@@ -51,7 +51,7 @@ public sealed class Store : IDisposable
         try{return Convert.ToHexString(HMACSHA256.HashData(auditMacKey,payload));}
         finally{CryptographicOperations.ZeroMemory(payload);}
     }
-    private static readonly HashSet<string> Tables = ["gpo_plans", "gpo_runs", "gpo_evidence", "workflow_jobs", "batch_plans", "fgpp_plans", "fgpp_runs"];
+    private static readonly HashSet<string> Tables = ["gpo_plans", "gpo_runs", "gpo_evidence", "workflow_jobs", "batch_plans", "fgpp_plans", "fgpp_runs", "gpo_diagnostics"];
     public Store(string path)
     {
         if (path != ":memory:") Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(path))!);

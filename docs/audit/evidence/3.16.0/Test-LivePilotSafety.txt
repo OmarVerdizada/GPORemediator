@@ -1,0 +1,11 @@
+PASS nonlocal/ambiguous credential destination rejected
+PASS nonlocal/ambiguous credential destination rejected
+PASS nonlocal/ambiguous credential destination rejected
+PASS nonlocal/ambiguous credential destination rejected
+PASS nonlocal/ambiguous credential destination rejected
+PASS protected GPO rejected
+PASS GPO linked beyond pilot rejected
+PASS oversized/incomplete target inventory rejected
+PASS restart control cannot falsely certify pilot
+PASS no-op cannot certify write/rollback lifecycle
+PASS safety helpers only; live AD pilot NOT RUN.

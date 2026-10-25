@@ -53,7 +53,7 @@ try {
     & $dotnet publish $project -c Release -r win-x64 --self-contained true -o $stage --nologo --no-restore
     Assert-Exit
 
-    foreach ($required in @('GpoRemediator.exe','GpoRemediator.dll','GpoRemediator.deps.json','GpoRemediator.runtimeconfig.json','PowerShell\Invoke-GpoWorkflow.ps1','PowerShell\GpoWorkflow.Worker.ps1','PowerShell\SecurityTemplate.psm1','PowerShell\FineGrainedPassword.ps1')) {
+    foreach ($required in @('GpoRemediator.exe','GpoRemediator.dll','GpoRemediator.deps.json','GpoRemediator.runtimeconfig.json','PowerShell\Invoke-GpoWorkflow.ps1','PowerShell\GpoWorkflow.Worker.ps1','PowerShell\SecurityTemplate.psm1','PowerShell\FineGrainedPassword.ps1','PowerShell\PolicyDiagnostics.ps1')) {
         if (!(Test-Path -LiteralPath (Join-Path $stage $required))) { throw "Published runtime is incomplete: $required is missing." }
     }
 
@@ -95,6 +95,8 @@ try {
 } finally {
     if (Test-Path -LiteralPath $archiveStage) { Remove-Item -LiteralPath $archiveStage -Force -ErrorAction SilentlyContinue }
 }
+
+& (Join-Path $PSScriptRoot 'scripts/Build-ReleaseManifest.ps1')
 
 Write-Host 'Portable Windows x64 application ready. No Node.js/pnpm/npm registry is required.' -ForegroundColor Green
 Write-Host 'Run GpoRemediator.cmd. For real AD/GPO use, complete Setup in the built-in Automation Center.' -ForegroundColor Green

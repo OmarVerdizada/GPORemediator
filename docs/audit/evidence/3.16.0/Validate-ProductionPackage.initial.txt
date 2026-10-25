@@ -1,0 +1,3 @@
+PRODUCTION PACKAGE VALIDATION: FAIL
+ - assurance.js: source/dist mismatch
+ - theme-polish.css: source/dist mismatch

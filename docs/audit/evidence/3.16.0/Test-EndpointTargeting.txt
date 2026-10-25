@@ -1,0 +1,1 @@
+PASS automatic OU targeting: 200 hosts, subtree/user OU, PDC/None, DNS boundaries, explicit mode, legacy migration, invalid mode and bounded enumeration. No AD commands executed.

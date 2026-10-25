@@ -1,0 +1,3 @@
+PASS endpoint evidence: merged policy, scope boundary, SID normalization, missing data, native failures, audit/deny inclusion and asynchronous refresh
+PASS firewall reported-state regression: size equality/bounds, disabled logging mismatch, independent profiles, path case, unavailable evidence
+PASS OU-wide user-policy selection without a verification user; optional HKCU evidence stays pending

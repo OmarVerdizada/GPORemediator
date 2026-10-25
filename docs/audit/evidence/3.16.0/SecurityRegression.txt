@@ -1,0 +1,1 @@
+PASS security: startup password/CSRF/identity/tamper/restart gate, role-free endpoints/case/trailing slash, unconfigured and legacy identities, CSRF/origin/identity isolation, anonymous denial, login rate limit, refresh JSON, host boundary, script tampering, DPAPI and compiled UI.

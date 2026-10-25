@@ -782,16 +782,18 @@ function Operation-Failure($Record,[string]$Stage){
 }
 function Emit-Stage([string]$Name){$script:workerStage=$Name;if([bool](Read-Field $cfg 'emitProgress' $false)){Write-Output ([pscustomobject]@{gpoStage=$Name})}}
 # FGPP_FUNCTIONS
+# DIAGNOSTIC_FUNCTIONS
 $script:workerStage='VALIDATING'
 try {
 switch($Operation){
-    'fgppPreview'{return Fgpp-Preview $Data.request}
+    'fgppPreview'{return Fgpp-Preview $Data.request @(Read-Field $Data 'previousUsers' @())}
     'fgppApply'{return Fgpp-Execute 'apply' $Data.plan}
     'fgppVerify'{return Fgpp-Execute 'verify' $Data.plan}
     'fgppRollback'{return Fgpp-Execute 'rollback' $Data.plan}
     'gpoReadiness'{return Environment-Status}
     'gpoInventory'{$gpos=@(Get-GPO -All -Domain $cfg.domain -Server $cfg.domainController|Sort-Object DisplayName|ForEach-Object{Gpo-Choice $_});if($gpos.Count -gt 5000){Fail 'DIRECTORY_TOO_LARGE' 'More than 5000 GPOs exist. Narrow the configured domain.'};return @{domain=$domain.DNSRoot;domainController=$dc.HostName;executionUser=[Security.Principal.WindowsIdentity]::GetCurrent().Name;gpos=$gpos;scopes=@(Scopes)}}
-    'gpoPreview'{if([bool](Read-Field $Data 'accessOnly' $false)){$access=Assert-SelectionAccess $Data.selection $Data.mapping;return @{authorized=$true;executionUser=$access.executionUser}};return Preview $Data.selection $Data.mapping ([bool](Read-Field $Data 'requireWriteAccess' $true))}
+    'gpoExplain'{return Explain-Policy $Data.plan $Data.mapping ([string]$Data.hostname)}
+    'gpoPreview'{if([bool](Read-Field $Data 'accessReport' $false)){return Access-Report $Data.selection $Data.mapping};if([bool](Read-Field $Data 'accessOnly' $false)){$access=Assert-SelectionAccess $Data.selection $Data.mapping;return @{authorized=$true;executionUser=$access.executionUser}};return Preview $Data.selection $Data.mapping ([bool](Read-Field $Data 'requireWriteAccess' $true))}
     'gpoApply'{
         Emit-Stage 'PREFLIGHT'
         $plan=$Data.plan;$map=$Data.mapping;$s=$plan.selection;Validate-Selection $s $map;$null=Assert-SelectionAccess $s $map;Emit-Stage 'BACKUP_DIRECTORY';$directory=Run-Directory $plan;$null=New-Item -ItemType Directory -Path $directory -Force;$lockRoot=Split-Path $directory -Parent;$lock=$null
@@ -878,12 +880,12 @@ switch($Operation){
          $endpointScope=[string](Read-Field $plan.selection 'endpointScopeDn' '')
          $computers=@(Refresh-Targets $strategy $plan.selection.scopeDn $endpointScope ([string]$map.scope))
         $liveComputers=@($computers);$pinned=Read-Field $plan.preview 'verificationComputers' $null
-        if(!$rollback -and $strategy -eq 'Scope' -and $null -ne $pinned){$computers=@($pinned)}
+        if($strategy -eq 'Scope' -and $null -ne $pinned){$computers=@($pinned)}
         if(!$computers.Count){return Result $(if($rollback){'ROLLED_BACK'}else{'REFRESH_NOT_CONFIGURED'}) 'No authorized refresh hosts are available. Choose the endpoint OU and automatic OU targeting, or configure explicit hosts in Settings.' $manifest $before @()}
         Emit-Stage 'GPUPDATE'
         $refresh=@();$target=if($rollback){'Both'}elseif([string]$map.scope -eq 'User'){'User'}else{'Computer'}
         $refreshCoverage=$null
-        if(!$rollback -and $target -eq 'Computer' -and (Endpoint-CredentialOptions).Count){
+        if(((!$rollback -and $target -eq 'Computer') -or ($rollback -and [string]$map.scope -eq 'Computer')) -and (Endpoint-CredentialOptions).Count){
             $offset=[int](Read-Field $Data 'refreshOffset' 0);if($offset -lt 0){Fail 'INVALID_REQUEST' 'Invalid refresh offset.'}
             $total=$computers.Count;$computers=@($computers|Select-Object -Skip $offset -First 64)
             $runTargets=@($computers|Where-Object{$_ -in $liveComputers})

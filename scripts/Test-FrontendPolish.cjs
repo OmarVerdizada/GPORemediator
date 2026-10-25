@@ -60,7 +60,7 @@ const server=http.createServer(async(req,res)=>{try{
   await appearance.evaluate(el=>el.open=false);
   for(const width of [1440,768,390,320]){
    await page.setViewportSize({width,height:900});
-   for(const route of ['dashboard','benchmark','workspace','reports','diagnostics','audit','password-policies','operations']){
+   for(const route of ['dashboard','benchmark','workspace','reports','diagnostics','audit','password-policies','assurance','operations']){
     await page.evaluate(route=>location.hash='#/'+route,route);await page.locator('#main-content').waitFor();await page.waitForFunction(()=>document.querySelector('#main-content')?.getAttribute('aria-busy')==='false');
     assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),theme+' '+width+' '+route+' horizontal overflow');
    }

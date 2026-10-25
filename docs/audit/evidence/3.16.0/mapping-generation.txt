@@ -1,0 +1,10 @@
+{
+  "schemaVersion": "2.0",
+  "benchmark": "CIS Benchmark v4.0.0",
+  "generatedFrom": "operator-supplied catalog",
+  "mapped": 394,
+  "manualOrBlocked": 11,
+  "totalUnique": 405,
+  "notes": "Mappings were cross-checked against Windows Group Policy semantics and the MIT-licensed ansible-lockdown Windows-2019-CIS GPO implementation where applicable."
+}
+read-only: ['1.2.3', '2.2.6', '2.2.16', '2.2.31', '2.2.33', '2.2.36', '2.2.39', '2.2.45', '2.3.11.6', '18.10.43.10.1', '18.10.43.10.2']
