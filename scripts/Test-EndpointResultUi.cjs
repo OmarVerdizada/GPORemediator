@@ -1,0 +1,22 @@
+const fs=require('node:fs'),path=require('node:path'),vm=require('node:vm'),assert=require('node:assert/strict');
+const root=path.join(__dirname,'../frontend/source'),window={},context=vm.createContext({window});
+for(const file of ['ui-domain.js','components.js'])vm.runInContext(fs.readFileSync(path.join(root,file),'utf8'),context);
+context.GpoUiDomain=window.GpoUiDomain;
+// Expose the actual renderer inside the test only; avoid a parallel UI model.
+vm.runInContext(fs.readFileSync(path.join(root,'control-view.js'),'utf8').replace('return {ensureSelection,','return {resultSummary,ensureSelection,'),context);
+const view=window.GpoControlView.create({state:{settings:[]},esc:window.GpoComponents.esc,stateClass:()=>'',statusText:String});
+const run={id:'run',plan:{selection:{setting:'1.1.4',refresh:'Scope'},preview:{desiredValue:'14'}},result:{state:'PUBLISHED',gpoPublished:true,linkVerified:true,currentValue:'14',effectiveStatus:'ENDPOINT_VERIFICATION_PENDING',refreshResults:[{computer:'pc.example.test',state:'FAILED',message:'ENDPOINT_ACCESS_DENIED <unsafe>'}],endpointChecks:[{hostname:'pc.example.test',state:'UNAVAILABLE',actualValue:null,message:'Unavailable'}]}};
+let html=view.resultSummary(run);
+assert.match(html,/<h2>Published — endpoint refresh failed<\/h2>/);
+assert.match(html,/Per-host refresh results/);assert.match(html,/ENDPOINT_ACCESS_DENIED &lt;unsafe&gt;/);assert(!html.includes('<unsafe>'));
+assert.match(html,/Completed <b>0<\/b>/);assert.match(html,/Wrong computer/);
+assert.equal(window.GpoUiDomain.classify(run).attention,true);
+const measured={...run,result:{...run.result,effectiveStatus:'VERIFIED_ON_SAMPLE',verification:{replicationConverged:true}}};
+assert.equal(window.GpoUiDomain.classify(measured).compliant,false,'failed refresh must remain visible even after a matching value is read');
+html=view.resultSummary({...run,result:{...run.result,state:'REFRESH_COMPLETED',refreshResults:[{computer:'pc.example.test',state:'COMPLETED',message:'Completed'}]}});
+assert.match(html,/Completed <b>1<\/b>/);assert(!html.includes('Published — endpoint refresh failed'));
+html=view.resultSummary({...run,result:{...run.result,state:'ROLLED_BACK'}});
+assert(!html.includes('Published — endpoint refresh failed'),'do not replace rollback outcome');
+html=view.resultSummary({...run,result:{...run.result,effectiveStatus:'ENDPOINT_MISMATCH'}});
+assert.match(html,/<h2>ENDPOINT_MISMATCH<\/h2>/,'do not hide a measured mismatch');
+console.log('PASS endpoint result UI: failed refresh persists after re-verification, per-host escaped diagnostics, completed counts, guarded manual check and rollback/mismatch outcomes');

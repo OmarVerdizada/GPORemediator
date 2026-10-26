@@ -20,7 +20,7 @@ assert.ok(batch.includes('visibleControls=controls.slice(0,80)'),'Batch list mus
 assert.ok(batch.includes('noncomputer')||batch.includes('Scope')||batch.includes('mapping?.scope'),'Batch safety flow unexpectedly missing');
 for(const file of ['workspace.js','control-view.js','product.js','catalog-view.js','workflow-center.js','index.html','ux-pro.css'])
   assert.equal(read('source',file),read('dist',file),'Frontend/dist stale: '+file);
-for(const marker of ['/ux-pro.css?v=3.16.0','/gpo-scope-picker.js','/workspace.js?v='+(/buildLabel:'([^']+)'/.exec(workspace)||[])[1]])
+for(const marker of ['/ux-pro.css?v=3.16.1','/gpo-scope-picker.js','/workspace.js?v='+(/buildLabel:'([^']+)'/.exec(workspace)||[])[1]])
   assert.ok(index.includes(marker),'Missing frontend asset '+marker);
 assert.ok(!read('source','ux-pro.css').includes('!important'),'No !important allowed in UX overrides');
 console.log('PASS professional UX regression: single control form, compact dashboard, 80-row batch, dist sync, retained policy analysis');

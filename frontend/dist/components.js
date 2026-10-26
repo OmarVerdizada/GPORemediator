@@ -69,7 +69,9 @@
     else if(/^AdvancedAudit$/i.test(handler))lines=[...items.filter(x=>x.guid||x.Guid).map(x=>`auditpol.exe /get /subcategory:"${String(x.guid||x.Guid).replaceAll('"','')}"`),`Get-ItemPropertyValue -LiteralPath 'Registry::HKEY_LOCAL_MACHINE\\SYSTEM\\CurrentControlSet\\Control\\Lsa' -Name 'SCENoApplyLegacyAuditPolicy' -ErrorAction Continue`];
     if(!lines.length)lines=[`gpresult.exe /scope ${String(mapping?.scope||mapping?.Scope).toLowerCase()==='user'?'user':'computer'} /r`];
     const host=String(endpoint?.hostname||'').split('.')[0];
-    return `${host?`if ($env:COMPUTERNAME -ine ${psQuote(host)}) { Write-Warning ${psQuote('Run this command on endpoint '+endpoint.hostname+'.')} }\n`:''}${lines.join('\n')}`;
+    // Keep the guard and probe in one block. A terminating error on the first
+    // pasted line must not leave subsequent console statements free to run.
+    return host?`& {\n  if ($env:COMPUTERNAME -ine ${psQuote(host)}) { throw ${psQuote('Wrong computer. Run this check on endpoint '+endpoint.hostname+'. No policy value was read.')} }\n${lines.join('\n').split('\n').map(line=>'  '+line).join('\n')}\n}`:lines.join('\n');
   }
   function recovery(s,h){
     const r=h.result||{},rolledBack=r.state==='ROLLED_BACK';

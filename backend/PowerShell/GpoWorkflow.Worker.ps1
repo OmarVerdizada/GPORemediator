@@ -567,12 +567,31 @@ function Endpoint-CredentialOptions {
     if($credential){return @{Credential=$credential}}
     return @{}
 }
+function Endpoint-FailureMessage($Record){
+    # Classify the native error without returning raw exception text, command
+    # arguments or credentials in an evidence bundle.
+    $category=[string]$Record.CategoryInfo.Category
+    $id=([string]$Record.FullyQualifiedErrorId -replace '[^A-Za-z0-9_.,-]','')
+    if($id.Length -gt 160){$id=$id.Substring(0,160)}
+    $native=[string]$Record.Exception.Message
+    if($category -eq 'PermissionDenied' -or $native -match '(?i)access.*denied|unauthorized|0x80070005' -or $id -match 'AccessDenied'){
+        $reason='ENDPOINT_ACCESS_DENIED. Check this account''s Execute access to the endpoint Microsoft.PowerShell session and the privileges required by the native probe. GPO Edit settings and Link GPOs do not grant endpoint access.'
+    }elseif($id -match 'Kerberos|Authentication|Logon' -or $native -match '(?i)Kerberos|logon failure|unknown user name|user name or password|0x8009030e|0x80090322'){
+        $reason='ENDPOINT_AUTHENTICATION_FAILED. Check the endpoint FQDN, domain DNS, Kerberos/SPN, clock and current delegated credentials.'
+    }elseif($category -in @('OpenError','ResourceUnavailable','ConnectionError') -or $id -match 'PSSessionOpenFailed|CannotConnect|NetworkPathNotFound'){
+        $reason='ENDPOINT_CONNECTION_FAILED. Check host availability, WinRM listener/service, firewall and the connection path from the selected DC to this endpoint.'
+    }else{
+        $reason='ENDPOINT_PROBE_FAILED. The remote command failed. Check endpoint permissions and the native security-policy tools; no effective value was established.'
+    }
+    return ($reason+' Error ID: '+$(if($id){$id}else{'unavailable'})+'.')
+}
 function Refresh-ComputerPolicy([string[]]$Computer){
     $credential=Endpoint-CredentialOptions
     # Run on the endpoint with an explicit delegated credential: no Kerberos
     # second-hop dependency. /wait:-1 plus the process deadline distinguish
     # actual process completion from mere RPC task scheduling.
-    return Invoke-Command -ComputerName $Computer -Authentication Kerberos @credential -ThrottleLimit 16 -ScriptBlock {
+    $remoteErrors=@()
+    $results=@(Invoke-Command -ComputerName $Computer -Authentication Kerberos @credential -ThrottleLimit 16 -ScriptBlock {
         $process=[Diagnostics.Process]::new()
         $process.StartInfo=[Diagnostics.ProcessStartInfo]::new((Join-Path $env:SystemRoot 'System32\gpupdate.exe'),'/target:computer /force /wait:-1')
         $process.StartInfo.UseShellExecute=$false;$process.StartInfo.CreateNoWindow=$true
@@ -584,7 +603,20 @@ function Refresh-ComputerPolicy([string[]]$Computer){
             if($process.ExitCode -ne 0){return @{state='FAILED';message=('gpupdate exited with code '+$process.ExitCode+'. Review GroupPolicy Operational events.')}}
             return @{state='COMPLETED';message='gpupdate /target:computer /force /wait:-1 exited successfully. Verify values and winning GPO separately.'}
         }finally{$process.Dispose()}
-    } -ErrorAction SilentlyContinue
+    } -ErrorAction SilentlyContinue -ErrorVariable remoteErrors)
+    foreach($computerName in $Computer){
+        $result=@($results|Where-Object{[string]$_.PSComputerName -ieq $computerName}|Select-Object -Last 1)
+        if($result.Count){$result[0];continue}
+        $failure=@($remoteErrors|Where-Object{
+            $origin=Read-Field $_ 'OriginInfo' $null
+            $target=Read-Field $_ 'TargetObject' $null
+            [string](Read-Field $origin 'PSComputerName' '') -ieq $computerName -or
+            [string](Read-Field $target 'ComputerName' '') -ieq $computerName -or [string]$target -ieq $computerName
+        }|Select-Object -First 1)
+        if(!$failure.Count -and $Computer.Count -eq 1){$failure=@($remoteErrors|Select-Object -First 1)}
+        $message=if($failure.Count){Endpoint-FailureMessage $failure[0]}else{'ENDPOINT_NO_COMPLETION. No per-host completion result was received. Check endpoint WinRM/Kerberos and execution permissions.'}
+        [pscustomobject]@{PSComputerName=$computerName;state='FAILED';message=$message}
+    }
 }
 function Verification-Page($Plan,$Fallback){
     $all=Read-Field $Plan.preview 'verificationComputers' $null
@@ -607,7 +639,7 @@ function Verify-EffectiveSamples($Plan,$Map){
       $expected=@(Endpoint-Expected $Map $s)
       foreach($hostName in $hosts){
         try{
-          $probe=Invoke-Command -ComputerName $hostName -Authentication Kerberos @remoteCredential -ArgumentList $sid,$expected -ScriptBlock {
+          $probe=Invoke-Command -ComputerName $hostName -Authentication Kerberos @remoteCredential -ErrorAction Stop -ArgumentList $sid,$expected -ScriptBlock {
             param($UserSid,$ExpectedItems)
             $ErrorActionPreference='Stop';$actual=@();$ok=$true
             if(!(Test-Path -LiteralPath ('Registry::HKEY_USERS\'+$UserSid))){return @{supported=$false;match=$false;actual='';message='The selected user profile hive is not loaded on this endpoint. The user must have an active or loaded profile before HKCU policy can be verified.'}}
@@ -621,7 +653,7 @@ function Verify-EffectiveSamples($Plan,$Map){
             return @{supported=$true;match=$ok;actual=($actual -join '; ');message='The effective HKCU policy values were read from the selected user profile hive.'}
           }
           if([bool]$probe.supported){$checks+=@{hostname=$hostName;state=$(if([bool]$probe.match){'VERIFIED'}else{'MISMATCH'});message=([string]$probe.message+' User: '+$identity);actualValue=[string]$probe.actual}}else{$checks+=@{hostname=$hostName;state='PENDING';message=([string]$probe.message+' User: '+$identity);actualValue=[string]$probe.actual}}
-        }catch{$checks+=@{hostname=$hostName;state='UNAVAILABLE';message=('User-policy probe failed. Check Kerberos/WinRM, endpoint availability and the selected user session. User: '+$identity);actualValue=$null}}
+        }catch{$checks+=@{hostname=$hostName;state='UNAVAILABLE';message=((Endpoint-FailureMessage $_)+' User: '+$identity);actualValue=$null}}
       }
       return @($checks)
     }
@@ -632,7 +664,7 @@ function Verify-EffectiveSamples($Plan,$Map){
     $expected=@(Endpoint-Expected $Map $s);$handler=[string]$Map.handler
     foreach($hostName in $hosts){
       try{
-        $probe=Invoke-Command -ComputerName $hostName -Authentication Kerberos @remoteCredential -ArgumentList $handler,$expected,([string]$Map.comparator) -ScriptBlock {
+        $probe=Invoke-Command -ComputerName $hostName -Authentication Kerberos @remoteCredential -ErrorAction Stop -ArgumentList $handler,$expected,([string]$Map.comparator) -ScriptBlock {
           param($Handler,$ExpectedItems,$Comparator)
           $ErrorActionPreference='Stop'
           function Read-IniValue([string]$Text,[string]$Section,[string]$Key){$inside=$false;foreach($line in ($Text -split "`r?`n")){$t=$line.Trim();if($t -match '^\[(.+)\]$'){$inside=($Matches[1] -ieq $Section);continue};if($inside -and $t -match '^([^=]+)=(.*)$' -and $Matches[1].Trim() -ieq $Key){return $Matches[2].Trim()}};return $null}
@@ -704,7 +736,7 @@ function Verify-EffectiveSamples($Plan,$Map){
           return @{supported=$false;match=$false;actual='';message='No endpoint verifier exists for this handler.'}
         }
         if([bool]$probe.supported){$checks+=@{hostname=$hostName;state=$(if([bool]$probe.match){'VERIFIED'}else{'MISMATCH'});message=[string]$probe.message;actualValue=[string]$probe.actual}}else{$checks+=@{hostname=$hostName;state='PENDING';message=[string]$probe.message;actualValue=[string]$probe.actual}}
-      }catch{$checks+=@{hostname=$hostName;state='UNAVAILABLE';message='Endpoint effective-policy probe failed. Check Kerberos/WinRM and host availability.';actualValue=$null}}
+      }catch{$checks+=@{hostname=$hostName;state='UNAVAILABLE';message=(Endpoint-FailureMessage $_);actualValue=$null}}
     }
     return @($checks)
 }

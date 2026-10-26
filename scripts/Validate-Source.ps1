@@ -12,14 +12,14 @@ try {
         & $dotnet run --project "scripts/$project" -c Release
         Check-Exit $project
     }
-    foreach($script in @('Test-SecurityFiles','Test-DomainSignIn','Test-EndpointTargeting','Test-SelectionAccess','Test-SysvolDiscovery','Test-RuntimeIntegrity','Test-GpoMappings','Test-EndpointEvidence','Test-AllEndpointMappings','Test-VerificationLifecycle','Test-PowerShellSyntax','Test-ServiceControl')){
+    foreach($script in @('Test-SecurityFiles','Test-DomainSignIn','Test-EndpointTargeting','Test-SelectionAccess','Test-SysvolDiscovery','Test-RuntimeIntegrity','Test-GpoMappings','Test-EndpointEvidence','Test-EndpointDiagnostics','Test-EndpointBatching','Test-AllEndpointMappings','Test-VerificationLifecycle','Test-PowerShellSyntax','Test-ServiceControl')){
         & powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "scripts/$script.ps1"
         Check-Exit $script
     }
     Get-ChildItem frontend/source -Filter *.js | ForEach-Object { & node --check $_.FullName; Check-Exit $_.Name }
     & node scripts/Build-Styles.cjs --check
     Check-Exit 'Styles'
-    foreach($test in @('Test-Responsiveness','Test-FrontendSystem','Test-RemediationEvidence','Test-RecipeWorkspace','Test-GuidedRemediation','Test-GpoScopePicker','Test-ControlTargeting','Test-UX-Contract','Test-Studio-UI','Test-EnterpriseCenter','Test-ManualVerification','Test-ValueEditor','Test-ManualRemediation')){
+    foreach($test in @('Test-Responsiveness','Test-FrontendSystem','Test-EndpointResultUi','Test-RemediationEvidence','Test-RecipeWorkspace','Test-GuidedRemediation','Test-GpoScopePicker','Test-ControlTargeting','Test-UX-Contract','Test-Studio-UI','Test-EnterpriseCenter','Test-ManualVerification','Test-ValueEditor','Test-ManualRemediation')){
         & node "scripts/$test.cjs"
         Check-Exit $test
     }

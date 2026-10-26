@@ -14,7 +14,7 @@
     const publication = result.gpoPublished === true ? 'published' : bad(result.state) ? 'failed' : 'pending';
     const replication = result.verification?.replicationConverged ? 'converged' : (result.verification ? 'pending' : 'not_checked');
     const effective = effectiveVerified(result.effectiveStatus)&&coverageVerified(result) ? 'verified' : bad(result.effectiveStatus) ? 'failed' : 'pending';
-    const attention = bad(result.state) || publication === 'failed' || effective === 'failed';
+    const attention = bad(result.state) || publication === 'failed' || effective === 'failed' || (result.refreshResults||[]).some(x=>upper(x.state)==='FAILED');
     const custom=!!run?.plan?.selection?.itemValues;
     const compliant = !upper(result.state).startsWith('ROLLED_BACK') && !custom && !attention && publication === 'published' && result.linkVerified === true && replication === 'converged' && effective === 'verified';
     return { publication, replication, effective, attention, compliant, custom };

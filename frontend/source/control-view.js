@@ -73,6 +73,15 @@ resultSummary=function(h){
  if(/^(APPLYING|ROLLBACKING|VERIFYING|REFRESHING)$/.test(h?.result?.state||''))html=html.replace(/<button[^>]*data-gpupdate[^>]*>[\s\S]*?<\/button>/,'');
  if(h?.result?.state==='ROLLED_BACK')html=html.replace(/>Run gpupdate \/force</,`>${'Run gpupdate /force after rollback'}<`);
  const stages=h?.result?.verificationStages||[],diagnosis=h?.result?.diagnosis||[];
+ const refresh=h?.result?.refreshResults||[],failedRefresh=refresh.some(x=>x.state==='FAILED');
+ if(failedRefresh&&h?.result?.gpoPublished&&!/^(ROLLED_BACK|APPLYING|ROLLBACKING|VERIFYING|REFRESHING|DRIFT|VERIFY_MISMATCH)/.test(h.result.state||'')&&h.result.effectiveStatus!=='ENDPOINT_MISMATCH'){
+   html=html.replace(/(<div class="result-summary-head">[\s\S]*?<h2>)[\s\S]*?(<\/h2>)/,'$1Published — endpoint refresh failed$2');
+ }
+ if(refresh.length){
+   const completed=refresh.filter(x=>x.state==='COMPLETED').length;
+   html=html.replace(/(<div class="refresh-summary">[\s\S]*?)(<\/div>)/,(match,content,close)=>content+'<span>Completed <b>'+completed+'</b></span>'+close+'<details class="endpoint-refresh-details" open><summary>Per-host refresh results</summary><ul>'+refresh.map(x=>'<li><strong>'+esc(x.computer)+'</strong> · '+esc(x.state)+'<p>'+esc(x.message||'No completion detail available.')+'</p></li>').join('')+'</ul></details>');
+ }
+
  if(h?.plan?.selection?.itemValues)html=html.replace('<div class="result-actions">',`<p class="custom-value-note">${'Custom values were requested. This result concerns that intent, not CIS recommendation compliance.'}</p><div class="result-actions">`);
  // Current server evidence replaces the legacy four-box summary. Rendering
  // both can contradict content-aware replication and repeats the same checks.
