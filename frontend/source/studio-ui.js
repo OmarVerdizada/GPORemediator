@@ -51,17 +51,17 @@
         <p>${live} ${'controls currently have real GPO mappings. Compliance requires live verification evidence.'}</p></div>
       <a href="#/workspace">${'Batch workflows'} <span aria-hidden="true">↗</span></a></div>`;
   }
-  function remediation(state){
-    const L=(a,b)=>label(a,b,state.lang),selection=state.selection||{},plan=state.plan;
-    const gpo=(state.inventory?.gpos||[]).find(x=>x.id===selection.gpoId),scope=(state.inventory?.scopes||[]).find(x=>x.dn===selection.scopeDn);
+  function remediation(state,run=null){
+    const L=(a,b)=>label(a,b,state.lang),selection=run?.plan?.selection||state.selection||{},plan=run?.plan||state.plan;
+    const gpo=run?{id:selection.gpoId,...run.plan?.preview?.gpo}:(state.inventory?.gpos||[]).find(x=>x.id===selection.gpoId),scope=run?{name:selection.scopeDn,dn:selection.scopeDn,...run.plan?.preview?.scope}:(state.inventory?.scopes||[]).find(x=>x.dn===selection.scopeDn);
     const steps=[
       ['Control',!!state.selectedRule],
       ['GPO / OU',!!gpo&&!!scope],
       ['Preview',!!plan],
-      ['Approval',!!state.approval?.reviewed],
-      ['Result',false]
+      ['Approval',run?!!run.approval:!!state.approval?.reviewed],
+      ['Result',!!run?.result]
     ];
-    return `<section class="studio-remediation-context"><div class="studio-context-head"><span class="studio-eyebrow">${'CHANGE CONTEXT'}</span><span class="studio-context-tag">${dot('blue')} ${'Read-only preview first'}</span></div>
+    return `<section class="studio-remediation-context"><div class="studio-context-head"><span class="studio-eyebrow">${'CHANGE CONTEXT'}</span><span class="studio-context-tag">${dot('blue')} ${run?'Recorded operation':'Read-only preview first'}</span></div>
       <div class="studio-context-grid"><div><small>CIS CONTROL</small><strong>${html(state.selectedRule?.id||'—')}</strong><span>${html(state.selectedRule?.title||'—')}</span></div>
         <div><small>${'SELECTED GPO'}</small><strong title="${html(gpo?.name||'')}">${html(gpo?.name||'Not selected')}</strong><span>${html(gpo?.id||'—')}</span></div>
         <div><small>${'TARGET OU / DOMAIN'}</small><strong title="${html(scope?.name||'')}">${html(scope?.name||'Not selected')}</strong><span title="${html(scope?.dn||'')}">${html(scope?.dn||'—')}</span></div></div>

@@ -190,6 +190,10 @@ public sealed class GpoWorkflowService(IConfiguration config,Store store,Operati
     public GpoWorkflowPlan ValidateSubmission(string id,string operation,GpoConsent consent,string token,string actor)
     {
         RequireReal();var plan=store.Require<GpoWorkflowPlan>("gpo_plans",id);AssertContext(plan,Get(token,actor),actor);
+        if(operation=="refresh"){
+            if(consent.Refresh is not ("Pdc" or "Scope"))throw new PolicyException("GPO_OPTIONS_INVALID","Choose PDC or scope computers for policy refresh.");
+            ProductionGpoMappings.ValidateRefresh(ProductionGpoMappings.Effective(plan.Selection),consent.Refresh);
+        }
         if(operation!="verify"){
             if(!config.GetValue<bool>("Windows:EnableWrites"))throw new PolicyException("WRITES_DISABLED","Enable the production change gate first.");
             GpoWorkflowRules.ValidateWriteScope(ApprovedGpos,AuthorizedOus);GpoWorkflowRules.ValidateWriteSelection(ApprovedGpos,AuthorizedOus,plan.Selection);
@@ -216,6 +220,9 @@ public sealed class GpoWorkflowService(IConfiguration config,Store store,Operati
             throw new PolicyException("OPERATION_DENIED","Unknown GPO operation.");
         if(operation=="refresh" && consent.Refresh is not ("Pdc" or "Scope"))
             throw new PolicyException("GPO_OPTIONS_INVALID","Choose PDC or scope computers for policy refresh.");
+        // Reject an incompatible refresh before claiming the GPO or replacing
+        // its recorded result with an in-progress/review state.
+        if(operation=="refresh")ProductionGpoMappings.ValidateRefresh(mapping,consent.Refresh);
         if(operation=="refresh" && mapping.Scope=="User" && consent.Refresh=="Pdc")
             throw new PolicyException("USER_REFRESH_TARGET_INVALID","User policy refresh requires the endpoint OU recorded in the plan; the PDC is not a user-session target.");
         if(operation=="refresh" && mapping.Scope=="User" && consent.Refresh=="Scope" && string.IsNullOrWhiteSpace(plan.Selection.EndpointScopeDn))

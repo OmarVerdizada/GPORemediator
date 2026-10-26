@@ -19,11 +19,16 @@
     const compliant = !upper(result.state).startsWith('ROLLED_BACK') && !custom && !attention && publication === 'published' && result.linkVerified === true && replication === 'converged' && effective === 'verified';
     return { publication, replication, effective, attention, compliant, custom };
   }
+  function refreshChoices(run,settings=[]) {
+    const selection=run?.plan?.selection||{},mapping=settings.find(x=>x.id===selection.setting);
+    const domain=!/^OU=/i.test(selection.scopeDn||'')&&(selection.accountScope==='Domain'||(!selection.accountScope&&mapping?.domainPolicySensitive));
+    return domain?[{value:'Pdc',label:'PDC emulator'}]:[{value:'Scope',label:'Scope computers'}];
+  }
   function workflowStep({ plan, approvalReviewed, run }) {
     if (run) {
       const state = upper(run.result?.state);
       if (/ROLLED_BACK/.test(state)) return 5;
-      if (/FAIL|REVIEW|DRIFT|MISMATCH/.test(state)) return 5;
+      if (/FAIL|REVIEW|DRIFT|MISMATCH/.test(state)) return run.result?.gpoPublished ? 6 : 5;
       if (classify(run).compliant) return 6;
       return run.result?.gpoPublished ? 6 : 5;
     }
@@ -40,5 +45,5 @@
         ? { name: 'Medium', cls: 'medium', copy: mapping?.impactReason || 'Validate scope and application dependencies before broad rollout.' }
         : { name: 'Low', cls: 'low', copy: mapping?.impactReason || 'Preview and post-change verification are still required.' };
   }
-  window.GpoUiDomain = Object.freeze({ classify, workflowStep, impact, bad, effectiveVerified, coverageVerified });
+  window.GpoUiDomain = Object.freeze({ classify, workflowStep, impact, bad, effectiveVerified, coverageVerified, refreshChoices });
 })();

@@ -19,6 +19,10 @@ var localAccount=selected with{ScopeDn="OU=Pilot,"+dn,AccountScope="LocalCompute
 ProductionGpoMappings.Validate(localAccount);
 var localMapping=ProductionGpoMappings.Effective(localAccount);
 Check(localMapping.Scope=="Computer"&&!localMapping.DomainPolicySensitive,"OU account policy did not resolve to local computer policy");
+ProductionGpoMappings.ValidateRefresh(localMapping,"Scope");
+Reject(()=>ProductionGpoMappings.ValidateRefresh(localMapping,"Pdc"),"PDC_REFRESH_SCOPE_INVALID");
+ProductionGpoMappings.ValidateRefresh(ProductionGpoMappings.Effective(selected),"Pdc");
+Reject(()=>ProductionGpoMappings.ValidateRefresh(ProductionGpoMappings.Effective(selected),"Scope"),"DOMAIN_REFRESH_SCOPE_INVALID");
 var domainInventory=JsonDefaults.Deserialize<GpoAffectedObjects>("{\"computers\":0,\"servers\":0,\"workstations\":0,\"disabled\":0,\"sampleHosts\":[],\"truncated\":false,\"targetKind\":\"DomainAccount\",\"scopeDn\":\"DC=example,DC=local\"}");
 Check(domainInventory!.TargetKind=="DomainAccount"&&domainInventory.ScopeDn==dn,"Live account scope metadata was lost during transport");
 ProductionGpoMappings.ValidateTarget(localMapping,new(localAccount.ScopeDn,"Pilot","OU"),localAccount);
@@ -99,6 +103,25 @@ Console.WriteLine("PASS mapping upgrades: stale writes blocked; snapshot rollbac
 
 var evidencePlan=new GpoWorkflowPlan("evidence-fixture","EXAMPLE\\Operator","EXAMPLE\\Executor","WINDOWS","example.local","dc.example.local",selected with{Setting="1.1.4"},new(new(gpo,"Test GPO",false,true),new(dn,"Domain","Domain"),"1","fingerprint","",null,[],[],DesiredValue:"14"),PolicyValues.Now());
 var evidenceResult=new GpoWorkflowResult("PUBLISHED","Published",null,null,null,true,true,[new("ws.example.local","SCHEDULED","scheduled")],"VERIFIED_ON_SAMPLE",new("1","1",true,[],[],PolicyValues.Now(),true),[new("ws.example.local","VERIFIED","sample only","14")],"14");
+// Real submission/execution preflight, private in-memory session, and an invalid
+// ciphertext guard: a regression cannot reach the native executor or live AD.
+using(var refreshStore=new Store(":memory:")){
+    var refreshConfig=new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string,string?>{{"Mode","Windows"},{"Windows:Domain","example.local"},{"Windows:DomainController","dc.example.local"}}).Build();
+    using var refreshService=new GpoWorkflowService(refreshConfig,refreshStore,new OperationGate(refreshStore),new EphemeralDataProtectionProvider(),new WindowsPowerShellExecutor(NullLogger<WindowsPowerShellExecutor>.Instance));
+    var inventoryForRefresh=inventory with{ExecutionUser=evidencePlan.ExecutionUser};
+    var connectionType=typeof(GpoWorkflowService).GetNestedType("Connection",BindingFlags.NonPublic)!;
+    var connection=Activator.CreateInstance(connectionType,BindingFlags.Instance|BindingFlags.Public|BindingFlags.NonPublic,null,[evidencePlan.Actor,evidencePlan.ExecutionUser,Array.Empty<byte>(),inventoryForRefresh,DateTimeOffset.UtcNow.AddMinutes(15),DateTimeOffset.UtcNow],null)!;
+    var connections=typeof(GpoWorkflowService).GetField("connections",BindingFlags.Instance|BindingFlags.NonPublic)!.GetValue(refreshService)!;
+    connections.GetType().GetMethod("TryAdd")!.Invoke(connections,["refresh-fixture",connection]);
+    var hash=(string)typeof(GpoWorkflowService).GetProperty("ConfigHash",BindingFlags.Instance|BindingFlags.NonPublic)!.GetValue(refreshService)!;
+    var refreshPlan=evidencePlan with{Selection=localAccount,ConfigHash=hash};
+    var previousRefresh=new GpoWorkflowRun(refreshPlan.Id,refreshPlan,evidenceResult,PolicyValues.Now());
+    refreshStore.Put("gpo_plans",refreshPlan.Id,refreshPlan);refreshStore.Put("gpo_runs",refreshPlan.Id,previousRefresh);
+    Reject(()=>refreshService.ValidateSubmission(refreshPlan.Id,"refresh",new("",Refresh:"Pdc"),"refresh-fixture",refreshPlan.Actor),"PDC_REFRESH_SCOPE_INVALID");
+    Reject(()=>refreshService.ExecuteAsync(refreshPlan.Id,"refresh",new("",Refresh:"Pdc"),"refresh-fixture",refreshPlan.Actor).GetAwaiter().GetResult(),"PDC_REFRESH_SCOPE_INVALID");
+    Check(PolicyValues.Hash(refreshStore.Require<GpoWorkflowRun>("gpo_runs",refreshPlan.Id))==PolicyValues.Hash(previousRefresh),"Invalid refresh overwrote the published result");
+    Console.WriteLine("PASS invalid OU/PDC refresh rejected at submission and execution without replacing recorded result or invoking native executor");
+}
 store.Put("gpo_runs",evidencePlan.Id,new GpoWorkflowRun(evidencePlan.Id,evidencePlan,evidenceResult,"2026-10-15T00:00:00Z"));
 var exportBefore=service.Evidence(evidencePlan.Id,evidencePlan.Actor);
 store.Put("gpo_runs",evidencePlan.Id,new GpoWorkflowRun(evidencePlan.Id,evidencePlan,evidenceResult with{State="ROLLED_BACK",EffectiveStatus="ROLLBACK_ENDPOINT_PENDING",CurrentValue="1"},"2026-10-15T00:01:00Z"));

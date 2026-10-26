@@ -19,7 +19,7 @@ try {
     Get-ChildItem frontend/source -Filter *.js | ForEach-Object { & node --check $_.FullName; Check-Exit $_.Name }
     & node scripts/Build-Styles.cjs --check
     Check-Exit 'Styles'
-    foreach($test in @('Test-Responsiveness','Test-FrontendSystem','Test-EndpointResultUi','Test-RemediationEvidence','Test-RecipeWorkspace','Test-GuidedRemediation','Test-GpoScopePicker','Test-ControlTargeting','Test-UX-Contract','Test-Studio-UI','Test-EnterpriseCenter','Test-ManualVerification','Test-ValueEditor','Test-ManualRemediation')){
+    foreach($test in @('Test-Responsiveness','Test-FrontendSystem','Test-EndpointResultUi','Test-ResultContext','Test-RemediationEvidence','Test-RecipeWorkspace','Test-GuidedRemediation','Test-GpoScopePicker','Test-ControlTargeting','Test-UX-Contract','Test-Studio-UI','Test-EnterpriseCenter','Test-ManualVerification','Test-ValueEditor','Test-ManualRemediation')){
         & node "scripts/$test.cjs"
         Check-Exit $test
     }
@@ -37,7 +37,7 @@ try {
     if(!(Test-FrontendDistMatchesSource)){throw 'Frontend/dist does not match source. Run Build-Portable.ps1.'}
     if(!(Test-PortableBackendMatchesSource)){throw 'Runtime does not match source. Run Build-Portable.ps1.'}
     if($IncludeBrowser){
-        foreach($test in @('Test-RecoveryUi','Test-WorkflowUi','Test-EndpointTargetingUi','Test-EnglishThemes')){
+        foreach($test in @('Test-RecoveryUi','Test-WorkflowUi','Test-EndpointTargetingUi','Test-EnglishThemes','Test-ResultOfflineUi')){
             & node "scripts/$test.cjs"
             Check-Exit $test
         }

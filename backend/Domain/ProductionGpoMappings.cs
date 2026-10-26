@@ -135,11 +135,20 @@ public static class ProductionGpoMappings
             throw new PolicyException("LOCAL_ACCOUNT_OU_REQUIRED","Choose a computer OU for local account policy.");
     }
 
+    public static void ValidateRefresh(GpoRuleMapping mapping,string? refresh)
+    {
+        if(refresh is not ("None" or "Pdc" or "Scope"))throw new PolicyException("GPO_OPTIONS_INVALID","Invalid policy refresh option.");
+        if(mapping.Scope=="User"&&refresh=="Pdc")throw new PolicyException("USER_REFRESH_TARGET_INVALID","User policy refresh requires the recorded endpoint OU, not the PDC.");
+        if(mapping.DomainPolicySensitive&&refresh=="Scope")throw new PolicyException("DOMAIN_REFRESH_SCOPE_INVALID","Domain account policy requires PDC refresh or the normal cycle.");
+        if(!mapping.DomainPolicySensitive&&mapping.Scope!="User"&&refresh=="Pdc")throw new PolicyException("PDC_REFRESH_SCOPE_INVALID","Computer OU policy requires scope refresh or the normal cycle, not the PDC.");
+    }
+
     public static void Validate(GpoSelection selection)
     {
         var mapping = Effective(selection);
         if (!mapping.Writable)
             throw new PolicyException("GPO_MANUAL_ONLY", "This CIS control is not classified as Automated in the imported CIS v4.0.0 catalog. It remains read-only and requires manual review.");
+        ValidateRefresh(mapping,selection.Refresh);
         if (!Guid.TryParse(selection.GpoId, out _)) throw new PolicyException("GPO_SELECTION_REQUIRED", "Select a GPO from the discovered list.");
         if (selection.Refresh is not ("None" or "Pdc" or "Scope")) throw new PolicyException("GPO_OPTIONS_INVALID", "Invalid policy refresh option.");
         if (selection.AccountScope is not ("Domain" or "LocalComputers" or "Users")) throw new PolicyException("GPO_OPTIONS_INVALID", "Invalid target scope option.");

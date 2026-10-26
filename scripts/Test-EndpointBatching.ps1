@@ -36,6 +36,10 @@ try{
  $Data.refreshOffset=-1
  try{$null=& $dispatch;throw 'negative refresh offset accepted'}catch{if($_.Exception.Message -notlike 'INVALID_REQUEST*'){throw}}
  $script:missing=$null
+ $Data.refresh='Pdc';$callsBefore=$script:remoteCalls
+ try{$null=& $dispatch;throw 'OU plan accepted PDC refresh'}catch{if($_.Exception.Message -notlike 'PDC_REFRESH_SCOPE_INVALID*'){throw}}
+ Check ($script:remoteCalls -eq $callsBefore) 'invalid PDC refresh is rejected before any endpoint command'
+ $Data.refresh='Scope'
  function Verify-Rollback {param($Plan,$Map,$Manifest) @{restored=$true;published=$false;linked=$false;effective='ROLLBACK_ENDPOINT_PENDING'}}
  @{phase='ROLLED_BACK'}|ConvertTo-Json|Set-Content -LiteralPath (Join-Path $temp 'manifest.json') -Encoding UTF8
  $rollbackTargets=@();for($offset=0;$offset -lt 201;$offset+=64){$Data.refreshOffset=$offset;$result=& $dispatch;Check ($result.state -eq 'ROLLED_BACK') 'rollback refresh preserves restored GPO status';$rollbackTargets+=@($result.refreshResults)}

@@ -909,6 +909,9 @@ switch($Operation){
         elseif(!$before.published -or !$before.linked){Fail 'DRIFT_DETECTED' 'Live GPO content or link changed. Refresh is blocked.'}
         $strategy=[string](Read-Field $Data 'refresh' '')
         if(!$strategy){$strategy=[string]$plan.selection.refresh}
+        $domainPolicy=[bool](Read-Field $map 'domainPolicySensitive' ([string]$map.scope -eq 'Domain'))
+        if($strategy -eq 'Pdc' -and !$domainPolicy){Fail 'PDC_REFRESH_SCOPE_INVALID' 'PDC refresh is only valid for domain account policy. Use the recorded endpoint scope.'}
+        if($strategy -eq 'Scope' -and $domainPolicy){Fail 'DOMAIN_REFRESH_SCOPE_INVALID' 'Domain account policy requires PDC refresh or the normal cycle.'}
          $endpointScope=[string](Read-Field $plan.selection 'endpointScopeDn' '')
          $computers=@(Refresh-Targets $strategy $plan.selection.scopeDn $endpointScope ([string]$map.scope))
         $liveComputers=@($computers);$pinned=Read-Field $plan.preview 'verificationComputers' $null
