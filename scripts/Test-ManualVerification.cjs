@@ -14,6 +14,7 @@ assert(!commands.find(x=>x.id==='9.1.5').command.includes('LogBlocked'));
 assert(commands.find(x=>x.id==='9.1.6').command.includes('Format-List Name, LogBlocked'));
 assert(commands.find(x=>x.id==='9.1.7').command.includes('Format-List Name, LogAllowed'));
 assert(commands.find(x=>x.id==='9.2.4').command.includes("-Name 'Private'"));
+for(const [id,rid] of [['2.3.1.2','501'],['2.3.1.4','500'],['2.3.1.5','501']]){const command=commands.find(x=>x.id===id).command;assert(command.includes('Get-LocalUser -ErrorAction Stop'));assert(command.includes(`-${rid}$`));assert(!command.includes('secedit.exe'));}
 const auditCommand=commands.find(x=>x.id==='17.2.1').command;
 assert.match(auditCommand,/auditpol\.exe \/get \/subcategory:"\{[a-f0-9-]+\}"/i);
 assert(!auditCommand.includes(' /r'));
@@ -45,6 +46,14 @@ try {
   $value=& $command
   if($script:probeCount -ne 1 -or [string]$value -notmatch 'MinimumPasswordLength = 14'){throw 'Expected endpoint probe failed'}
   'PASS manual check stops before reading the wrong host and reads the expected host'
+  function Get-LocalUser {
+    param($ErrorAction)
+    [pscustomobject]@{Name='renamed-guest';SID='S-1-5-21-100-200-300-501';Enabled=$false;PrincipalSource='Local'}
+  }
+  $guestCommand=[scriptblock]::Create(($rows|Where-Object id -eq '2.3.1.2').command)
+  $guest=& $guestCommand
+  if($guest.Name -ne 'renamed-guest' -or $guest.Enabled -ne $false -or $guest.EnableGuestAccount -ne 0 -or $script:probeCount -ne 1){throw 'Generated Guest check did not use live renamed account state'}
+  'PASS generated Guest check reads renamed RID 501 status without secedit or an INF'
 } finally { $env:COMPUTERNAME=$original }
 `);
 const guard=cp.spawnSync('powershell.exe',['-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-File',guardTest],{encoding:'utf8'});process.stdout.write(guard.stdout||'');process.stderr.write(guard.stderr||'');assert.equal(guard.status,0);

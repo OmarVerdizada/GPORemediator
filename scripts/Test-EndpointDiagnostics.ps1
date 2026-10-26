@@ -23,6 +23,8 @@ Check ($results[0].state -eq 'COMPLETED') 'one denied host does not discard succ
 Check ($results[1].PSComputerName -eq 'denied.example.test' -and $results[1].state -eq 'FAILED' -and $results[1].message -match 'ENDPOINT_ACCESS_DENIED') 'transport failure maps to the denied host with actionable access guidance'
 Check ($results[1].message -notmatch 'sensitive fixture|not-a-real-password') 'failure evidence excludes raw exceptions and credentials'
 foreach($case in @(
+ @{id='112,PSSessionStateBroken';category='OpenError';message='WSMan could not launch a host process';code='ENDPOINT_DISK_FULL'},
+ @{id='39,PSSessionStateBroken';category='OpenError';message='Disk full';code='ENDPOINT_DISK_FULL'},
  @{id='KerberosError,PSSessionOpenFailed';category='OpenError';message='Kerberos failed';code='ENDPOINT_AUTHENTICATION_FAILED'},
  @{id='PSSessionOpenFailed';category='OpenError';message='Unavailable';code='ENDPOINT_CONNECTION_FAILED'},
  @{id='NativeToolFailed';category='NotSpecified';message='Unexpected native error';code='ENDPOINT_PROBE_FAILED'}

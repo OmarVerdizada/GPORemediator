@@ -62,6 +62,13 @@
         if(profile&&firewallProperty)lines.push(`Get-NetFirewallProfile -Name ${psQuote(profile)} -PolicyStore ActiveStore | Format-List Name, ${firewallProperty}`);
       }
     }
+    else if(/^SecurityTemplate$/i.test(handler)&&items.length&&items.every(x=>String(x.section||x.Section)==='System Access'&&['EnableGuestAccount','EnableAdminAccount','NewGuestName','NewAdministratorName'].includes(x.key||x.Key))){
+      lines=["$localAccounts = @(Get-LocalUser -ErrorAction Stop | Where-Object { [string]$_.PrincipalSource -eq 'Local' })"];
+      for(const item of items){const key=item.key||item.Key,rid=['EnableGuestAccount','NewGuestName'].includes(key)?501:500;
+        lines.push(`$account = @($localAccounts | Where-Object { [string]$_.SID -match '-${rid}$' })`,`if ($account.Count -ne 1) { throw ${psQuote('Exactly one local built-in RID '+rid+' account was not found. No account state was established.')} }`);
+        lines.push(key.startsWith('Enable')?`$account | Select-Object Name, Enabled, SID, @{Name=${psQuote(key)};Expression={[int]$_.Enabled}}`:'$account | Select-Object Name, Enabled, SID');
+      }
+    }
     else if(/^SecurityTemplate$/i.test(handler)){
       const checks=items.filter(x=>x.key||x.Key).map(x=>`Select-String -LiteralPath $policyFile -Pattern ${psQuote('^\\s*'+String(x.key||x.Key).replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'\\s*=')}`);
       lines=[`$policyFile = Join-Path $env:TEMP ([guid]::NewGuid().ToString('N') + '.inf')\ntry {\n  secedit.exe /export /mergedpolicy /cfg $policyFile /quiet | Out-Null\n  if ($LASTEXITCODE -ne 0) { throw 'secedit export failed' }\n  ${checks.join('\n  ')}\n} finally { Remove-Item -LiteralPath $policyFile -Force -ErrorAction SilentlyContinue }`];

@@ -21,6 +21,17 @@ function secedit.exe {
  foreach($item in $script:expected){$value=$item.expected;if($script:wrong){$value=if($item.type -eq 'Principals'){'*S-1-5-21-999-888-777-1001'}else{'__mismatch__'}};$text+="[$($item.section)]`r`n$($item.key) = $value`r`n"}
  [IO.File]::WriteAllText($file,$text);$global:LASTEXITCODE=0
 }
+function Get-LocalUser {
+ param($ErrorAction)
+ foreach($rid in @(500,501)){
+  $item=@($script:expected|Where-Object{([string]$_.key -in @('EnableGuestAccount','NewGuestName') -and $rid -eq 501) -or ([string]$_.key -in @('EnableAdminAccount','NewAdministratorName') -and $rid -eq 500)}|Select-Object -First 1)
+  if(!$item.Count){continue}
+  $name=if([string]$item[0].key -like 'New*'){if($script:wrong){'other-account-name'}else{[string]$item[0].expected}}else{'renamed-built-in'}
+  $enabled=if([string]$item[0].key -like 'Enable*'){[string]$item[0].expected -eq '1'}else{$false}
+  if($script:wrong){$enabled=!$enabled}
+  [pscustomobject]@{Name=$name;SID=('S-1-5-21-100-200-300-'+$rid);Enabled=$enabled;PrincipalSource='Local'}
+ }
+}
 function auditpol.exe {
  if($args.Count -ne 2 -or $args[0] -ne '/backup' -or $args[1] -notlike '/file:*'){throw 'Unexpected native audit export arguments'}
  $file=([string]$args[1]).Substring('/file:'.Length);$lines=@('Machine Name,Policy Target,Subcategory,Subcategory GUID,Inclusion Setting,Exclusion Setting,Setting Value')

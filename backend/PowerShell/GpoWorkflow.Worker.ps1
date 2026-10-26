@@ -574,7 +574,9 @@ function Endpoint-FailureMessage($Record){
     $id=([string]$Record.FullyQualifiedErrorId -replace '[^A-Za-z0-9_.,-]','')
     if($id.Length -gt 160){$id=$id.Substring(0,160)}
     $native=[string]$Record.Exception.Message
-    if($category -eq 'PermissionDenied' -or $native -match '(?i)access.*denied|unauthorized|0x80070005' -or $id -match 'AccessDenied'){
+    if($id -match '^(?:112|39)(?:,|$)|ERROR_DISK_FULL|ERROR_HANDLE_DISK_FULL' -or $native -match '(?i)0x80070070|not enough space on the disk'){
+        $reason='ENDPOINT_DISK_FULL. Windows reported insufficient disk space. Check free space and quotas on the endpoint system, profile and temporary-file volumes, then retry the remote session. A listening WinRM port does not establish that a host process can start.'
+    }elseif($category -eq 'PermissionDenied' -or $native -match '(?i)access.*denied|unauthorized|0x80070005' -or $id -match 'AccessDenied'){
         $reason='ENDPOINT_ACCESS_DENIED. Check this account''s Execute access to the endpoint Microsoft.PowerShell session and the privileges required by the native probe. GPO Edit settings and Link GPOs do not grant endpoint access.'
     }elseif($id -match 'Kerberos|Authentication|Logon' -or $native -match '(?i)Kerberos|logon failure|unknown user name|user name or password|0x8009030e|0x80090322'){
         $reason='ENDPOINT_AUTHENTICATION_FAILED. Check the endpoint FQDN, domain DNS, Kerberos/SPN, clock and current delegated credentials.'
@@ -705,6 +707,36 @@ function Verify-EffectiveSamples($Plan,$Map){
             return @{supported=$true;match=$ok;actual=($actual -join '; ');message='Endpoint policy registry values were read directly. This evidence does not prove runtime enforcement; restart, logon, service and tamper-protection requirements still apply.'}
           }
           if($Handler -eq 'SecurityTemplate'){
+            $samKeys=@('EnableGuestAccount','EnableAdminAccount','NewGuestName','NewAdministratorName')
+            if(@($ExpectedItems).Count -gt 0 -and @($ExpectedItems|Where-Object{[string]$_.section -ne 'System Access' -or [string]$_.key -notin $samKeys}).Count -eq 0){
+              # These settings describe built-in SAM accounts. An exported INF
+              # may omit them; identify the live account by RID, never its name.
+              $accounts=@()
+              try{
+                if(Get-Command Get-LocalUser -ErrorAction SilentlyContinue){
+                  $accounts=@(Get-LocalUser -ErrorAction Stop|Where-Object{[string]$_.PrincipalSource -eq 'Local'}|ForEach-Object{
+                    if($_.Enabled -isnot [bool]){throw 'Account enabled flag unavailable'}
+                    [pscustomobject]@{name=[string]$_.Name;sid=[string]$_.SID;enabled=[bool]$_.Enabled}
+                  })
+                }else{
+                  $role=Get-CimInstance Win32_ComputerSystem -Property DomainRole -ErrorAction Stop
+                  if($null -eq $role.DomainRole -or [int]$role.DomainRole -notin @(0,1,2,3)){throw 'A local SAM endpoint role was not established'}
+                  $accounts=@(Get-CimInstance Win32_UserAccount -Filter "LocalAccount=True AND (SID LIKE '%-500' OR SID LIKE '%-501')" -ErrorAction Stop|Where-Object{$_.LocalAccount -eq $true}|ForEach-Object{
+                    if($_.Disabled -isnot [bool]){throw 'Account disabled flag unavailable'}
+                    [pscustomobject]@{name=[string]$_.Name;sid=[string]$_.SID;enabled=(-not [bool]$_.Disabled)}
+                  })
+                }
+              }catch{return @{supported=$false;match=$false;actual='';message='Local built-in account state could not be read. Check local SAM read permissions and endpoint role. No account state was established.'}}
+              foreach($item in @($ExpectedItems)){
+                $key=[string]$item.key;$rid=if($key -in @('EnableGuestAccount','NewGuestName')){501}else{500}
+                $account=@($accounts|Where-Object{$_.sid -match ('^S-1-5-21-(?:\d+-){2}\d+-'+$rid+'$')})
+                if($account.Count -ne 1 -or [string]::IsNullOrWhiteSpace($account[0].name)){return @{supported=$false;match=$false;actual='';message=('Exactly one local built-in RID '+$rid+' account could not be established. Domain accounts are not substituted for local SAM evidence.')}}
+                $current=if($key -like 'Enable*'){[string][int][bool]$account[0].enabled}else{[string]$account[0].name}
+                $actual+=($key+'='+$current+' (account='+$account[0].name+'; SID='+$account[0].sid+')')
+                if(!(Value-Matches $current $item.expected $(if($item.comparator){$item.comparator}else{$Comparator}))){$ok=$false}
+              }
+              return @{supported=$true;match=$ok;actual=($actual -join '; ');message='Live local built-in account state was read by SID/RID. This establishes the observed account state, not which GPO caused it or whether the application refresh completed.'}
+            }
             $tmp=Join-Path $env:TEMP ('gpo-remediator-'+[guid]::NewGuid().ToString('N')+'.inf');try{& secedit.exe /export /mergedpolicy /cfg $tmp /quiet | Out-Null;if($LASTEXITCODE -ne 0 -or !(Test-Path -LiteralPath $tmp)){return @{supported=$false;match=$false;actual='';message='secedit could not export merged security policy.'}};$text=[IO.File]::ReadAllText($tmp);foreach($item in @($ExpectedItems)){$cur=Read-IniValue $text ([string]$item.section) ([string]$item.key);if([string]$item.type -eq 'Principals' -and $null -ne $cur){$cur=Normalize-Sids $cur}elseif([string]$item.type -eq 'QuotedString' -and $null -ne $cur){$cur=$cur.Trim().Trim('"')};$actual+=([string]$item.key+'='+$(if($null -eq $cur){'<not configured>'}else{$cur}));if($null -eq $cur){$ok=$false}elseif($Comparator -eq 'includes' -and [string]$item.type -eq 'Principals'){if(@(([string]$item.expected -split ',')|Where-Object{$_ -and $_ -notin @($cur -split ',')}).Count){$ok=$false}}elseif(!(Value-Matches $cur $item.expected $(if($item.comparator){$item.comparator}else{$Comparator}))){$ok=$false}};return @{supported=$true;match=$ok;actual=($actual -join '; ');message='Effective security policy was exported with secedit.'}}finally{Remove-Item -LiteralPath $tmp -Force -ErrorAction SilentlyContinue}
           }
           if($Handler -eq 'AdvancedAudit'){
