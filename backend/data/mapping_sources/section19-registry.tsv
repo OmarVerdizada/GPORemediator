@@ -8,5 +8,5 @@
 19.7.8.4	HKCU\SOFTWARE\Policies\Microsoft\Windows\CloudContent	DisableWindowsSpotlightFeatures	DWORD	1
 19.7.8.5	HKCU\SOFTWARE\Policies\Microsoft\Windows\CloudContent	DisableSpotlightCollectionOnDesktop	DWORD	1
 19.7.26.1	HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\Explorer	NoInplaceSharing	DWORD	1
-19.7.44.1	HKCU\SOFTWARE\Policies\Microsoft\Windows\Installer	AlwaysInstallElevated	DWORD	0
-19.7.46.2.1	HKCU\SOFTWARE\Policies\Microsoft\WindowsMediaPlayer	PreventCodecDownload	DWORD	1
+19.7.42.1	HKCU\SOFTWARE\Policies\Microsoft\Windows\Installer	AlwaysInstallElevated	DWORD	0
+19.7.44.2.1	HKCU\SOFTWARE\Policies\Microsoft\WindowsMediaPlayer	PreventCodecDownload	DWORD	1

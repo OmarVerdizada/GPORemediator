@@ -303,13 +303,43 @@
   },
   "18.9.5.7": {
     "warnings": [
-      "This CIS recipe contains benchmark notes/cautions or environment-specific exceptions. Review the imported benchmark description and application dependencies before Apply.",
-      "Depends on Turn On Virtualization Based Security (18.9.5.1). This individual control does not enable the parent policy. Hardware, firmware and restart requirements must be verified on the endpoint."
+      "Depends on Turn On Virtualization Based Security (18.9.5.1). This individual control does not enable the parent policy. Secure Launch hardware, firmware, OS updates and restart requirements must be verified on Windows Server 2019."
     ]
   },
   "18.10.93.2.2": {
     "warnings": [
-      "The scheduled day requires Configure Automatic Updates (18.10.93.2.1) to enable a scheduled installation mode. A registry day value alone does not prove updates are scheduled."
+      "ScheduledInstallDay only affects automatic scheduled installation when Configure Automatic Updates is enabled (NoAutoUpdate=0) and AUOptions=4. This control does not change the installation mode or force installation."
+    ]
+  },
+  "18.10.43.6.1.2": {
+    "warnings": [
+      "ASR activation depends on Configure Attack Surface Reduction rules (18.10.43.6.1.1) and an active supported Defender engine; this rule-list control does not silently enable the parent policy.",
+      "Windows Server 2019 LTSC (17763) does not support the WMI-event-subscription ASR rule e6db77e5-3df2-4cf1-b95a-636979351e5b; Microsoft documents Server 1903 SAC or later for that rule. Writing its registry value is not runtime enforcement evidence."
+    ]
+  },
+  "18.10.43.11.1.1.2": {
+    "warnings": [
+      "The imported control title requests Remote Encryption Protection. This recipe configures RemoteEncryptionProtectionConfiguredState, not the separate Brute Force Protection feature.",
+      "Block (1) is selected, which is stronger than Audit (2). Verify supported Defender platform, cloud protection, onboarding and feature enforcement on Windows Server 2019."
+    ]
+  },
+  "18.7.11": {
+    "warnings": [
+      "This CIS recipe contains benchmark notes/cautions or environment-specific exceptions. Review the imported benchmark description and application dependencies before Apply.",
+      "Review the parent Point and Print Restrictions policy and current printer-driver security updates. An option value alone is not proof that the parent policy or driver-installation restrictions are active."
+    ]
+  },
+  "18.7.12": {
+    "warnings": [
+      "This CIS recipe contains benchmark notes/cautions or environment-specific exceptions. Review the imported benchmark description and application dependencies before Apply.",
+      "Review the parent Point and Print Restrictions policy and current printer-driver security updates. An option value alone is not proof that the parent policy or driver-installation restrictions are active."
+    ]
+  },
+  "1.1.4": {
+    "warnings": [
+      "Domain user password/lockout policy must use the domain root; the selected GPO is enabled at link order 1 so it becomes the effective domain account policy.",
+      "This CIS recipe contains benchmark notes/cautions or environment-specific exceptions. Review the imported benchmark description and application dependencies before Apply.",
+      "On Windows Server 2019, minimum password lengths above the legacy limit require supported updates and the separate relaxed minimum-password-length policy. This control does not silently enable that prerequisite."
     ]
   }
 }

@@ -33,3 +33,14 @@ assert m['2.3.7.6']['items'][0]['value']==['4']
 assert m['18.10.93.4.2']['items'][1]['comparator']=='>='
 assert 'Favorite Themes' not in m['19.7.44.2.1']['recommended']
 print('PASS 18 numeric-bound recipes, zero/nonzero distinction and catalog contamination regression')
+
+# Independent identities for the two newly confirmed recipe defects.
+asr_guids={item['name'] for item in m['18.10.43.6.1.2']['items']}
+assert '92e97fa1-2edf-4476-bdd6-9dd0b4dddc7b' in asr_guids
+assert '56a863a9-875e-4185-98a7-b882c64b5ce5' not in asr_guids
+assert len(asr_guids)==12
+remote=m['18.10.43.11.1.1.2']['items'][0]
+assert remote['name']=='RemoteEncryptionProtectionConfiguredState'
+assert remote['key'].endswith(r'Behavioral Network Blocks\Remote Encryption Protection')
+assert remote['value']==['1']
+print('PASS ASR Office-macro identity and remote-encryption feature identity')

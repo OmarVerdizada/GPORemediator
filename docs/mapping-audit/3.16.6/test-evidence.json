@@ -1,0 +1,17 @@
+[
+  {
+    "test": "writer-tests.log",
+    "originalSha256": "9B6093A15C0D5D705FCB8C98BC4F1DC686451AC6792C830BD7940BF5257DD763",
+    "publishedLog": "writer-tests.txt"
+  },
+  {
+    "test": "endpoint-tests.log",
+    "originalSha256": "C03803D3EB6BB67E146A90BA4F1303D27A5055EC2F74B1D9BCFADAF0E1A6E341",
+    "publishedLog": "endpoint-tests.txt"
+  },
+  {
+    "test": "manual-tests.log",
+    "originalSha256": "605A076BBCA2EF872CDB1DFCEF51D0EED5786BC3DFAA8D22E39B4FA8728AF1C2",
+    "publishedLog": "manual-tests.txt"
+  }
+]

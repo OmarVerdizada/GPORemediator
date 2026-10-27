@@ -1,5 +1,5 @@
-2.3.1.1	HKLM\SYSTEM\CurrentControlSet\Control\Lsa	EnableGuestAccount	DWORD	0
-2.3.1.2	HKLM\SYSTEM\CurrentControlSet\Control\Lsa	LimitBlankPasswordUse	DWORD	1
+2.3.1.1	HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System	NoConnectedUser	DWORD	3
+2.3.1.3	HKLM\SYSTEM\CurrentControlSet\Control\Lsa	LimitBlankPasswordUse	DWORD	1
 2.3.2.1	HKLM\SYSTEM\CurrentControlSet\Control\Lsa	SCENoApplyLegacyAuditPolicy	DWORD	1
 2.3.2.2	HKLM\SYSTEM\CurrentControlSet\Control\Lsa	CrashOnAuditFail	DWORD	0
 2.3.4.1	HKLM\SYSTEM\Currentcontrolset\Control\Print\Providers\Lanman Print Services\Servers	AddPrinterDrivers	DWORD	1
@@ -12,7 +12,7 @@
 2.3.7.1	HKLM\SOFTWARE\Microsoft\Windows\Currentversion\Policies\System	DisableCAD	DWORD	0
 2.3.7.2	HKLM\SOFTWARE\Microsoft\Windows\Currentversion\Policies\System	DontDisplayLastUserName	DWORD	1
 2.3.7.3	HKLM\SOFTWARE\Microsoft\Windows\Currentversion\Policies\System	InactivityTimeoutSecs	DWORD	900
-2.3.7.6	HKLM\SOFTWARE\Microsoft\Windows Nt\Currentversion\Winlogon	CachedLogonsCount	String	1
+2.3.7.6	HKLM\SOFTWARE\Microsoft\Windows Nt\Currentversion\Winlogon	CachedLogonsCount	String	4
 2.3.7.7	HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon	PasswordExpiryWarning	DWORD	14
 2.3.7.8	HKLM\SOFTWARE\Microsoft\Windows Nt\Currentversion\Winlogon	ForceUnlockLogon	DWORD	1
 2.3.7.9	HKLM\SOFTWARE\Microsoft\Windows Nt\Currentversion\Winlogon	ScRemoveOption	String	1
@@ -24,7 +24,6 @@
 2.3.9.3	HKLM\SYSTEM\Currentcontrolset\Services\LanManServer\Parameters	EnableSecuritySignature	DWORD	1
 2.3.9.4	HKLM\SYSTEM\Currentcontrolset\Services\LanManServer\Parameters	EnableForcedLogoff	DWORD	1
 2.3.9.5	HKLM\SYSTEM\Currentcontrolset\Services\LanManServer\Parameters	SMBServerNameHardeningLevel	DWORD	1
-2.3.10.1	HKLM\SYSTEM\CurrentControlSet\Control\Lsa	LSAAnonymousNameLookup	DWORD	0
 2.3.10.2	HKLM\SYSTEM\Currentcontrolset\Control\Lsa	RestrictAnonymousSAM	DWORD	1
 2.3.10.3	HKLM\SYSTEM\Currentcontrolset\Control\Lsa	RestrictAnonymous	DWORD	1
 2.3.10.4	HKLM\SYSTEM\Currentcontrolset\Control\Lsa	DisableDomainCreds	DWORD	1
@@ -38,7 +37,6 @@
 2.3.11.3	HKLM\SYSTEM\Currentcontrolset\Control\Lsa\Pku2U	AllowOnlineID	DWORD	0
 2.3.11.4	HKLM\SOFTWARE\Microsoft\Windows\Currentversion\Policies\SYSTEM\Kerberos\Parameters	SupportedEncryptionTypes	DWORD	2147483640
 2.3.11.5	HKLM\SYSTEM\Currentcontrolset\Control\Lsa	NoLMHash	DWORD	1
-2.3.11.6	HKLM\SYSTEM\CurrentControlSet\Services\LanManServer\Parameters	EnableForcedLogOff	DWORD	1
 2.3.11.7	HKLM\SYSTEM\Currentcontrolset\Control\Lsa	LMCompatibilityLevel	DWORD	5
 2.3.11.8	HKLM\SYSTEM\Currentcontrolset\Services\Ldap	LDAPClientIntegrity	DWORD	1
 2.3.11.9	HKLM\SYSTEM\Currentcontrolset\Control\Lsa\Msv1_0	NTLMMinClientSec	DWORD	537395200
@@ -55,4 +53,4 @@
 2.3.17.5	HKLM\SOFTWARE\Microsoft\Windows\Currentversion\Policies\System	EnableSecureUIAPaths	DWORD	1
 2.3.17.6	HKLM\SOFTWARE\Microsoft\Windows\Currentversion\Policies\System	EnableLUA	DWORD	1
 2.3.17.7	HKLM\SOFTWARE\Microsoft\Windows\Currentversion\Policies\System	PromptOnSecureDesktop	DWORD	1
-2.3.17.8	HKLM\SOFTWARE\Microsoft\Windows\Currentversion\Policies\System	EnableVirtualization	DWORD	0
+2.3.17.8	HKLM\SOFTWARE\Microsoft\Windows\Currentversion\Policies\System	EnableVirtualization	DWORD	1

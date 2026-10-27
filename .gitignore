@@ -14,3 +14,6 @@ runtime/
 backend/appsettings.Local.json
 .tools/
 .gpo-*-backup-*/
+
+# Python source-audit import caches
+**/__pycache__/

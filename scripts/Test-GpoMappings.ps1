@@ -176,7 +176,8 @@ try{$null=& ([scriptblock]::Create($refreshBlock.Extent.Text.TrimStart('{').Trim
 Assert-Test ($script:refreshCalls.Count -eq 1) 'Rollback drift scheduled a refresh'
 Write-Output 'PASS rollback refresh: restored snapshot, explicit force and drift rejection'
 [IO.File]::WriteAllText((Join-Path $script:folder 'policy.txt'),'restored snapshot')
-$Data.refresh='Scope'
+# Switch from domain-account to computer policy before testing a scope refresh.
+$Data.mapping=@{scope='Computer'};$Data.refresh='Scope'
 $result=& ([scriptblock]::Create($refreshBlock.Extent.Text.TrimStart('{').TrimEnd('}')))
 Assert-Test ($result.state -eq 'ROLLED_BACK' -and $result.refreshResults[0].computer -eq 'ws.example.local') 'Rollback scope refresh ignored the host boundary'
 $script:failRefresh=$true
@@ -207,7 +208,7 @@ $cfg|Add-Member -NotePropertyName emitProgress -NotePropertyValue $true -Force
 $events=@(& ([scriptblock]::Create($rollbackBlock.Extent.Text.TrimStart('{').TrimEnd('}'))))
 $result=$events[-1]
 Assert-Test ($result.state -eq 'ROLLED_BACK' -and $script:restoreCalls -eq 1) 'Anchored batch did not restore the first full snapshot'
-Assert-Test (@($events|Where-Object{$_.PSObject.Properties['gpoStage']}).Count -eq 3) 'Worker did not stream actual restore stages'
+Assert-Test ((@($events|Where-Object{$_.PSObject.Properties['gpoStage']}|ForEach-Object{$_.gpoStage}) -join ',') -eq 'RESTORE_PREFLIGHT,RESTORE_ACCESS_CHECK,RESTORING_GPO,RESTORING_LINK,RESTORE_CHECK') 'Worker did not stream the ordered preflight/access/import/link/read-back restore stages'
 $events=@(& ([scriptblock]::Create($rollbackBlock.Extent.Text.TrimStart('{').TrimEnd('}'))))
 Assert-Test ($events[-1].state -eq 'ROLLED_BACK' -and $script:restoreCalls -eq 2) 'Second rollback was not actually executed'
 $saved=Get-Content -LiteralPath (Join-Path $script:batchFirst 'manifest.json') -Raw|ConvertFrom-Json

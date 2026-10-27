@@ -1,6 +1,6 @@
-# GPO Remediator 3.16.5
+# GPO Remediator 3.16.6
 
-3.16.5 fixes explicit workflow refresh submission, distinguishes user-session refresh from computer processing, and removes executable checks for placeholder endpoints. See [release notes](docs/RELEASE-3.16.5.md), [recovery assessment](docs/RELEASE-3.16.4.md), [native endpoint evidence](docs/RELEASE-3.16.3.md), [result context changes](docs/RELEASE-3.16.2.md), and [deployment instructions](docs/ASSURANCE-AND-UPDATES.md). Live AD validation must be run in your own test environment; local tests do not certify live enforcement.
+3.16.6 reviews all 405 imported mapping sources for Windows Server 2019, corrects ASR and Remote Encryption feature identities, and rejects stale/unknown source records. See [release notes](docs/RELEASE-3.16.6.md), [per-control source review](docs/mapping-audit/3.16.6/README.md), and [deployment instructions](docs/ASSURANCE-AND-UPDATES.md). Configuration-source review does not certify the original CIS PDF binding or live policy enforcement.
 
 3.14.4 accepts the standard SYSVOL rights created by GPMC **Edit settings** delegation (`Read & execute`, `Write`, and `Delete child`) without requiring per-file Modify/Delete. The publisher retains atomic replacement where available and uses a flushed in-place write after the durable backup/manifest when standard GPMC ACLs do not permit `ReplaceFile`. See [release notes](docs/RELEASE-3.14.4.md).
 

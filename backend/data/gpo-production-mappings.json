@@ -6,6 +6,8 @@
     "mapped": 394,
     "manualOrBlocked": 11,
     "totalUnique": 405,
+    "reviewTargetOperatingSystem": "Windows Server 2019 (operator-confirmed)",
+    "sourceCatalogBinding": "Imported 405-control subset; original CIS product/version document not independently bound. Not a full-benchmark or OS-enforcement certification.",
     "notes": "Mappings were cross-checked against Windows Group Policy semantics and the MIT-licensed ansible-lockdown Windows-2019-CIS GPO implementation where applicable."
   },
   "mappings": [
@@ -120,7 +122,8 @@
       "requiresRestart": false,
       "warnings": [
         "Domain user password/lockout policy must use the domain root; the selected GPO is enabled at link order 1 so it becomes the effective domain account policy.",
-        "This CIS recipe contains benchmark notes/cautions or environment-specific exceptions. Review the imported benchmark description and application dependencies before Apply."
+        "This CIS recipe contains benchmark notes/cautions or environment-specific exceptions. Review the imported benchmark description and application dependencies before Apply.",
+        "On Windows Server 2019, minimum password lengths above the legacy limit require supported updates and the separate relaxed minimum-password-length policy. This control does not silently enable that prerequisite."
       ],
       "source": "operator CIS v4.0.0 + validated Windows policy mapping"
     },
@@ -7920,7 +7923,8 @@
       "requiresGpUpdate": true,
       "requiresRestart": false,
       "warnings": [
-        "This CIS recipe contains benchmark notes/cautions or environment-specific exceptions. Review the imported benchmark description and application dependencies before Apply."
+        "This CIS recipe contains benchmark notes/cautions or environment-specific exceptions. Review the imported benchmark description and application dependencies before Apply.",
+        "Review the parent Point and Print Restrictions policy and current printer-driver security updates. An option value alone is not proof that the parent policy or driver-installation restrictions are active."
       ],
       "source": "operator CIS v4.0.0 + validated Windows policy mapping"
     },
@@ -7958,7 +7962,8 @@
       "requiresGpUpdate": true,
       "requiresRestart": false,
       "warnings": [
-        "This CIS recipe contains benchmark notes/cautions or environment-specific exceptions. Review the imported benchmark description and application dependencies before Apply."
+        "This CIS recipe contains benchmark notes/cautions or environment-specific exceptions. Review the imported benchmark description and application dependencies before Apply.",
+        "Review the parent Point and Print Restrictions policy and current printer-driver security updates. An option value alone is not proof that the parent policy or driver-installation restrictions are active."
       ],
       "source": "operator CIS v4.0.0 + validated Windows policy mapping"
     },
@@ -8337,8 +8342,7 @@
       "requiresGpUpdate": true,
       "requiresRestart": false,
       "warnings": [
-        "This CIS recipe contains benchmark notes/cautions or environment-specific exceptions. Review the imported benchmark description and application dependencies before Apply.",
-        "Depends on Turn On Virtualization Based Security (18.9.5.1). This individual control does not enable the parent policy. Hardware, firmware and restart requirements must be verified on the endpoint."
+        "Depends on Turn On Virtualization Based Security (18.9.5.1). This individual control does not enable the parent policy. Secure Launch hardware, firmware, OS updates and restart requirements must be verified on Windows Server 2019."
       ],
       "source": "operator CIS v4.0.0 + validated Windows policy mapping"
     },
@@ -11973,14 +11977,6 @@
         },
         {
           "key": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows Defender\\Windows Defender Exploit Guard\\ASR\\Rules",
-          "name": "56a863a9-875e-4185-98a7-b882c64b5ce5",
-          "type": "String",
-          "value": [
-            "1"
-          ]
-        },
-        {
-          "key": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows Defender\\Windows Defender Exploit Guard\\ASR\\Rules",
           "name": "5beb7efe-fd9a-4556-801d-275e5ffc04cc",
           "type": "String",
           "value": [
@@ -11998,6 +11994,14 @@
         {
           "key": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows Defender\\Windows Defender Exploit Guard\\ASR\\Rules",
           "name": "7674ba52-37eb-4a4f-a9a1-f0f9a1619a2c",
+          "type": "String",
+          "value": [
+            "1"
+          ]
+        },
+        {
+          "key": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows Defender\\Windows Defender Exploit Guard\\ASR\\Rules",
+          "name": "92e97fa1-2edf-4476-bdd6-9dd0b4dddc7b",
           "type": "String",
           "value": [
             "1"
@@ -12067,7 +12071,10 @@
       "domainPolicySensitive": false,
       "requiresGpUpdate": true,
       "requiresRestart": false,
-      "warnings": [],
+      "warnings": [
+        "ASR activation depends on Configure Attack Surface Reduction rules (18.10.43.6.1.1) and an active supported Defender engine; this rule-list control does not silently enable the parent policy.",
+        "Windows Server 2019 LTSC (17763) does not support the WMI-event-subscription ASR rule e6db77e5-3df2-4cf1-b95a-636979351e5b; Microsoft documents Server 1903 SAC or later for that rule. Writing its registry value is not runtime enforcement evidence."
+      ],
       "source": "operator CIS v4.0.0 + validated Windows policy mapping"
     },
     {
@@ -12514,8 +12521,8 @@
       "handler": "Registry",
       "items": [
         {
-          "key": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows Defender\\Remediation\\Behavioral Network Blocks\\Brute Force Protection",
-          "name": "BruteForceProtectionConfiguredState",
+          "key": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows Defender\\Remediation\\Behavioral Network Blocks\\Remote Encryption Protection",
+          "name": "RemoteEncryptionProtectionConfiguredState",
           "type": "DWORD",
           "value": [
             "1"
@@ -12538,7 +12545,8 @@
       "requiresGpUpdate": true,
       "requiresRestart": false,
       "warnings": [
-        "This CIS recipe contains benchmark notes/cautions or environment-specific exceptions. Review the imported benchmark description and application dependencies before Apply."
+        "The imported control title requests Remote Encryption Protection. This recipe configures RemoteEncryptionProtectionConfiguredState, not the separate Brute Force Protection feature.",
+        "Block (1) is selected, which is stronger than Audit (2). Verify supported Defender platform, cloud protection, onboarding and feature enforcement on Windows Server 2019."
       ],
       "source": "operator CIS v4.0.0 + validated Windows policy mapping"
     },
@@ -14358,7 +14366,7 @@
       "requiresGpUpdate": true,
       "requiresRestart": false,
       "warnings": [
-        "The scheduled day requires Configure Automatic Updates (18.10.93.2.1) to enable a scheduled installation mode. A registry day value alone does not prove updates are scheduled."
+        "ScheduledInstallDay only affects automatic scheduled installation when Configure Automatic Updates is enabled (NoAutoUpdate=0) and AUOptions=4. This control does not change the installation mode or force installation."
       ],
       "source": "operator CIS v4.0.0 + validated Windows policy mapping"
     },

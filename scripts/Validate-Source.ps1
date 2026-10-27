@@ -25,7 +25,7 @@ try {
     }
     & python scripts/Build-ProductionMappings.py --check
     Check-Exit 'Mapping generation'
-    foreach($script in @('scripts/Test-ProductionMappings.py','scripts/Audit-PolicyScopes.py','scripts/Validate-ProductionPackage.py')){
+    foreach($script in @('scripts/Test-ProductionMappings.py','scripts/Test-MappingSources.py','scripts/Audit-PolicyScopes.py','scripts/Validate-ProductionPackage.py')){
         & python $script
         Check-Exit $script
     }

@@ -44,10 +44,19 @@ for cid,(key,val,cmp,unit) in account.items():
 # TSV helpers.
 def read_tsv(name):
     p=os.path.join(root,'backend','data','mapping_sources',name)
-    if not os.path.exists(p): return []
+    if not os.path.exists(p): raise SystemExit(f'Required mapping source missing: {name}')
+    expected_width=4 if name=='section18-asr.tsv' else 3 if 'userrights' in name else 5
+    seen_rows=set()
     with open(p,encoding='utf-8') as f:
-      for row in csv.reader(f,delimiter='\t'):
-        if row and row[0].strip(): yield row
+      for line,row in enumerate(csv.reader(f,delimiter='\t'),1):
+        if row and row[0].strip():
+            if len(row)!=expected_width: raise SystemExit(f'{name}:{line}: expected {expected_width} columns')
+            if row[0] not in byid: raise SystemExit(f'{name}:{line}: unknown catalog ID {row[0]}')
+            row_identity=(row[0],row[1].lower()) if name=='section18-asr.tsv' else row[0]
+            if row_identity in seen_rows: raise SystemExit(f'{name}:{line}: duplicate source record')
+            seen_rows.add(row_identity)
+            if name=='section18-asr.tsv' and (row[0]!='18.10.43.6.1.2' or not re.fullmatch(r'[0-9a-fA-F-]{36}',row[1]) or row[2] not in ('0','1','2','6')): raise SystemExit(f'{name}:{line}: invalid ASR rule record')
+            yield row
 
 for row in read_tsv('section02-userrights.tsv'):
     cid,key,*rest=row; vals=(rest[0] if rest else '').split('|') if (rest and rest[0]) else []
@@ -66,12 +75,16 @@ for row in read_tsv('section17-audit.tsv'):
 
 # Correct user-catalog numbering and controls that differ from the reference task numbering.
 add('2.3.1.1','Registry',[{'key':r'HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Policies\\System','name':'NoConnectedUser','type':'DWORD','value':['3']}],scope='Computer')
-add('2.3.1.2','Registry',[{'key':r'HKLM\\SYSTEM\\CurrentControlSet\\Control\\Lsa','name':'EnableGuestAccount','type':'DWORD','value':['0']}],scope='Computer')
+add('2.3.1.2','SecurityTemplate',[{'section':'System Access','key':'EnableGuestAccount','type':'Integer','value':['0']}],scope='Computer')
 add('2.3.1.3','Registry',[{'key':r'HKLM\\SYSTEM\\CurrentControlSet\\Control\\Lsa','name':'LimitBlankPasswordUse','type':'DWORD','value':['1']}],scope='Computer')
 add('2.3.1.4','SecurityTemplate',[{'section':'System Access','key':'NewAdministratorName','type':'QuotedString','value':[]}],scope='Computer',requiresInput=True,inputType='String',inputLabel='New built-in Administrator account name',warnings=['Choose a non-obvious name that does not reveal administrative purpose.'])
 add('2.3.1.5','SecurityTemplate',[{'section':'System Access','key':'NewGuestName','type':'QuotedString','value':[]}],scope='Computer',requiresInput=True,inputType='String',inputLabel='New built-in Guest account name',warnings=['Choose a non-obvious name that does not reveal guest purpose.'])
 add('2.3.7.4','Registry',[{'key':r'HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Policies\\System','name':'LegalNoticeText','type':'String','value':[]}],scope='Computer',requiresInput=True,inputType='String',inputLabel='Logon legal notice text')
 add('2.3.7.5','Registry',[{'key':r'HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Policies\\System','name':'LegalNoticeCaption','type':'String','value':[]}],scope='Computer',requiresInput=True,inputType='String',inputLabel='Logon legal notice title')
+
+# Security database settings have explicit base recipes; no registry placeholder is involved.
+add('2.3.10.1','SecurityTemplate',[{'section':'System Access','key':'LSAAnonymousNameLookup','type':'Integer','value':['0']}],scope='Computer')
+add('2.3.11.6','SecurityTemplate',[{'section':'System Access','key':'ForceLogoffWhenHourExpire','type':'Integer','value':['1']}],scope='Computer')
 
 add('2.3.10.7','Registry',[{'key':r'HKLM\\SYSTEM\\CurrentControlSet\\Services\\LanManServer\\Parameters','name':'NullSessionPipes','type':'MultiString','value':[]}],scope='Computer',warnings=['The benchmark permits BROWSER only when the legacy Computer Browser service is enabled. This mapping uses the safer blank list. RDS Licensing role exceptions must be reviewed.'])
 add('2.3.10.8','Registry',[{'key':r'HKLM\\SYSTEM\\CurrentControlSet\\Control\\SecurePipeServers\\Winreg\\AllowedExactPaths','name':'Machine','type':'MultiString','value':[r'System\\CurrentControlSet\\Control\\ProductOptions',r'System\\CurrentControlSet\\Control\\Server Applications',r'Software\\Microsoft\\Windows NT\\CurrentVersion']}],scope='Computer')
@@ -89,19 +102,24 @@ add('18.10.8.3','Registry',[{'key':r'HKLM\\SOFTWARE\\Microsoft\\Windows\\Current
 add('18.10.9.1.1','Registry',[{'key':r'HKLM\\SOFTWARE\\Policies\\Microsoft\\Biometrics\\FacialFeatures','name':'EnhancedAntiSpoofing','type':'DWORD','value':['1']}],scope='Computer')
 
 # Multi-value/special policies.
-add('18.6.20.1','RegistrySet',[
- {'key':r'HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\Wcn\\Registrars','name':n,'type':'DWORD','value':['0']}
- for n in ['EnableRegistrars','DisableUPnPRegistrar','DisableInBand802DOT11Registrar','DisableFlashConfigRegistrar','DisableWPDRegistrar']
+add('18.6.20.1','Registry',[
+ {'key':r'HKLM\SOFTWARE\Policies\Microsoft\Windows\Wcn\Registrars','name':'EnableRegistrars','type':'DWORD','value':['0']}
 ],scope='Computer')
 add('18.9.5.2','Registry',[{'key':r'HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\DeviceGuard','name':'RequirePlatformSecurityFeatures','type':'DWORD','value':['3']}],scope='Computer',warnings=['Requires compatible UEFI/Secure Boot/DMA protection hardware. Validate virtualization platform support before deployment.'])
 add('18.9.20.1.4','Registry',[{'key':r'HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\Internet Connection Wizard','name':'ExitOnMSICW','type':'DWORD','value':['1']}])
 add('18.9.20.1.5','Registry',[{'key':r'HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Policies\\Explorer','name':'NoWebServices','type':'DWORD','value':['1']}])
 add('18.9.20.1.7','Registry',[{'key':r'HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\Registration Wizard Control','name':'NoRegistration','type':'DWORD','value':['1']}])
 add('18.9.20.1.10','Registry',[{'key':r'HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Policies\\Explorer','name':'NoPublishingWizard','type':'DWORD','value':['1']}])
-add('18.9.25.1','Registry',[{'key':r'HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Policies\\LAPS','name':'BackupDirectory','type':'DWORD','value':['1']}],warnings=['This on-prem Active Directory workflow chooses Active Directory (1). Azure AD backup is also benchmark-compliant but is outside this product\'s current AD-only deployment model.'])
+add('18.9.25.1','Registry',[{'key':r'HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Policies\\LAPS','name':'BackupDirectory','type':'DWORD','value':['2']}],warnings=['This on-prem Active Directory workflow chooses Active Directory (2). Microsoft Entra backup (1) is also benchmark-compliant but is outside this product\'s current AD-only deployment model.'])
 
-asr=['26190899-1602-49e8-8b27-eb1d0a1ce869','3b576869-a4ec-4529-8536-b80a7769e899','56a863a9-875e-4185-98a7-b882c64b5ce5','5beb7efe-fd9a-4556-801d-275e5ffc04cc','75668c1f-73b5-4cf0-bb93-3ecf5cb7cc84','7674ba52-37eb-4a4f-a9a1-f0f9a1619a2c','9e6c4e1f-7d60-472f-ba1a-a39ef669e4b2','b2b3f03d-6a65-4f7b-a9c7-1c7ef74a9ba4','be9ba2d9-53ea-4cdc-84e5-9b1eeee46550','d3e037e1-3eb8-44c8-a917-57927947596d','d4f940ab-401b-4efc-aadc-ad5f3c50688a','e6db77e5-3df2-4cf1-b95a-636979351e5b']
-add('18.10.43.6.1.2','RegistrySet',[{'key':r'HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows Defender\\Windows Defender Exploit Guard\\ASR\\Rules','name':n,'type':'String','value':['1']} for n in asr])
+# Per-rule states are explicit source records, not a second handwritten GUID list.
+asr_rows=list(read_tsv('section18-asr.tsv'))
+if not asr_rows or len({row[1].lower() for row in asr_rows}) != len(asr_rows):
+    raise SystemExit('ASR source must contain distinct rule GUIDs.')
+add('18.10.43.6.1.2','RegistrySet',[
+ {'key':r'HKLM\SOFTWARE\Policies\Microsoft\Windows Defender\Windows Defender Exploit Guard\ASR\Rules','name':row[1].lower(),'type':'String','value':[row[2]]}
+ for row in asr_rows
+])
 add('18.10.76.2.1','RegistrySet',[
  {'key':r'HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\System','name':'EnableSmartScreen','type':'DWORD','value':['1']},
  {'key':r'HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\System','name':'ShellSmartScreenLevel','type':'String','value':['Block']}
@@ -222,6 +240,8 @@ meta={
  'mapped':sum(1 for x in out if x['handler']!='Manual' and x.get('automation')=='Automated'),
  'manualOrBlocked':sum(1 for x in out if x['handler']=='Manual' or x.get('automation')!='Automated'),
  'totalUnique':len(out),
+ 'reviewTargetOperatingSystem':'Windows Server 2019 (operator-confirmed)',
+ 'sourceCatalogBinding':'Imported 405-control subset; original CIS product/version document not independently bound. Not a full-benchmark or OS-enforcement certification.',
  'notes':'Mappings were cross-checked against Windows Group Policy semantics and the MIT-licensed ansible-lockdown Windows-2019-CIS GPO implementation where applicable.'
 }
 obj={'meta':meta,'mappings':out}

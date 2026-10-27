@@ -1,0 +1,219 @@
+{
+  "families": {
+    "firewall": {
+      "references": [
+        {
+          "source": "Microsoft Firewall CSP and MS-GPFAS policy-store contract",
+          "url": "https://learn.microsoft.com/en-us/windows/client-management/mdm/firewall-csp",
+          "review": "Reviewed domain/private/public registry profile addresses, DWORD state/merge/logging switches, block=1, notification suppression=1, path strings and catalog size bounds. CSP is semantic evidence, not a claim that CSP and GPO stores are interchangeable."
+        },
+        {
+          "source": "Microsoft MS-GPFAS GPO registry contract",
+          "url": "https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-gpfas/5f0dde47-6431-4561-8bac-2efe8465f1e3",
+          "review": "DefaultInboundAction REG_DWORD applies to DomainProfile, PrivateProfile and PublicProfile; 1 blocks inbound traffic."
+        }
+      ]
+    },
+    "userRights": {
+      "references": [
+        {
+          "source": "Microsoft user-rights assignment reference and MS-GPSB privilege template contract",
+          "url": "https://learn.microsoft.com/en-us/windows/security/threat-protection/security-policy-settings/user-rights-assignment",
+          "review": "Reviewed Se* privilege names against the policy titles and the Microsoft WS2019 template; SID sets follow the imported recommendation. Role-sensitive controls remain guided."
+        }
+      ]
+    },
+    "audit": {
+      "references": [
+        {
+          "source": "Windows native auditpol /list /subcategory:* /r",
+          "sha256": "D37E4C701BF4236DEDB3E108AC37983CD8C0ED1FE8257B75DE6C5DCDCBA699FB",
+          "url": "https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/auditpol-list",
+          "review": "All 27 selected GUIDs resolve to the requested native audit subcategories. PNP Activity is the Plug and Play Events display-name alias; masks 1/2/3 were checked against imported Success/Failure wording. Local listing is not an endpoint enforcement check."
+        }
+      ]
+    }
+  },
+  "controls": {
+    "1.2.3": {
+      "note": "Update-dependent local built-in Administrator setting. Remains guided; not domain-account policy.",
+      "references": [
+        {
+          "source": "Microsoft policy documentation",
+          "url": "https://support.microsoft.com/en-us/servicing/os/windows/2022/10/kb5020282-account-lockout-available-for-built-in-local-administrators"
+        }
+      ]
+    },
+    "2.3.1.4": {
+      "note": "Security template rename entry requires explicit operator input; no default account name is invented.",
+      "references": [
+        {
+          "source": "Microsoft policy documentation",
+          "url": "https://learn.microsoft.com/en-us/windows/security/threat-protection/security-policy-settings/accounts-rename-administrator-account"
+        }
+      ]
+    },
+    "2.3.1.5": {
+      "note": "Security template rename entry requires explicit operator input; no default account name is invented.",
+      "references": [
+        {
+          "source": "Microsoft policy documentation",
+          "url": "https://learn.microsoft.com/en-us/windows/security/threat-protection/security-policy-settings/accounts-rename-guest-account"
+        }
+      ]
+    },
+    "5.2": {
+      "note": "Service Start=4 configures disabled startup. It does not stop a running Spooler process; restart/convergence must be checked.",
+      "references": [
+        {
+          "source": "Microsoft policy documentation",
+          "url": "https://learn.microsoft.com/en-us/windows-hardware/drivers/install/hklm-system-currentcontrolset-services-registry-tree"
+        }
+      ]
+    },
+    "18.4.4": {
+      "note": "EnableCertPaddingCheck uses quoted string values on native and Wow6432Node paths; restart/application compatibility review remains required.",
+      "references": [
+        {
+          "source": "Microsoft policy documentation",
+          "url": "https://msrc.microsoft.com/update-guide/vulnerability/CVE-2013-3900"
+        }
+      ]
+    },
+    "18.4.7": {
+      "note": "NetBT NodeType=2 is P-node. Review WINS/NetBIOS dependencies; registry presence is not a name-resolution test.",
+      "references": [
+        {
+          "source": "Microsoft policy documentation",
+          "url": "https://techcommunity.microsoft.com/blog/coreinfrastructureandsecurityblog/active-directory-hardening-series---part-6-%E2%80%93-enforcing-smb-signing/4272168"
+        }
+      ]
+    },
+    "18.6.19.2.1": {
+      "note": "DisabledComponents=255 is the imported disable-IPv6 recommendation and requires restart. Microsoft generally recommends preferring IPv4 rather than disabling IPv6; this is a benchmark-vendor guidance difference, not an address correction.",
+      "references": [
+        {
+          "source": "Microsoft policy documentation",
+          "url": "https://learn.microsoft.com/en-us/troubleshoot/windows-server/networking/configure-ipv6-in-windows"
+        }
+      ]
+    },
+    "18.10.43.6.1.2": {
+      "note": "Corrected imported ASR rule-list identity: 92e97fa1 is the Office-macro Win32 API rule. Removed the unrelated 56a863a9 entry from this 12-rule recipe. Existing unrelated policy entries are preserved by the writer. WMI subscription rule e6db77e5 requires Server 1903 SAC or later, not Server 2019 LTSC 17763.",
+      "references": [
+        {
+          "source": "Microsoft policy documentation",
+          "url": "https://learn.microsoft.com/en-us/defender-endpoint/attack-surface-reduction-rules-reference"
+        }
+      ]
+    },
+    "18.10.43.11.1.1.2": {
+      "note": "Corrected feature identity to RemoteEncryptionProtectionConfiguredState under Remote Encryption Protection. Block=1 satisfies the imported Audit-or-higher wording; BruteForceProtectionConfiguredState configures a different feature.",
+      "references": [
+        {
+          "source": "Microsoft policy documentation",
+          "url": "https://learn.microsoft.com/en-us/windows/client-management/mdm/defender-csp"
+        }
+      ]
+    },
+    "18.9.25.1": {
+      "note": "Windows LAPS requires supported Windows Server 2019 cumulative updates plus AD schema/ACL prerequisites. Modern template availability alone does not establish those prerequisites.",
+      "references": [
+        {
+          "source": "Microsoft policy documentation",
+          "url": "https://learn.microsoft.com/en-us/windows-server/identity/laps/laps-management-policy-settings"
+        }
+      ]
+    },
+    "18.9.25.2": {
+      "note": "Windows LAPS requires supported Windows Server 2019 cumulative updates plus AD schema/ACL prerequisites. Modern template availability alone does not establish those prerequisites.",
+      "references": [
+        {
+          "source": "Microsoft policy documentation",
+          "url": "https://learn.microsoft.com/en-us/windows-server/identity/laps/laps-management-policy-settings"
+        }
+      ]
+    },
+    "18.9.25.3": {
+      "note": "Windows LAPS requires supported Windows Server 2019 cumulative updates plus AD schema/ACL prerequisites. Modern template availability alone does not establish those prerequisites.",
+      "references": [
+        {
+          "source": "Microsoft policy documentation",
+          "url": "https://learn.microsoft.com/en-us/windows-server/identity/laps/laps-management-policy-settings"
+        }
+      ]
+    },
+    "18.9.25.4": {
+      "note": "Windows LAPS requires supported Windows Server 2019 cumulative updates plus AD schema/ACL prerequisites. Modern template availability alone does not establish those prerequisites.",
+      "references": [
+        {
+          "source": "Microsoft policy documentation",
+          "url": "https://learn.microsoft.com/en-us/windows-server/identity/laps/laps-management-policy-settings"
+        }
+      ]
+    },
+    "18.9.25.5": {
+      "note": "Windows LAPS requires supported Windows Server 2019 cumulative updates plus AD schema/ACL prerequisites. Modern template availability alone does not establish those prerequisites.",
+      "references": [
+        {
+          "source": "Microsoft policy documentation",
+          "url": "https://learn.microsoft.com/en-us/windows-server/identity/laps/laps-management-policy-settings"
+        }
+      ]
+    },
+    "18.9.25.6": {
+      "note": "Windows LAPS requires supported Windows Server 2019 cumulative updates plus AD schema/ACL prerequisites. Modern template availability alone does not establish those prerequisites.",
+      "references": [
+        {
+          "source": "Microsoft policy documentation",
+          "url": "https://learn.microsoft.com/en-us/windows-server/identity/laps/laps-management-policy-settings"
+        }
+      ]
+    },
+    "18.9.25.7": {
+      "note": "Windows LAPS requires supported Windows Server 2019 cumulative updates plus AD schema/ACL prerequisites. Modern template availability alone does not establish those prerequisites.",
+      "references": [
+        {
+          "source": "Microsoft policy documentation",
+          "url": "https://learn.microsoft.com/en-us/windows-server/identity/laps/laps-management-policy-settings"
+        }
+      ]
+    },
+    "18.9.25.8": {
+      "note": "Windows LAPS requires supported Windows Server 2019 cumulative updates plus AD schema/ACL prerequisites. Modern template availability alone does not establish those prerequisites.",
+      "references": [
+        {
+          "source": "Microsoft policy documentation",
+          "url": "https://learn.microsoft.com/en-us/windows-server/identity/laps/laps-management-policy-settings"
+        }
+      ]
+    },
+    "18.9.5.7": {
+      "note": "Secure Launch depends on VBS, supported hardware/firmware, current OS updates and restart; parent settings are not silently enabled.",
+      "references": [
+        {
+          "source": "Microsoft policy documentation",
+          "url": "https://learn.microsoft.com/en-us/windows/security/hardware-security/system-guard-secure-launch-and-smm-protection"
+        }
+      ]
+    },
+    "18.10.93.2.2": {
+      "note": "ScheduledInstallDay is conditional on enabled Automatic Updates and AUOptions=4. An option value is not proof of an active installation schedule.",
+      "references": [
+        {
+          "source": "Microsoft policy documentation",
+          "url": "https://learn.microsoft.com/en-us/windows/deployment/update/waas-wu-settings"
+        }
+      ]
+    },
+    "1.1.4": {
+      "note": "Default 14 meets the imported recommendation. Values above legacy length limits require the appropriate updates and relaxed minimum-password-length policy; do not infer support from a written INF alone.",
+      "references": [
+        {
+          "source": "Microsoft policy documentation",
+          "url": "https://learn.microsoft.com/en-us/windows/security/threat-protection/security-policy-settings/minimum-password-length"
+        }
+      ]
+    }
+  }
+}
