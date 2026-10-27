@@ -1,4 +1,4 @@
-# Real worker dispatch + writer + manifests against private filesystem fixtures.
+﻿# Real worker dispatch + writer + manifests against private filesystem fixtures.
 # AD, GPMC, DNS and remote endpoints are mocked. No live domain is contacted.
 $ErrorActionPreference='Stop';Set-StrictMode -Version Latest
 $repo=Split-Path $PSScriptRoot -Parent
@@ -94,6 +94,33 @@ try{
   $Operation='gpoVerify';$result=& $dispatch
   Check ($result.state -eq 'ROLLED_BACK') ('rollback read-back '+$map.id)
  }
+ # A denied preflight must not poison an otherwise valid publication manifest.
+ $plan.id=[guid]::NewGuid().ToString('N');$Operation='gpoPreview';$Data=@{selection=$s;mapping=$map};$plan.preview=& $dispatch
+ $Operation='gpoApply';$Data=@{plan=$plan;mapping=$map;consent=@{confirmation='APPLY'}};$result=& $dispatch
+ Check ($result.state -eq 'PUBLISHED') 'recovery fixture publication'
+ $manifestPath=Join-Path (Run-Directory $plan) 'manifest.json'
+ $accessFn=(Get-Item Function:\Assert-SelectionAccess).ScriptBlock
+ $importFn=(Get-Item Function:\Import-GPO).ScriptBlock
+ try {
+  function Assert-SelectionAccess {param($Selection,$Mapping) throw [UnauthorizedAccessException]::new('Access denied fixture')}
+  $beforeFingerprint=Fingerprint $s.gpoId $s.scopeDn
+  $Operation='gpoRollback';$result=& $dispatch
+  $saved=Get-Content -LiteralPath $manifestPath -Raw|ConvertFrom-Json
+  Check ($result.state -eq 'FAILED_SAFE' -and $saved.phase -eq 'PUBLISHED' -and $saved.rollbackFailure.stage -eq 'RESTORE_ACCESS_CHECK') 'pre-restore access denial preserves the recoverable manifest phase'
+  Check ((Fingerprint $s.gpoId $s.scopeDn) -ceq $beforeFingerprint) 'denied restore does not mutate GPO or link'
+  Set-Item Function:\Assert-SelectionAccess $accessFn
+  $script:restoreCalls=0
+  function Import-GPO {param($BackupId,$TargetGuid,$Path,$Domain,$Server) $script:restoreCalls++;throw [InvalidOperationException]::new('Private fixture import failure')}
+  $Operation='gpoRollback';$result=& $dispatch
+  $saved=Get-Content -LiteralPath $manifestPath -Raw|ConvertFrom-Json
+  Check ($result.state -eq 'ROLLBACK_REVIEW_REQUIRED' -and $saved.phase -eq 'ROLLBACK_REVIEW_REQUIRED' -and $saved.rollbackFailure.stage -eq 'RESTORING_GPO') 'failure after import begins remains blocked and retains its stage'
+  Check ($result.message -notmatch 'Private fixture') 'native rollback errors are sanitized'
+  $Operation='gpoRollbackInspect';$assessment=& $dispatch
+  Check (!$assessment.canRestore -and $assessment.manifestPhase -eq 'ROLLBACK_REVIEW_REQUIRED' -and $assessment.reason -eq 'MANUAL_REVIEW_REQUIRED' -and $assessment.failure.stage -eq 'RESTORING_GPO') 'read-only recovery assessment exposes the retained block reason'
+  $Operation='gpoRollback';$blocked=$false;try{$null=& $dispatch}catch{$blocked=$_.Exception.Message -match 'ROLLBACK_CONFLICT'}
+  Check ($blocked -and $script:restoreCalls -eq 1) 'review-required retry cannot invoke native restore'
+ } finally {Set-Item Function:\Assert-SelectionAccess $accessFn;Set-Item Function:\Import-GPO $importFn}
+ Import-GPO -Path (Run-Directory $plan)
  # Check that a real exception before policy mutation is retained with context.
  $plan.id=[guid]::NewGuid().ToString('N');$Operation='gpoPreview';$Data=@{selection=$s;mapping=$map};$plan.preview=& $dispatch
  $script:backupDenied=$true;$Operation='gpoApply';$Data=@{plan=$plan;mapping=$map;consent=@{confirmation='APPLY'}};$result=& $dispatch

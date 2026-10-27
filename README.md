@@ -1,6 +1,6 @@
-# GPO Remediator 3.16.3
+# GPO Remediator 3.16.4
 
-3.16.3 verifies built-in local account status and names by SID/RID instead of relying on exported INF entries, and identifies endpoint disk-full errors during WinRM host startup. See [release notes](docs/RELEASE-3.16.3.md), [result context changes](docs/RELEASE-3.16.2.md), and [deployment instructions](docs/ASSURANCE-AND-UPDATES.md). Live AD validation must be run in your own test environment; local tests do not certify live enforcement.
+3.16.4 adds read-only rollback assessment, retains recovery failure stages, and exposes scoped endpoint refresh with clear disabled reasons. See [release notes](docs/RELEASE-3.16.4.md), [native endpoint evidence](docs/RELEASE-3.16.3.md), [result context changes](docs/RELEASE-3.16.2.md), and [deployment instructions](docs/ASSURANCE-AND-UPDATES.md). Live AD validation must be run in your own test environment; local tests do not certify live enforcement.
 
 3.14.4 accepts the standard SYSVOL rights created by GPMC **Edit settings** delegation (`Read & execute`, `Write`, and `Delete child`) without requiring per-file Modify/Delete. The publisher retains atomic replacement where available and uses a flushed in-place write after the durable backup/manifest when standard GPMC ACLs do not permit `ReplaceFile`. See [release notes](docs/RELEASE-3.14.4.md).
 

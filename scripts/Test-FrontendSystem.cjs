@@ -22,17 +22,35 @@ assert.ok(ui.operations(s,s.history).includes('&lt;bad&gt;'));
 assert.ok(!ui.operations(s,s.history).includes('<bad>'));
 const recoverable={...incomplete,result:{state:'PUBLISHED',backupId:'backup-<id>'}};
 assert.ok(ui.operations(s,[recoverable]).includes('Rollback'));
+s.gpoSession={connected:true};
+assert.ok(!ui.recovery(s,recoverable).includes('<form'),'Backup ID alone must not expose a restore form');
+s.rollbackChecks={[recoverable.id]:{result:{canRestore:true,manifestPhase:'PUBLISHED',reason:'READY'},updatedAt:recoverable.updatedAt,state:recoverable.result.state,session:s.gpoSession,at:Date.now()}};
 assert.ok(ui.recovery(s,recoverable).includes('data-rollback="&lt;unsafe&gt;"'));
 assert.ok(ui.recovery(s,recoverable).includes('backup-&lt;id&gt;'));
 assert.ok(ui.recovery(s,recoverable).includes('name="refresh"'));
 assert.ok(ui.recovery(s,{...recoverable,result:{...recoverable.result,state:'ROLLED_BACK'}}).includes('data-gpupdate="&lt;unsafe&gt;"'));
-assert.ok(!ui.recovery(s,{...recoverable,result:{...recoverable.result,state:'ROLLBACK_DRIFT_DETECTED'}}).includes('data-gpupdate'));
-assert.ok(ui.recovery(s,{...recoverable,result:{...recoverable.result,state:'ROLLED_BACK'}}).includes('data-rollback='),'A completed restore must offer another confirmed rollback');
+assert.match(ui.recovery(s,{...recoverable,result:{...recoverable.result,state:'ROLLBACK_DRIFT_DETECTED'}}),/data-gpupdate[^>]*disabled/);
+assert.ok(!ui.recovery(s,{...recoverable,result:{...recoverable.result,state:'ROLLED_BACK'}}).includes('<form'),'A changed result requires a fresh rollback assessment');
 for(const state of ['NO_CHANGE','BATCH_ROLLED_BACK','ROLLBACK_DRIFT_DETECTED','APPLYING','ROLLBACKING','VERIFYING','REFRESHING']){
  assert.ok(!ui.recovery(s,{...recoverable,result:{...recoverable.result,state}}).includes('<form'),state);
 }
 assert.ok(!ui.recovery(s,incomplete).includes('<form'));
-assert.ok(ui.recovery(s,{...recoverable,result:{...recoverable.result,state:'REVIEW_REQUIRED'}}).includes('<form'));
+assert.ok(!ui.recovery(s,{...recoverable,result:{...recoverable.result,state:'REVIEW_REQUIRED'}}).includes('<form'),'Unreviewed partial restore must not expose retry form');
+const assessed=s.rollbackChecks[recoverable.id];
+for(const change of [{at:Date.now()-60001},{updatedAt:'new-record'},{state:'FAILED_SAFE'},{session:{}},{processId:99}]){
+ s.rollbackChecks[recoverable.id]={...assessed,...change};
+ assert.equal(ui.rollbackCheck(s,recoverable),null,'Changed or expired context must invalidate restore assessment');
+}
+s.rollbackChecks[recoverable.id]={...assessed,result:{canRestore:false,manifestPhase:'ROLLBACK_REVIEW_REQUIRED',reason:'MANUAL_REVIEW_REQUIRED',failure:{code:'<unsafe>',stage:'RESTORING_GPO',message:'<detail>'}}};
+assert.ok(!ui.recovery(s,recoverable).includes('<form'));
+assert.ok(ui.recovery(s,recoverable).includes('&lt;detail&gt;'));
+assert.ok(ui.recovery(s,recoverable).includes('ROLLBACK_REVIEW_REQUIRED'));
+s.serviceOffline=true;s.rollbackChecks[recoverable.id]=assessed;
+assert.ok(!ui.recovery(s,recoverable).includes('<form'));
+assert.match(ui.refreshAction(s,recoverable),/data-gpupdate[^>]*disabled/);
+s.serviceOffline=false;
+const connected=s.gpoSession;s.gpoSession=null;assert.match(ui.refreshAction(s,{...recoverable,result:{state:'PUBLISHED',gpoPublished:true,linkVerified:true}}),/disabled/);s.gpoSession=connected;
+assert.doesNotMatch(ui.refreshAction(s,{...recoverable,result:{state:'PUBLISHED',gpoPublished:true,linkVerified:true}}),/disabled/,'Published operation must allow explicit refresh even without an original refresh request');
 assert.ok(ui.domainEvidence(s).includes('Not assessed'));
 s.audit={integrityValid:false,firstInvalidEventId:2,events:[{id:2,hash:'<bad>'}]};
 assert.ok(ui.auditChain(s).includes('First invalid event: #2'));

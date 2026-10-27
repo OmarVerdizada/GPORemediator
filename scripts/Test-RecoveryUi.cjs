@@ -1,11 +1,12 @@
 /* Browser integration regression. Requires Playwright; never contacts AD. */
 const fs=require('node:fs'),path=require('node:path'),http=require('node:http'),assert=require('node:assert/strict');
 const {chromium}=require('playwright');
+async function inspectRecovery(page){if(!await page.locator('[data-rollback]').count()){await page.locator('[data-rollback-inspect]').first().click();await page.locator('[data-rollback]').first().waitFor();}}
 const root=path.resolve(__dirname,'../frontend/source'),screens=path.resolve(__dirname,'../work/screens');
 fs.mkdirSync(screens,{recursive:true});
 const gpos=[{id:'6ac1786c-016f-11d2-945f-00c04fb984f9',name:'Protected controller policy',protected:true,selectable:true},{id:'31b2f340-016d-11d2-945f-00c04fb984f9',name:'Protected domain policy',protected:true,selectable:true}];
 gpos.push({id:'11111111-1111-1111-1111-111111111111',name:'GPO-Pilot-Computers',protected:false,selectable:true});
-const run={id:'recovery-test',startedAt:'2026-10-06T08:00:00Z',updatedAt:'2026-10-09T08:00:34Z',plan:{selection:{setting:'1.1.4',gpoId:gpos[0].id,scopeDn:'DC=test,DC=local'},preview:{gpo:gpos[0],scope:{dn:'DC=test,DC=local'},previousValue:0,desiredValue:14},executionUser:'TEST\\operator'},result:{state:'PUBLISHED',backupId:'test-backup-id',gpoPublished:true,linkVerified:true}};
+const run={id:'recovery-test',startedAt:'2026-10-06T08:00:00Z',updatedAt:'2026-10-09T08:00:34Z',plan:{selection:{setting:'1.1.4',gpoId:gpos[0].id,scopeDn:'OU=Endpoints,DC=test,DC=local',accountScope:'LocalComputers'},preview:{gpo:gpos[0],scope:{dn:'OU=Endpoints,DC=test,DC=local'},previousValue:0,desiredValue:14},executionUser:'TEST\\operator'},result:{state:'PUBLISHED',backupId:'test-backup-id',gpoPublished:true,linkVerified:true}};
 const inventory={gpos,scopes:[{dn:'DC=test,DC=local',name:'test.local',kind:'Domain'},{dn:'OU=Users,DC=test,DC=local',name:'Users',kind:'OU'},{dn:'OU=Endpoints,DC=test,DC=local',name:'Endpoints',kind:'OU'}],domain:'test.local'};
 let writes=[],refreshRequests=[],rollbackState='ROLLED_BACK',refreshFailure=false,workflowJobs=[];
 const jobPosts=[],manualMappings=JSON.parse(fs.readFileSync(path.resolve(__dirname,'../backend/data/gpo-production-mappings.json'),'utf8')).mappings;
@@ -31,6 +32,7 @@ const server=http.createServer(async(req,res)=>{
    if(previewDenied){res.statusCode=403;res.end(JSON.stringify({code:previewDenied,message:'Fixture permission denied'}));return;}
    data={id:'preview-fixture',selection:payload,executionUser:'TEST\\operator',writeAuthorized:true,preview:{gpo:gpos.find(x=>x.id===payload.gpoId),scope:{dn:payload.scopeDn,kind:payload.accountScope==='Domain'?'Domain':'OU',name:'Users'},previousValue:'0',desiredValue:'1',existingLink:null,refreshComputers:['ws.test.local'],warnings:['User OU policy applies to all eligible users.'],impact:{inheritance:'NORMAL',conflicts:[],existingLinkScopes:[],securityFiltering:[],affectedObjects:{targetKind:'User',scopeDn:payload.scopeDn,users:3,sampleUsers:['one','two','three'],computers:0,servers:0,workstations:0,disabled:0,sampleHosts:[],truncated:false}}}};
   }
+  else if(url.pathname.endsWith('/rollback-preview'))data={canRestore:!String(run.result.state).includes('REVIEW'),manifestPhase:run.result.state==='ROLLED_BACK'?'ROLLED_BACK':'PUBLISHED',reason:'READY',message:'Fixture full snapshot state checked',checkedAt:new Date().toISOString()};
   else if(url.pathname==='/api/gpo/inventory')data=inventory;
   else if(url.pathname==='/api/gpo/session')data={connected:true};
   else if(url.pathname==='/api/gpo/readiness')data={ready:true,checks:[]};
@@ -92,9 +94,9 @@ const server=http.createServer(async(req,res)=>{
   assert.ok(await page.locator('.ds-activity-duration').textContent().then(s=>s.includes('3')));
   await page.screenshot({path:path.join(screens,'operations-desktop.png'),fullPage:true});
   await page.locator('.ds-table button.ds-danger').click();
-  await page.locator('.ds-recovery input').fill('WRONG');
+  await inspectRecovery(page);await page.locator('.ds-recovery input').fill('WRONG');
   assert.equal(await page.locator('.ds-recovery input').evaluate(el=>el.checkValidity()),false);
-  await page.locator('.ds-recovery input').fill('ROLLBACK');
+  await inspectRecovery(page);await page.locator('.ds-recovery input').fill('ROLLBACK');
   await page.screenshot({path:path.join(screens,'rollback-details.png')});
   await page.locator('.ds-recovery button[type=submit]').click();
   await page.locator('.confirm-dialog').waitFor();
@@ -103,14 +105,14 @@ const server=http.createServer(async(req,res)=>{
   await page.locator('[data-confirm-cancel]').click();
   assert.equal(writes.length,0,'Cancel must not write');
   await page.locator('.ds-table button.ds-danger').click();
-  await page.locator('.ds-recovery input').fill('ROLLBACK');
+  await inspectRecovery(page);await page.locator('.ds-recovery input').fill('ROLLBACK');
   await page.locator('.ds-recovery button[type=submit]').click();
   await page.locator('[data-confirm-run]').click();
   await page.waitForFunction(()=>['Rolled back','Rolled back'].some(x=>document.querySelector('.ds-table')?.textContent.includes(x)));
   assert.deepEqual(writes,['/api/gpo/recovery-test/rollback']);
   await page.locator('[data-ops-layout=cards]').click();
-  assert.equal(await page.locator('[data-rollback]').count(),1,'Restored run must offer another confirmed restore');
-  await page.locator('[data-rollback] input').fill('ROLLBACK');
+  await inspectRecovery(page);assert.equal(await page.locator('[data-rollback]').count(),1,'Restored run offers a confirmed restore after reassessment');
+  await inspectRecovery(page);await page.locator('[data-rollback] input').fill('ROLLBACK');
   await page.locator('[data-rollback] button[type=submit]').click();await page.locator('[data-confirm-run]').click();
   await page.waitForFunction(()=>!document.querySelector('.busy-layer'));
   assert.deepEqual(writes,['/api/gpo/recovery-test/rollback','/api/gpo/recovery-test/rollback'],'Second confirmed rollback was not submitted');
@@ -128,8 +130,9 @@ const server=http.createServer(async(req,res)=>{
   async function recoveryScenario(strategy,resultState='ROLLED_BACK',failRefresh=false){
    run.result={state:'PUBLISHED',backupId:'test-backup-id',gpoPublished:true,linkVerified:true};
    writes=[];refreshRequests=[];rollbackState=resultState;refreshFailure=failRefresh;
-   await page.reload();await page.locator('[data-rollback]').waitFor();
-   await page.locator('[data-rollback] input').fill('ROLLBACK');
+   run.updatedAt=new Date().toISOString();run.plan.selection.accountScope=strategy==='Pdc'?'Domain':'LocalComputers';run.plan.selection.scopeDn=strategy==='Pdc'?'DC=test,DC=local':'OU=Endpoints,DC=test,DC=local';run.plan.preview.scope.dn=run.plan.selection.scopeDn;
+   await page.reload();await page.locator('[data-rollback-inspect]').waitFor();
+   await inspectRecovery(page);await page.locator('[data-rollback] input').fill('ROLLBACK');
    await page.locator('[data-rollback] select').selectOption(strategy);
    await page.locator('[data-rollback] button[type=submit]').click();
    await page.locator('.confirm-dialog').waitFor();
@@ -192,6 +195,9 @@ const server=http.createServer(async(req,res)=>{
   await page.locator('.policy-value-editor').screenshot({path:path.join(screens,'custom-policy-value.png')});
   await page.locator('[data-recommended-values]').click();
   assert.equal(await page.locator('#gpo-selection [name=value]').inputValue(),'14','Recommendation reset failed');
+  // Recorded evidence must match both the GPO and scope selected in this draft.
+  await page.locator('[data-gpo-toggle]').click();await page.locator(`[data-gpo="${gpos[0].id}"]`).click();
+  await page.locator('[data-scope-open=scopeDn]').click();await page.locator('[data-scope-choose="OU=Endpoints,DC=test,DC=local"]').click();
   await page.locator('[data-tab=verification]').click();
   await page.locator('.ux-more-tabs summary').click();
   assert.equal(await page.locator('.control-header').evaluate(el=>getComputedStyle(el).overflow),'visible');

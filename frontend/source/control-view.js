@@ -72,6 +72,8 @@ resultSummary=function(h){
  html=html.replace(/(<div class="endpoint-evidence">[\s\S]*?<pre>[\s\S]*?<\/pre>)(<\/div>)/g,(match,content,close)=>{const endpoint=(h?.result?.endpointChecks||[])[index++];if(!endpoint)return match;const command=window.GpoComponents.manualCheck(state,h,endpoint);return `${content}<div class="manual-check-head"><small>${'PowerShell manual check (run as Administrator on the endpoint)'}</small><button type="button" data-copy-value="${esc(command)}">${'Copy'}</button></div><pre class="manual-check-command">${esc(command)}</pre>${close}`;});
  if(/^(APPLYING|ROLLBACKING|VERIFYING|REFRESHING)$/.test(h?.result?.state||''))html=html.replace(/<button[^>]*data-gpupdate[^>]*>[\s\S]*?<\/button>/,'');
  if(h?.result?.state==='ROLLED_BACK')html=html.replace(/>Run gpupdate \/force</,`>${'Run gpupdate /force after rollback'}<`);
+ html=html.replace(/<button[^>]*data-gpupdate[^>]*>[\s\S]*?<\/button>/g,'');
+ html=html.replace('<div class="result-actions">','<div class="result-actions">'+window.GpoComponents.refreshAction(state,h));
  const stages=h?.result?.verificationStages||[],diagnosis=h?.result?.diagnosis||[];
  const refresh=h?.result?.refreshResults||[],failedRefresh=refresh.some(x=>x.state==='FAILED');
  if(failedRefresh&&h?.result?.gpoPublished&&!/^(ROLLED_BACK|APPLYING|ROLLBACKING|VERIFYING|REFRESHING|DRIFT|VERIFY_MISMATCH)/.test(h.result.state||'')&&h.result.effectiveStatus!=='ENDPOINT_MISMATCH'){
@@ -86,7 +88,7 @@ resultSummary=function(h){
  // Current server evidence replaces the legacy four-box summary. Rendering
  // both can contradict content-aware replication and repeats the same checks.
  if(stages.length)html=html.replace(/<div class="assurance-grid">(?:<div>[\s\S]*?<\/div>){4}<\/div>/,'');
- if(state.serviceOffline||state.serviceTransition){html=html.replace(/<button([^>]*(?:data-verify|data-gpupdate|data-replan)[^>]*)>/g,'<button$1 disabled aria-disabled="true">').replaceAll('class="ok"','class="pending"');}
+ if(state.serviceOffline||state.serviceTransition){html=html.replace(/<button([^>]*(?:data-verify|data-replan)[^>]*)>/g,'<button$1 disabled aria-disabled="true">').replaceAll('class="ok"','class="pending"');}
  if(stages.length)html=html.replace('<div class="result-actions">',`${window.GpoComponents.assuranceStages(state,stages)}${diagnosis.length?`<details><summary>${'Diagnostic checks'}</summary><ul>${diagnosis.map(x=>`<li>${esc(x)}</li>`).join('')}</ul></details>`:''}<div class="result-actions">`);
  return html;
 };

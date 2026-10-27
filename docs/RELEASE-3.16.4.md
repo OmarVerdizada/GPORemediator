@@ -1,0 +1,13 @@
+# 3.16.4 — recovery assessment and scoped endpoint refresh
+
+Rollback controls now start with **Check rollback availability**, a read-only assessment of the retained manifest and live fingerprint. A backup ID alone no longer displays an executable restore form. The assessment shows the manifest phase, reason, check time and retained failure stage. Its browser cache expires after one minute and is invalidated by operation, session or service changes. Rollback still independently checks authorization and external drift under its GPO lock; the assessment cannot authorize or bypass a restore.
+
+A failure before Import-GPO begins preserves the previous manifest phase and records the preflight/access error. A failure after import begins remains ROLLBACK_REVIEW_REQUIRED with its sanitized failure code and stage. Failed read-back never claims that the snapshot was restored. Historical review-required manifests are not automatically rewritten or unlocked. Use read-only Re-verify to establish the live state; partial or unanchored writes still require independent recovery review.
+
+Operation details and recorded results expose **Run gpupdate /force** even when the original plan did not request refresh. Unknown publication, drift, an uncertain restore, an active operation or service/session unavailability disables it with an explanation. Confirmed refresh uses the recorded operation targets and offers PDC or scope computers according to that operation's account scope. Settings does not issue an untargeted global refresh. A successful publication remains separate from endpoint refresh and effective policy evidence.
+
+## Validation and deployment
+
+Isolated real-worker dispatch tests cover publication, backup, rollback, read-back, pre-import permission denial, post-import failure, retained diagnostics and blocked repeat import. Browser integration covers read-only assessment, explicit confirmation/cancellation, rollback with scoped refresh, failed recovery without refresh, and desktop/mobile rendering. Result-context, endpoint-result, offline and syntax regressions are checked separately. These tests use private filesystem fixtures and mocked directory APIs; no production AD changes or live endpoint enforcement are certified.
+
+Deploy the complete 3.16.4 package and restart through the launcher so the UI, worker and backend agree. An older 3.16.2 result does not become a successful recovery after an upgrade. Inspect its actual manifest phase and failure using the new assessment. Endpoint WinRM disk-full error 112 still requires adequate free space on the endpoint system/profile volume; this release does not delete files or grant endpoint privileges automatically.

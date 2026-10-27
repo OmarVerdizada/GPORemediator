@@ -1,4 +1,4 @@
-param([switch]$IncludeBrowser)
+﻿param([switch]$IncludeBrowser)
 $ErrorActionPreference='Stop'
 $repo=Split-Path $PSScriptRoot -Parent
 Push-Location -LiteralPath $repo
@@ -12,7 +12,7 @@ try {
         & $dotnet run --project "scripts/$project" -c Release
         Check-Exit $project
     }
-    foreach($script in @('Test-SecurityFiles','Test-DomainSignIn','Test-EndpointTargeting','Test-SelectionAccess','Test-SysvolDiscovery','Test-RuntimeIntegrity','Test-GpoMappings','Test-EndpointEvidence','Test-LocalAccountEvidence','Test-EndpointDiagnostics','Test-EndpointBatching','Test-AllEndpointMappings','Test-VerificationLifecycle','Test-PowerShellSyntax','Test-ServiceControl')){
+    foreach($script in @('Test-SecurityFiles','Test-DomainSignIn','Test-EndpointTargeting','Test-SelectionAccess','Test-SysvolDiscovery','Test-RuntimeIntegrity','Test-GpoMappings','Test-EndpointEvidence','Test-LocalAccountEvidence','Test-EndpointDiagnostics','Test-EndpointBatching','Test-AllEndpointMappings','Test-VerificationLifecycle','Test-RemediationChain','Test-PowerShellSyntax','Test-ServiceControl')){
         & powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "scripts/$script.ps1"
         Check-Exit $script
     }

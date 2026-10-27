@@ -976,20 +976,25 @@ switch($Operation){
         $manifestPath=Join-Path $directory 'manifest.json'
         if(!(Test-Path -LiteralPath $manifestPath)){return @{canRestore=$false;driftDetected=$false;reason='NO_BACKUP';message='No completed backup manifest exists for this operation.'}}
         $m=Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
-        if(!$m.backupId -or !$m.postFingerprint){return @{canRestore=$false;driftDetected=$false;reason='INCOMPLETE_BACKUP';message='A completed backup and post-write fingerprint are required.'}}
         $phase=[string]$m.phase
-        if($phase -notin @('PUBLISHED','VERIFY_MISMATCH','ROLLED_BACK')){return @{canRestore=$false;driftDetected=$false;reason='MANUAL_REVIEW_REQUIRED';message=('Manifest phase '+$phase+' requires independent recovery review.')}}
+        $failure=Read-Field $m 'rollbackFailure' (Read-Field $m 'failure' $null)
+        $assessment=@{canRestore=$false;driftDetected=$false;manifestPhase=$phase;backupId=(Read-Field $m 'backupId' $null);hasPostFingerprint=[bool](Read-Field $m 'postFingerprint' $null);checkedAt=[DateTimeOffset]::UtcNow.ToString('O');failure=$null}
+        if($failure){$assessment.failure=@{code=[string](Read-Field $failure 'code' '');stage=[string](Read-Field $failure 'stage' '');message=[string](Read-Field $failure 'message' '')}}
+        if(!(Read-Field $m 'backupId' $null) -or !(Read-Field $m 'postFingerprint' $null)){$assessment.reason='INCOMPLETE_BACKUP';$assessment.message='A completed backup and post-write fingerprint are required. Run read-only Verify and inspect the retained manifest; do not retry restore blindly.';return $assessment}
+        if($phase -notin @('PUBLISHED','VERIFY_MISMATCH','ROLLED_BACK')){$assessment.reason='MANUAL_REVIEW_REQUIRED';$assessment.message=('Manifest phase '+$phase+' requires independent recovery review. Run read-only Verify to establish whether the original snapshot is already restored. Partial or unanchored writes require administrator assessment.');return $assessment}
         $current=Fingerprint $s.gpoId $s.scopeDn
         $expected=Rollback-ExpectedFingerprint $plan $m $current
         $drift=(!$expected -or $current -cne [string]$expected)
         $gpo=Get-GPO -Guid ([guid]$s.gpoId) -Domain $cfg.domain -Server $cfg.domainController
         $direct=Selected-Link $s.scopeDn $s.gpoId
-        return @{canRestore=(-not $drift);driftDetected=[bool]$drift;restoreMethod='Import-GPO';restorePermissionVerified=$false;reason=$(if($drift){'ROLLBACK_CONFLICT'}else{'READY'});message=$(if($drift){'The live GPO or its link changed since Apply; automatic rollback must not overwrite the external change.'}else{'Live fingerprint matches the saved post-apply state. Recovery imports the saved settings into the same GPO and preserves its ACL. Edit settings, backup read access and required link authority are checked again before import.'});gpoName=[string]$gpo.DisplayName;gpoId=[string]$s.gpoId;scopeDn=[string]$s.scopeDn;backupId=[string]$m.backupId;controlId=[string]$m.mappingId;beforeValue=[string]$plan.preview.previousValue;afterValue=[string]$plan.preview.desiredValue;beforeLink=$plan.preview.existingLink;currentLink=$direct;otherLinkedScopes=@($plan.preview.impact.existingLinkScopes);fullGpoRestore=$true;checkedAt=[DateTimeOffset]::UtcNow.ToString('O')}
+        return @{canRestore=(-not $drift);driftDetected=[bool]$drift;restoreMethod='Import-GPO';restorePermissionVerified=$false;manifestPhase=$phase;hasPostFingerprint=$assessment.hasPostFingerprint;failure=$assessment.failure;reason=$(if($drift){'ROLLBACK_CONFLICT'}else{'READY'});message=$(if($drift){'The live GPO or its link changed since Apply; automatic rollback must not overwrite the external change.'}else{'Live fingerprint matches the saved post-apply state. Recovery imports the saved settings into the same GPO and preserves its ACL. Edit settings, backup read access and required link authority are checked again before import.'});gpoName=[string]$gpo.DisplayName;gpoId=[string]$s.gpoId;scopeDn=[string]$s.scopeDn;backupId=[string]$m.backupId;controlId=[string]$m.mappingId;beforeValue=[string]$plan.preview.previousValue;afterValue=[string]$plan.preview.desiredValue;beforeLink=$plan.preview.existingLink;currentLink=$direct;otherLinkedScopes=@($plan.preview.impact.existingLinkScopes);fullGpoRestore=$true;checkedAt=$assessment.checkedAt}
     }
     'gpoRollback'{
         $plan=$Data.plan;$map=$Data.mapping;$s=$plan.selection;$directory=Run-Directory $plan;if(!(Test-Path -LiteralPath (Join-Path $directory 'manifest.json'))){Fail 'ROLLBACK_NOT_AVAILABLE' 'No backup exists because this operation did not change the GPO.'};$manifest=Get-Content -LiteralPath (Join-Path $directory 'manifest.json') -Raw|ConvertFrom-Json;if(!$manifest.backupId){Fail 'ROLLBACK_BACKUP_INCOMPLETE' 'The operation manifest exists but no completed Backup-GPO ID was recorded. Verify current policy and inspect the operation directory; automatic rollback is unavailable.'};if(!$manifest.postFingerprint){Fail 'ROLLBACK_VERSION_UNKNOWN' 'A completed post-write fingerprint is missing. Recover the recorded Backup-GPO snapshot manually after inspecting AD/SYSVOL.'};$lock=$null
         try{$lock=[IO.File]::Open((Join-Path (Split-Path $directory -Parent) (([guid]$s.gpoId).ToString()+'.lock')),[IO.FileMode]::OpenOrCreate,[IO.FileAccess]::ReadWrite,[IO.FileShare]::None)}catch{Fail 'GPO_BUSY' 'Another operation is writing this GPO.'}
+        $restoreStarted=$false;$phaseBeforeRestore=[string]$manifest.phase
         try{
+            Emit-Stage 'RESTORE_PREFLIGHT'
             if([string]$manifest.phase -notin @('PUBLISHED','VERIFY_MISMATCH','ROLLED_BACK')){Fail 'ROLLBACK_CONFLICT' 'The backup manifest requires independent review before another restore.'}
             $currentFingerprint=Fingerprint $s.gpoId $s.scopeDn
             $expectedFingerprint=Rollback-ExpectedFingerprint $plan $manifest $currentFingerprint
@@ -1004,10 +1009,12 @@ switch($Operation){
                 $expectedFingerprint=[string]$anchorManifest.postFingerprint
             }
             if((Fingerprint $s.gpoId $s.scopeDn) -cne $expectedFingerprint){Fail 'ROLLBACK_CONFLICT' 'The GPO or links changed after Apply. Automatic full-GPO restore is blocked.'}
+            Emit-Stage 'RESTORE_ACCESS_CHECK'
             $null=Assert-SelectionAccess $s $map
             Emit-Stage 'RESTORING_GPO'
             $manifest | Add-Member -NotePropertyName rollbackAttempts -NotePropertyValue ([int](Read-Field $manifest 'rollbackAttempts' 0)+1) -Force
             $manifest.phase='ROLLING_BACK';Save-Manifest $manifest $directory
+            $restoreStarted=$true
             Import-GPO -BackupId ([guid]$manifest.backupId) -TargetGuid ([guid]$s.gpoId) -Path $directory -Domain $cfg.domain -Server $cfg.domainController|Out-Null
             Emit-Stage 'RESTORING_LINK'
             $before=$plan.preview.existingLink
@@ -1019,10 +1026,11 @@ switch($Operation){
             $manifest.phase=if($matches){'ROLLED_BACK'}else{'ROLLBACK_REVIEW_REQUIRED'}
             if($matches){$manifest | Add-Member -NotePropertyName rollbackFingerprint -NotePropertyValue (Fingerprint $s.gpoId $s.scopeDn) -Force}
             Save-Manifest $manifest $directory
-            return Result $manifest.phase 'GPO snapshot and selected link restored. Endpoint refresh/replication still need to converge.' $manifest @{published=$false;linked=$false;effective='ROLLBACK_ENDPOINT_PENDING';currentValue=$null} @()
+            $message=if($matches){'GPO snapshot and selected link restored. Endpoint refresh/replication still need to converge.'}else{'Restore read-back did not match the saved snapshot, extensions or link. Independent review is required before another restore.'}
+            return Result $manifest.phase $message $manifest @{published=$false;linked=$false;effective='ROLLBACK_ENDPOINT_PENDING';currentValue=$null} @()
         }catch{
             if($_.Exception.Message -like 'ROLLBACK_CONFLICT*'){throw}
-            if($manifest){$manifest.phase='ROLLBACK_REVIEW_REQUIRED';Save-Manifest $manifest $directory;return Result 'ROLLBACK_REVIEW_REQUIRED' 'Rollback did not finish cleanly. Do not retry automatically; inspect the saved backup and verify the live GPO/link state.' $manifest @{published=$false;linked=$false;effective='ROLLBACK_ENDPOINT_PENDING';currentValue=$null} @()}
+            if($manifest){$failure=Operation-Failure $_ $script:workerStage;$manifest|Add-Member -NotePropertyName rollbackFailure -NotePropertyValue $failure -Force;$manifest.phase=if($restoreStarted){'ROLLBACK_REVIEW_REQUIRED'}else{$phaseBeforeRestore};Save-Manifest $manifest $directory;$message=if($restoreStarted){'Rollback did not finish cleanly. Inspect the saved backup and verify the live GPO/link state.'}else{'Rollback stopped before the restore command began. The previous manifest phase was preserved. Resolve the reported access/preflight failure and reassess recovery.'};return Result $(if($restoreStarted){'ROLLBACK_REVIEW_REQUIRED'}else{'FAILED_SAFE'}) ($message+' '+$failure.code+': '+$failure.message) $manifest @{published=$false;linked=$false;effective='ROLLBACK_ENDPOINT_PENDING';currentValue=$null} @()}
             throw
         }finally{if($lock){$lock.Dispose()}}
     }
