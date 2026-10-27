@@ -48,6 +48,8 @@
   function psQuote(value){return `'${String(value??'').replaceAll("'","''")}'`;}
   function registryPath(key){return String(key||'').replace(/^HKLM\\/i,'HKEY_LOCAL_MACHINE\\').replace(/^HKCU\\/i,'HKEY_CURRENT_USER\\');}
   function manualCheck(s,h,endpoint){
+    // Scope/session placeholders are evidence context, never executable hosts.
+    if(endpoint&&!/^[A-Za-z0-9](?:[A-Za-z0-9.-]*[A-Za-z0-9])?$/.test(String(endpoint?.hostname||'')))return '';
     const mapping=s.settings?.find(x=>x.id===h.plan?.selection?.setting),items=mapping?.items||mapping?.Items||[],handler=String(mapping?.handler||mapping?.Handler||'');
     let lines=[];
     if(/^Registry(Set)?$/i.test(handler)){
@@ -87,9 +89,10 @@
   function refreshAction(s,h){
     const r=h.result||{},busy=/^(APPLYING|ROLLBACKING|VERIFYING|REFRESHING)$/.test(r.state||''),offline=s.serviceOffline||s.serviceTransition||!s.gpoSession?.connected;
     const known=r.state==='ROLLED_BACK'||r.gpoPublished===true&&r.linkVerified===true&&['PUBLISHED','NO_CHANGE','REVIEW_REQUIRED','REFRESH_COMPLETED','REFRESH_PARTIAL','REFRESH_SCHEDULED','PUBLISHED_REFRESH_FAILED'].includes(r.state);
-    const enabled=known&&!busy&&!offline;
-    const reason=offline?'Reconnect the service and delegated session before endpoint refresh.':busy?'Wait for the current operation to finish.':!known?'Run read-only Re-verify first. A published GPO/link or a verified restored snapshot is required before endpoint refresh.':'';
-    return `<button type="button" class="ds-button ds-secondary ds-sm" data-gpupdate="${esc(h.id)}" ${enabled?'':'disabled aria-disabled="true"'}>${icon('refresh')}${r.state==='ROLLED_BACK'?'gpupdate /force after rollback':'Run gpupdate /force'}</button>${reason?`<p class="ds-caption refresh-block-reason">${esc(reason)}</p>`:''}`;
+    const user=window.GpoUiDomain.isUserPolicy(h,s.settings||[]),choices=window.GpoUiDomain.refreshChoices(h,s.settings||[]);
+    const enabled=known&&!busy&&!offline&&choices.length>0;
+    const reason=offline?'Reconnect the service and delegated session before endpoint refresh.':busy?'Wait for the current operation to finish.':!known?'Run read-only Re-verify first. A published GPO/link or a verified restored snapshot is required before endpoint refresh.':!choices.length?'This recorded user-policy plan has no session endpoint OU. Create a fresh plan with the computers where affected users sign in.':'';
+    return `<button type="button" class="ds-button ds-secondary ds-sm" data-gpupdate="${esc(h.id)}" ${enabled?'':'disabled aria-disabled="true"'}>${icon('refresh')}${r.state==='ROLLED_BACK'?'gpupdate /force after rollback':user?'Run gpupdate /target:user /force':'Run gpupdate /force'}</button>${reason?`<p class="ds-caption refresh-block-reason">${esc(reason)}</p>`:''}`;
   }
   function recovery(s,h){
     const r=h.result||{},busy=/^(APPLYING|ROLLBACKING|VERIFYING|REFRESHING)$/.test(r.state||''),offline=s.serviceOffline||s.serviceTransition||!s.gpoSession?.connected;

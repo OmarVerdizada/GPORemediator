@@ -19,8 +19,12 @@
     const compliant = !upper(result.state).startsWith('ROLLED_BACK') && !custom && !attention && publication === 'published' && result.linkVerified === true && replication === 'converged' && effective === 'verified';
     return { publication, replication, effective, attention, compliant, custom };
   }
+  function isUserPolicy(run,settings=[]) {
+    return run?.plan?.selection?.accountScope==='Users'||String(settings.find(x=>x.id===run?.plan?.selection?.setting)?.scope||'').toLowerCase()==='user';
+  }
   function refreshChoices(run,settings=[]) {
     const selection=run?.plan?.selection||{},mapping=settings.find(x=>x.id===selection.setting);
+    if(isUserPolicy(run,settings))return selection.endpointScopeDn?[{value:'Scope',label:'User sessions on endpoint OU computers'}]:[];
     const domain=!/^OU=/i.test(selection.scopeDn||'')&&(selection.accountScope==='Domain'||(!selection.accountScope&&mapping?.domainPolicySensitive));
     return domain?[{value:'Pdc',label:'PDC emulator'}]:[{value:'Scope',label:'Scope computers'}];
   }
@@ -45,5 +49,5 @@
         ? { name: 'Medium', cls: 'medium', copy: mapping?.impactReason || 'Validate scope and application dependencies before broad rollout.' }
         : { name: 'Low', cls: 'low', copy: mapping?.impactReason || 'Preview and post-change verification are still required.' };
   }
-  window.GpoUiDomain = Object.freeze({ classify, workflowStep, impact, bad, effectiveVerified, coverageVerified, refreshChoices });
+  window.GpoUiDomain = Object.freeze({ classify, workflowStep, impact, bad, effectiveVerified, coverageVerified, isUserPolicy, refreshChoices });
 })();

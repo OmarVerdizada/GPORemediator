@@ -1,4 +1,4 @@
-# Real refresh dispatcher/helper with mocked remoting; never runs gpupdate or AD.
+﻿# Real refresh dispatcher/helper with mocked remoting; never runs gpupdate or AD.
 $ErrorActionPreference='Stop';Set-StrictMode -Version Latest
 $repo=Split-Path $PSScriptRoot -Parent;$tokens=$null;$errors=$null
 $ast=[Management.Automation.Language.Parser]::ParseFile((Join-Path $repo 'backend/PowerShell/GpoWorkflow.Worker.ps1'),[ref]$tokens,[ref]$errors)
@@ -44,6 +44,26 @@ try{
  @{phase='ROLLED_BACK'}|ConvertTo-Json|Set-Content -LiteralPath (Join-Path $temp 'manifest.json') -Encoding UTF8
  $rollbackTargets=@();for($offset=0;$offset -lt 201;$offset+=64){$Data.refreshOffset=$offset;$result=& $dispatch;Check ($result.state -eq 'ROLLED_BACK') 'rollback refresh preserves restored GPO status';$rollbackTargets+=@($result.refreshResults)}
  Check ($rollbackTargets.Count -eq 201 -and @($rollbackTargets|Where-Object state -ne 'COMPLETED').Count -eq 0) 'rollback completes computer processing across all pinned pages'
+
+
+ # User refresh must schedule logged-on user processing, never run computer
+ # policy under the remoting operator and never claim scheduling is completion.
+ @{phase='PUBLISHED'}|ConvertTo-Json|Set-Content -LiteralPath (Join-Path $temp 'manifest.json') -Encoding UTF8
+ $script:targets=@('userhost1.example.test','userhost2.example.test');$script:userSchedules=@();$script:userScheduleDenied=$false
+ function Invoke-GPUpdate {param($Computer,$Force,$RandomDelayInMinutes,$ErrorAction,$Target)
+  $script:userSchedules+=@{computer=$Computer;target=$Target;force=$Force}
+  if($script:userScheduleDenied){throw [UnauthorizedAccessException]::new('Fixture RPC scheduling denied')}
+ }
+ $plan.selection.accountScope='Users';$plan.selection.endpointScopeDn='OU=Endpoints,DC=example,DC=test';$plan.preview.verificationComputers=$script:targets
+ $Data=@{plan=$plan;mapping=@{scope='User'};previous=@{state='PUBLISHED'};refresh='Scope'}
+ $callsBefore=$script:remoteCalls;$result=& $dispatch
+ Check ($result.state -eq 'REFRESH_SCHEDULED' -and $result.refreshResults.Count -eq 2 -and @($script:userSchedules|Where-Object{$_.target -ne 'User' -or !$_.force}).Count -eq 0) 'user refresh schedules Target User on each pinned session endpoint'
+ Check ($script:remoteCalls -eq $callsBefore -and @($result.refreshResults|Where-Object state -eq 'COMPLETED').Count -eq 0) 'user task scheduling never becomes computer refresh or completed user processing'
+ $script:missing=$script:targets[0];$script:userSchedules=@();$result=& $dispatch
+ Check ($script:userSchedules.Count -eq 1 -and $script:userSchedules[0].computer -eq $script:targets[1] -and $result.state -eq 'REFRESH_PARTIAL') 'removed user session endpoints are not scheduled and remain visible as failures'
+ $script:missing=$null
+ $script:userScheduleDenied=$true;$result=& $dispatch
+ Check ($result.state -eq 'REFRESH_PARTIAL' -and @($result.refreshResults|Where-Object state -eq 'FAILED').Count -eq 2) 'user RPC scheduling failures remain per-host failures'
 
 }finally{
  $resolved=[IO.Path]::GetFullPath($temp)

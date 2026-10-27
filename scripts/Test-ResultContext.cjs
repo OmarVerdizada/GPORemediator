@@ -7,7 +7,7 @@ const run={id:'run-a',updatedAt:'2026-10-26T10:00:00Z',approval:{},plan:{selecti
 assert.equal(window.GpoUiDomain.refreshChoices(run,settings)[0].value,'Scope');
 const domain={...run,plan:{...run.plan,selection:{...run.plan.selection,accountScope:'Domain',scopeDn:'DC=example,DC=local'}}};
 assert.equal(window.GpoUiDomain.refreshChoices(domain,settings)[0].value,'Pdc');
-assert.equal(window.GpoUiDomain.refreshChoices({...run,plan:{selection:{accountScope:'Users'}}},settings)[0].value,'Scope');
+assert.equal(window.GpoUiDomain.refreshChoices({...run,plan:{selection:{accountScope:'Users',endpointScopeDn:'OU=Endpoints,DC=example,DC=local'}}},settings)[0].value,'Scope');
 assert.equal(window.GpoUiDomain.workflowStep({run}),6,'already-published review state belongs to verification');
 const other={...run,id:'other-target',updatedAt:'2026-10-26T11:00:00Z',plan:{...run.plan,selection:{...run.plan.selection,scopeDn:'OU=Other,DC=example,DC=local'}}};
 const state={catalog:{sections:[]},selection:{...run.plan.selection},selectedRule:{id:'1.1.4',backendSetting:'1.1.4',implementation:'live',title:'Minimum length'},settings,history:[other,run],tab:'verification',approval:{reviewed:false},favorites:new Set(),inventory:null,serviceOffline:false};
@@ -20,5 +20,14 @@ assert(html.includes('Service unavailable — saved evidence only'));assert(html
 assert(html.includes('Recorded: Verified'));assert(!html.includes('class="assurance-stage good"'));
 assert.match(html,/<button[^>]*data-verify[^>]*disabled/);assert.match(html,/<button[^>]*data-gpupdate[^>]*disabled/);assert.match(html,/<button data-evidence disabled/);
 state.serviceOffline=false;html=view.controlView();assert(!/<button[^>]*data-verify[^>]*disabled/.test(html));
+const userRun={...run,plan:{...run.plan,selection:{...run.plan.selection,setting:'19.7.5.2',accountScope:'Users',endpointScopeDn:'OU=Endpoints,DC=example,DC=local'}}};
+assert.equal(window.GpoUiDomain.refreshChoices(userRun,settings)[0].label,'User sessions on endpoint OU computers');
+assert.equal(window.GpoUiDomain.refreshChoices({...userRun,plan:{...userRun.plan,selection:{...userRun.plan.selection,endpointScopeDn:''}}},settings).length,0);
+state.gpoSession={connected:true};state.settings=settings;
+const components=window.GpoComponents;
+assert(components.refreshAction(state,userRun).includes('Run gpupdate /target:user /force'));
+const noEndpoint={...userRun,plan:{...userRun.plan,selection:{...userRun.plan.selection,endpointScopeDn:''}}};
+assert.match(components.refreshAction(state,noEndpoint),/data-gpupdate[^>]*disabled/);
+assert(components.refreshAction(state,noEndpoint).includes('no session endpoint OU'));
 const workspace=fs.readFileSync(path.join(root,'workspace.js'),'utf8');assert(workspace.includes('GpoUiDomain.refreshChoices(state.history.find(h=>h.id===c.id),state.settings)'));assert(workspace.includes("'write status unavailable'"));
 console.log('PASS result context: recorded target/time, target isolation, offline snapshots/actions, reconnect, operation-scoped refresh choices and published review step');

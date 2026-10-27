@@ -6,6 +6,10 @@ const settings=JSON.parse(fs.readFileSync(path.join(root,'backend/data/gpo-produ
 const dir=path.join(root,'work/audit');fs.mkdirSync(dir,{recursive:true});
 const commands=settings.map(m=>({id:m.id,command:window.GpoComponents.manualCheck({settings},{plan:{selection:{setting:m.id,verificationUser:"EXAMPLE\\User'Name"}}},{hostname:'ws.example.test'})}));
 for(const row of commands){assert(row.command.includes('ws.example.test'));assert(!row.command.includes('gpupdate'));assert(row.command.startsWith('& {'));assert(!row.command.includes('Write-Warning'));}
+for(const hostname of ['<user-session>','<scope>',''])assert.equal(window.GpoComponents.manualCheck({settings},{plan:{selection:{setting:'19.7.5.2'}}},{hostname}),'','Placeholder hosts must never become executable commands');
+assert(window.GpoComponents.manualCheck({settings},{plan:{selection:{setting:'19.7.5.2'}}},null).includes('HKEY_CURRENT_USER'),'Generic standalone manual procedures must remain available without a recorded endpoint');
+const userCheck=window.GpoComponents.manualCheck({settings},{plan:{selection:{setting:'19.7.5.2'}}},{hostname:'ws.example.test'});
+assert(userCheck.includes('HKEY_CURRENT_USER'));assert(userCheck.includes('Run in the intended user session'));assert(!userCheck.includes('Administrator'));
 assert(commands.find(x=>x.id==='19.5.1.1').command.includes('HKEY_USERS'));
 assert(commands.find(x=>x.id==='19.5.1.1').command.includes("User''Name"));
 assert(commands.find(x=>x.id==='9.1.5').command.includes('-PolicyStore ActiveStore'));

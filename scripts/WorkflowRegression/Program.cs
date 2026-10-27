@@ -107,7 +107,8 @@ var evidenceResult=new GpoWorkflowResult("PUBLISHED","Published",null,null,null,
 // ciphertext guard: a regression cannot reach the native executor or live AD.
 using(var refreshStore=new Store(":memory:")){
     var refreshConfig=new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string,string?>{{"Mode","Windows"},{"Windows:Domain","example.local"},{"Windows:DomainController","dc.example.local"}}).Build();
-    using var refreshService=new GpoWorkflowService(refreshConfig,refreshStore,new OperationGate(refreshStore),new EphemeralDataProtectionProvider(),new WindowsPowerShellExecutor(NullLogger<WindowsPowerShellExecutor>.Instance));
+    var refreshGate=new OperationGate(refreshStore);
+    using var refreshService=new GpoWorkflowService(refreshConfig,refreshStore,refreshGate,new EphemeralDataProtectionProvider(),new WindowsPowerShellExecutor(NullLogger<WindowsPowerShellExecutor>.Instance));
     var inventoryForRefresh=inventory with{ExecutionUser=evidencePlan.ExecutionUser};
     var connectionType=typeof(GpoWorkflowService).GetNestedType("Connection",BindingFlags.NonPublic)!;
     var connection=Activator.CreateInstance(connectionType,BindingFlags.Instance|BindingFlags.Public|BindingFlags.NonPublic,null,[evidencePlan.Actor,evidencePlan.ExecutionUser,Array.Empty<byte>(),inventoryForRefresh,DateTimeOffset.UtcNow.AddMinutes(15),DateTimeOffset.UtcNow],null)!;
@@ -121,6 +122,28 @@ using(var refreshStore=new Store(":memory:")){
     Reject(()=>refreshService.ExecuteAsync(refreshPlan.Id,"refresh",new("",Refresh:"Pdc"),"refresh-fixture",refreshPlan.Actor).GetAwaiter().GetResult(),"PDC_REFRESH_SCOPE_INVALID");
     Check(PolicyValues.Hash(refreshStore.Require<GpoWorkflowRun>("gpo_runs",refreshPlan.Id))==PolicyValues.Hash(previousRefresh),"Invalid refresh overwrote the published result");
     Console.WriteLine("PASS invalid OU/PDC refresh rejected at submission and execution without replacing recorded result or invoking native executor");
+    // Exercise the real workflow boundary plus real service validation. Do not
+    // start the background worker: no credentials/native command can be used.
+    refreshConfig["Windows:EnableWrites"]="true";
+    refreshConfig["Windows:ApprovedGpoIds:0"]=gpo;
+    refreshConfig["Windows:AuthorizedOus:0"]="OU=Users,"+dn;
+    refreshConfig["Windows:AuthorizedOus:1"]="OU=Endpoints,"+dn;
+    hash=(string)typeof(GpoWorkflowService).GetProperty("ConfigHash",BindingFlags.Instance|BindingFlags.NonPublic)!.GetValue(refreshService)!;
+    var userSelection=new GpoSelection(gpo,"OU=Users,"+dn,"19.7.5.2",3,"Users",Refresh:"None",EndpointScopeDn:"OU=Endpoints,"+dn);
+    var userPlan=refreshPlan with{Id="user-refresh-boundary",Selection=userSelection,ConfigHash=hash};
+    refreshStore.Put("gpo_plans",userPlan.Id,userPlan);
+    refreshStore.Put("gpo_runs",userPlan.Id,new GpoWorkflowRun(userPlan.Id,userPlan,evidenceResult,PolicyValues.Now()));
+    var userEvidenceHash=PolicyValues.Hash(refreshStore.Require<GpoWorkflowRun>("gpo_runs",userPlan.Id));
+    using var queued=new WorkspaceWorkflows(refreshStore,refreshService,refreshGate,NullLogger<WorkspaceWorkflows>.Instance,TimeProvider.System);
+    Reject(()=>queued.Start("refresh",new(Guid.NewGuid().ToString(),[userPlan.Id],new("",Refresh:"Scope"),"Pdc"),"refresh-fixture",userPlan.Actor),"USER_REFRESH_TARGET_INVALID");
+    var missingEndpoints=userPlan with{Id="user-no-endpoint",Selection=userSelection with{EndpointScopeDn=null}};
+    refreshStore.Put("gpo_plans",missingEndpoints.Id,missingEndpoints);
+    Reject(()=>queued.Start("refresh",new(Guid.NewGuid().ToString(),[missingEndpoints.Id],new(""),"Scope"),"refresh-fixture",userPlan.Actor),"ENDPOINT_SCOPE_REQUIRED");
+    var accepted=queued.Start("refresh",new(Guid.NewGuid().ToString(),[userPlan.Id],new(""),"Scope"),"refresh-fixture",userPlan.Actor);
+    Check(accepted.State=="QUEUED"&&accepted.Refresh=="Scope"&&accepted.Consent.Refresh=="Scope","Explicit workflow refresh was lost before service preflight");
+    Check(PolicyValues.Hash(refreshStore.Require<GpoWorkflowRun>("gpo_runs",userPlan.Id))==userEvidenceHash,"Submission changed recorded user evidence");
+    Console.WriteLine("PASS real user refresh submission: top-level Scope reaches validation and stored consent; PDC and missing session endpoint OU rejected before enqueue; no native execution");
+
 }
 store.Put("gpo_runs",evidencePlan.Id,new GpoWorkflowRun(evidencePlan.Id,evidencePlan,evidenceResult,"2026-10-15T00:00:00Z"));
 var exportBefore=service.Evidence(evidencePlan.Id,evidencePlan.Actor);

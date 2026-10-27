@@ -1,6 +1,6 @@
-# GPO Remediator 3.16.4
+# GPO Remediator 3.16.5
 
-3.16.4 adds read-only rollback assessment, retains recovery failure stages, and exposes scoped endpoint refresh with clear disabled reasons. See [release notes](docs/RELEASE-3.16.4.md), [native endpoint evidence](docs/RELEASE-3.16.3.md), [result context changes](docs/RELEASE-3.16.2.md), and [deployment instructions](docs/ASSURANCE-AND-UPDATES.md). Live AD validation must be run in your own test environment; local tests do not certify live enforcement.
+3.16.5 fixes explicit workflow refresh submission, distinguishes user-session refresh from computer processing, and removes executable checks for placeholder endpoints. See [release notes](docs/RELEASE-3.16.5.md), [recovery assessment](docs/RELEASE-3.16.4.md), [native endpoint evidence](docs/RELEASE-3.16.3.md), [result context changes](docs/RELEASE-3.16.2.md), and [deployment instructions](docs/ASSURANCE-AND-UPDATES.md). Live AD validation must be run in your own test environment; local tests do not certify live enforcement.
 
 3.14.4 accepts the standard SYSVOL rights created by GPMC **Edit settings** delegation (`Read & execute`, `Write`, and `Delete child`) without requiring per-file Modify/Delete. The publisher retains atomic replacement where available and uses a flushed in-place write after the durable backup/manifest when standard GPMC ACLs do not permit `ReplaceFile`. See [release notes](docs/RELEASE-3.14.4.md).
 

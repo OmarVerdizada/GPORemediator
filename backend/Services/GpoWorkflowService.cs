@@ -192,7 +192,10 @@ public sealed class GpoWorkflowService(IConfiguration config,Store store,Operati
         RequireReal();var plan=store.Require<GpoWorkflowPlan>("gpo_plans",id);AssertContext(plan,Get(token,actor),actor);
         if(operation=="refresh"){
             if(consent.Refresh is not ("Pdc" or "Scope"))throw new PolicyException("GPO_OPTIONS_INVALID","Choose PDC or scope computers for policy refresh.");
-            ProductionGpoMappings.ValidateRefresh(ProductionGpoMappings.Effective(plan.Selection),consent.Refresh);
+            var mapping=ProductionGpoMappings.Effective(plan.Selection);
+            ProductionGpoMappings.ValidateRefresh(mapping,consent.Refresh);
+            if(mapping.Scope=="User"&&string.IsNullOrWhiteSpace(plan.Selection.EndpointScopeDn))
+                throw new PolicyException("ENDPOINT_SCOPE_REQUIRED","This user-policy plan does not contain an endpoint OU. Prepare a fresh plan with a user-session endpoint OU.");
         }
         if(operation!="verify"){
             if(!config.GetValue<bool>("Windows:EnableWrites"))throw new PolicyException("WRITES_DISABLED","Enable the production change gate first.");

@@ -37,7 +37,7 @@ try {
     if(!(Test-FrontendDistMatchesSource)){throw 'Frontend/dist does not match source. Run Build-Portable.ps1.'}
     if(!(Test-PortableBackendMatchesSource)){throw 'Runtime does not match source. Run Build-Portable.ps1.'}
     if($IncludeBrowser){
-        foreach($test in @('Test-RecoveryUi','Test-WorkflowUi','Test-EndpointTargetingUi','Test-EnglishThemes','Test-ResultOfflineUi')){
+        foreach($test in @('Test-RecoveryUi','Test-WorkflowUi','Test-EndpointTargetingUi','Test-EnglishThemes','Test-ResultOfflineUi','Test-UserRefreshUi')){
             & node "scripts/$test.cjs"
             Check-Exit $test
         }

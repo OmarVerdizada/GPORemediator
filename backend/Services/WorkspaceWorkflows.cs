@@ -79,7 +79,9 @@ public sealed class WorkspaceWorkflows(Store store,IWorkflowOperations service,O
         if(ids.Length is <1 or >20||ids.Distinct().Count()!=ids.Length)throw new PolicyException("INVALID_REQUEST","Select 1–20 distinct plans.");
         if(request.SourceWorkflowId is not null&&action!="rollback")throw new PolicyException("INVALID_REQUEST","A recovery source is only valid for rollback.");
         if(ids.Length>1&&action!="apply")throw new PolicyException("INVALID_REQUEST","Use the batch recovery source for full-GPO rollback.");
-        var plans=ids.Select(op=>service.ValidateSubmission(op,action,request.Consent,token,actor)).ToArray();
+        // The workflow refresh field is authoritative at both submission and execution.
+        var executionConsent=request.Consent with{Refresh=request.Refresh};
+        var plans=ids.Select(op=>service.ValidateSubmission(op,action,executionConsent,token,actor)).ToArray();
         if(plans.Any(p=>p.Selection.GpoId!=plans[0].Selection.GpoId||p.Selection.ScopeDn!=plans[0].Selection.ScopeDn))throw new PolicyException("INVALID_REQUEST","One workflow must use one GPO/scope.");
         if(action=="apply"&&ids.Length>1&&request.BatchId is null)throw new PolicyException("BATCH_REQUIRED","Apply the reviewed batch preview.");
         if(request.BatchId is not null){
@@ -88,7 +90,7 @@ public sealed class WorkspaceWorkflows(Store store,IWorkflowOperations service,O
             if(batch.Pilot)foreach(var plan in plans)WorkspaceRules.ValidatePilot(plan,batch.PilotLimit);
             if(batch.Pilot&&request.Refresh=="Pdc")throw new PolicyException("PILOT_SCOPE_UNSAFE","Pilot refresh must remain within the authorized pilot OU; PDC refresh is not permitted.");
         }
-        var job=New(request.RequestId,actor,action,new{action,request}) with{PlanIds=ids,Consent=request.Consent,Refresh=request.Refresh,VerificationDelays=schedule,BatchId=request.BatchId,SourceWorkflowId=request.SourceWorkflowId};
+        var job=New(request.RequestId,actor,action,new{action,request}) with{PlanIds=ids,Consent=executionConsent,Refresh=request.Refresh,VerificationDelays=schedule,BatchId=request.BatchId,SourceWorkflowId=request.SourceWorkflowId};
         return Enqueue(job,token,action=="verify"?null:Guid.Parse(plans[0].Selection.GpoId).ToString("D"));
     }
     protected override async Task ExecuteAsync(CancellationToken stoppingToken){
