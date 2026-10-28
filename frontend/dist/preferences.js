@@ -38,7 +38,7 @@
   }
   function install(s,render,installNav){
     if(document.querySelector('.ds-sidebar-toggle'))return;
-    const toggle=document.createElement('button');toggle.className='ds-sidebar-toggle';toggle.innerHTML=ui.icon('panel');toggle.addEventListener('click',()=>{storage.set('gr-sidebar-collapsed',preference('gr-sidebar-collapsed','false')==='true'?'false':'true');apply(s);update();});document.querySelector('.brand-lockup').insertAdjacentElement('afterend',toggle);
+    const toggle=document.createElement('button');toggle.className='ds-sidebar-toggle';toggle.innerHTML=ui.icon('panel');toggle.addEventListener('click',()=>{storage.set('gr-sidebar-collapsed',preference('gr-sidebar-collapsed','false')==='true'?'false':'true');apply(s);update();});document.querySelector('.brand-lockup').append(toggle);
     const update=()=>{toggle.setAttribute('aria-label','Collapse / expand sidebar');toggle.setAttribute('aria-expanded',preference('gr-sidebar-collapsed','false')!=='true');};update();
     document.addEventListener('change',e=>{const key=e.target.dataset.preference;if(!key)return;if(key==='theme')s.theme=e.target.value;if(key==='language'){s.lang='en';window.GpoI18n.setLanguage('en');storage.set('gr-lang','en');}if(key==='accent'||key==='density')storage.set('gr-'+key,e.target.value);if(key==='large-text'||key==='high-contrast')storage.set('gr-'+key,String(e.target.checked));apply(s);render();update();});
     document.addEventListener('invalid',e=>validate(e.target,s),true);document.addEventListener('input',e=>{if(e.target.hasAttribute('aria-invalid'))validate(e.target,s);});

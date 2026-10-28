@@ -1,7 +1,7 @@
 (() => {
   'use strict';
   const upper = value => String(value || '').toUpperCase();
-  const bad = value => /FAIL|MISMATCH|REVIEW|PARTIAL|DRIFT|ERROR/.test(upper(value));
+  const bad = value => /FAIL|MISMATCH|REVIEW|PARTIAL|DRIFT|ERROR|OVERRIDDEN/.test(upper(value));
   const effectiveVerified = value => /^(VERIFIED_ON_SAMPLE|VERIFIED_ON_ALL_TARGETS|DOMAIN_VALUE_MATCHES_ON_SELECTED_DC)$/.test(upper(value));
   function coverageVerified(result){
     if(upper(result.effectiveStatus)!=='VERIFIED_ON_ALL_TARGETS')return true;
@@ -49,5 +49,10 @@
         ? { name: 'Medium', cls: 'medium', copy: mapping?.impactReason || 'Validate scope and application dependencies before broad rollout.' }
         : { name: 'Low', cls: 'low', copy: mapping?.impactReason || 'Preview and post-change verification are still required.' };
   }
-  window.GpoUiDomain = Object.freeze({ classify, workflowStep, impact, bad, effectiveVerified, coverageVerified, isUserPolicy, refreshChoices });
+  function resultState(run){
+    const r=run?.result||{};
+    if(/^(ROLLED_BACK|BATCH_ROLLED_BACK|APPLYING|VERIFYING|REFRESHING|ROLLBACKING|ROLLING_BACK)$/.test(r.state||''))return r.state;
+    return r.effectiveStatus==='ENDPOINT_MISMATCH'||r.effectiveStatus==='DOMAIN_VALUE_PENDING_OR_OVERRIDDEN'||(r.endpointChecks||[]).some(x=>x.state==='MISMATCH')?'ENDPOINT_MISMATCH':r.state;
+  }
+  window.GpoUiDomain = Object.freeze({ classify, workflowStep, impact, bad, effectiveVerified, coverageVerified, isUserPolicy, refreshChoices, resultState });
 })();

@@ -355,7 +355,7 @@ public sealed class GpoWorkflowService(IConfiguration config,Store store,Operati
             run.Plan.ExecutionUser,run.Plan.Domain,run.Plan.DomainController,ProductionGpoMappings.Require(run.Plan.Selection.Setting).ControlId,run.Plan.Selection.Setting,
             run.Plan.Selection.GpoId,run.Plan.Preview.Gpo.Name,run.Plan.Selection.ScopeDn,run.Plan.Preview.PreviousValue,
             ProductionGpoMappings.Effective(run.Plan.Selection).DesiredDisplay(run.Plan.Selection),run.Result.State,run.Result.BackupId,run.Result.BackupDirectory,run.Result.EffectiveStatus,
-            run.Result.Verification,run.Plan.Preview.Warnings,"",run.Approval?.ChangeReference,run.Approval?.ApprovedBy,ProductionGpoMappings.Require(run.Plan.Selection.Setting).Handler,ProductionGpoMappings.Effective(run.Plan.Selection).Source,run.Result.EndpointChecks,run.CorrelationId,run.Result.CurrentValue,run.Plan.Preview.PreviousValueSource,run.Result.CurrentValueSource);
+            run.Result.Verification,run.Plan.Preview.Warnings,"",run.Approval?.ChangeReference,run.Approval?.ApprovedBy,ProductionGpoMappings.Require(run.Plan.Selection.Setting).Handler,ProductionGpoMappings.Effective(run.Plan.Selection).Source,run.Result.EndpointChecks,run.CorrelationId,run.Result.CurrentValue,run.Plan.Preview.PreviousValueSource,run.Result.CurrentValueSource,run.Result.DomainPolicy);
         evidence=evidence with{IntegrityHash=GpoWorkflowRules.EvidenceHash(evidence)};
         store.Put("gpo_evidence",id+"-"+evidence.IntegrityHash,evidence,"IMMUTABLE");
         return evidence;

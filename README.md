@@ -1,4 +1,6 @@
-# GPO Remediator 3.16.7
+# GPO Remediator 3.16.8
+
+3.16.8 synchronizes approved domain account settings with the effective AD policy, snapshots those properties for guarded rollback, and replaces the crowded result page with an actual-versus-requested comparison. See [release notes](docs/RELEASE-3.16.8.md).
 
 3.16.7 simplifies mixed OU targeting, shows configured-value GPO sources, verifies effective endpoint values after Apply/Refresh, and fixes rollback refresh. See [release notes](docs/RELEASE-3.16.7.md).
 

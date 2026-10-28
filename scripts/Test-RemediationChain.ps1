@@ -26,12 +26,19 @@ function Get-ADReplicationPartnerMetadata {param($Target,$Scope,$ErrorAction) @(
 function Get-ADOrganizationalUnit {param($Identity,$Server) [pscustomobject]@{DistinguishedName=$Identity;Name='Pilot'}}
 function Get-ADObject {param($Identity,$Server,$Properties,$Replace,$ErrorAction)
  if($Identity -like 'CN=*'){return [pscustomobject]@{DistinguishedName=$Identity;allowedAttributesEffective=@('versionNumber','gPCMachineExtensionNames','gPCUserExtensionNames');versionNumber=$script:version;gPCMachineExtensionNames=$script:extensions;gPCUserExtensionNames=$script:userExtensions;gPCWQLFilter='';flags=0;whenChanged=[datetime]'2026-01-01'}}
- return [pscustomobject]@{gPLink=$script:rawLinks;allowedAttributesEffective=@('gPLink')}
+ return [pscustomobject]@{gPLink=$script:rawLinks;allowedAttributesEffective=@('gPLink','pwdHistoryLength','minPwdAge','minPwdLength','pwdProperties','lockoutDuration','lockoutThreshold','lockOutObservationWindow')}
 }
 function Set-ADObject {param($Identity,$Server,$Replace) $script:version=[int]$Replace.versionNumber;$script:extensions=[string]$Replace.gPCMachineExtensionNames}
 function Get-GPO {param($Guid,$Domain,$Server) [pscustomobject]@{Id=[guid]$gpoId;DisplayName='Dedicated pilot';GpoStatus='AllSettingsEnabled'}}
 function Get-GPPermission {param($Guid,[switch]$All,$Domain,$Server) [pscustomobject]@{Permission='GpoApply';Trustee=[pscustomobject]@{Name='Authenticated Users';Sid=[Security.Principal.SecurityIdentifier]::new('S-1-5-11')}}}
-function Get-ADDefaultDomainPasswordPolicy {param($Identity,$Server) @{PasswordHistoryCount=24;MinPasswordAge=[timespan]::FromDays(1);MinPasswordLength=14;ComplexityEnabled=$true;ReversibleEncryptionEnabled=$false;LockoutDuration=[timespan]::FromMinutes(15);LockoutThreshold=5;LockoutObservationWindow=[timespan]::FromMinutes(15)}}
+function Get-ADDefaultDomainPasswordPolicy {param($Identity,$Server,$ErrorAction) [pscustomobject]$script:domainState}
+function Set-ADDefaultDomainPasswordPolicy {
+ [CmdletBinding()]param($Identity,$Server,$PasswordHistoryCount,$MinPasswordAge,$MinPasswordLength,$ComplexityEnabled,$ReversibleEncryptionEnabled,$LockoutDuration,$LockoutThreshold,$LockoutObservationWindow)
+ if($script:domainWriteDenied){throw [UnauthorizedAccessException]::new('Fixture domain property write denied')}
+ if($script:domainWriteNoOp){return}
+ foreach($key in @($PSBoundParameters.Keys|Where-Object{$_ -in $script:domainState.Keys})){$script:domainState[$key]=$PSBoundParameters[$key]}
+}
+
 function All-LinkScopes {@([pscustomobject]@{dn=$target;rawLinks=$script:rawLinks})}
 function Get-GPInheritance {param($Target,$Domain,$Server)
  $links=@();if($script:rawLinks){$links=@([pscustomobject]@{GpoId=[guid]$gpoId;Order=1;Enforced=$false;Enabled=$true;DisplayName='Dedicated pilot'})}
@@ -66,7 +73,8 @@ function Import-GPO {param($BackupId,$TargetGuid,$Path,$Domain,$Server)
 function Invoke-GPUpdate {param($Computer,$Force,$RandomDelayInMinutes,$ErrorAction,$Target) $script:refreshes++}
 $catalog=(Get-Content (Join-Path $repo 'backend/data/gpo-production-mappings.json') -Raw|ConvertFrom-Json).mappings
 try{
- $cases=@(@('1.1.1','LocalComputers'),@('1.1.1','Domain'),@('2.3.1.1','LocalComputers'),@('18.4.4','LocalComputers'),@('17.1.1','LocalComputers'),@('19.5.1.1','Users'))
+ $cases=@(@('1.1.1','LocalComputers'),@('1.1.1','Domain'),@('1.2.2','Domain'),@('2.3.1.1','LocalComputers'),@('18.4.4','LocalComputers'),@('17.1.1','LocalComputers'),@('19.5.1.1','Users'))
+ foreach($entry in @($catalog|Where-Object{$_.domainPolicySensitive -and $_.id -notin @('1.1.1','1.2.2')})){$cases+=,@([string]$entry.id,'Domain')}
  foreach($manual in @($catalog|Where-Object automation -ne 'Automated')){$cases+=,@([string]$manual.id,'LocalComputers')}
  if($AllControls){$cases=@();foreach($entry in $catalog){$cases+=,@([string]$entry.id,$(if($entry.scope -eq 'User'){'Users'}else{'LocalComputers'}));if($entry.domainPolicySensitive){$cases+=,@([string]$entry.id,'Domain')}}}
  $report=@()
@@ -81,8 +89,10 @@ try{
   [IO.File]::WriteAllText((Join-Path $script:folder 'GPT.INI'),"[General]`r`nVersion=0`r`n")
   $script:version=0;$script:extensions='';$script:userExtensions='';$script:rawLinks='';$script:registry=@{}
   $s=@{gpoId=$gpoId;scopeDn=$(if($case[1] -eq 'Domain'){$domainDn}else{$target});setting=$map.id;value=$map.suggested;customValue=$(if($map.requiresInput){if($map.inputDefault){[string]$map.inputDefault}else{'Authorized use only'}}else{''});refresh='None';firstLink=($case[1] -eq 'Domain');accountScope=$case[1];endpointScopeDn='';verificationUser=''}
+  $script:domainState=@{PasswordHistoryCount=0;MinPasswordAge=[timespan]::Zero;MinPasswordLength=7;ComplexityEnabled=$false;ReversibleEncryptionEnabled=$true;LockoutDuration=[timespan]::FromMinutes(30);LockoutThreshold=0;LockoutObservationWindow=[timespan]::FromMinutes(30)};$script:domainWriteDenied=$false;$script:domainWriteNoOp=$false
+  if($map.id -eq '1.2.2' -and $case[1] -eq 'Domain'){$null=Write-Mapping @{selection=$s} $map}
   $Operation='gpoPreview';$Data=@{selection=$s;mapping=$map};$script:workerStage='VALIDATING';$preview=& $dispatch
-  Check ($null -eq $preview.previousValue -and $null -eq $preview.previousValueSource) ('unconfigured source '+$map.id)
+  if($map.id -eq '1.2.2' -and $case[1] -eq 'Domain'){Check (!$preview.noChange -and $preview.previousValue -eq '5' -and $preview.domainPolicy.value -eq '0') 'GPO 5 / AD 0 is a real change, never NO_CHANGE'}else{Check ($null -eq $preview.previousValue -and $null -eq $preview.previousValueSource) ('unconfigured source '+$map.id)}
   Check ($preview.preflight.ready) ('readiness '+$map.id+' '+$case[1])
   $plan=@{id=[guid]::NewGuid().ToString('N');domain=$cfg.domain;domainController=$cfg.domainController;selection=$s;preview=$preview}
   $refreshBefore=$script:refreshes
@@ -94,11 +104,32 @@ try{
    $Operation='gpoRefresh';$Data.refresh=if($case[1] -eq 'Domain'){'Pdc'}else{'Scope'};$result=& $dispatch
    Check ($result.state -eq 'REFRESH_SCHEDULED' -and $script:refreshes -eq $refreshBefore+1) ('explicit refresh schedules exactly one target '+$map.id)
   }
+  if($map.id -eq '1.2.2' -and $case[1] -eq 'Domain'){
+   Check ($script:domainState.LockoutThreshold -eq 5 -and $result.domainPolicy.value -eq '5') 'Apply writes and reads back the effective AD threshold'
+   $script:domainState.LockoutThreshold=0;$Operation='gpoVerify';$observed=& $dispatch
+   Check ($observed.gpoPublished -and $observed.currentValue -eq '5' -and $observed.effectiveStatus -eq 'ENDPOINT_MISMATCH' -and $observed.endpointChecks[0].actualValue -eq '0') 'User incident: GPO 5 / AD 0 is measured as mismatch with actual value 0'
+   $Operation='gpoRollback';$blocked=$false;try{$null=& $dispatch}catch{$blocked=$_.Exception.Message -match 'ROLLBACK_CONFLICT'}
+   Check ($blocked -and $script:domainState.LockoutThreshold -eq 0) 'External AD policy change blocks rollback without overwriting it'
+   $script:domainState.LockoutThreshold=5
+  }
   $Operation='gpoRollback';$result=& $dispatch
   Check ($result.state -eq 'ROLLED_BACK') ('snapshot rollback '+$map.id)
   $Operation='gpoVerify';$result=& $dispatch
   Check ($result.state -eq 'ROLLED_BACK') ('rollback read-back '+$map.id)
-  Check ($null -eq $result.currentValue -and $null -eq $result.currentValueSource) ('rollback clears configured value and source '+$map.id)
+  if($map.id -eq '1.2.2' -and $case[1] -eq 'Domain'){Check ($script:domainState.LockoutThreshold -eq 0 -and $result.currentValue -eq '5') 'Rollback restores the recorded AD threshold separately from the GPO snapshot'}else{Check ($null -eq $result.currentValue -and $null -eq $result.currentValueSource) ('rollback clears configured value and source '+$map.id)}
+  if($map.id -eq '1.2.2' -and $case[1] -eq 'Domain'){
+   $failedPlan=@{id=[guid]::NewGuid().ToString('N');domain=$cfg.domain;domainController=$cfg.domainController;selection=$s}
+   $Operation='gpoPreview';$Data=@{selection=$s;mapping=$map};$failedPlan.preview=& $dispatch
+   $script:domainWriteDenied=$true;$Operation='gpoApply';$Data=@{plan=$failedPlan;mapping=$map;consent=@{confirmation='APPLY'}};$failed=& $dispatch
+   $saved=Get-Content -LiteralPath (Join-Path (Run-Directory $failedPlan) 'manifest.json') -Raw|ConvertFrom-Json
+   Check ($failed.state -eq 'REVIEW_REQUIRED' -and !$failed.gpoPublished -and $script:domainState.LockoutThreshold -eq 0 -and $saved.beforeDomainPolicy.value -eq '0' -and $saved.failure.stage -eq 'DOMAIN_POLICY_WRITE') 'Denied domain write never reports success and retains the pre-change AD snapshot'
+   $script:domainWriteDenied=$false
+   $failedPlan.id=[guid]::NewGuid().ToString('N');$Operation='gpoPreview';$Data=@{selection=$s;mapping=$map};$failedPlan.preview=& $dispatch
+   $script:domainWriteNoOp=$true;$Operation='gpoApply';$Data=@{plan=$failedPlan;mapping=$map;consent=@{confirmation='APPLY'}};$noOp=& $dispatch
+   $saved=Get-Content -LiteralPath (Join-Path (Run-Directory $failedPlan) 'manifest.json') -Raw|ConvertFrom-Json
+   Check ($noOp.state -eq 'REVIEW_REQUIRED' -and !$noOp.gpoPublished -and $saved.failure.code -eq 'DOMAIN_POLICY_WRITE_MISMATCH' -and $script:domainState.LockoutThreshold -eq 0) 'A silent no-op AD setter cannot become a successful Apply'
+   $script:domainWriteNoOp=$false
+  }
   $report+=@{controlId=[string]$map.id;domain=([string]$map.id -split '\.')[0];scope=$case[1];state='PASS';steps=$(if($case[1] -eq 'Users'){@('preview','backup','write','link','source','rollback','verify')}else{@('preview','backup','write','link','source','refresh','rollback','verify')})}
  }
  if($ReportPath){$output=[IO.Path]::GetFullPath($ReportPath);$null=New-Item -ItemType Directory -Path (Split-Path $output -Parent) -Force;$report|ConvertTo-Json -Depth 6|Set-Content -LiteralPath $output -Encoding UTF8}

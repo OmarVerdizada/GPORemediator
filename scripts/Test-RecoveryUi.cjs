@@ -220,7 +220,9 @@ const server=http.createServer(async(req,res)=>{
   assert.equal(await page.locator('.ux-more-tabs').getAttribute('open'),null);
   await page.setViewportSize({width:1440,height:1000});
   await page.locator('[data-tab=verification]').click();
+  await page.locator('.verification-details summary').first().click();
   await page.locator('.endpoint-evidence').waitFor();
+  await page.locator('.manual-check-details summary').click();
   await page.locator('.manual-check-command').waitFor();
   assert.ok((await page.locator('.manual-check-command').textContent()).includes('secedit.exe /export /mergedpolicy'));
   assert.equal(await page.locator('.manual-check-head [data-copy-value]').count(),1);

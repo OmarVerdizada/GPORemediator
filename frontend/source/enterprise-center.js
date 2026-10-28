@@ -21,7 +21,7 @@
     return {id:String(run?.id||''),controlId:String(s.setting||''),date:String(run?.updatedAt||run?.startedAt||''),
       operator:String(p.actor||''),executionUser:String(p.executionUser||''),domain:String(p.domain||''),
       gpo:String(v.gpo?.name||''),gpoId:String(s.gpoId||''),scopeDn:String(s.scopeDn||''),
-      before:v.previousValue??null,requested:v.desiredValue??null,observed:result.currentValue??null,
+      before:v.previousValue??null,requested:v.desiredValue??null,observed:result.domainPolicy?.value??result.currentValue??null,
       state,effectiveStatus:effective,status,publication:result.gpoPublished===true,linkVerified:result.linkVerified===true,
       replicationConverged:meta.replicationConverged===true,replicationCheckedAt:meta.checkedAt||null,
       endpointChecks:(result.endpointChecks||[]).map(x=>({host:String(x.hostname||''),state:String(x.state||''),message:String(x.message||''),actualValue:x.actualValue??null})),

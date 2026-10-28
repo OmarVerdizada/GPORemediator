@@ -42,6 +42,7 @@ public static class GpoAssurance
         if(r.Verification?.ReplicationConverged!=true)notes.Add("Inspect per-DC replication evidence; unavailable probes and equal versions alone are not content convergence.");
         if(r.RefreshResults.Any(x=>x.State=="FAILED"))notes.Add("Inspect endpoint WinRM/Kerberos or task-scheduler/RPC access and per-host gpupdate exit/deadline results; a failed refresh is not proof of policy processing.");
         if((r.EndpointChecks??[]).Any(x=>x.State=="MISMATCH"))notes.Add("Run the control-specific native check and gpresult/RSoP on that endpoint; inspect winning GPO, filtering, audit override, OS applicability and restart/logon/service requirements.");
+        if(r.DomainPolicy is { } domain && r.EffectiveStatus=="ENDPOINT_MISMATCH")notes.Add($"AD {domain.Property} on {domain.DomainController} is {domain.Value}; requested {domain.DesiredValue}. Create a fresh repair plan to update both the selected GPO and the effective domain property.");
         if(!(r.EndpointChecks??[]).Any())notes.Add("No endpoint sample exists. Select an authorized endpoint/user session and run read-only verification.");
         notes.Add("These are diagnostic candidates, not established root causes. Collect target RSoP and GroupPolicy Operational events for attribution and processing evidence.");
         return notes.ToArray();

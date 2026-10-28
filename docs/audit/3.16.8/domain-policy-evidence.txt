@@ -1,0 +1,17 @@
+PASS readiness 1.1.1 LocalComputers
+PASS readiness 1.1.1 Domain
+PASS GPO 5 / AD 0 is a real change, never NO_CHANGE
+PASS readiness 1.2.2 Domain
+PASS Apply writes and reads back the effective AD threshold
+PASS User incident: GPO 5 / AD 0 is measured as mismatch with actual value 0
+PASS External AD policy change blocks rollback without overwriting it
+PASS Rollback restores the recorded AD threshold separately from the GPO snapshot
+PASS Denied domain write never reports success and retains the pre-change AD snapshot
+PASS A silent no-op AD setter cannot become a successful Apply
+PASS readiness 1.1.3 Domain
+PASS readiness 1.1.4 Domain
+PASS readiness 1.1.5 Domain
+PASS readiness 1.1.6 Domain
+PASS readiness 1.2.1 Domain
+PASS readiness 1.2.4 Domain
+PASS readiness 1.2.3 LocalComputers

@@ -8,17 +8,17 @@ function prompt(initial){return new Promise(resolve=>{
  const root=document.getElementById('root');root.inert=true;root.hidden=true;
  const overlay=document.createElement('div');overlay.className='operator-sign-in';overlay.setAttribute('role','dialog');overlay.setAttribute('aria-modal','true');overlay.setAttribute('aria-labelledby','operator-sign-in-title');
  let current=initial;
- overlay.innerHTML=`<form class="operator-sign-in-card"><span class="operator-sign-in-emblem" aria-hidden="true">◇</span><span class="card-kicker">GPO REMEDIATOR</span><h1 id="operator-sign-in-title"></h1><p data-sign-in-copy></p><label><span data-account-label></span><input name="actor" autocomplete="username" maxlength="256" required></label><label>${'Password'}<input name="password" type="password" autocomplete="current-password" maxlength="1024" required></label><p class="operator-sign-in-error" role="alert"></p><button class="primary" type="submit"></button><small data-sign-in-note></small></form>`;
+ overlay.innerHTML=`<form class="operator-sign-in-card"><span class="operator-sign-in-emblem" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><path d="M12 3 20 6v6c0 4-4 7-8 9-4-2-8-5-8-9V6l8-3Z" fill="currentColor"/></svg></span><span class="card-kicker">GPO REMEDIATOR</span><h1 id="operator-sign-in-title"></h1><p data-sign-in-copy></p><label><span data-account-label></span><input name="actor" autocomplete="username" maxlength="256" required></label><label>${'Password'}<input name="password" type="password" autocomplete="current-password" maxlength="1024" required></label><p class="operator-sign-in-error" role="alert"></p><button class="primary" type="submit"></button><small data-sign-in-note></small></form>`;
  document.body.append(overlay);const form=overlay.querySelector('form'),account=form.elements.actor,password=form.elements.password,button=form.querySelector('button'),error=form.querySelector('[role=alert]');
  function configure(){
   const domain=current?.domainSignIn===true;
-  overlay.querySelector('h1').textContent=domain?'Sign in with your domain account':'Confirm your sign-in';
-  overlay.querySelector('[data-sign-in-copy]').textContent=domain?'One sign-in opens your AD connection and supplies the account for GPO operations.':'Confirm your Windows password to open initial configuration.';
+  overlay.querySelector('h1').textContent=domain?'Connect to your domain':'Confirm your sign-in';
+  overlay.querySelector('[data-sign-in-copy]').textContent=domain?'Use your domain account to manage and verify Group Policy.':'Confirm your Windows password to open initial configuration.';
   overlay.querySelector('[data-account-label]').textContent=domain?'Domain account (DOMAIN\\user or user@domain)':'Windows account';
   account.readOnly=!domain;account.tabIndex=domain?0:-1;account.value=current?.operator||'';
   password.disabled=!current;password.required=!!current;
   button.textContent=!current?'Retry':domain?'Sign in':'Confirm and enter';
-  overlay.querySelector('[data-sign-in-note]').textContent=domain?'The password is not saved to disk. It is reused while the connection is active. A service restart or session expiry requires sign-in again.':'Only an authorized Windows operator can change configuration.';
+  overlay.querySelector('[data-sign-in-note]').textContent=domain?'Your password stays in the active session and is not saved to disk.':'Only an authorized Windows operator can change configuration.';
  }
  configure();
  if(!current)error.textContent='Session unavailable. Check the service and Windows sign-in, then retry.';

@@ -13,12 +13,12 @@ const other={...run,id:'other-target',updatedAt:'2026-10-26T11:00:00Z',plan:{...
 const state={catalog:{sections:[]},selection:{...run.plan.selection},selectedRule:{id:'1.1.4',backendSetting:'1.1.4',implementation:'live',title:'Minimum length'},settings,history:[other,run],tab:'verification',approval:{reviewed:false},favorites:new Set(),inventory:null,serviceOffline:false};
 const view=window.GpoControlView.create({state,esc:window.GpoComponents.esc,say:(_,en)=>en,tr:String,riskFor:()=>({name:'High',cls:'high'}),badges:()=>'',topDomainForRule:()=>null,uiIcon:()=>'',stateClass:()=>'',statusText:String});
 assert.equal(view.relevantHistory(state.selectedRule)[0].id,'run-a','latest result from another target must not replace selected target');
-let html=view.controlView();assert(html.includes('run-a'));assert(!html.includes('other-target'));assert(html.includes('GPO VALUE AT LAST CHECK'));assert(!html.includes('Every status below is calculated from the live'));
+let html=view.controlView();assert(html.includes('run-a'));assert(!html.includes('other-target'));assert(html.includes('Stored GPO value:'));assert(!html.includes('Every status below is calculated from the live'));
 state.selection={};state.history=[run];state.serviceOffline=true;
 html=view.controlView();
 assert(html.includes('Service unavailable — saved evidence only'));assert(html.includes('2026-10-26T10:00:00Z'));assert(html.includes('Pilot GPO'));assert(html.includes('OU=Pilot,DC=example,DC=local'));assert(!html.includes('Not selected'));
 assert(html.includes('Recorded: Verified'));assert(!html.includes('class="assurance-stage good"'));
-assert.match(html,/<button[^>]*data-verify[^>]*disabled/);assert.match(html,/<button[^>]*data-gpupdate[^>]*disabled/);assert.match(html,/<button data-evidence disabled/);
+assert.match(html,/<button[^>]*data-verify[^>]*disabled/);assert.match(html,/<button[^>]*data-gpupdate[^>]*disabled/);assert.match(html,/<button data-op-evidence[^>]*disabled/);
 state.serviceOffline=false;html=view.controlView();assert(!/<button[^>]*data-verify[^>]*disabled/.test(html));
 const userRun={...run,plan:{...run.plan,selection:{...run.plan.selection,setting:'19.7.5.2',accountScope:'Users',endpointScopeDn:'OU=Endpoints,DC=example,DC=local'}}};
 assert.equal(window.GpoUiDomain.refreshChoices(userRun,settings)[0].label,'User sessions on endpoint OU computers');

@@ -477,6 +477,58 @@ function Impact-Details($S,$Map,$Gpo,$Scope,[string[]]$LinkScopes){
     $kind=if($domainAccount){'DomainAccount'}elseif([string]$Map.scope -eq 'User'){'User'}else{'Computer'}
     return @{inheritance=$(if([bool]$inherit.GpoInheritanceBlocked){'BLOCKED'}else{'NORMAL'});blockInheritance=[bool]$inherit.GpoInheritanceBlocked;conflicts=@($conflicts);affectedObjects=@{targetKind=$kind;scopeDn=[string]$Scope.dn;computers=$enabled.Count;servers=$servers.Count;workstations=$workstations.Count;disabled=@($objects|Where-Object{-not $_.Enabled}).Count;sampleHosts=$sample;truncated=$false;users=$enabledUsers.Count;disabledUsers=@($users|Where-Object{-not $_.Enabled}).Count;sampleUsers=$sampleUsers};existingLinkScopes=@($LinkScopes);securityFiltering=$permissions;wmiFilter=$(if($ad.gPCWQLFilter){[string]$ad.gPCWQLFilter}else{$null})}
 }
+function Domain-PolicyProperty($Map){
+    if(![bool](Read-Field $Map 'domainPolicySensitive' $false)){return $null}
+    switch([string]$Map.id){
+        '1.1.1' {return 'PasswordHistoryCount'} '1.1.3' {return 'MinPasswordAge'}
+        '1.1.4' {return 'MinPasswordLength'} '1.1.5' {return 'ComplexityEnabled'}
+        '1.1.6' {return 'ReversibleEncryptionEnabled'} '1.2.1' {return 'LockoutDuration'}
+        '1.2.2' {return 'LockoutThreshold'} '1.2.4' {return 'LockoutObservationWindow'}
+        default {Fail 'DOMAIN_POLICY_UNSUPPORTED' 'No domain account property is mapped for this control.'}
+    }
+}
+function Domain-PolicyAccess([string]$Property){
+    $attribute=switch($Property){'PasswordHistoryCount'{'pwdHistoryLength'}'MinPasswordAge'{'minPwdAge'}'MinPasswordLength'{'minPwdLength'}'ComplexityEnabled'{'pwdProperties'}'ReversibleEncryptionEnabled'{'pwdProperties'}'LockoutDuration'{'lockoutDuration'}'LockoutThreshold'{'lockoutThreshold'}'LockoutObservationWindow'{'lockOutObservationWindow'}default{Fail 'DOMAIN_POLICY_UNSUPPORTED' 'Unknown domain account property.'}}
+    if((Attribute-WriteState $domainDn @($attribute)) -ne 'ALLOWED'){Fail 'DOMAIN_POLICY_ACCESS_DENIED' ('Write access to AD '+$Property+' could not be confirmed.')}
+}
+function Domain-PolicyRead([string]$Property,[string]$Desired){
+    $policy=Get-ADDefaultDomainPasswordPolicy -Identity $domainDn -Server $cfg.domainController -ErrorAction Stop
+    $value=Read-Field $policy $Property $null
+    if($null -eq $value){Fail 'DOMAIN_POLICY_UNAVAILABLE' ('AD did not return '+$Property+'.')}
+    $number=switch($Property){
+        'MinPasswordAge' {$value.TotalDays}
+        {$_ -in @('LockoutDuration','LockoutObservationWindow')} {$value.TotalMinutes}
+        {$_ -in @('ComplexityEnabled','ReversibleEncryptionEnabled')} {[int][bool]$value}
+        default {$value}
+    }
+    return @{property=$Property;value=([double]$number).ToString([Globalization.CultureInfo]::InvariantCulture);desiredValue=$Desired;domainController=[string]$cfg.domainController}
+}
+function Domain-PolicySnapshot($S,$Map){
+    $property=Domain-PolicyProperty $Map;if(!$property){return $null}
+    return Domain-PolicyRead $property ([string](Desired-Normalized $Map @($Map.items)[0] $S))
+}
+function Domain-PolicyWrite([string]$Property,[string]$Value){
+    if($Property -notin @('PasswordHistoryCount','MinPasswordAge','MinPasswordLength','ComplexityEnabled','ReversibleEncryptionEnabled','LockoutDuration','LockoutThreshold','LockoutObservationWindow')){Fail 'DOMAIN_POLICY_UNSUPPORTED' 'Unrecognized domain account property.'}
+    $number=[double]::Parse($Value,[Globalization.CultureInfo]::InvariantCulture)
+    $typed=switch($Property){
+        'MinPasswordAge' {[timespan]::FromDays($number)}
+        {$_ -in @('LockoutDuration','LockoutObservationWindow')} {[timespan]::FromMinutes($number)}
+        {$_ -in @('ComplexityEnabled','ReversibleEncryptionEnabled')} {[bool]([int]$number)}
+        default {[int]$number}
+    }
+    $options=@{Identity=$domainDn;Server=$cfg.domainController;ErrorAction='Stop'};$options[$Property]=$typed
+    Set-ADDefaultDomainPasswordPolicy @options
+    $actual=Domain-PolicyRead $Property $Value
+    if([string]$actual.value -cne $Value){Fail 'DOMAIN_POLICY_WRITE_MISMATCH' ('AD '+$Property+' did not read back as '+$Value+'.')}
+    return $actual
+}
+function Domain-RollbackMatches($Manifest,[bool]$Restored=$false){
+    $before=Read-Field $Manifest 'beforeDomainPolicy' $null;if(!$before){return $true}
+    $expected=if($Restored){$before}else{Read-Field $Manifest 'afterDomainPolicy' $null}
+    if(!$expected){return $false}
+    $actual=Domain-PolicyRead ([string]$expected.property) ([string]$expected.value)
+    return [string]$actual.value -ceq [string]$expected.value
+}
 function Preview($S,$Map,[bool]$RequireWriteAccess=$true){
     Validate-Selection $S $Map;$access=if($RequireWriteAccess){Assert-SelectionAccess $S $Map}else{@{checks=@()}};$gpo=Get-GPO -Guid ([guid]$S.gpoId) -Domain $cfg.domain -Server $cfg.domainController;$scope=Scope $S.scopeDn;$raw=Scope-Links $scope.dn;$existing=Selected-Link $scope.dn $S.gpoId;$computers=@()
     $endpointScope=[string](Read-Field $S 'endpointScopeDn' '')
@@ -498,8 +550,12 @@ function Preview($S,$Map,[bool]$RequireWriteAccess=$true){
     $impact.affectedObjects.sampleHosts=@(Filter-EndpointHosts @($impact.affectedObjects.sampleHosts))
     if([string]$S.refresh -eq 'Scope' -and @($computers).Count -eq 0){$warnings+='NO_REFRESH_HOSTS: No enabled endpoint matched the selected OU and endpoint targeting mode.'}
     $contentMatches=Mapping-Matches $S.gpoId $Map $S;$linkMatches=$null -ne $existing -and $existing.enabled -and (!$S.firstLink -or $existing.order -eq 1);$desired=Mapping-Display $S.gpoId $Map $S $true
+    $domainPolicy=Domain-PolicySnapshot $S $Map
+    if($domainPolicy -and $RequireWriteAccess){Domain-PolicyAccess ([string]$domainPolicy.property)}
+    if($domainPolicy){$warnings+=('DOMAIN_ACCOUNT_WRITE: '+$domainPolicy.property+' on '+$domainPolicy.domainController+': '+$domainPolicy.value+' -> '+$domainPolicy.desiredValue+'. Apply backs up and updates this AD property as well as the GPO.')}
+    $domainMatches=(!$domainPolicy -or (Numeric-Complies $domainPolicy.value $domainPolicy.desiredValue ([string]$Map.comparator)))
     $choice=Gpo-Choice $gpo;$previous=Mapping-Display $S.gpoId $Map $S $false
-    return @{gpo=$choice;scope=$scope;previousValue=$previous;previousValueSource=(Value-Source $choice $previous);desiredValue=$desired;noChange=($contentMatches -and $linkMatches);fingerprint=(Fingerprint $S.gpoId $scope.dn);scopeLinks=$raw;existingLink=$existing;refreshComputers=$computers;verificationComputers=$verificationComputers;warnings=$warnings;impact=$impact;preflight=$preflight}
+    return @{gpo=$choice;scope=$scope;previousValue=$previous;previousValueSource=(Value-Source $choice $previous);desiredValue=$desired;noChange=($contentMatches -and $linkMatches -and $domainMatches);domainPolicy=$domainPolicy;fingerprint=(Fingerprint $S.gpoId $scope.dn);scopeLinks=$raw;existingLink=$existing;refreshComputers=$computers;verificationComputers=$verificationComputers;warnings=$warnings;impact=$impact;preflight=$preflight}
 }
 function Atomic-Text([string]$Path,[string]$Text,[Text.Encoding]$Encoding){
     $null=[IO.Directory]::CreateDirectory([IO.Path]::GetDirectoryName($Path));$temp=$Path+'.'+[guid]::NewGuid().ToString('N')+'.tmp'
@@ -534,6 +590,7 @@ function Write-Mapping($Plan,$Map){
     }
 }
 function Rollback-ExpectedFingerprint($Plan,$Manifest,[string]$Current){
+    if(!(Domain-RollbackMatches $Manifest ([string]$Manifest.phase -eq 'ROLLED_BACK'))){return $null}
     if([string]$Manifest.phase -ne 'ROLLED_BACK'){return [string]$Manifest.postFingerprint}
     $saved=Read-Field $Manifest 'rollbackFingerprint' $null
     if($saved){return [string]$saved}
@@ -790,20 +847,31 @@ function Verify-EffectiveSamples($Plan,$Map){
 }
 function Verify-Published($Plan,$Map,[bool]$CheckEndpoints=$false){
     $s=$Plan.selection;$metadata=Verification-Metadata $s;$published=(Mapping-Matches $s.gpoId $Map $s) -and [bool]$metadata.versionsMatch;$link=Selected-Link $s.scopeDn $s.gpoId;$linked=$null -ne $link -and $link.enabled -and (!$s.firstLink -or $link.order -eq 1);$effective='GPO_VALUE_VERIFIED_ENDPOINT_PENDING';$endpointChecks=@()
-    if([bool]$Map.domainPolicySensitive){$policy=Get-ADDefaultDomainPasswordPolicy -Identity $domainDn -Server $cfg.domainController;$actual=$null;switch([string]$Map.id){'1.1.1'{$actual=$policy.PasswordHistoryCount}'1.1.3'{$actual=$policy.MinPasswordAge.TotalDays}'1.1.4'{$actual=$policy.MinPasswordLength}'1.1.5'{$actual=[int][bool]$policy.ComplexityEnabled}'1.1.6'{$actual=[int][bool]$policy.ReversibleEncryptionEnabled}'1.2.1'{$actual=$policy.LockoutDuration.TotalMinutes}'1.2.2'{$actual=$policy.LockoutThreshold}'1.2.4'{$actual=$policy.LockoutObservationWindow.TotalMinutes}};if($null -eq $actual){$effective='DOMAIN_VALUE_NOT_EXPOSED_BY_AD_CMDLET'}elseif(Numeric-Complies $actual (Desired-Normalized $Map @($Map.items)[0] $s) ([string]$Map.comparator)){$effective='DOMAIN_VALUE_MATCHES_ON_SELECTED_DC'}else{$effective='DOMAIN_VALUE_PENDING_OR_OVERRIDDEN'}}elseif($CheckEndpoints){$endpointChecks=@(Verify-EffectiveSamples $Plan $Map);if(@($endpointChecks|Where-Object{$_.state -eq 'MISMATCH'}).Count){$effective='ENDPOINT_MISMATCH'}elseif(@($endpointChecks|Where-Object{$_.state -eq 'VERIFIED'}).Count -gt 0 -and @($endpointChecks|Where-Object{$_.state -ne 'VERIFIED'}).Count -eq 0){$effective='VERIFIED_ON_SAMPLE'}else{$effective='ENDPOINT_VERIFICATION_PENDING'}}
+    $domainPolicy=$null
+    if([bool]$Map.domainPolicySensitive){
+        try{
+            $domainPolicy=Domain-PolicySnapshot $s $Map
+            $match=Numeric-Complies $domainPolicy.value $domainPolicy.desiredValue ([string]$Map.comparator)
+            $effective=if($match){'DOMAIN_VALUE_MATCHES_ON_SELECTED_DC'}else{'ENDPOINT_MISMATCH'}
+            $endpointChecks=@(@{hostname=$domainPolicy.domainController;state=$(if($match){'VERIFIED'}else{'MISMATCH'});actualValue=[string]$domainPolicy.value;message=('AD '+$domainPolicy.property+' = '+$domainPolicy.value+'; requested '+$domainPolicy.desiredValue+'. Read from the domain account policy, independently of the GPO file.')})
+        }catch{
+            $effective='DOMAIN_POLICY_UNAVAILABLE'
+            $endpointChecks=@(@{hostname=[string]$cfg.domainController;state='UNAVAILABLE';actualValue=$null;message='The effective AD domain account policy could not be read. No successful application is established.'})
+        }
+    }elseif($CheckEndpoints){$endpointChecks=@(Verify-EffectiveSamples $Plan $Map);if(@($endpointChecks|Where-Object{$_.state -eq 'MISMATCH'}).Count){$effective='ENDPOINT_MISMATCH'}elseif(@($endpointChecks|Where-Object{$_.state -eq 'VERIFIED'}).Count -gt 0 -and @($endpointChecks|Where-Object{$_.state -ne 'VERIFIED'}).Count -eq 0){$effective='VERIFIED_ON_SAMPLE'}else{$effective='ENDPOINT_VERIFICATION_PENDING'}}
     $coverage=$null;$all=Read-Field $Plan.preview 'verificationComputers' $null
     if($CheckEndpoints -and $null -ne $all -and ![bool]$Map.domainPolicySensitive){$offset=[int](Read-Field (Get-Variable Data -ValueOnly -ErrorAction SilentlyContinue) 'verificationOffset' 0);$count=@($all).Count;$coverage=@{total=$count;checked=[math]::Min($offset+25,$count);complete=($offset+25 -ge $count)};if(!$coverage.complete -and $effective -eq 'VERIFIED_ON_SAMPLE'){$effective='ENDPOINT_VERIFICATION_PENDING'}}
     # Never display endpoint effectiveness as verified when the source GPO or target link is wrong.
     # A matching sample is evidence only for inspected hosts; a scheduled gpupdate is not evidence.
     if(!$published){$effective='GPO_PUBLICATION_MISMATCH'}
     elseif(!$linked){$effective='GPO_LINK_MISMATCH'}
-    elseif(!$metadata.replicationConverged -and $effective -ne 'ENDPOINT_MISMATCH'){$effective='REPLICATION_PENDING'}
-    return @{published=[bool]$published;linked=[bool]$linked;effective=$effective;verification=$metadata;endpointChecks=@($endpointChecks);endpointCoverage=$coverage;currentValue=(Mapping-Display $s.gpoId $Map $s $false)}
+    elseif(!$metadata.replicationConverged -and $effective -notin @('ENDPOINT_MISMATCH','DOMAIN_POLICY_UNAVAILABLE')){$effective='REPLICATION_PENDING'}
+    return @{published=[bool]$published;linked=[bool]$linked;effective=$effective;verification=$metadata;endpointChecks=@($endpointChecks);endpointCoverage=$coverage;domainPolicy=$domainPolicy;currentValue=(Mapping-Display $s.gpoId $Map $s $false)}
 }
 function Verify-Rollback($Plan,$Map,$Manifest){
     $s=$Plan.selection
     $matches=(Get-NormalizedGpoContentFingerprint (Gpo-Folder $s.gpoId)) -ceq [string]$Manifest.beforeContent
-    $matches=$matches -and (Snapshot-ExtensionsMatch $Manifest $s.gpoId $s) -and ((Scope-Links $s.scopeDn) -ceq [string]$Plan.preview.scopeLinks)
+    $matches=$matches -and (Snapshot-ExtensionsMatch $Manifest $s.gpoId $s) -and ((Scope-Links $s.scopeDn) -ceq [string]$Plan.preview.scopeLinks) -and (Domain-RollbackMatches $Manifest $true)
     return @{restored=[bool]$matches;published=$false;linked=$false;effective='ROLLBACK_ENDPOINT_PENDING';verification=(Verification-Metadata $s);endpointChecks=@();currentValue=(Mapping-Display $s.gpoId $Map $s $false)}
 }
 function Filter-EndpointHosts([string[]]$Hosts){
@@ -842,7 +910,7 @@ function Result([string]$State,[string]$Message,$Manifest,$V,$Refresh){
     $current=Read-Field $V 'currentValue' $null
     $planData=Get-Variable Data -ValueOnly -ErrorAction SilentlyContinue
     $sourceGpo=Read-Field (Read-Field (Read-Field $planData 'plan' $null) 'preview' $null) 'gpo' $null
-    return @{state=$State;message=$Message;backupId=$backupId;backupDirectory=$backupDirectory;postFingerprint=$postFingerprint;gpoPublished=[bool](Read-Field $V 'published' $false);linkVerified=[bool](Read-Field $V 'linked' $false);refreshResults=@($Refresh);effectiveStatus=[string](Read-Field $V 'effective' 'UNKNOWN');verification=$verification;endpointChecks=$endpointChecks;currentValue=$current;currentValueSource=(Value-Source $sourceGpo $current);endpointCoverage=Read-Field $V 'endpointCoverage' $null}
+    return @{state=$State;message=$Message;backupId=$backupId;backupDirectory=$backupDirectory;postFingerprint=$postFingerprint;gpoPublished=[bool](Read-Field $V 'published' $false);linkVerified=[bool](Read-Field $V 'linked' $false);refreshResults=@($Refresh);effectiveStatus=[string](Read-Field $V 'effective' 'UNKNOWN');verification=$verification;endpointChecks=$endpointChecks;currentValue=$current;currentValueSource=(Value-Source $sourceGpo $current);domainPolicy=(Read-Field $V 'domainPolicy' $null);endpointCoverage=Read-Field $V 'endpointCoverage' $null}
 }
 
 function Operation-Failure($Record,[string]$Stage){
@@ -887,9 +955,15 @@ switch($Operation){
             Emit-Stage 'PREFLIGHT'
             $fresh=Preview $s $map;if(!$fresh.preflight.ready){Fail 'ENVIRONMENT_NOT_READY' 'Required environment preflight checks must pass before Apply.'}
             if($fresh.fingerprint -cne $plan.preview.fingerprint -or (@($fresh.refreshComputers)-join '|') -cne (@($plan.preview.refreshComputers)-join '|')){Fail 'GPO_CHANGED' 'GPO, links or refresh targets changed after preview. Prepare a new plan.'}
+            $domainBefore=Read-Field $fresh 'domainPolicy' $null
+            if($domainBefore){
+                $plannedDomain=Read-Field $plan.preview 'domainPolicy' $null
+                if(!$plannedDomain -or [string]$plannedDomain.property -cne [string]$domainBefore.property -or [string]$plannedDomain.value -cne [string]$domainBefore.value){Fail 'DOMAIN_POLICY_CHANGED' 'The AD domain account policy changed or was not included in the plan. Generate a fresh preview.'}
+                Domain-PolicyAccess ([string]$domainBefore.property)
+            }
             if([bool]$fresh.noChange){$v=Verify-Published $plan $map $true;$state=if($v.published -and $v.linked){'NO_CHANGE'}else{'VERIFY_MISMATCH'};return Result $state 'No policy write was required. Live content, link and AD/SYSVOL versions were checked; inspect the verification result before claiming publication.' $null $v @()}
             $beforeAd=Gpo-Ad $s.gpoId
-            $manifest=[ordered]@{plan=$plan;mappingId=[string]$map.id;mappingSource=[string]$map.source;approval=$Data.consent;backupId=$null;directory=$directory;preFingerprint=$fresh.fingerprint;postFingerprint=$null;phase='BACKUP_STARTED';beforeContent=(Get-NormalizedGpoContentFingerprint (Gpo-Folder $s.gpoId));beforeExtensions=[string]$beforeAd.gPCMachineExtensionNames;beforeUserExtensions=[string]$beforeAd.gPCUserExtensionNames};Save-Manifest $manifest $directory
+            $manifest=[ordered]@{plan=$plan;mappingId=[string]$map.id;mappingSource=[string]$map.source;approval=$Data.consent;backupId=$null;directory=$directory;preFingerprint=$fresh.fingerprint;postFingerprint=$null;phase='BACKUP_STARTED';beforeContent=(Get-NormalizedGpoContentFingerprint (Gpo-Folder $s.gpoId));beforeExtensions=[string]$beforeAd.gPCMachineExtensionNames;beforeUserExtensions=[string]$beforeAd.gPCUserExtensionNames;beforeDomainPolicy=$domainBefore;afterDomainPolicy=$null};Save-Manifest $manifest $directory
             Emit-Stage 'BACKUP'
             $backup=Backup-GPO -Guid ([guid]$s.gpoId) -Path $directory -Domain $cfg.domain -Server $cfg.domainController -Comment ('GpoRemediator '+$plan.id)
             $manifest.backupId=$backup.Id.ToString();$manifest.phase='BACKED_UP';Save-Manifest $manifest $directory
@@ -899,6 +973,13 @@ switch($Operation){
             Emit-Stage 'LINKING'
             if(Link-ChangeRequired $s $fresh.existingLink){
             if($null -eq $fresh.existingLink){$p=@{Guid=[guid]$s.gpoId;Target=$s.scopeDn;Domain=$cfg.domain;Server=$cfg.domainController;LinkEnabled='Yes'};if($s.firstLink){$p.Order=1};New-GPLink @p|Out-Null}else{$p=@{Guid=[guid]$s.gpoId;Target=$s.scopeDn;Domain=$cfg.domain;Server=$cfg.domainController;LinkEnabled='Yes'};if($s.firstLink){$p.Order=1};Set-GPLink @p|Out-Null}
+            }
+            if($domainBefore){
+                Emit-Stage 'DOMAIN_POLICY_WRITE'
+                $currentDomain=Domain-PolicySnapshot $s $map
+                if([string]$currentDomain.value -cne [string]$domainBefore.value){Fail 'DOMAIN_POLICY_CHANGED' 'AD domain account policy changed after backup. Inspect the retained backup before retrying.'}
+                $manifest.afterDomainPolicy=if(Numeric-Complies $currentDomain.value $currentDomain.desiredValue ([string]$map.comparator)){$currentDomain}else{Domain-PolicyWrite ([string]$currentDomain.property) ([string]$currentDomain.desiredValue)}
+                Save-Manifest $manifest $directory
             }
             Emit-Stage 'PUBLICATION_CHECK'
             $v=Verify-Published $plan $map $false;$manifest.postFingerprint=Fingerprint $s.gpoId $s.scopeDn;$manifest.phase=if(!$v.published -or !$v.linked){'VERIFY_MISMATCH'}else{'PUBLISHED'};Save-Manifest $manifest $directory
@@ -931,7 +1012,7 @@ switch($Operation){
             $contentMatches=(Get-NormalizedGpoContentFingerprint (Gpo-Folder $plan.selection.gpoId)) -ceq [string]$manifest.beforeContent
             $extensionMatches=Snapshot-ExtensionsMatch $manifest $plan.selection.gpoId $plan.selection
             $linkMatches=((Scope-Links $plan.selection.scopeDn) -ceq [string]$plan.preview.scopeLinks)
-            $rolledBack=$contentMatches -and $extensionMatches -and $linkMatches
+            $rolledBack=$contentMatches -and $extensionMatches -and $linkMatches -and (Domain-RollbackMatches $manifest $true)
             $v=@{published=$false;linked=$false;effective='ROLLBACK_ENDPOINT_PENDING';verification=(Verification-Metadata $plan.selection);endpointChecks=@();currentValue=(Mapping-Display $plan.selection.gpoId $map $plan.selection $false)}
             if($rolledBack){
                 $manifest.phase='ROLLED_BACK';Save-Manifest $manifest $directory
@@ -1012,7 +1093,7 @@ switch($Operation){
         $drift=(!$expected -or $current -cne [string]$expected)
         $gpo=Get-GPO -Guid ([guid]$s.gpoId) -Domain $cfg.domain -Server $cfg.domainController
         $direct=Selected-Link $s.scopeDn $s.gpoId
-        return @{canRestore=(-not $drift);driftDetected=[bool]$drift;restoreMethod='Import-GPO';restorePermissionVerified=$false;manifestPhase=$phase;hasPostFingerprint=$assessment.hasPostFingerprint;failure=$assessment.failure;reason=$(if($drift){'ROLLBACK_CONFLICT'}else{'READY'});message=$(if($drift){'The live GPO or its link changed since Apply; automatic rollback must not overwrite the external change.'}else{'Live fingerprint matches the saved post-apply state. Recovery imports the saved settings into the same GPO and preserves its ACL. Edit settings, backup read access and required link authority are checked again before import.'});gpoName=[string]$gpo.DisplayName;gpoId=[string]$s.gpoId;scopeDn=[string]$s.scopeDn;backupId=[string]$m.backupId;controlId=[string]$m.mappingId;beforeValue=[string]$plan.preview.previousValue;afterValue=[string]$plan.preview.desiredValue;beforeLink=$plan.preview.existingLink;currentLink=$direct;otherLinkedScopes=@($plan.preview.impact.existingLinkScopes);fullGpoRestore=$true;checkedAt=$assessment.checkedAt}
+        return @{canRestore=(-not $drift);driftDetected=[bool]$drift;restoreMethod='Import-GPO';restorePermissionVerified=$false;manifestPhase=$phase;hasPostFingerprint=$assessment.hasPostFingerprint;failure=$assessment.failure;reason=$(if($drift){'ROLLBACK_CONFLICT'}else{'READY'});message=$(if($drift){'The live GPO, its link or the recorded AD domain setting changed since Apply; rollback must not overwrite the external change.'}else{'Live fingerprint matches the saved post-apply state. Recovery imports the saved settings into the same GPO and preserves its ACL. Edit settings, backup read access and required link authority are checked again before import.'});gpoName=[string]$gpo.DisplayName;gpoId=[string]$s.gpoId;scopeDn=[string]$s.scopeDn;backupId=[string]$m.backupId;controlId=[string]$m.mappingId;beforeValue=[string]$plan.preview.previousValue;afterValue=[string]$plan.preview.desiredValue;beforeDomainPolicy=(Read-Field $m 'beforeDomainPolicy' $null);afterDomainPolicy=(Read-Field $m 'afterDomainPolicy' $null);beforeLink=$plan.preview.existingLink;currentLink=$direct;otherLinkedScopes=@($plan.preview.impact.existingLinkScopes);fullGpoRestore=$true;checkedAt=$assessment.checkedAt}
     }
     'gpoRollback'{
         $plan=$Data.plan;$map=$Data.mapping;$s=$plan.selection;$directory=Run-Directory $plan;if(!(Test-Path -LiteralPath (Join-Path $directory 'manifest.json'))){Fail 'ROLLBACK_NOT_AVAILABLE' 'No backup exists because this operation did not change the GPO.'};$manifest=Get-Content -LiteralPath (Join-Path $directory 'manifest.json') -Raw|ConvertFrom-Json;if(!$manifest.backupId){Fail 'ROLLBACK_BACKUP_INCOMPLETE' 'The operation manifest exists but no completed Backup-GPO ID was recorded. Verify current policy and inspect the operation directory; automatic rollback is unavailable.'};if(!$manifest.postFingerprint){Fail 'ROLLBACK_VERSION_UNKNOWN' 'A completed post-write fingerprint is missing. Recover the recorded Backup-GPO snapshot manually after inspecting AD/SYSVOL.'};$lock=$null
@@ -1023,7 +1104,7 @@ switch($Operation){
             if([string]$manifest.phase -notin @('PUBLISHED','VERIFY_MISMATCH','ROLLED_BACK')){Fail 'ROLLBACK_CONFLICT' 'The backup manifest requires independent review before another restore.'}
             $currentFingerprint=Fingerprint $s.gpoId $s.scopeDn
             $expectedFingerprint=Rollback-ExpectedFingerprint $plan $manifest $currentFingerprint
-            if(!$expectedFingerprint){Fail 'ROLLBACK_CONFLICT' 'The current GPO no longer matches the recorded restored snapshot.'}
+            if(!$expectedFingerprint){Fail 'ROLLBACK_CONFLICT' 'The GPO or recorded AD domain setting no longer matches the snapshot.'}
             $anchor=Read-Field $Data 'rollbackAnchor' $null
             if($anchor -and [string]$manifest.phase -ne 'ROLLED_BACK'){
                 $anchorPlan=$anchor.plan
@@ -1036,18 +1117,22 @@ switch($Operation){
             if((Fingerprint $s.gpoId $s.scopeDn) -cne $expectedFingerprint){Fail 'ROLLBACK_CONFLICT' 'The GPO or links changed after Apply. Automatic full-GPO restore is blocked.'}
             Emit-Stage 'RESTORE_ACCESS_CHECK'
             $null=Assert-SelectionAccess $s $map
+            $domainBefore=Read-Field $manifest 'beforeDomainPolicy' $null
+            if($domainBefore){Domain-PolicyAccess ([string]$domainBefore.property)}
             Emit-Stage 'RESTORING_GPO'
             $manifest | Add-Member -NotePropertyName rollbackAttempts -NotePropertyValue ([int](Read-Field $manifest 'rollbackAttempts' 0)+1) -Force
             $manifest.phase='ROLLING_BACK';Save-Manifest $manifest $directory
             $restoreStarted=$true
             Import-GPO -BackupId ([guid]$manifest.backupId) -TargetGuid ([guid]$s.gpoId) -Path $directory -Domain $cfg.domain -Server $cfg.domainController|Out-Null
+            $domainBefore=Read-Field $manifest 'beforeDomainPolicy' $null
+            if($domainBefore){Emit-Stage 'RESTORING_DOMAIN_POLICY';$null=Domain-PolicyWrite ([string]$domainBefore.property) ([string]$domainBefore.value)}
             Emit-Stage 'RESTORING_LINK'
             $before=$plan.preview.existingLink
             if($null -eq $before){Remove-GPLink -Guid ([guid]$s.gpoId) -Target $s.scopeDn -Domain $cfg.domain -Server $cfg.domainController -Confirm:$false|Out-Null}
             else{Set-GPLink -Guid ([guid]$s.gpoId) -Target $s.scopeDn -Domain $cfg.domain -Server $cfg.domainController -Order ([int]$before.order) -LinkEnabled $(if($before.enabled){'Yes'}else{'No'}) -Enforced $(if($before.enforced){'Yes'}else{'No'})|Out-Null}
             Emit-Stage 'RESTORE_CHECK'
             $matches=(Get-NormalizedGpoContentFingerprint (Gpo-Folder $s.gpoId)) -ceq $manifest.beforeContent
-            $matches=$matches -and (Snapshot-ExtensionsMatch $manifest $s.gpoId $s) -and ((Scope-Links $s.scopeDn) -ceq [string]$plan.preview.scopeLinks)
+            $matches=$matches -and (Snapshot-ExtensionsMatch $manifest $s.gpoId $s) -and ((Scope-Links $s.scopeDn) -ceq [string]$plan.preview.scopeLinks) -and (Domain-RollbackMatches $manifest $true)
             $manifest.phase=if($matches){'ROLLED_BACK'}else{'ROLLBACK_REVIEW_REQUIRED'}
             if($matches){$manifest | Add-Member -NotePropertyName rollbackFingerprint -NotePropertyValue (Fingerprint $s.gpoId $s.scopeDn) -Force}
             Save-Manifest $manifest $directory

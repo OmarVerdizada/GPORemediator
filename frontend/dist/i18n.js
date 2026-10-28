@@ -1,7 +1,7 @@
 (() => {
   'use strict';
   const messages={
-    en:{dashboard:'Dashboard',benchmark:'Benchmark',operations:'Operations',settings:'Settings',connected:'Connected',setup:'Setup required',refresh:'Refresh',theme:'Theme',language:'Language',domains:'Benchmark domains',controls:'Controls',ready:'Remediation ready',planned:'Mapping pending',manual:'Manual control',search:'Search control ID, policy name or keyword…',allLevels:'All levels',allTypes:'All types',overview:'Overview',remediation:'Remediation',impact:'Impact',verification:'Verification',audit:'Audit',back:'Back to benchmark',target:'Target & policy',preview:'Generate plan',approval:'Change approval',apply:'Apply change',history:'Recent operations',noHistory:'No operations yet.',noSelection:'No control selected',open:'Open',logout:'Disconnect',connect:'Connect to AD',risk:'Operational risk'}
+    en:{dashboard:'Dashboard',benchmark:'Benchmark',operations:'Operations',settings:'Settings',connected:'Connected',setup:'Setup required',refresh:'Refresh',theme:'Theme',language:'Language',domains:'Benchmark domains',controls:'Controls',ready:'Automation supported',planned:'Mapping pending',manual:'Manual control',search:'Search control ID, policy name or keyword…',allLevels:'All levels',allTypes:'All types',overview:'Overview',remediation:'Remediation',impact:'Impact',verification:'Verification',audit:'Audit',back:'Back to benchmark',target:'Target & policy',preview:'Generate plan',approval:'Change approval',apply:'Apply change',history:'Recent operations',noHistory:'No operations yet.',noSelection:'No control selected',open:'Open',logout:'Disconnect',connect:'Connect to AD',risk:'Operational risk'}
   };
   let language='en';
   const normalize=()=> 'en';

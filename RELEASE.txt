@@ -1,6 +1,6 @@
-GPO Remediator 3.16.7 - mixed OU scopes, GPO sources and effective verification
+GPO Remediator 3.16.8 - effective domain account policy and compact workspace
 
-See docs/RELEASE-3.16.7.md and docs/audit/3.16.7/validation.md.
-Apply/Refresh collect effective endpoint evidence. Unchanged values require review;
-unavailable evidence remains incomplete. Rollback refresh schedules both policy halves.
-Deploy the complete package. No live AD/endpoint certification is claimed.
+See docs/RELEASE-3.16.8.md.
+Domain account Apply backs up and updates the selected GPO and the approved AD property.
+The result page compares requested and actual values, with publication details separate.
+Live AD validation is still required on the deployment domain.
