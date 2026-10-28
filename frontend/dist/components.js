@@ -27,7 +27,7 @@
   function status(s,value){
     const v=String(value||'UNKNOWN').toUpperCase();
     const known={PUBLISHED:['Published','Published'],REFRESH_COMPLETED:['Refresh completed','Refresh completed'],VERIFIED_ON_ALL_TARGETS:['Verified on all pinned targets','Verified on all pinned targets'],NO_CHANGE:['No change','No change'],ROLLED_BACK:['Rolled back','Rolled back'],APPLYING:['Applying','Applying'],VERIFYING:['Verifying','Verifying'],FAILED_SAFE:['Safely stopped','Safely stopped'],DRIFT_DETECTED:['Drift detected','Drift detected'],VERIFY_MISMATCH:['Mismatch','Mismatch'],REVIEW_REQUIRED:['Needs review','Needs review'],VERIFIED_ON_SAMPLE:['Verified on sample','Verified on sample'],DOMAIN_VALUE_MATCHES_ON_SELECTED_DC:['Matches on selected DC','Matches on selected DC'],REPLICATION_PENDING:['Replication pending','Replication pending'],ENDPOINT_VERIFICATION_PENDING:['Endpoint verification pending','Endpoint verification pending'],REFRESH_SCHEDULED:['Refresh scheduled','Refresh scheduled'],ROLLBACK_ENDPOINT_PENDING:['Post-rollback verification pending','Post-rollback verification pending'],PUBLISHED_REFRESH_FAILED:['Published, refresh failed','Published, refresh failed']};
-    const tone=v==='ROLLED_BACK'?'neutral':/FAIL|ERROR|DRIFT|MISMATCH|REVIEW|PARTIAL/.test(v)?'danger':/^(PUBLISHED|NO_CHANGE|VERIFIED_ON_SAMPLE|VERIFIED_ON_ALL_TARGETS|REFRESH_COMPLETED|DOMAIN_VALUE_MATCHES_ON_SELECTED_DC)$/.test(v)?'success':'pending';
+    const tone=v==='ROLLED_BACK'?'neutral':/FAIL|ERROR|DRIFT|MISMATCH|REVIEW|PARTIAL/.test(v)?'danger':/^(VERIFIED_ON_SAMPLE|VERIFIED_ON_ALL_TARGETS|DOMAIN_VALUE_MATCHES_ON_SELECTED_DC)$/.test(v)?'success':'pending';
     const symbol=v==='ROLLED_BACK'?'undo':tone==='danger'?'alert':tone==='success'?'check':'clock';
     const label=known[v]?text(s,...known[v]):v.replaceAll('_',' ');
     return {tone,label,icon:symbol,html:`<span class="ds-badge ds-${tone}">${icon(symbol)}${esc(label)}</span>`};
@@ -116,5 +116,10 @@
     const primary=stages.filter(x=>!supplemental(x)),extra=stages.filter(supplemental);
     return `<div class="assurance-stage-list" aria-label="${'Verification stages'}"><div class="assurance-group-heading"><strong>${'Measured results'}</strong><p>${'Results cover only the selected control and sampled endpoints. They do not establish compliance for other controls or the whole domain.'}</p></div>${primary.map(render).join('')}${extra.length?`<div class="assurance-group-heading"><strong>${'Policy source and refresh'}</strong><p>${'These details are separate from the measured value. A scheduled refresh is not a completed refresh.'}</p></div>${extra.map(render).join('')}`:''}</div>`;
   }
-  window.GpoComponents=Object.freeze({esc,text,icon,domainIcon:id=>icon(domains[id]||'shield'),status,breadcrumb,operations,timeline,domainEvidence,skeleton,auditChain,activity,recovery,rollbackCheck,refreshAction,manualCheck,assuranceStages});
+  function valueSource(source,value,gpo){
+    const known=value!==null&&value!==undefined;
+    const name=known?(source?.gpoName||gpo?.name):null,id=known?(source?.gpoId||gpo?.id):null;
+    return `<small class="value-source" title="Source of the configured GPO value. Endpoint winning policy is checked separately.">Source GPO: ${esc(name||id||'—')}${name&&id?`<span>${esc(id)}</span>`:''}</small>`;
+  }
+  window.GpoComponents=Object.freeze({esc,text,icon,domainIcon:id=>icon(domains[id]||'shield'),status,breadcrumb,operations,timeline,domainEvidence,skeleton,auditChain,activity,recovery,rollbackCheck,refreshAction,manualCheck,assuranceStages,valueSource});
 })();

@@ -94,3 +94,6 @@ input:not([type=checkbox]),select,textarea{font-size:var(--text-14);border-radiu
 .target-scope-note{display:flex;align-items:flex-start;gap:12px;min-width:0;height:100%;box-sizing:border-box}.target-scope-note>.target-scope-icon{display:flex;align-items:center;justify-content:center;flex:0 0 36px;width:36px;height:36px;border-radius:10px;background:var(--color-primary-soft);color:var(--color-primary)}.target-scope-note>.target-scope-icon .ui-icon{display:block;width:20px;height:20px;flex:none}.target-scope-note>div{min-width:0;flex:1}.target-scope-note strong{line-height:1.5}.target-scope-note small{line-height:1.65;overflow-wrap:anywhere}
 
 .rollback-assessment{padding:12px;margin:12px 0;border:1px solid var(--color-border-strong);border-radius:var(--radius-sm);background:var(--color-surface);overflow-wrap:anywhere}
+
+.value-source { display: block; margin-top: 6px; overflow-wrap: anywhere; font-size: 12px; font-weight: 400; }
+.value-source span { display: block; font-size: 11px; }

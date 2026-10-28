@@ -5,7 +5,7 @@ public record BatchPlan(string Id, string Actor, string CreatedAt, string[] Plan
 [System.Text.Json.Serialization.JsonUnmappedMemberHandling(System.Text.Json.Serialization.JsonUnmappedMemberHandling.Disallow)]
 public record WorkflowRequest(string RequestId, string[] PlanIds, GpoConsent Consent, string Refresh = "None", int[]? VerificationDelays = null, string? BatchId = null, string? SourceWorkflowId = null);
 public record ScanRequest(string RequestId, GpoSelection Target, string[] Controls);
-public record ScanRow(string ControlId, string State, string? CurrentValue, string? DesiredValue, string Message, string CheckedAt, string? PlanId = null);
+public record ScanRow(string ControlId, string State, string? CurrentValue, string? DesiredValue, string Message, string CheckedAt, string? PlanId = null, GpoValueSource? CurrentValueSource = null);
 public record WorkflowJob(string Id, string Actor, string Action, string State, string CreatedAt, string UpdatedAt,
     string[] PlanIds, string[] CompletedIds, string Refresh, int[] VerificationDelays, GpoConsent Consent,
     string RequestHash, string Message, string? BatchId = null, string? SourceWorkflowId = null,

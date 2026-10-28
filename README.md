@@ -1,4 +1,6 @@
-# GPO Remediator 3.16.6
+# GPO Remediator 3.16.7
+
+3.16.7 simplifies mixed OU targeting, shows configured-value GPO sources, verifies effective endpoint values after Apply/Refresh, and fixes rollback refresh. See [release notes](docs/RELEASE-3.16.7.md).
 
 3.16.6 reviews all 405 imported mapping sources for Windows Server 2019, corrects ASR and Remote Encryption feature identities, and rejects stale/unknown source records. See [release notes](docs/RELEASE-3.16.6.md), [per-control source review](docs/mapping-audit/3.16.6/README.md), and [deployment instructions](docs/ASSURANCE-AND-UPDATES.md). Configuration-source review does not certify the original CIS PDF binding or live policy enforcement.
 

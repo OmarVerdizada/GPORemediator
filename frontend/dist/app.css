@@ -2340,6 +2340,8 @@ input[aria-invalid=true],select[aria-invalid=true]{border-color:var(--color-dang
 .target-scope-note strong{line-height:1.5}
 .target-scope-note small{line-height:1.65;overflow-wrap:anywhere}
 .rollback-assessment{padding:12px;margin:12px 0;border:1px solid var(--color-border-strong);border-radius:var(--radius-sm);background:var(--color-surface);overflow-wrap:anywhere}
+.value-source { display: block; margin-top: 6px; overflow-wrap: anywhere; font-size: 12px; font-weight: 400; }
+.value-source span { display: block; font-size: 11px; }
 /* Restrained graphite workspace. Local fonts and semantic accents. */
 @font-face{font-family:Geist;src:url('/fonts/Geist-Variable.woff2') format('woff2');font-style:normal;font-weight:100 900;font-display:swap}
 @font-face{font-family:'Geist Mono';src:url('/fonts/GeistMono-Variable.woff2') format('woff2');font-style:normal;font-weight:100 900;font-display:swap}

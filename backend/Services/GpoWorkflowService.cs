@@ -314,8 +314,9 @@ public sealed class GpoWorkflowService(IConfiguration config,Store store,Operati
                     }
                     var unique=refreshResults.GroupBy(x=>x.Computer,StringComparer.OrdinalIgnoreCase).Select(g=>g.Last()).ToArray();
                     var completed=result.RefreshCoverage is {Complete:true} finished && finished.Total>0 && unique.Length==finished.Total && unique.All(x=>x.State=="COMPLETED");
-                    result=result with{RefreshResults=unique,State=result.GpoPublished&&result.LinkVerified?(completed?"REFRESH_COMPLETED":"REFRESH_PARTIAL"):result.State,
-                        Message=completed?"Computer policy processing completed on every pinned refresh target. Verify resultant values and winning GPO separately.":"Refresh did not complete on every pinned target. Review per-host results."};
+                    var scheduled=result.RefreshCoverage is {Complete:true} scheduledCoverage && scheduledCoverage.Total>0 && unique.Length==scheduledCoverage.Total && unique.All(x=>x.State is "SCHEDULED" or "COMPLETED");
+                    result=result with{RefreshResults=unique,State=result.GpoPublished&&result.LinkVerified?(completed?"REFRESH_COMPLETED":scheduled?"REFRESH_SCHEDULED":"REFRESH_PARTIAL"):result.State,
+                        Message=completed?"Computer policy processing completed on every pinned refresh target. Verify resultant values and winning GPO separately.":scheduled?"gpupdate /force was scheduled on every pinned target. Endpoint convergence still requires verification.":"Refresh did not complete on every pinned target. Review per-host results."};
                 }
                 if(stages.Count>0){stages[^1]=stages[^1] with{FinishedAt=PolicyValues.Now()};run=run with{Stages=stages.ToArray()};}
                 if(operation=="verify" && previous is not null && result.RefreshResults.Length==0 && previous.Result.RefreshResults.Length>0)
@@ -354,7 +355,7 @@ public sealed class GpoWorkflowService(IConfiguration config,Store store,Operati
             run.Plan.ExecutionUser,run.Plan.Domain,run.Plan.DomainController,ProductionGpoMappings.Require(run.Plan.Selection.Setting).ControlId,run.Plan.Selection.Setting,
             run.Plan.Selection.GpoId,run.Plan.Preview.Gpo.Name,run.Plan.Selection.ScopeDn,run.Plan.Preview.PreviousValue,
             ProductionGpoMappings.Effective(run.Plan.Selection).DesiredDisplay(run.Plan.Selection),run.Result.State,run.Result.BackupId,run.Result.BackupDirectory,run.Result.EffectiveStatus,
-            run.Result.Verification,run.Plan.Preview.Warnings,"",run.Approval?.ChangeReference,run.Approval?.ApprovedBy,ProductionGpoMappings.Require(run.Plan.Selection.Setting).Handler,ProductionGpoMappings.Effective(run.Plan.Selection).Source,run.Result.EndpointChecks,run.CorrelationId,run.Result.CurrentValue);
+            run.Result.Verification,run.Plan.Preview.Warnings,"",run.Approval?.ChangeReference,run.Approval?.ApprovedBy,ProductionGpoMappings.Require(run.Plan.Selection.Setting).Handler,ProductionGpoMappings.Effective(run.Plan.Selection).Source,run.Result.EndpointChecks,run.CorrelationId,run.Result.CurrentValue,run.Plan.Preview.PreviousValueSource,run.Result.CurrentValueSource);
         evidence=evidence with{IntegrityHash=GpoWorkflowRules.EvidenceHash(evidence)};
         store.Put("gpo_evidence",id+"-"+evidence.IntegrityHash,evidence,"IMMUTABLE");
         return evidence;

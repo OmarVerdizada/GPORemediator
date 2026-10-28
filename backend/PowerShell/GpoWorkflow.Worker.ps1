@@ -165,7 +165,9 @@ function Get-ItemCurrent([string]$Id,$Map,$Item){
       'AdvancedAudit' {
         $path=Audit-Path $Id;if(!(Test-Path -LiteralPath $path)){return $null}
         try{$rows=@(Get-Content -LiteralPath $path -Encoding UTF8|ConvertFrom-Csv)}catch{Fail 'AUDIT_POLICY_INVALID' 'Advanced-audit CSV could not be parsed.'}
-        $matches=@($rows|Where-Object{[string]$_.'Subcategory GUID' -ieq [string]$Item.guid})
+        # A per-user policy row may legitimately share a system subcategory GUID.
+        # It must neither supply the computer policy value nor make it ambiguous.
+        $matches=@($rows|Where-Object{[string]$_.'Subcategory GUID' -ieq [string]$Item.guid -and [string]$_.'Policy Target' -eq 'System'})
         if($matches.Count -gt 1){Fail 'AUDIT_POLICY_AMBIGUOUS' 'Duplicate advanced-audit subcategory rows exist in this GPO.'}
         if($matches.Count -eq 0){return $null}
         $mask=0;if(![int]::TryParse([string]$matches[0].'Setting Value',[ref]$mask) -or $mask -lt 0 -or $mask -gt 4){Fail 'AUDIT_POLICY_INVALID' 'Advanced-audit CSV contains an invalid system setting.'}
@@ -218,7 +220,19 @@ function Mapping-Matches([string]$Id,$Map,$S){
     return $true
 }
 function Mapping-Display([string]$Id,$Map,$S,[bool]$Desired=$false){
-    $parts=@();foreach($item in Mapping-Items $Map){$label=[string]$(if($item.name){$item.name}elseif($item.key){$item.key}else{$item.guid});$v=if($Desired){Desired-Normalized $Map $item $S}else{Get-ItemCurrent $Id $Map $item};if(@(Mapping-Items $Map).Count -eq 1){return $(if($null -eq $v){$null}else{[string]$v})};$parts+=($label+'='+$(if($null -eq $v){'<not configured>'}else{[string]$v}))};return ($parts -join '; ')
+    $parts=@();$configured=$false
+    foreach($item in Mapping-Items $Map){
+        $label=[string]$(if($item.name){$item.name}elseif($item.key){$item.key}else{$item.guid})
+        $v=if($Desired){Desired-Normalized $Map $item $S}else{Get-ItemCurrent $Id $Map $item}
+        if($null -ne $v){$configured=$true}
+        if(@(Mapping-Items $Map).Count -eq 1){return $(if($null -eq $v){$null}else{[string]$v})}
+        $parts+=($label+'='+$(if($null -eq $v){'<not configured>'}else{[string]$v}))
+    }
+    if(!$configured){return $null};return ($parts -join '; ')
+}
+function Value-Source($Gpo,$Value){
+    if($null -eq $Value -or $null -eq $Gpo){return $null}
+    return @{gpoId=[string](Read-Field $Gpo 'id' '');gpoName=[string](Read-Field $Gpo 'name' '')}
 }
 function Fingerprint([string]$Id,[string]$ScopeDn){
     $ad=Gpo-Ad $Id;$folder=Gpo-Folder $Id
@@ -484,7 +498,8 @@ function Preview($S,$Map,[bool]$RequireWriteAccess=$true){
     $impact.affectedObjects.sampleHosts=@(Filter-EndpointHosts @($impact.affectedObjects.sampleHosts))
     if([string]$S.refresh -eq 'Scope' -and @($computers).Count -eq 0){$warnings+='NO_REFRESH_HOSTS: No enabled endpoint matched the selected OU and endpoint targeting mode.'}
     $contentMatches=Mapping-Matches $S.gpoId $Map $S;$linkMatches=$null -ne $existing -and $existing.enabled -and (!$S.firstLink -or $existing.order -eq 1);$desired=Mapping-Display $S.gpoId $Map $S $true
-    return @{gpo=(Gpo-Choice $gpo);scope=$scope;previousValue=(Mapping-Display $S.gpoId $Map $S $false);desiredValue=$desired;noChange=($contentMatches -and $linkMatches);fingerprint=(Fingerprint $S.gpoId $scope.dn);scopeLinks=$raw;existingLink=$existing;refreshComputers=$computers;verificationComputers=$verificationComputers;warnings=$warnings;impact=$impact;preflight=$preflight}
+    $choice=Gpo-Choice $gpo;$previous=Mapping-Display $S.gpoId $Map $S $false
+    return @{gpo=$choice;scope=$scope;previousValue=$previous;previousValueSource=(Value-Source $choice $previous);desiredValue=$desired;noChange=($contentMatches -and $linkMatches);fingerprint=(Fingerprint $S.gpoId $scope.dn);scopeLinks=$raw;existingLink=$existing;refreshComputers=$computers;verificationComputers=$verificationComputers;warnings=$warnings;impact=$impact;preflight=$preflight}
 }
 function Atomic-Text([string]$Path,[string]$Text,[Text.Encoding]$Encoding){
     $null=[IO.Directory]::CreateDirectory([IO.Path]::GetDirectoryName($Path));$temp=$Path+'.'+[guid]::NewGuid().ToString('N')+'.tmp'
@@ -514,7 +529,7 @@ function Write-Mapping($Plan,$Map){
     switch([string]$Map.handler){
       'SecurityTemplate' {$null=Assert-VersionSync $s.gpoId;$path=Security-Path $s.gpoId;$text=if(Test-Path -LiteralPath $path){[IO.File]::ReadAllText($path)}else{''};foreach($item in Mapping-Items $Map){$desired=Desired-Item $Map $item $s;if([string]$item.type -eq 'Principals'){$values=@($item.value);if([string]$Map.comparator -eq 'includes'){$existing=Get-ItemCurrent $s.gpoId $Map $item;if($existing){$values+=@($existing -split ',')}};$desired=Principals-Desired @($values|Sort-Object -Unique)}elseif([string]$item.type -eq 'QuotedString'){$desired='"'+([string]$desired)+'"'};$text=Set-SecurityTemplateValue $text ([string]$item.section) ([string]$item.key) ([string]$desired)};Atomic-Text $path $text ([Text.Encoding]::Unicode);Bump-ComputerVersion $s.gpoId 'Security';return $true}
       {$_ -in @('Registry','RegistrySet')} {foreach($item in Mapping-Items $Map){$current=Get-ItemCurrent $s.gpoId $Map $item;$desired=Desired-Normalized $Map $item $s;if(Item-Matches $current $desired $Map $item){continue};$value=Desired-Item $Map $item $s;$type=Registry-Type ([string]$item.type);if($type -eq 'DWord'){$value=[int64]$value}elseif($type -eq 'QWord'){$value=[int64]$value}elseif($type -eq 'MultiString'){$value=[string[]]@($value)}else{$value=[string]$value};Set-GPRegistryValue -Guid ([guid]$s.gpoId) -Key ([string]$item.key) -ValueName ([string]$item.name) -Type $type -Value $value -Domain $cfg.domain -Server $cfg.domainController|Out-Null};return $true}
-      'AdvancedAudit' {$null=Assert-VersionSync $s.gpoId;$path=Audit-Path $s.gpoId;$lines=New-Object 'System.Collections.Generic.List[string]';if(Test-Path -LiteralPath $path){$lines.AddRange([string[]](Audit-CanonicalLines ([string[]](Get-Content -LiteralPath $path -Encoding UTF8))))}else{$lines.Add('Machine Name,Policy Target,Subcategory,Subcategory GUID,Inclusion Setting,Exclusion Setting,Setting Value')};foreach($item in Mapping-Items $Map){$guid=[string]$item.guid;$indices=@();for($i=1;$i -lt $lines.Count;$i++){if($lines[$i] -match [regex]::Escape($guid)){$indices+=$i}};if($indices.Count -gt 1){Fail 'AUDIT_POLICY_AMBIGUOUS' 'Duplicate advanced-audit subcategory rows exist in this GPO.'};$mask=[int]$item.mask;if([string]$Map.comparator -eq 'includes'){$existing=Get-ItemCurrent $s.gpoId $Map $item;if($null -ne $existing){$n=0;if(![int]::TryParse([string]$existing,[ref]$n) -or $n -lt 0 -or $n -gt 3){Fail 'AUDIT_POLICY_INVALID' 'Existing audit mask is invalid.'};$mask=$mask -bor $n}};$auditState=switch($mask){0{'No Auditing'}1{'Success'}2{'Failure'}3{'Success and Failure'}};$row=Audit-Row ([string]$item.name) $guid $auditState $(if($mask -eq 0){4}else{$mask});if($indices.Count -eq 1){$lines[$indices[0]]=$row}else{$lines.Add($row)}};Atomic-Text $path (($lines -join "`r`n")+"`r`n") ([Text.UTF8Encoding]::new($false));Bump-ComputerVersion $s.gpoId 'Audit';return $true}
+      'AdvancedAudit' {$null=Assert-VersionSync $s.gpoId;$path=Audit-Path $s.gpoId;$lines=New-Object 'System.Collections.Generic.List[string]';if(Test-Path -LiteralPath $path){$lines.AddRange([string[]](Audit-CanonicalLines ([string[]](Get-Content -LiteralPath $path -Encoding UTF8))))}else{$lines.Add('Machine Name,Policy Target,Subcategory,Subcategory GUID,Inclusion Setting,Exclusion Setting,Setting Value')};foreach($item in Mapping-Items $Map){$guid=[string]$item.guid;$indices=@();for($i=1;$i -lt $lines.Count;$i++){if($lines[$i] -match [regex]::Escape($guid)){$candidate=@(@($lines[0],$lines[$i])|ConvertFrom-Csv)[0];if([string]$candidate.'Policy Target' -eq 'System' -and [string]$candidate.'Subcategory GUID' -ieq $guid){$indices+=$i}}};if($indices.Count -gt 1){Fail 'AUDIT_POLICY_AMBIGUOUS' 'Duplicate advanced-audit subcategory rows exist in this GPO.'};$mask=[int]$item.mask;if([string]$Map.comparator -eq 'includes'){$existing=Get-ItemCurrent $s.gpoId $Map $item;if($null -ne $existing){$n=0;if(![int]::TryParse([string]$existing,[ref]$n) -or $n -lt 0 -or $n -gt 3){Fail 'AUDIT_POLICY_INVALID' 'Existing audit mask is invalid.'};$mask=$mask -bor $n}};$auditState=switch($mask){0{'No Auditing'}1{'Success'}2{'Failure'}3{'Success and Failure'}};$row=Audit-Row ([string]$item.name) $guid $auditState $(if($mask -eq 0){4}else{$mask});if($indices.Count -eq 1){$lines[$indices[0]]=$row}else{$lines.Add($row)}};Atomic-Text $path (($lines -join "`r`n")+"`r`n") ([Text.UTF8Encoding]::new($false));Bump-ComputerVersion $s.gpoId 'Audit';return $true}
       default {Fail 'GPO_HANDLER_UNSUPPORTED' ('Unsupported mapping handler: '+[string]$Map.handler)}
     }
 }
@@ -747,7 +762,7 @@ function Verify-EffectiveSamples($Plan,$Map){
               & auditpol.exe /backup ('/file:'+$auditFile) 2>$null | Out-Null
               if($LASTEXITCODE -ne 0 -or !(Test-Path -LiteralPath $auditFile)){return @{supported=$false;match=$false;actual='';message='auditpol could not export effective policy. Check audit-policy read/export privileges on this endpoint.'}}
               $auditRows=@(Get-Content -LiteralPath $auditFile -Encoding UTF8 | ConvertFrom-Csv)
-              try{$override=Get-ItemPropertyValue -LiteralPath 'Registry::HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Lsa' -Name 'SCENoApplyLegacyAuditPolicy' -ErrorAction Stop;$actual+=('SCENoApplyLegacyAuditPolicy='+[string]$override)}catch{$actual+='SCENoApplyLegacyAuditPolicy=<not available>'}
+              $overrideEnabled=$false;try{$override=Get-ItemPropertyValue -LiteralPath 'Registry::HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Lsa' -Name 'SCENoApplyLegacyAuditPolicy' -ErrorAction Stop;$overrideEnabled=([string]$override -eq '1');$actual+=('SCENoApplyLegacyAuditPolicy='+[string]$override)}catch{$actual+='SCENoApplyLegacyAuditPolicy=<not available>'}
             foreach($item in @($ExpectedItems)){
               try{
                 $rows=@($auditRows|Where-Object{
@@ -762,6 +777,7 @@ function Verify-EffectiveSamples($Plan,$Map){
                 $expectedMask=[int]$item.expected;$actual+=([string]$item.guid+'='+$numeric+' ('+$label+')');if($Comparator -eq 'includes'){if(($numeric -band $expectedMask) -ne $expectedMask){$ok=$false}}elseif($numeric -ne $expectedMask){$ok=$false}
               }catch{return @{supported=$false;match=$false;actual='';message='Effective advanced-audit probe is unavailable on this endpoint.'}}
             }
+            if($ok -and !$overrideEnabled){return @{supported=$false;match=$false;actual=($actual -join '; ');message='Audit values currently match, but subcategory override is disabled or unavailable. Review control 2.3.2.1 (SCENoApplyLegacyAuditPolicy=1) and re-verify after policy processing; legacy category policy can override subcategories.'}}
             return @{supported=$true;match=$ok;actual=($actual -join '; ');message=$(if($ok){'Effective advanced-audit settings match the requested values on this sampled endpoint. This does not identify the winning GPO or prove refresh completion.'}else{'Effective advanced-audit settings differ from the requested values. Check policy processing, winning GPO and control 2.3.2.1 (subcategory override).'})}
             }finally{Remove-Item -LiteralPath $auditFile -Force -ErrorAction SilentlyContinue}
           }
@@ -823,7 +839,10 @@ function Result([string]$State,[string]$Message,$Manifest,$V,$Refresh){
     $backupId=Read-Field $Manifest 'backupId' $null
     $backupDirectory=Read-Field $Manifest 'directory' $null
     $postFingerprint=Read-Field $Manifest 'postFingerprint' $null
-    return @{state=$State;message=$Message;backupId=$backupId;backupDirectory=$backupDirectory;postFingerprint=$postFingerprint;gpoPublished=[bool](Read-Field $V 'published' $false);linkVerified=[bool](Read-Field $V 'linked' $false);refreshResults=@($Refresh);effectiveStatus=[string](Read-Field $V 'effective' 'UNKNOWN');verification=$verification;endpointChecks=$endpointChecks;currentValue=Read-Field $V 'currentValue' $null;endpointCoverage=Read-Field $V 'endpointCoverage' $null}
+    $current=Read-Field $V 'currentValue' $null
+    $planData=Get-Variable Data -ValueOnly -ErrorAction SilentlyContinue
+    $sourceGpo=Read-Field (Read-Field (Read-Field $planData 'plan' $null) 'preview' $null) 'gpo' $null
+    return @{state=$State;message=$Message;backupId=$backupId;backupDirectory=$backupDirectory;postFingerprint=$postFingerprint;gpoPublished=[bool](Read-Field $V 'published' $false);linkVerified=[bool](Read-Field $V 'linked' $false);refreshResults=@($Refresh);effectiveStatus=[string](Read-Field $V 'effective' 'UNKNOWN');verification=$verification;endpointChecks=$endpointChecks;currentValue=$current;currentValueSource=(Value-Source $sourceGpo $current);endpointCoverage=Read-Field $V 'endpointCoverage' $null}
 }
 
 function Operation-Failure($Record,[string]$Stage){
@@ -952,7 +971,10 @@ switch($Operation){
         Emit-Stage 'GPUPDATE'
         $refresh=@();$target=if($rollback){'Both'}elseif([string]$map.scope -eq 'User'){'User'}else{'Computer'}
         $refreshCoverage=$null
-        if(((!$rollback -and $target -eq 'Computer') -or ($rollback -and [string]$map.scope -eq 'Computer')) -and (Endpoint-CredentialOptions).Count){
+        # Full-GPO restore can affect both halves. Remote gpupdate.exe in an
+        # administrative WinRM session cannot refresh the signed-in user's policy.
+        # Invoke-GPUpdate without Target schedules both halves in their proper contexts.
+        if(!$rollback -and $target -eq 'Computer' -and (Endpoint-CredentialOptions).Count){
             $offset=[int](Read-Field $Data 'refreshOffset' 0);if($offset -lt 0){Fail 'INVALID_REQUEST' 'Invalid refresh offset.'}
             $total=$computers.Count;$computers=@($computers|Select-Object -Skip $offset -First 64)
             $runTargets=@($computers|Where-Object{$_ -in $liveComputers})
@@ -960,7 +982,10 @@ switch($Operation){
             foreach($computer in $computers){$entry=@($done|Where-Object{[string]$_.PSComputerName -ieq $computer}|Select-Object -Last 1);if($entry.Count){$refresh+=@{computer=$computer;state=[string]$entry[0].state;message=[string]$entry[0].message}}else{$refresh+=@{computer=$computer;state='FAILED';message='No completion result. Check endpoint WinRM/Kerberos and execution permissions.'}}}
             $refreshCoverage=@{total=$total;checked=[math]::Min($offset+64,$total);complete=($offset+64 -ge $total)}
         }else{
-            foreach($computer in $computers){if($computer -notin $liveComputers){$refresh+=@{computer=$computer;state='FAILED';message='The pinned endpoint is no longer in the enabled authorized endpoint scope. No refresh was scheduled.'};continue};try{$options=@{Computer=$computer;Force=$true;RandomDelayInMinutes=0;ErrorAction='Stop'};if(!$rollback){$options.Target=$target};Invoke-GPUpdate @options|Out-Null;$refresh+=@{computer=$computer;state='SCHEDULED';message=('gpupdate /target:'+$target.ToLowerInvariant()+' /force scheduled.')}}catch{$refresh+=@{computer=$computer;state='FAILED';message='Remote gpupdate could not be scheduled. Check RPC/task-scheduler firewall and permissions.'}}}
+            $offset=[int](Read-Field $Data 'refreshOffset' 0);if($offset -lt 0){Fail 'INVALID_REQUEST' 'Invalid refresh offset.'}
+            $total=$computers.Count;$computers=@($computers|Select-Object -Skip $offset -First 64)
+            $refreshCoverage=@{total=$total;checked=[math]::Min($offset+64,$total);complete=($offset+64 -ge $total)}
+            foreach($computer in $computers){if($computer -notin $liveComputers){$refresh+=@{computer=$computer;state='FAILED';message='The pinned endpoint is no longer in the enabled authorized endpoint scope. No refresh was scheduled.'};continue};try{$options=@{Computer=$computer;Force=$true;RandomDelayInMinutes=0;ErrorAction='Stop'};if(!$rollback){$options.Target=$target};Invoke-GPUpdate @options|Out-Null;$refresh+=@{computer=$computer;state='SCHEDULED';message=$(if($rollback){'gpupdate /force scheduled for computer and signed-in user policies after rollback.'}else{'gpupdate /target:'+$target.ToLowerInvariant()+' /force scheduled.'})}}catch{$refresh+=@{computer=$computer;state='FAILED';message='Remote gpupdate could not be scheduled. Check RPC/task-scheduler firewall and permissions.'}}}
         }
         # Invoke-GPUpdate schedules a task; it does not wait for policy processing.
         $v=if($rollback){Verify-Rollback $plan $map $manifest}else{Verify-Published $plan $map $false};$failed=@($refresh|Where-Object{$_.state -eq 'FAILED'}).Count

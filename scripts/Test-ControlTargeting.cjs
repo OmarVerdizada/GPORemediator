@@ -22,3 +22,12 @@ const modal=window.GpoScopePicker.modal(state.inventory.scopes,'scopeDn','',new 
 assert(modal.includes('data-scope-choose="'+ou+'"'));assert(modal.includes('data-scope-choose="'+domain+'"'));
 state.selection.scopeDn=ou;state.targetAccessError={key:view.targetKey(),message:'GPMC <unsafe>'};html=view.targetForm(state.selectedRule);assert(html.includes('&lt;unsafe>'));assert(!html.includes('class="primary-action" disabled'));
 console.log('PASS local/domain account intent, OU/domain targets across handlers, stable selection, access escaping and selectable plan actions');
+
+state.selectedRule={id:'19.5.1.1',backendSetting:'19.5.1.1',implementation:'live'};
+state.selection.scopeDn=ou;state.selection.endpointScopeDn='';view.ensureSelection();
+assert.equal(state.selection.endpointScopeDn,ou,'Mixed OU should be the default endpoint scope');
+html=view.targetForm(state.selectedRule);
+assert(html.includes('Policy scope (OU / domain)'));
+assert(!/User OU|Computer apply scope|computer OU|user OU/.test(html));
+assert(html.includes('Optional session verification'));
+console.log('PASS mixed OU selection with default endpoints and optional session overrides');

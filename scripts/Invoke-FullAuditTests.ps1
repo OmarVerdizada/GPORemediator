@@ -18,7 +18,7 @@ Push-Location $repo
 try{
  Run-Check 'build-portable' 'powershell.exe' @('-NoProfile','-ExecutionPolicy','Bypass','-File','Build-Portable.ps1') 'build/package'
  foreach($project in @('SecurityRegression','WorkflowRegression','WorkspaceRegression','HardeningRegression')){Run-Check $project $sdk @('run','--project',('scripts/'+$project),'-c','Release')}
- foreach($script in @('Test-SecurityFiles','Test-DomainSignIn','Test-EndpointTargeting','Test-SelectionAccess','Test-SysvolDiscovery','Test-RemediationChain','Test-RuntimeIntegrity','Test-GpoMappings','Test-EndpointEvidence','Test-AllEndpointMappings','Test-VerificationLifecycle','Test-PowerShellSyntax','Test-ServiceControl','Test-PolicyDiagnostics','Test-LivePilotSafety','Test-LivePilotFlow','Test-ReleaseInstaller')){
+ foreach($script in @('Test-SecurityFiles','Test-DomainSignIn','Test-EndpointTargeting','Test-SelectionAccess','Test-SysvolDiscovery','Test-RemediationChain','Test-RuntimeIntegrity','Test-GpoMappings','Test-EndpointEvidence','Test-AllEndpointMappings','Test-VerificationLifecycle','Test-PowerShellSyntax','Test-ServiceControl','Test-PolicyDiagnostics','Test-LivePilotSafety','Test-LivePilotFlow','Test-ReleaseInstaller','Test-EndpointDiagnostics','Test-LocalAccountEvidence')){
   $arguments=@('-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-File',('scripts/'+$script+'.ps1'))
   if($script -eq 'Test-GpoMappings'){$arguments+=@('-ReportPath',($OutputDirectory+'/remediation-controls.json'))}
   if($script -eq 'Test-AllEndpointMappings'){$arguments+=@('-ReportPath',($OutputDirectory+'/endpoint-controls.json'))}
@@ -31,9 +31,9 @@ try{
  Run-Check 'Test-AssuranceScale' $node @('scripts/Test-AssuranceScale.cjs')
  Run-Check 'Test-FrontendPolish' $node @('scripts/Test-FrontendPolish.cjs')
  Run-Check 'stylesheet-build' $node @('scripts/Build-Styles.cjs','--check')
- foreach($test in @('Test-Responsiveness','Test-FrontendSystem','Test-RemediationEvidence','Test-RecipeWorkspace','Test-GuidedRemediation','Test-GpoScopePicker','Test-ControlTargeting','Test-UX-Contract','Test-Studio-UI','Test-EnterpriseCenter','Test-ManualVerification','Test-ValueEditor','Test-ManualRemediation','Test-RecoveryUi','Test-WorkflowUi','Test-EndpointTargetingUi','Test-EnglishThemes')){Run-Check $test $node @('scripts/'+$test+'.cjs')}
+ foreach($test in @('Test-Responsiveness','Test-FrontendSystem','Test-RemediationEvidence','Test-RecipeWorkspace','Test-GuidedRemediation','Test-GpoScopePicker','Test-ControlTargeting','Test-UX-Contract','Test-Studio-UI','Test-EnterpriseCenter','Test-ManualVerification','Test-ValueEditor','Test-ManualRemediation','Test-RecoveryUi','Test-WorkflowUi','Test-EndpointTargetingUi','Test-EnglishThemes','Test-UserRefreshUi','Test-EndpointResultUi','Test-ResultContext','Test-ResultOfflineUi')){Run-Check $test $node @('scripts/'+$test+'.cjs')}
  Run-Check 'mapping-generation' $python @('scripts/Build-ProductionMappings.py','--check')
- foreach($test in @('Test-ProductionMappings','Audit-PolicyScopes','Validate-ProductionPackage')){Run-Check $test $python @('scripts/'+$test+'.py')}
+ foreach($test in @('Test-ProductionMappings','Test-MappingSources','Audit-PolicyScopes','Validate-ProductionPackage')){Run-Check $test $python @('scripts/'+$test+'.py')}
  Run-Check 'installed-admx-review' $python @('scripts/Audit-AdmxMappings.py','--output',($OutputDirectory+'/admx-review.json')) 'local ADMX comparison; not policy execution'
  Run-Check 'secret-guard-selftest' $python @('security/Secret-Pattern-Guard.py','--self-test')
  Run-Check 'secret-guard' $python @('security/Secret-Pattern-Guard.py','.')

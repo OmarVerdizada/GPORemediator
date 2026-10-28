@@ -1,5 +1,6 @@
 ﻿# Real worker dispatch + writer + manifests against private filesystem fixtures.
 # AD, GPMC, DNS and remote endpoints are mocked. No live domain is contacted.
+param([switch]$AllControls,[string]$ReportPath)
 $ErrorActionPreference='Stop';Set-StrictMode -Version Latest
 $repo=Split-Path $PSScriptRoot -Parent
 $temp=Join-Path ([IO.Path]::GetTempPath()) ('gpr-chain-'+[guid]::NewGuid().ToString('N'))
@@ -30,7 +31,7 @@ function Get-ADObject {param($Identity,$Server,$Properties,$Replace,$ErrorAction
 function Set-ADObject {param($Identity,$Server,$Replace) $script:version=[int]$Replace.versionNumber;$script:extensions=[string]$Replace.gPCMachineExtensionNames}
 function Get-GPO {param($Guid,$Domain,$Server) [pscustomobject]@{Id=[guid]$gpoId;DisplayName='Dedicated pilot';GpoStatus='AllSettingsEnabled'}}
 function Get-GPPermission {param($Guid,[switch]$All,$Domain,$Server) [pscustomobject]@{Permission='GpoApply';Trustee=[pscustomobject]@{Name='Authenticated Users';Sid=[Security.Principal.SecurityIdentifier]::new('S-1-5-11')}}}
-function Get-ADDefaultDomainPasswordPolicy {param($Identity,$Server) @{PasswordHistoryCount=24}}
+function Get-ADDefaultDomainPasswordPolicy {param($Identity,$Server) @{PasswordHistoryCount=24;MinPasswordAge=[timespan]::FromDays(1);MinPasswordLength=14;ComplexityEnabled=$true;ReversibleEncryptionEnabled=$false;LockoutDuration=[timespan]::FromMinutes(15);LockoutThreshold=5;LockoutObservationWindow=[timespan]::FromMinutes(15)}}
 function All-LinkScopes {@([pscustomobject]@{dn=$target;rawLinks=$script:rawLinks})}
 function Get-GPInheritance {param($Target,$Domain,$Server)
  $links=@();if($script:rawLinks){$links=@([pscustomobject]@{GpoId=[guid]$gpoId;Order=1;Enforced=$false;Enabled=$true;DisplayName='Dedicated pilot'})}
@@ -67,6 +68,8 @@ $catalog=(Get-Content (Join-Path $repo 'backend/data/gpo-production-mappings.jso
 try{
  $cases=@(@('1.1.1','LocalComputers'),@('1.1.1','Domain'),@('2.3.1.1','LocalComputers'),@('18.4.4','LocalComputers'),@('17.1.1','LocalComputers'),@('19.5.1.1','Users'))
  foreach($manual in @($catalog|Where-Object automation -ne 'Automated')){$cases+=,@([string]$manual.id,'LocalComputers')}
+ if($AllControls){$cases=@();foreach($entry in $catalog){$cases+=,@([string]$entry.id,$(if($entry.scope -eq 'User'){'Users'}else{'LocalComputers'}));if($entry.domainPolicySensitive){$cases+=,@([string]$entry.id,'Domain')}}}
+ $report=@()
  foreach($case in $cases){
   $map=($catalog|Where-Object id -eq $case[0])|ConvertTo-Json -Depth 15|ConvertFrom-Json
   Check ($null -ne $map) ('mapping exists '+$case[0])
@@ -77,13 +80,15 @@ try{
   $null=New-Item -ItemType Directory -Path $script:folder
   [IO.File]::WriteAllText((Join-Path $script:folder 'GPT.INI'),"[General]`r`nVersion=0`r`n")
   $script:version=0;$script:extensions='';$script:userExtensions='';$script:rawLinks='';$script:registry=@{}
-  $s=@{gpoId=$gpoId;scopeDn=$(if($case[1] -eq 'Domain'){$domainDn}else{$target});setting=$map.id;value=$map.suggested;customValue='';refresh='None';firstLink=($case[1] -eq 'Domain');accountScope=$case[1];endpointScopeDn='';verificationUser=''}
+  $s=@{gpoId=$gpoId;scopeDn=$(if($case[1] -eq 'Domain'){$domainDn}else{$target});setting=$map.id;value=$map.suggested;customValue=$(if($map.requiresInput){if($map.inputDefault){[string]$map.inputDefault}else{'Authorized use only'}}else{''});refresh='None';firstLink=($case[1] -eq 'Domain');accountScope=$case[1];endpointScopeDn='';verificationUser=''}
   $Operation='gpoPreview';$Data=@{selection=$s;mapping=$map};$script:workerStage='VALIDATING';$preview=& $dispatch
+  Check ($null -eq $preview.previousValue -and $null -eq $preview.previousValueSource) ('unconfigured source '+$map.id)
   Check ($preview.preflight.ready) ('readiness '+$map.id+' '+$case[1])
   $plan=@{id=[guid]::NewGuid().ToString('N');domain=$cfg.domain;domainController=$cfg.domainController;selection=$s;preview=$preview}
   $refreshBefore=$script:refreshes
   $Operation='gpoApply';$Data=@{plan=$plan;mapping=$map;consent=@{confirmation='APPLY'}};$result=& $dispatch
   Check ($result.state -eq 'PUBLISHED') ('backup/write/link/publication '+$map.id+' '+$case[1]+': '+$result.message)
+  Check ($result.currentValueSource.gpoId -eq $gpoId -and $result.currentValueSource.gpoName -eq 'Dedicated pilot') ('configured source '+$map.id)
   Check ($script:refreshes -eq $refreshBefore) 'Apply does not schedule unrequested endpoint refresh'
   if($case[1] -ne 'Users'){
    $Operation='gpoRefresh';$Data.refresh=if($case[1] -eq 'Domain'){'Pdc'}else{'Scope'};$result=& $dispatch
@@ -93,7 +98,10 @@ try{
   Check ($result.state -eq 'ROLLED_BACK') ('snapshot rollback '+$map.id)
   $Operation='gpoVerify';$result=& $dispatch
   Check ($result.state -eq 'ROLLED_BACK') ('rollback read-back '+$map.id)
+  Check ($null -eq $result.currentValue -and $null -eq $result.currentValueSource) ('rollback clears configured value and source '+$map.id)
+  $report+=@{controlId=[string]$map.id;domain=([string]$map.id -split '\.')[0];scope=$case[1];state='PASS';steps=$(if($case[1] -eq 'Users'){@('preview','backup','write','link','source','rollback','verify')}else{@('preview','backup','write','link','source','refresh','rollback','verify')})}
  }
+ if($ReportPath){$output=[IO.Path]::GetFullPath($ReportPath);$null=New-Item -ItemType Directory -Path (Split-Path $output -Parent) -Force;$report|ConvertTo-Json -Depth 6|Set-Content -LiteralPath $output -Encoding UTF8}
  # A denied preflight must not poison an otherwise valid publication manifest.
  $plan.id=[guid]::NewGuid().ToString('N');$Operation='gpoPreview';$Data=@{selection=$s;mapping=$map};$plan.preview=& $dispatch
  $Operation='gpoApply';$Data=@{plan=$plan;mapping=$map;consent=@{confirmation='APPLY'}};$result=& $dispatch

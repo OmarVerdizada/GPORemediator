@@ -10,6 +10,7 @@ public sealed class GpoLoginRequest
 
 public record GpoChoice(string Id, string Name, bool Protected, bool Selectable);
 public record GpoScope(string Dn, string Name, string Kind);
+public record GpoValueSource(string GpoId, string GpoName);
 public record GpoInventory(string Domain, string DomainController, string ExecutionUser, GpoChoice[] Gpos, GpoScope[] Scopes);
 
 public record GpoSelection(string GpoId, string ScopeDn, string Setting, int Value,
@@ -38,7 +39,8 @@ public record GpoVerificationDetails(string AdVersion, string GptVersion, bool V
 public record GpoPreview(GpoChoice Gpo, GpoScope Scope, string? PreviousValue, string Fingerprint, string ScopeLinks,
     GpoLink? ExistingLink, string[] RefreshComputers, string[] Warnings,
     GpoImpactDetails? Impact = null, GpoEnvironmentStatus? Preflight = null, string? DesiredValue = null, bool NoChange = false,
-    [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] string[]? VerificationComputers = null);
+    [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] string[]? VerificationComputers = null,
+    GpoValueSource? PreviousValueSource = null);
 
 public record GpoWorkflowPlan(string Id, string Actor, string ExecutionUser, string Mode, string Domain, string DomainController,
     GpoSelection Selection, GpoPreview Preview, string CreatedAt, string? MappingHash = null, string? ConfigHash = null, bool WriteAuthorized = false);
@@ -53,7 +55,8 @@ public record GpoWorkflowResult(string State, string Message, string? BackupId, 
     bool GpoPublished, bool LinkVerified, GpoRefreshResult[] RefreshResults, string EffectiveStatus,
     GpoVerificationDetails? Verification = null, GpoEndpointCheck[]? EndpointChecks = null, string? CurrentValue = null,
     [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] EndpointCoverage? EndpointCoverage = null,
-    [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] EndpointCoverage? RefreshCoverage = null)
+    [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] EndpointCoverage? RefreshCoverage = null,
+    GpoValueSource? CurrentValueSource = null)
 {
     public GpoAssuranceStage[] VerificationStages => GpoAssurance.Stages(this);
     public string[] Diagnosis => GpoAssurance.Diagnose(this);
@@ -68,7 +71,8 @@ public record GpoEvidence(string SchemaVersion, string Product, string Benchmark
     string GpoId, string GpoName, string ScopeDn, string? BeforeValue, string DesiredValue, string State,
     string? BackupId, string? BackupDirectory, string EffectiveStatus, GpoVerificationDetails? Verification,
     string[] Warnings, string IntegrityHash, string? ChangeReference = null, string? ApprovedBy = null, string? Handler = null, string? MappingSource = null,
-    GpoEndpointCheck[]? EndpointChecks = null, string? CorrelationId = null, string? CurrentValue = null);
+    GpoEndpointCheck[]? EndpointChecks = null, string? CorrelationId = null, string? CurrentValue = null,
+    GpoValueSource? BeforeValueSource = null, GpoValueSource? CurrentValueSource = null);
 
 public static class GpoWorkflowRules
 {

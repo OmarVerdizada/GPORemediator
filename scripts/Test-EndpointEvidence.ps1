@@ -7,7 +7,8 @@ $ast=[Management.Automation.Language.Parser]::ParseFile((Join-Path $root 'backen
 if($errors.Count){throw ($errors|Out-String)}
 foreach($fn in $ast.FindAll({param($n) $n -is [Management.Automation.Language.FunctionDefinitionAst]},$false)){. ([scriptblock]::Create($fn.Extent.Text))}
 function Assert-Test($Condition,$Message){if(!$Condition){throw $Message}}
-function Get-ItemPropertyValue {param($LiteralPath,$Name,$ErrorAction) if($Name -eq 'SCENoApplyLegacyAuditPolicy'){return 1};throw 'Unexpected fixture registry read'}
+$script:auditOverride=1
+function Get-ItemPropertyValue {param($LiteralPath,$Name,$ErrorAction) if($Name -eq 'SCENoApplyLegacyAuditPolicy'){return $script:auditOverride};throw 'Unexpected fixture registry read'}
 function Get-ADComputer {param($SearchBase,$SearchScope,$Filter,$Server,$Properties,$ResultSetSize,$ErrorAction) [pscustomobject]@{DNSHostName='ws.example.local'}}
 $cfg=@{domainController='dc.example.local';allowedHosts=@('ws.example.local','dc.example.local')}
 $plan=@{selection=@{scopeDn='OU=Endpoints,DC=example,DC=local'};preview=@{refreshComputers=@('dc.example.local');impact=@{affectedObjects=@{sampleHosts=@('ws.example.local','outside.example.local')}}}}
@@ -40,6 +41,10 @@ function auditpol.exe {
  $global:LASTEXITCODE=$script:nativeExit
 }
 Assert-Test ((@(Verify-EffectiveSamples $plan $map))[0].state -eq 'VERIFIED') 'Audit superset did not satisfy include Success'
+$script:auditOverride=0
+$overrideResult=@(Verify-EffectiveSamples $plan $map)[0]
+Assert-Test ($overrideResult.state -eq 'PENDING' -and $overrideResult.message -match '2.3.2.1') 'Missing subcategory override was silently accepted as verified audit policy'
+$script:auditOverride=1
 $script:auditMask=2
 Assert-Test ((@(Verify-EffectiveSamples $plan $map))[0].state -eq 'MISMATCH') 'Missing required audit bit passed'
 $script:auditMask=4

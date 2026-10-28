@@ -8,7 +8,7 @@ $files=@(Get-ChildItem -LiteralPath $repo -File|Where-Object{$_.Extension -in @(
 foreach($folder in @('backend','frontend','scripts','security','release')){
     $files+=@(Get-ChildItem -LiteralPath (Join-Path $repo $folder) -Recurse -File|Where-Object{
         $relative=$_.FullName.Substring($repo.Length+1).Replace('\','/')
-        $relative -notmatch '(^|/)(bin|obj|node_modules|\.git)/|appsettings\.Local\.json$|^release/package-files\.json$' -and
+        $relative -notmatch '(^|/)(bin|obj|node_modules|__pycache__|\.git)/|\.py[co]$|appsettings\.Local\.json$|^release/package-files\.json$' -and
         ($relative -notmatch '^backend/data/' -or $_.Name -in @('benchmark.json','gpo-production-mappings.json') -or $relative -like 'backend/data/mapping_sources/*')
     })
 }

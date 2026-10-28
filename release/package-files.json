@@ -1,7 +1,7 @@
 {
     "stateSchema":  "3.1.2",
     "format":  1,
-    "version":  "3.16.6",
+    "version":  "3.16.7",
     "files":  [
                   {
                       "path":  "backend/appsettings.json",
@@ -70,12 +70,12 @@
                   },
                   {
                       "path":  "backend/Domain/GpoAssurance.cs",
-                      "sha256":  "3AD58F5021F0E410BD0988BE603874FFB569AEE4854CE9AB435E847ED4AA0AA7",
+                      "sha256":  "9CE0171F42AACD19727D2CFA0BAC5D5877E20D485A37066E93E10B9072A339AF",
                       "mode":  "text-lf"
                   },
                   {
                       "path":  "backend/Domain/GpoWorkflow.cs",
-                      "sha256":  "7D59AF26A91DA4E580C2AE2FCAFE9B18DC1A367457793B8D7172E0C589EEB3B0",
+                      "sha256":  "D270410353ADFA60BEF76B69D75D5853D826487260083548071A027047B1B548",
                       "mode":  "text-lf"
                   },
                   {
@@ -95,12 +95,12 @@
                   },
                   {
                       "path":  "backend/Domain/WorkspaceWorkflow.cs",
-                      "sha256":  "5797FB906EEF39067AE3A65104DE0E4CF8596535381B974833DB31B6C90319B1",
+                      "sha256":  "D33CDE1E01017DD79792976CBA03913B3B71C5A2E7F8BF53A24429258FA7FE52",
                       "mode":  "text-lf"
                   },
                   {
                       "path":  "backend/GpoRemediator.csproj",
-                      "sha256":  "A425505F30608F953892AF5A5501F644C1BEE8589E5F8FB1BD6704543BB940D1",
+                      "sha256":  "E7EE1ACD7A5ACA72AE3B19B6453EC7E2077E29CCBF0165FA52DF381B6D3272F6",
                       "mode":  "text-lf"
                   },
                   {
@@ -150,7 +150,7 @@
                   },
                   {
                       "path":  "backend/Infrastructure/WorkspaceEndpoints.cs",
-                      "sha256":  "54707039EEB48248620492DD6141788DCCCB7EB8C7E27B759350C320B8503CE7",
+                      "sha256":  "819FD0B7E475668C1915820B6B72FA135B9FAD1C746766354C9BF34BB737F9A5",
                       "mode":  "text-lf"
                   },
                   {
@@ -160,7 +160,7 @@
                   },
                   {
                       "path":  "backend/PowerShell/GpoWorkflow.Worker.ps1",
-                      "sha256":  "E115E12FBEB5D10BBB0D8F2DFC09439BBF7279ABFA34E88BFEBD8D068889B727",
+                      "sha256":  "D9F5FFD2A38993ECAEAEAC05690D5E9BB7DD38AB2D895DED20ED83AB2CA09B58",
                       "mode":  "text-lf"
                   },
                   {
@@ -200,7 +200,7 @@
                   },
                   {
                       "path":  "backend/Services/GpoWorkflowService.cs",
-                      "sha256":  "A2066C66651542241F6FE0ED11F92D8A1F1419E1DEAC331F6095BD241C013EBE",
+                      "sha256":  "DC2ACBDE694A57CA5FC22A44DC72AED29A0C0AB97B09F783C8829870AE49884E",
                       "mode":  "text-lf"
                   },
                   {
@@ -215,7 +215,7 @@
                   },
                   {
                       "path":  "backend/Services/WorkspaceWorkflows.cs",
-                      "sha256":  "D86B6D65DBDAC2605CFD026F3A2130E892D8CB41032A6EF40AADFA8F8484BF69",
+                      "sha256":  "6F9EFD6E59F8B5652D049A54E91DA35182972809FA5F0479767FD63073C11F1F",
                       "mode":  "text-lf"
                   },
                   {
@@ -230,7 +230,7 @@
                   },
                   {
                       "path":  "frontend/dist/app.css",
-                      "sha256":  "A54E59A2F9F8B348E1C5786A27CBE2CEF1814FC307E4579D3229B04A901D9029",
+                      "sha256":  "BF942026D6F62B29D19D0D4594E4B05111D3E16AA3C9667B4F232399807265F2",
                       "mode":  "text-lf"
                   },
                   {
@@ -240,7 +240,7 @@
                   },
                   {
                       "path":  "frontend/dist/automation.js",
-                      "sha256":  "6F754E5E5E90F81633C0B72B50F9E271EB988D6289AD3CACE9187356C77EB41D",
+                      "sha256":  "7DC2FD036CD5AB7C1BFF05596B3B793ED647B7A363EACC454298CCA67C6434F7",
                       "mode":  "text-lf"
                   },
                   {
@@ -255,17 +255,17 @@
                   },
                   {
                       "path":  "frontend/dist/client.js",
-                      "sha256":  "BE249A8EA5B1EBBDCCA4BA08CFCC3CB1F05559BB03D3F47F365B1C55E5B0F742",
+                      "sha256":  "1BA2D7306889771EC8A8CF3962B8EEE8C94DEEEC5B8589DE1831804A8B555508",
                       "mode":  "text-lf"
                   },
                   {
                       "path":  "frontend/dist/components.js",
-                      "sha256":  "C9142FE565A576BA9186F2172D6352D0F2C6513E3535572D6D2B218290E31B6B",
+                      "sha256":  "0EFDAD405044F5D0F3453E0710839B83C09643A0941BD4F086E374F5C43A9AD4",
                       "mode":  "text-lf"
                   },
                   {
                       "path":  "frontend/dist/control-view.js",
-                      "sha256":  "3FE69F613D9ABE6D9CAB552107A2A6C4B1D180FB3D3248D770EB9973B1A0204C",
+                      "sha256":  "2244C3F006B74F74A38E80636BAB8A3CE46849A941E59A4CDEEA4D0D9322B429",
                       "mode":  "text-lf"
                   },
                   {
@@ -320,7 +320,7 @@
                   },
                   {
                       "path":  "frontend/dist/index.html",
-                      "sha256":  "AD53045EA0D7069A87932AC30DE7BFF3E9AF4E0E36693F8D7C479DCEE4E442C6",
+                      "sha256":  "77029F5B97B1776E7618AA37CC9E1D55E6E37D6AFE23F371DA869902CD20FDD7",
                       "mode":  "text-lf"
                   },
                   {
@@ -330,7 +330,7 @@
                   },
                   {
                       "path":  "frontend/dist/manual-engine.js",
-                      "sha256":  "314CC8D7957D7F03E8CF143545B0DC0587896C41503AB2C6C91759CF99416663",
+                      "sha256":  "19C88A03A6FD279ED0F8CFCFBB571849E6E52AD20A4A5BC457C15E067AF7556D",
                       "mode":  "text-lf"
                   },
                   {
@@ -340,7 +340,7 @@
                   },
                   {
                       "path":  "frontend/dist/operation-view.js",
-                      "sha256":  "F297FFBE42C6602B867069E4F718F8C5C8B6A4B9BB85E65302FE4E2554F4D7B5",
+                      "sha256":  "764309C5D8C97EEAA0A1CB8AE02DE5C399A1E32B26F8D601BF7AB613672D47DD",
                       "mode":  "text-lf"
                   },
                   {
@@ -350,12 +350,12 @@
                   },
                   {
                       "path":  "frontend/dist/password-policies.js",
-                      "sha256":  "87BBEB0BEE32E475BE8C3EF85ED5CD62D6E8638F22C904EE53ADCC0DA6A53CDB",
+                      "sha256":  "4D98FC12BAAAF15CD3587CEE57DF5F0ED8462AED163FC08DF87EC61FE7B48B5B",
                       "mode":  "text-lf"
                   },
                   {
                       "path":  "frontend/dist/preferences.js",
-                      "sha256":  "5ECA0E31057224DBBA03069EECDDD33CD659AF70641323A52B8CD99354CC49C0",
+                      "sha256":  "A586D625ACD8A527FE6354BF3BC4E50D4CDDA644FE0FCA9233FBA5D81936601B",
                       "mode":  "text-lf"
                   },
                   {
@@ -365,7 +365,7 @@
                   },
                   {
                       "path":  "frontend/dist/product.js",
-                      "sha256":  "AC00159ED6564EA81639C76CB1F8CC67416522A7345C39E9CC1FA44690FEEFE7",
+                      "sha256":  "8E2C02EFE849A7CDFD37C25EF8D53A96022A48FCB1772B884A1A09B578C1BC43",
                       "mode":  "text-lf"
                   },
                   {
@@ -380,7 +380,7 @@
                   },
                   {
                       "path":  "frontend/dist/source.sha256",
-                      "sha256":  "CAB43C11DDBE89785425BE833D87A036BFB03D41EB8B0149370C2B3FF4E8C1B6",
+                      "sha256":  "096423C286206AC223E1EFFB2C7812FF96E0ACBDA333C43F2988267254FB8533",
                       "mode":  "text-lf"
                   },
                   {
@@ -400,7 +400,7 @@
                   },
                   {
                       "path":  "frontend/dist/styles/components.css",
-                      "sha256":  "E09A1205623AE323D07F8A3B3629E018BDA5365CC36D0C797BA875BB7A0D8604",
+                      "sha256":  "B0C90A52B3E77BF51EF44071F570479E1D66C64A2C86F10ABA33A62CC2243AE6",
                       "mode":  "text-lf"
                   },
                   {
@@ -470,12 +470,12 @@
                   },
                   {
                       "path":  "frontend/dist/workflow-center.js",
-                      "sha256":  "2C19D3F168A518904EAFCE575D78C235B12BC32C65E997F866DC7DD4D25C7865",
+                      "sha256":  "1275AA3A0FD559CBA512AD4A58574ACE6FB578934F5CB0987BF75E45A769B875",
                       "mode":  "text-lf"
                   },
                   {
                       "path":  "frontend/dist/workspace.js",
-                      "sha256":  "32B6F64876669C6C53E980C9988AFF636E16FEEA8D7C7D36B4EBA24338660E2D",
+                      "sha256":  "AFEA939BC41A2CC58F8E29D0E897438A1E5AFD6E546EC293880CD07557BB7044",
                       "mode":  "text-lf"
                   },
                   {
@@ -485,7 +485,7 @@
                   },
                   {
                       "path":  "frontend/source/app.css",
-                      "sha256":  "A54E59A2F9F8B348E1C5786A27CBE2CEF1814FC307E4579D3229B04A901D9029",
+                      "sha256":  "BF942026D6F62B29D19D0D4594E4B05111D3E16AA3C9667B4F232399807265F2",
                       "mode":  "text-lf"
                   },
                   {
@@ -495,7 +495,7 @@
                   },
                   {
                       "path":  "frontend/source/automation.js",
-                      "sha256":  "6F754E5E5E90F81633C0B72B50F9E271EB988D6289AD3CACE9187356C77EB41D",
+                      "sha256":  "7DC2FD036CD5AB7C1BFF05596B3B793ED647B7A363EACC454298CCA67C6434F7",
                       "mode":  "text-lf"
                   },
                   {
@@ -510,17 +510,17 @@
                   },
                   {
                       "path":  "frontend/source/client.js",
-                      "sha256":  "BE249A8EA5B1EBBDCCA4BA08CFCC3CB1F05559BB03D3F47F365B1C55E5B0F742",
+                      "sha256":  "1BA2D7306889771EC8A8CF3962B8EEE8C94DEEEC5B8589DE1831804A8B555508",
                       "mode":  "text-lf"
                   },
                   {
                       "path":  "frontend/source/components.js",
-                      "sha256":  "C9142FE565A576BA9186F2172D6352D0F2C6513E3535572D6D2B218290E31B6B",
+                      "sha256":  "0EFDAD405044F5D0F3453E0710839B83C09643A0941BD4F086E374F5C43A9AD4",
                       "mode":  "text-lf"
                   },
                   {
                       "path":  "frontend/source/control-view.js",
-                      "sha256":  "3FE69F613D9ABE6D9CAB552107A2A6C4B1D180FB3D3248D770EB9973B1A0204C",
+                      "sha256":  "2244C3F006B74F74A38E80636BAB8A3CE46849A941E59A4CDEEA4D0D9322B429",
                       "mode":  "text-lf"
                   },
                   {
@@ -575,7 +575,7 @@
                   },
                   {
                       "path":  "frontend/source/index.html",
-                      "sha256":  "AD53045EA0D7069A87932AC30DE7BFF3E9AF4E0E36693F8D7C479DCEE4E442C6",
+                      "sha256":  "77029F5B97B1776E7618AA37CC9E1D55E6E37D6AFE23F371DA869902CD20FDD7",
                       "mode":  "text-lf"
                   },
                   {
@@ -585,7 +585,7 @@
                   },
                   {
                       "path":  "frontend/source/manual-engine.js",
-                      "sha256":  "314CC8D7957D7F03E8CF143545B0DC0587896C41503AB2C6C91759CF99416663",
+                      "sha256":  "19C88A03A6FD279ED0F8CFCFBB571849E6E52AD20A4A5BC457C15E067AF7556D",
                       "mode":  "text-lf"
                   },
                   {
@@ -595,7 +595,7 @@
                   },
                   {
                       "path":  "frontend/source/operation-view.js",
-                      "sha256":  "F297FFBE42C6602B867069E4F718F8C5C8B6A4B9BB85E65302FE4E2554F4D7B5",
+                      "sha256":  "764309C5D8C97EEAA0A1CB8AE02DE5C399A1E32B26F8D601BF7AB613672D47DD",
                       "mode":  "text-lf"
                   },
                   {
@@ -605,12 +605,12 @@
                   },
                   {
                       "path":  "frontend/source/password-policies.js",
-                      "sha256":  "87BBEB0BEE32E475BE8C3EF85ED5CD62D6E8638F22C904EE53ADCC0DA6A53CDB",
+                      "sha256":  "4D98FC12BAAAF15CD3587CEE57DF5F0ED8462AED163FC08DF87EC61FE7B48B5B",
                       "mode":  "text-lf"
                   },
                   {
                       "path":  "frontend/source/preferences.js",
-                      "sha256":  "5ECA0E31057224DBBA03069EECDDD33CD659AF70641323A52B8CD99354CC49C0",
+                      "sha256":  "A586D625ACD8A527FE6354BF3BC4E50D4CDDA644FE0FCA9233FBA5D81936601B",
                       "mode":  "text-lf"
                   },
                   {
@@ -620,7 +620,7 @@
                   },
                   {
                       "path":  "frontend/source/product.js",
-                      "sha256":  "AC00159ED6564EA81639C76CB1F8CC67416522A7345C39E9CC1FA44690FEEFE7",
+                      "sha256":  "8E2C02EFE849A7CDFD37C25EF8D53A96022A48FCB1772B884A1A09B578C1BC43",
                       "mode":  "text-lf"
                   },
                   {
@@ -650,7 +650,7 @@
                   },
                   {
                       "path":  "frontend/source/styles/components.css",
-                      "sha256":  "E09A1205623AE323D07F8A3B3629E018BDA5365CC36D0C797BA875BB7A0D8604",
+                      "sha256":  "B0C90A52B3E77BF51EF44071F570479E1D66C64A2C86F10ABA33A62CC2243AE6",
                       "mode":  "text-lf"
                   },
                   {
@@ -720,12 +720,12 @@
                   },
                   {
                       "path":  "frontend/source/workflow-center.js",
-                      "sha256":  "2C19D3F168A518904EAFCE575D78C235B12BC32C65E997F866DC7DD4D25C7865",
+                      "sha256":  "1275AA3A0FD559CBA512AD4A58574ACE6FB578934F5CB0987BF75E45A769B875",
                       "mode":  "text-lf"
                   },
                   {
                       "path":  "frontend/source/workspace.js",
-                      "sha256":  "32B6F64876669C6C53E980C9988AFF636E16FEEA8D7C7D36B4EBA24338660E2D",
+                      "sha256":  "AFEA939BC41A2CC58F8E29D0E897438A1E5AFD6E546EC293880CD07557BB7044",
                       "mode":  "text-lf"
                   },
                   {
@@ -735,7 +735,7 @@
                   },
                   {
                       "path":  "GpoRemediator.ps1",
-                      "sha256":  "4BCD2AA38018EF2AF5D8E679A1B581B0244A4AF3CE7038C3E7E14B7E7B091DCB",
+                      "sha256":  "FA105B9C10A3D823CD7EB6E20C0398554EA82EECB8200C955A2700A68B3DE035",
                       "mode":  "text-lf"
                   },
                   {
@@ -750,28 +750,23 @@
                   },
                   {
                       "path":  "README.md",
-                      "sha256":  "74833B103F85A3EDDC9FECC3ED26E479AF923AC353999FC9833EA7C3FBD5462B",
+                      "sha256":  "44F7A154368900253AE941F856A88D3D345F7CBE2D5D448B8CC7EA793A32323E",
                       "mode":  "text-lf"
                   },
                   {
                       "path":  "release/GpoRemediator-runtime-win-x64.zip",
-                      "sha256":  "F7054CCB60DBC5341BB429BFC8DF47E761709E528D0337B836D0F58968D5C3FB",
+                      "sha256":  "7F5B04679CF9CCBC4107E1D01E2FBC6E3D72027B0AC5B9EF8E196AA923B16D19",
                       "mode":  "binary"
                   },
                   {
                       "path":  "release/GpoRemediator-runtime-win-x64.zip.sha256",
-                      "sha256":  "0FEA746FF447F5AD5498D6A1BE4440D03C32C33A174631528529752B2F20DC31",
+                      "sha256":  "2B0972AF04543564EC9055E077F8CB098438C064271CBF1CEFD7441B4AC47C3B",
                       "mode":  "text-lf"
                   },
                   {
                       "path":  "release/README.md",
                       "sha256":  "FAA02CB113AFC16EDE6C794E3C6D6A9C175C9D6CEAFD422DE2EBA705B3BC2C80",
                       "mode":  "text-lf"
-                  },
-                  {
-                      "path":  "scripts/__pycache__/Audit-MappingSources.cpython-312.pyc",
-                      "sha256":  "292E14F0A8F76CB9B54DBCD79849373498AD88F41E20DF170C1ADB64AC08A04A",
-                      "mode":  "binary"
                   },
                   {
                       "path":  "scripts/Audit-AdmxMappings.py",
@@ -805,7 +800,7 @@
                   },
                   {
                       "path":  "scripts/Build-ReleaseManifest.ps1",
-                      "sha256":  "555D25B207B9971E4A57FE4D03613D3CD79F53F088FFAF1BFBF0492E2BA7C09E",
+                      "sha256":  "9DD2CDA60E674AC290BB371D52F599D93AC33DF2D086882ED90D43CD74D2453D",
                       "mode":  "text-lf"
                   },
                   {
@@ -825,7 +820,7 @@
                   },
                   {
                       "path":  "scripts/Invoke-FullAuditTests.ps1",
-                      "sha256":  "533A0687F3A9EF7CF3152E9ED9077BCFF0124BE041430C77ED91637ED2565CDA",
+                      "sha256":  "D92F650B734BD73ACAD737FFD65AE3DE3B49405A0818D4FAF64553EBBB16664C",
                       "mode":  "text-lf"
                   },
                   {
@@ -885,7 +880,7 @@
                   },
                   {
                       "path":  "scripts/Test-ControlTargeting.cjs",
-                      "sha256":  "DD22D4F522D0D306C811E5A0462B888ECBF93797CC5B2441E84329F67033D577",
+                      "sha256":  "031073CCF0774D8F39167C5825A9A01157B9C0F303BFDF813E6283FBA894AB9F",
                       "mode":  "text-lf"
                   },
                   {
@@ -900,7 +895,7 @@
                   },
                   {
                       "path":  "scripts/Test-EndpointBatching.ps1",
-                      "sha256":  "DEE96B82049EDB21BE88BF7CE13745A3320D65D69E6F781E228F959F8CE598ED",
+                      "sha256":  "DC5A9AFB284687EA7D2FCB7787190BD20912677887017363C6C54193640ED12F",
                       "mode":  "text-lf"
                   },
                   {
@@ -910,7 +905,7 @@
                   },
                   {
                       "path":  "scripts/Test-EndpointEvidence.ps1",
-                      "sha256":  "E9AF87DC9CFBF00215822EF640419EAD368DBDF30AA497200290F08083676D95",
+                      "sha256":  "409C9A23B09F69460DDA3BF7700A401EDA3E92FEBA46E6911859F5ECD56C03A9",
                       "mode":  "text-lf"
                   },
                   {
@@ -950,12 +945,12 @@
                   },
                   {
                       "path":  "scripts/Test-FrontendSystem.cjs",
-                      "sha256":  "6A29853127B6052F0AF507A81BC6CC7EEBD511927B1C0569AC72E2516E814CC8",
+                      "sha256":  "39132A40750046CC4A52D4A09847C3444E176FCEE9DCC9418D87D5AB5B308DBD",
                       "mode":  "text-lf"
                   },
                   {
                       "path":  "scripts/Test-GpoMappings.ps1",
-                      "sha256":  "51FCDDC3950C9600DFC8BCBC6EE22D4F226F76D830962A492D8DEB869940D738",
+                      "sha256":  "3C4AC020201AC79B9496DD62D780CA07BB8BDA0C611AF0CC1FCB0E76235E7C7B",
                       "mode":  "text-lf"
                   },
                   {
@@ -1030,7 +1025,7 @@
                   },
                   {
                       "path":  "scripts/Test-RecoveryUi.cjs",
-                      "sha256":  "9FCDEE9950B8D8AB15E3A286386E06ED4678C179A15D9DC08CC3321C5620EA0C",
+                      "sha256":  "F24B787E52BF6066E3EC45BAF1D858FE434DECD2A30C132AE513C9ED4D96D7DA",
                       "mode":  "text-lf"
                   },
                   {
@@ -1040,7 +1035,7 @@
                   },
                   {
                       "path":  "scripts/Test-RemediationChain.ps1",
-                      "sha256":  "D32D8131296B5144DAE4947E1B815F7E42EABCE41C6C69B94B7CE0467A7B921A",
+                      "sha256":  "3EC4EEC0C2F63F74C54A398C997EB480639D32B02DCC118771D836029F84E686",
                       "mode":  "text-lf"
                   },
                   {
@@ -1100,7 +1095,7 @@
                   },
                   {
                       "path":  "scripts/Test-UX-Contract.cjs",
-                      "sha256":  "1625ADF2590B6D6687E340B002E41C5D02672E6015A4044175838EBCFD98C5C1",
+                      "sha256":  "B56202085DA36E420CF25B443ACADD7757F083A280A590D7AF54EF04CF6D1F06",
                       "mode":  "text-lf"
                   },
                   {
@@ -1145,7 +1140,7 @@
                   },
                   {
                       "path":  "scripts/WorkspaceRegression/Program.cs",
-                      "sha256":  "624D3CA211715B62330EB653ECD1C80A4CF986B716499A8820CE7A02897A1B2C",
+                      "sha256":  "85016C3AC5CDA92A64C275847A0F3624ACBA9A24C7949E2C4E0EF97948C343BB",
                       "mode":  "text-lf"
                   },
                   {

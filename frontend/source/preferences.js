@@ -20,9 +20,9 @@
   }
   validate.sequence=0;
   function decorate(root){
-    for(const group of root.querySelectorAll('[role=tablist]')){
+    for(const [groupIndex,group] of [...root.querySelectorAll('[role=tablist]')].entries()){
       const tabs=[...group.querySelectorAll('[role=tab]')],active=tabs.find(x=>x.getAttribute('aria-selected')==='true')||tabs[0];
-      tabs.forEach(tab=>tab.tabIndex=tab===active?0:-1);
+      tabs.forEach((tab,index)=>{tab.tabIndex=tab===active?0:-1;if(!tab.id)tab.id='tab-'+root.id+'-'+groupIndex+'-'+index;});
     }
     for(const input of root.querySelectorAll('input:not([id]),select:not([id]),textarea:not([id])')){
       const name=input.name||input.dataset.entFilter;

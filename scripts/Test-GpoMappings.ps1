@@ -113,6 +113,18 @@ Assert-Test ($noneRows[0].'Setting Value' -eq '4') 'Explicit No Auditing must us
 Assert-Test (Mapping-Matches $selection.gpoId $noneMap $selection) 'Explicit No Auditing did not normalize to internal mask zero'
 [IO.File]::WriteAllText($path,('Machine Name,Policy Target,Subcategory,Subcategory GUID,Inclusion Setting,Exclusion Setting,Setting Value'+"`r`n"+(Audit-Row $map.items[0].name $map.items[0].guid 'Not Specified' 0)+"`r`n"))
 Assert-Test (!(Mapping-Matches $selection.gpoId $noneMap $selection)) 'Unchanged GPO audit setting matched explicit No Auditing'
+# Per-user audit rows share subcategories with the system policy. They are
+# independent records and must survive system policy reads and writes verbatim.
+$userRow=',S-1-5-21-100-200-300-1001,"User override",'+[string]$map.items[0].guid+',Failure,,2'
+[IO.File]::WriteAllText($path,($header+"`r`n"+$userRow+"`r`n"))
+Assert-Test ($null -eq (Get-ItemCurrent $selection.gpoId $map $map.items[0])) 'Per-user audit row supplied the computer policy value'
+Assert-Test (Write-Mapping $plan $map) 'System audit policy could not be added beside a per-user row'
+Assert-Test (Mapping-Matches $selection.gpoId $map $selection) 'System/per-user audit rows were incorrectly treated as duplicates'
+Assert-Test ([IO.File]::ReadAllText($path).Contains($userRow)) 'Writing system audit policy changed a per-user audit row'
+$null=Write-Mapping $plan $noneMap
+Assert-Test ((Get-ItemCurrent $selection.gpoId $noneMap $noneMap.items[0]) -eq '0') 'System audit replacement matched the per-user row'
+Assert-Test ([IO.File]::ReadAllText($path).Contains($userRow)) 'Replacing system audit policy changed a per-user audit row'
+Write-Output 'PASS audit system/per-user subcategory isolation during read, append and replacement'
 $map=$catalog.mappings|Where-Object{$_.id -eq '2.3.17.8'};$item=$map.items[0]
 $script:registry=@{};$script:registry[$item.key+'|'+$item.name]=@{value=1;type='String'}
 Assert-Test (!(Mapping-Matches $selection.gpoId $map $selection)) 'Wrong registry type passed publication verification'

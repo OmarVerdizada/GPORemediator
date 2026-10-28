@@ -1,8 +1,6 @@
-GPO Remediator 3.14.7 - backup access and remediation workflow repair
+GPO Remediator 3.16.7 - mixed OU scopes, GPO sources and effective verification
 
-See docs/RELEASE-3.14.7.md for changes and validation boundaries.
-The self-contained backend/runtime archive is rebuilt from current source.
-The frontend ships offline with one compiled stylesheet and local SVG icons.
-No credentials are persisted in browser storage or configuration files.
-Apply and Rollback retain production authorization, impact acknowledgements and explicit confirmation.
-Recorded results, publication, replication and effective policy remain distinct.
+See docs/RELEASE-3.16.7.md and docs/audit/3.16.7/validation.md.
+Apply/Refresh collect effective endpoint evidence. Unchanged values require review;
+unavailable evidence remains incomplete. Rollback refresh schedules both policy halves.
+Deploy the complete package. No live AD/endpoint certification is claimed.

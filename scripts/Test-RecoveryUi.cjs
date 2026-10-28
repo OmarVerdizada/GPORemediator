@@ -268,15 +268,17 @@ const server=http.createServer(async(req,res)=>{
   await page.locator('[data-tab=remediation]').click();
   assert.equal(await page.locator('#gpo-selection [name=endpointScopeDn]').count(),1);
   assert.equal(await page.locator('#gpo-selection [name=verificationUser]').count(),1);
-  await page.locator('#gpo-selection .target-scope-note').screenshot({path:path.join(screens,'user-scope-card-desktop.png')});
+  await page.locator('#gpo-selection .scope-target-label').first().screenshot({path:path.join(screens,'user-scope-card-desktop.png')});
   const userViewport=page.viewportSize();
   await page.setViewportSize({width:390,height:844});
-  await page.locator('#gpo-selection .target-scope-note').screenshot({path:path.join(screens,'user-scope-card-mobile.png')});
+  await page.locator('#gpo-selection .scope-target-label').first().screenshot({path:path.join(screens,'user-scope-card-mobile.png')});
   await page.setViewportSize(userViewport);
   assert.equal(await page.locator('#gpo-selection input[value=Pdc]').count(),0,'User policy exposed a PDC refresh choice');
   await page.locator('[data-scope-open="scopeDn"]').click();
   await page.locator('#scope-search').fill('Users');
   await page.locator('[data-scope-choose="OU=Users,DC=test,DC=local"]').click();
+  assert.equal(await page.locator('#gpo-selection [name=endpointScopeDn]').inputValue(),'OU=Users,DC=test,DC=local','Mixed scope should be used for endpoints by default');
+  await page.locator('#gpo-selection details summary').filter({hasText:'Optional session verification'}).click();
   await page.locator('[data-scope-open="endpointScopeDn"]').click();
   await page.locator('#scope-search').fill('Endpoints');
   await page.locator('[data-scope-choose="OU=Endpoints,DC=test,DC=local"]').click();
@@ -295,7 +297,7 @@ const server=http.createServer(async(req,res)=>{
   await page.goto(`http://127.0.0.1:${server.address().port}/#/benchmark`);
   await page.locator('#catalog-search').fill('1.1.1');await page.locator('[data-rule="1.1.1"]').first().click();
   await page.locator('[data-tab=remediation]').click();
-  assert.ok((await page.locator('.target-scope-note').textContent()).includes('Domain account policy'));
+  assert.ok((await page.locator('#gpo-selection .domain-policy-boundary').first().textContent()).includes('Domain root'));
   assert.equal(await page.locator('#gpo-selection input[name=refresh][value=Scope]').count(),0);
   assert.equal(await page.locator('#gpo-selection input[name=firstLink]').count(),0);
   assert.equal(await page.locator('#gpo-selection>.primary-action').isDisabled(),true);

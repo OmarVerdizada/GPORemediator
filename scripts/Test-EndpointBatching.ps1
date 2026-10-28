@@ -13,6 +13,8 @@ function Run-Directory($Plan){$temp}
 function Refresh-Targets {param($Strategy,$ScopeDn,$EndpointScopeDn,$PolicyScope) $script:targets|Where-Object{$_ -ne $script:missing}}
 function Verify-Published {param($Plan,$Map,$CheckEndpoints) @{published=$true;linked=$true;effective='ENDPOINT_VERIFICATION_PENDING'}}
 function Endpoint-CredentialOptions {@{Credential='fixture-credential-not-a-secret'}}
+$script:rollbackSchedules=@()
+function Invoke-GPUpdate {param($Computer,$Force,$RandomDelayInMinutes,$ErrorAction,$Target) $script:rollbackSchedules+=@{computer=$Computer;target=$Target;force=$Force}}
 function Invoke-Command {
  param($ComputerName,$Authentication,$Credential,$ThrottleLimit,$ScriptBlock,$ErrorAction)
  Check ($Credential -eq 'fixture-credential-not-a-secret' -and $Authentication -eq 'Kerberos') 'computer refresh uses explicit delegated credential across the second hop'|Out-Null
@@ -43,7 +45,9 @@ try{
  function Verify-Rollback {param($Plan,$Map,$Manifest) @{restored=$true;published=$false;linked=$false;effective='ROLLBACK_ENDPOINT_PENDING'}}
  @{phase='ROLLED_BACK'}|ConvertTo-Json|Set-Content -LiteralPath (Join-Path $temp 'manifest.json') -Encoding UTF8
  $rollbackTargets=@();for($offset=0;$offset -lt 201;$offset+=64){$Data.refreshOffset=$offset;$result=& $dispatch;Check ($result.state -eq 'ROLLED_BACK') 'rollback refresh preserves restored GPO status';$rollbackTargets+=@($result.refreshResults)}
- Check ($rollbackTargets.Count -eq 201 -and @($rollbackTargets|Where-Object state -ne 'COMPLETED').Count -eq 0) 'rollback completes computer processing across all pinned pages'
+ Check ($rollbackTargets.Count -eq 201 -and @($rollbackTargets|Where-Object state -ne 'SCHEDULED').Count -eq 0) 'rollback schedules both policy halves across all pinned pages'
+ Check ($script:rollbackSchedules.Count -eq 201 -and @($script:rollbackSchedules|Where-Object{$_.target -or !$_.force}).Count -eq 0) 'delegated rollback refresh schedules computer and signed-in user policies with force'
+ Check ($script:remoteCalls -eq $callsBefore) 'rollback must not refresh only the remoting operator computer context'
 
 
  # User refresh must schedule logged-on user processing, never run computer

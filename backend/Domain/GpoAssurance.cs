@@ -6,6 +6,17 @@ public record GpoAssuranceStage(string Stage,string Status,string Evidence);
 // completion, applicability, or runtime enforcement from a stored policy value.
 public static class GpoAssurance
 {
+    public static bool EffectiveVerified(GpoWorkflowResult r)
+    {
+        if(!r.GpoPublished || !r.LinkVerified || r.Verification?.ReplicationConverged!=true)return false;
+        if(r.EffectiveStatus=="DOMAIN_VALUE_MATCHES_ON_SELECTED_DC")return true;
+        var checks=r.EndpointChecks??[];
+        if(checks.Length==0 || checks.Any(x=>x.State!="VERIFIED"))return false;
+        return r.EffectiveStatus=="VERIFIED_ON_SAMPLE" || r.EffectiveStatus=="VERIFIED_ON_ALL_TARGETS" &&
+            r.EndpointCoverage is {Complete:true} coverage && coverage.Total>0 && coverage.Checked==coverage.Total &&
+            checks.Select(x=>x.Hostname).Distinct(StringComparer.OrdinalIgnoreCase).Count()==coverage.Total;
+    }
+
     public static GpoAssuranceStage[] Stages(GpoWorkflowResult r)
     {
         var checks=r.EndpointChecks??[];

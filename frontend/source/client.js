@@ -39,7 +39,7 @@
     SYSVOL_WRITE_ACCESS_DENIED:"You cannot write the selected GPO files in SYSVOL. Ask an administrator to check Edit settings delegation and NTFS Effective Access for this GPO. Repair permissions only for the selected GPO, then sign in again.",
     GPO_ACCESS_UNVERIFIED:"Effective write access could not be verified, so no plan was created. Check GPO Edit settings delegation, SYSVOL Effective Access, Link GPOs on the selected OU/domain, metadata read access and DC connectivity. Sign in again and retry.",
     DOMAIN_POLICY_PRIORITY_REQUIRED:"Domain password/lockout policy requires the selected GPO to be enabled at link order 1 on the domain root.",
-    DOMAIN_REFRESH_SCOPE_INVALID:"Computer OU refresh does not apply to domain account policy. Refresh the PDC or wait for the normal policy cycle.",
+    DOMAIN_REFRESH_SCOPE_INVALID:"OU refresh does not apply to domain account policy. Refresh the PDC or wait for the normal policy cycle.",
     PASSWORD_SCOPE_MISMATCH:"This control requires the domain root. Choose a compatible target; this is a scope mismatch.",
     GPO_OU_REQUIRED:"This computer/user control requires an OU. Choose the appropriate OU instead of the domain root.",
     GPO_LOGIN_REQUIRED:"The execution session expired or the service restarted. The sign-in screen will open.",

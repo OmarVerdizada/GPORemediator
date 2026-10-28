@@ -93,3 +93,14 @@ assert.ok(!copied.includes('<unsafe>'));
 for(const name of ['Geist-Variable.woff2','GeistMono-Variable.woff2'])assert.equal(fs.readFileSync(path.join(source,'fonts',name)).subarray(0,4).toString(),'wOF2');
 assert.ok(fs.readFileSync(path.join(source,'fonts/LICENSE.txt'),'utf8').includes('SIL OPEN FONT LICENSE'));
 console.log('Premium: PASS (405 cells, 19 domains, status evidence, copy escaping and offline fonts).');
+
+// Configured-value provenance is independent of the resultant endpoint policy.
+const policySource={gpoId:'11111111-1111-1111-1111-111111111111',gpoName:'Baseline <unsafe>'};
+assert.match(ui.valueSource(policySource,0),/Baseline &lt;unsafe&gt;/);
+assert.match(ui.valueSource(policySource,''),/11111111-1111-1111-1111-111111111111/);
+assert(!ui.valueSource(policySource,null,{name:'must not appear'}).includes('Baseline'));
+assert.match(ui.valueSource(policySource,null),/Source GPO: —/);
+assert.match(ui.valueSource(null,'1',{id:policySource.gpoId,name:'Legacy recorded GPO'}),/Legacy recorded GPO/);
+console.log('PASS configured-value GPO source, zero/empty values, unknown source and HTML escaping');
+
+assert.equal(ui.status(s,'PUBLISHED').tone,'pending');assert.equal(ui.status(s,'REFRESH_COMPLETED').tone,'pending');
