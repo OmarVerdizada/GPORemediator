@@ -19,6 +19,15 @@ function Get-ADObject {param($Identity,$Server,$Properties,$ErrorAction) if($scr
 function Remote-GpoFolder {param($Server,$Id) Join-Path $temp 'remote'}
 $selection=@{gpoId='11111111-1111-1111-1111-111111111111'}
 try{
+ $cfg.emitProgress=$true
+ $stream=@(Verification-Metadata $selection 6>&1)
+ $events=@($stream|Where-Object{$_ -is [Management.Automation.InformationRecord]})
+ $payload=@($stream|Where-Object{$_ -isnot [Management.Automation.InformationRecord]})
+ Assert-Test ($payload.Count -eq 1 -and $payload[0].replicationConverged) 'streamed checks do not contaminate the metadata return value'
+ Assert-Test ($events.Count -eq 4 -and $events[0].MessageData.gpoCheck.state -eq 'CHECKING' -and $events[-1].MessageData.gpoCheck.state -eq 'VERIFIED') 'each controller emits checking and measured result before return'
+ $serialized=@($events|ForEach-Object{'GPO_CHECK:'+($_.MessageData.gpoCheck|ConvertTo-Json -Depth 5 -Compress)})
+ Assert-Test ($serialized.Count -eq 4 -and ($serialized[0].Substring(10)|ConvertFrom-Json).phase -eq 'REPLICATION') 'transport serializes product-owned information records as separate progress frames'
+ $cfg.emitProgress=$false
  $pagePlan=@{preview=@{verificationComputers=@(1..201|ForEach-Object{'ws'+$_+'.example.test'})}}
  $seen=@();for($offset=0;$offset -lt 201;$offset+=25){$Data=@{verificationOffset=$offset};$page=@(Verification-Page $pagePlan @());Assert-Test ($page.Count -le 25) 'verification page remains bounded';$seen+=$page}
  Assert-Test ($seen.Count -eq 201 -and @($seen|Sort-Object -Unique).Count -eq 201) 'every pinned endpoint is checked exactly once across pages'

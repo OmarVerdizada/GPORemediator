@@ -1,4 +1,6 @@
-# GPO Remediator 3.16.8
+# GPO Remediator 3.16.9
+
+3.16.9 streams real verification stages and per-host evidence into the control screen, distinguishes stored GPO settings from an unverified OU value, and fixes compact navigation. See [release notes](docs/RELEASE-3.16.9.md) and [cleanup recommendations](docs/CLEANUP-RECOMMENDATIONS.md).
 
 3.16.8 synchronizes approved domain account settings with the effective AD policy, snapshots those properties for guarded rollback, and replaces the crowded result page with an actual-versus-requested comparison. See [release notes](docs/RELEASE-3.16.8.md).
 

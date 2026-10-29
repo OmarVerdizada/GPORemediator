@@ -1,6 +1,8 @@
-GPO Remediator 3.16.8 - effective domain account policy and compact workspace
+GPO Remediator 3.16.9 - live verification and target-aware preview
 
-See docs/RELEASE-3.16.8.md.
-Domain account Apply backs up and updates the selected GPO and the approved AD property.
-The result page compares requested and actual values, with publication details separate.
-Live AD validation is still required on the deployment domain.
+See docs/RELEASE-3.16.9.md.
+Live checks display server stages and measured host results as they arrive.
+Stored GPO values and direct target link state are separate from endpoint evidence.
+Compact navigation keeps the logo and expand control inside the rail.
+See docs/CLEANUP-RECOMMENDATIONS.md for consolidation candidates.
+Deployment-domain verification remains required.

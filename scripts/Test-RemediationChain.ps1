@@ -1,4 +1,4 @@
-﻿# Real worker dispatch + writer + manifests against private filesystem fixtures.
+# Real worker dispatch + writer + manifests against private filesystem fixtures.
 # AD, GPMC, DNS and remote endpoints are mocked. No live domain is contacted.
 param([switch]$AllControls,[string]$ReportPath)
 $ErrorActionPreference='Stop';Set-StrictMode -Version Latest
@@ -15,7 +15,7 @@ $domainDn='DC=example,DC=test';$target='OU=Pilot,'+$domainDn
 $domain=@{DNSRoot='example.test';DistinguishedName=$domainDn;PDCEmulator='dc.example.test'};$dc=@{HostName='dc.example.test'}
 $protectedBuiltInGpoIds=@();$gpoId='11111111-1111-1111-1111-111111111111'
 $script:folder=Join-Path $temp 'Policy';$script:rawLinks='';$script:version=0;$script:extensions='';$script:userExtensions='';$script:registry=@{};$script:backupDenied=$false;$script:refreshes=0
-function Check($ok,$name){if(!$ok){throw $name};Write-Output ('PASS '+$name)}
+function Check($ok,$name){if(!$ok){foreach($record in @($Error|Select-Object -First 3)){[Console]::Error.WriteLine(('Fixture diagnostic: '+$record.Exception.ToString()+' Stack: '+$record.ScriptStackTrace))};throw $name};Write-Output ('PASS '+$name)}
 function Sysvol-Policies {return $script:folder}
 function Gpo-Folder {param($Id) return $script:folder}
 function Remote-GpoFolder {param($Server,$Id) return $script:folder}
@@ -99,6 +99,11 @@ try{
   $Operation='gpoApply';$Data=@{plan=$plan;mapping=$map;consent=@{confirmation='APPLY'}};$result=& $dispatch
   Check ($result.state -eq 'PUBLISHED') ('backup/write/link/publication '+$map.id+' '+$case[1]+': '+$result.message)
   Check ($result.currentValueSource.gpoId -eq $gpoId -and $result.currentValueSource.gpoName -eq 'Dedicated pilot') ('configured source '+$map.id)
+  # The stored value can match even when the selected target has no direct link.
+  $savedLinks=$script:rawLinks;$script:rawLinks=''
+  $unlinked=Preview $s $map
+  Check (!$unlinked.noChange -and $null -eq $unlinked.existingLink -and $unlinked.previousValue -eq $result.currentValue) ('matching stored GPO without target link is not NO_CHANGE '+$map.id)
+  $script:rawLinks=$savedLinks
   Check ($script:refreshes -eq $refreshBefore) 'Apply does not schedule unrequested endpoint refresh'
   if($case[1] -ne 'Users'){
    $Operation='gpoRefresh';$Data.refresh=if($case[1] -eq 'Domain'){'Pdc'}else{'Scope'};$result=& $dispatch

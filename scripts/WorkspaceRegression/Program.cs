@@ -20,6 +20,12 @@ static void Check(bool value,string message){if(!value)throw new Exception(messa
 static void Reject(Action action,string code){try{action();throw new Exception("Expected "+code);}catch(PolicyException error){Check(error.Code==code,error.Code+" != "+code);}}
 static async Task<WorkflowJob> Done(WorkspaceWorkflows jobs,string id){for(var i=0;i<600;i++){var job=jobs.Get(id,"TEST\\Admin");if(!WorkspaceRules.Active(job.State)&&job.State!="VERIFY_SCHEDULED")return job;await Task.Delay(10);}throw new Exception("Workflow did not finish");}
 var phases=new List<string>();
+var liveChecks=new List<GpoLiveCheck>();
+var liveFrame=JsonSerializer.Serialize(new GpoLiveCheck("ENDPOINT","CHECKING","ws.example.test",null,"Reading effective policy.","untrusted-time"));
+using(var reader=new StreamReader(new MemoryStream(Encoding.UTF8.GetBytes("GPO_CHECK:"+liveFrame+"\nGPO_CHECK:{invalid}\nGPO_CHECK:"+liveFrame.Replace("CHECKING","FAKE_SUCCESS")+"\n{\"ok\":true}")))){
+ var output=await WindowsPowerShellExecutor.ReadOutputAsync(reader,8192,CancellationToken.None,null,liveChecks.Add);
+ Check(output=="{\"ok\":true}"&&liveChecks.Count==1&&liveChecks[0].State=="CHECKING"&&liveChecks[0].CheckedAt!="untrusted-time","Live evidence frames must be bounded, validated, timestamped and separate from the final response");
+}
 using(var reader=new StreamReader(new MemoryStream(Encoding.UTF8.GetBytes("GPO_STAGE:BACKUP\r\nGPO_STAGE:WRITING\n{\"ok\":true}")))){
  var output=await WindowsPowerShellExecutor.ReadOutputAsync(reader,1024,CancellationToken.None,phases.Add);
  Check(output=="{\"ok\":true}"&&phases.SequenceEqual(new[]{"BACKUP","WRITING"}),"Streaming protocol mixed stages and result");

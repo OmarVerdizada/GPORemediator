@@ -51,22 +51,6 @@
         <p>${live} ${'controls currently have real GPO mappings. Compliance requires live verification evidence.'}</p></div>
       <a href="#/workspace">${'Batch workflows'} <span aria-hidden="true">↗</span></a></div>`;
   }
-  function remediation(state,run=null){
-    const L=(a,b)=>label(a,b,state.lang),selection=run?.plan?.selection||state.selection||{},plan=run?.plan||state.plan;
-    const gpo=run?{id:selection.gpoId,...run.plan?.preview?.gpo}:(state.inventory?.gpos||[]).find(x=>x.id===selection.gpoId),scope=run?{name:selection.scopeDn,dn:selection.scopeDn,...run.plan?.preview?.scope}:(state.inventory?.scopes||[]).find(x=>x.dn===selection.scopeDn);
-    const steps=[
-      ['Control',!!state.selectedRule],
-      ['GPO / OU',!!gpo&&!!scope],
-      ['Preview',!!plan],
-      ['Approval',run?!!run.approval:!!state.approval?.reviewed],
-      ['Result',!!run?.result]
-    ];
-    return `<section class="studio-remediation-context"><div class="studio-context-head"><span class="studio-eyebrow">${'CHANGE CONTEXT'}</span><span class="studio-context-tag">${dot('blue')} ${run?'Recorded operation':'Read-only preview first'}</span></div>
-      <div class="studio-context-grid"><div><small>CIS CONTROL</small><strong>${html(state.selectedRule?.id||'—')}</strong><span>${html(state.selectedRule?.title||'—')}</span></div>
-        <div><small>${'SELECTED GPO'}</small><strong title="${html(gpo?.name||'')}">${html(gpo?.name||'Not selected')}</strong><span>${html(gpo?.id||'—')}</span></div>
-        <div><small>${'TARGET OU / DOMAIN'}</small><strong title="${html(scope?.name||'')}">${html(scope?.name||'Not selected')}</strong><span title="${html(scope?.dn||'')}">${html(scope?.dn||'—')}</span></div></div>
-      <ol class="studio-steps">${steps.map(([t,done],i)=>`<li class="${done?'done':i===steps.findIndex(x=>!x[1])?'current':''}"><span>${done?'✓':i+1}</span><small>${t}</small></li>`).join('')}</ol></section>`;
-  }
   function operations(state){
     const L=(a,b)=>label(a,b,state.lang),list=state.history||[],newest=last(list);
     const reviewed=list.filter(h=>status(h)==='review').length,verified=list.filter(h=>status(h)==='verified').length;
@@ -76,5 +60,5 @@
   function workflow(state){const L=(a,b)=>label(a,b,state.lang);
     return `<section class="studio-workflow-brief"><div><span class="studio-eyebrow">${'CONTROLLED EXECUTION'}</span><strong>${'Preview → Approval → Apply → Verify'}</strong><small>${'Write operations always require backend scope, backup and approval checks.'}</small></div><a href="#/diagnostics">${'Check readiness'} ↗</a></section>`;
   }
-  window.GpoStudioUI=Object.freeze({dashboard,catalog,remediation,operations,workflow,status});
+  window.GpoStudioUI=Object.freeze({dashboard,catalog,operations,workflow,status});
 })();

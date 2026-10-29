@@ -32,6 +32,7 @@ public record GpoImpactDetails(string Inheritance, bool BlockInheritance, GpoCon
     GpoAffectedObjects AffectedObjects, string[] ExistingLinkScopes, string[] SecurityFiltering, string? WmiFilter);
 public record GpoDcVersionStatus(string DomainController, string? AdVersion, string? GptVersion, bool Reachable, bool VersionsMatch, string Message);
 public record GpoEndpointCheck(string Hostname, string State, string Message, string? ActualValue = null);
+public record GpoLiveCheck(string Phase, string State, string Subject, string? ActualValue, string Message, string CheckedAt);
 public record GpoVerificationDetails(string AdVersion, string GptVersion, bool VersionsMatch,
     string[] DomainControllers, string[] ReplicationWarnings, string CheckedAt,
     bool ReplicationConverged = false, GpoDcVersionStatus[]? DcVersions = null,
@@ -63,7 +64,7 @@ public record GpoWorkflowResult(string State, string Message, string? BackupId, 
     public string[] Diagnosis => GpoAssurance.Diagnose(this);
 }
 public record GpoWorkflowRun(string Id, GpoWorkflowPlan Plan, GpoWorkflowResult Result, string UpdatedAt, GpoConsent? Approval = null,
-    string? CorrelationId = null, string? StartedAt = null, GpoStage[]? Stages = null);
+    string? CorrelationId = null, string? StartedAt = null, GpoStage[]? Stages = null, GpoLiveCheck[]? LiveChecks = null);
 public record GpoStage(string Phase, string StartedAt, string? FinishedAt = null);
 public record GpoRollbackAnchor(GpoWorkflowPlan Plan, string PostFingerprint);
 

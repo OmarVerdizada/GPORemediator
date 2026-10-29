@@ -8,7 +8,7 @@ namespace GpoRemediator.Infrastructure;
 // Fixed bundled scripts only. Optional GPO credentials travel over redirected stdin, never argv or logs.
 public sealed class WindowsPowerShellExecutor(ILogger<WindowsPowerShellExecutor> logger)
 {
-    public async Task<T> RunAsync<T>(string operation, object configuration, object payload, CancellationToken ct,Action<string>? progress=null)
+    public async Task<T> RunAsync<T>(string operation, object configuration, object payload, CancellationToken ct,Action<string>? progress=null,Action<GpoLiveCheck>? checkProgress=null)
     {
         if (!OperatingSystem.IsWindows()) throw new PolicyException("WINDOWS_REQUIRED", "Real execution requires a domain-connected Windows management host.");
         var gpo = new[] {"gpoExplain","gpoInventory","gpoReadiness","gpoPreview","gpoApply","gpoRollback","gpoRollbackInspect","gpoVerify","gpoRefresh","fgppPreview","fgppApply","fgppVerify","fgppRollback"}.Contains(operation);
@@ -46,7 +46,7 @@ public sealed class WindowsPowerShellExecutor(ILogger<WindowsPowerShellExecutor>
         {
             process.Start();
             started=true;
-            var stdout = ReadOutputAsync(process.StandardOutput,8_000_000,timeout.Token,progress);
+            var stdout = ReadOutputAsync(process.StandardOutput,8_000_000,timeout.Token,progress,checkProgress);
             var stderr = DrainAsync(process.StandardError,timeout.Token);
             await process.StandardInput.WriteAsync(JsonDefaults.Serialize(new { operation, configuration, payload }).AsMemory(), timeout.Token);
             process.StandardInput.Close();
@@ -92,7 +92,7 @@ public sealed class WindowsPowerShellExecutor(ILogger<WindowsPowerShellExecutor>
             if(started&&!process.HasExited) { try { process.Kill(entireProcessTree:true); } catch(InvalidOperationException) { } }
         }
     }
-    internal static async Task<string> ReadOutputAsync(StreamReader reader,int limit,CancellationToken ct,Action<string>? progress=null)
+    internal static async Task<string> ReadOutputAsync(StreamReader reader,int limit,CancellationToken ct,Action<string>? progress=null,Action<GpoLiveCheck>? checkProgress=null)
     {
         var output=new StringBuilder();var pending=new StringBuilder();var buffer=new char[4096];bool exceeded=false;int read,total=0;
         void Line(){
@@ -100,6 +100,16 @@ public sealed class WindowsPowerShellExecutor(ILogger<WindowsPowerShellExecutor>
             if(line.StartsWith("GPO_STAGE:",StringComparison.Ordinal)){
                 var phase=line[10..];
                 if(phase.Length<=64&&System.Text.RegularExpressions.Regex.IsMatch(phase,"^[A-Z_]+$"))progress?.Invoke(phase);
+            }else if(line.StartsWith("GPO_CHECK:",StringComparison.Ordinal)){
+                // Only bounded, product-owned evidence crosses the progress channel.
+                if(line.Length>8192)return;
+                try{
+                    var check=JsonSerializer.Deserialize<GpoLiveCheck>(line[10..],new JsonSerializerOptions{PropertyNameCaseInsensitive=true});
+                    if(check is not null && check.Phase is "GPO" or "LINK" or "REPLICATION" or "DOMAIN" or "ENDPOINT" &&
+                       check.State is "CHECKING" or "VERIFIED" or "MISMATCH" or "UNAVAILABLE" or "PENDING" &&
+                       check.Subject is {Length:<=256} && check.Message is {Length:<=2048} && check.ActualValue is null or {Length:<=4096})
+                        checkProgress?.Invoke(check with{CheckedAt=PolicyValues.Now()});
+                }catch(JsonException){ }
             }else output.Append(line);
         }
         while((read=await reader.ReadAsync(buffer.AsMemory(),ct))>0){

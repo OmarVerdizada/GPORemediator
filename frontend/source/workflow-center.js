@@ -32,13 +32,14 @@ window.GpoWorkflowCenter={create({state,esc,say,api,run,render}){
   const nextJobs=Array.isArray(jobs)?jobs:[],nextBatches=Array.isArray(batches)?batches:[];
   const changed=!c.loaded||!!c.error||JSON.stringify([c.jobs,c.batches,state.history])!==JSON.stringify([nextJobs,nextBatches,history]);
   c.jobs=nextJobs;c.batches=nextBatches;state.history=history;c.loaded=true;c.error='';
+  if(state.singleOperation){const op=state.singleOperation,job=nextJobs.find(j=>j.id===op.jobId);if(job){op.job=job;op.pollError='';if(['NEEDS_REVIEW','FAILED','CHECKS_INCOMPLETE','CANCELLED','REVIEW_REQUIRED'].includes(job.state)&&op.noticeState!==job.state){state.notice=job.message;op.noticeState=job.state;}}}
   return changed;
  }
  async function poll(){
   if(polling||state.busy||document.hidden||state.session?.mode!=='WINDOWS'||(location.hash!=='#/workspace'&&!c.jobs.some(active)&&!renderPending))return;
   polling=true;
   try{if(await reload())renderPending=true;}
-  catch(e){if(c.error!==e.message){c.error=e.message;renderPending=true;}}
+  catch(e){if(state.singleOperation)state.singleOperation.pollError=e.message;if(c.error!==e.message){c.error=e.message;renderPending=true;}}
   finally{polling=false;}
   // Keep edits, confirmations and open drawers intact. A deferred change must
   // still render on the next safe tick even when the server data is unchanged.
@@ -69,7 +70,7 @@ window.GpoWorkflowCenter={create({state,esc,say,api,run,render}){
   const a=c.confirmation;if(!a)return true;const body={requestId:crypto.randomUUID(),planIds:a.planIds,batchId:a.batchId,sourceWorkflowId:a.sourceWorkflowId,consent:a.action==='apply'?a.consent:{confirmation:f.elements.confirmation.value},refresh:a.action==='apply'?a.refresh:f.elements.refresh.value,verificationDelays:a.action==='apply'?a.verificationDelays:f.elements.followup.checked?[60,300,900]:[]};c.confirmation=null;run(async()=>accepted(await api('/workflows/'+a.action,body)));return true;
  }
  function afterRender(){if(location.hash!=='#/workspace')return;for(const [id,value] of [['wf-gpo',c.gpo],['wf-scope',c.scope],['wf-pilot-source',c.pilotSource]]){const el=document.getElementById(id);if(el)el.value=value;}if(c.confirmation)document.getElementById('wf-confirm')?.querySelector('input,button,select')?.focus();}
- async function submitSingle(action,id,consent,refresh='None'){const job=await api('/workflows/'+action,{requestId:crypto.randomUUID(),planIds:[id],consent,refresh,verificationDelays:[]});c.selectedJob=job.id;await reload();state.notice=job.message+' · '+job.id+' · '+'Track in Workflow center';return job;}
+ async function submitSingle(action,id,consent,refresh='None'){const job=await api('/workflows/'+action,{requestId:crypto.randomUUID(),planIds:[id],consent,refresh,verificationDelays:[]});c.selectedJob=job.id;const selection=(state.history.find(h=>h.id===id)?.plan||state.plan)?.selection;state.singleOperation={id,selection:selection?{...selection}:null,setting:selection?.setting||state.selectedRule?.backendSetting,jobId:job.id,action,startedAt:new Date().toISOString(),job,pollError:''};await reload();return job;}
  return {view,poll,handleClick,handleInput,handleSubmit,afterRender,submitSingle};
 }};
 })();

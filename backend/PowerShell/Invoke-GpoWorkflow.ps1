@@ -38,8 +38,10 @@ try {
     $worker=$worker.Replace('# FGPP_FUNCTIONS',[IO.File]::ReadAllText((Join-Path $PSScriptRoot 'FineGrainedPassword.ps1')))
     $module=[IO.File]::ReadAllText((Join-Path $PSScriptRoot 'SecurityTemplate.psm1'))
     $data=$null
-    Invoke-Command -Session $session -ScriptBlock ([scriptblock]::Create($worker)) -ArgumentList ([string]$request.operation),$cfg,$request.payload.data,$module,$credential | ForEach-Object {
-        if($_.PSObject.Properties['gpoStage']){[Console]::Out.WriteLine('GPO_STAGE:'+([string]$_.gpoStage))}
+    Invoke-Command -Session $session -ScriptBlock ([scriptblock]::Create($worker)) -ArgumentList ([string]$request.operation),$cfg,$request.payload.data,$module,$credential 6>&1 | ForEach-Object {
+        if($_.PSObject.Properties['MessageData'] -and $_.MessageData.PSObject.Properties['gpoCheck']){[Console]::Out.WriteLine('GPO_CHECK:'+($_.MessageData.gpoCheck | ConvertTo-Json -Depth 5 -Compress))}
+        elseif($_ -is [Management.Automation.InformationRecord]){ }
+        elseif($_.PSObject.Properties['gpoStage']){[Console]::Out.WriteLine('GPO_STAGE:'+([string]$_.gpoStage))}
         else{$data=$_}
     }
     [Console]::Out.Write((@{ok=$true;data=$data;durationMs=$clock.ElapsedMilliseconds} | ConvertTo-Json -Depth 50 -Compress))

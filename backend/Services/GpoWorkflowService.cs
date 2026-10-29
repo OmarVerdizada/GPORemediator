@@ -76,11 +76,11 @@ public sealed class GpoWorkflowService(IConfiguration config,Store store,Operati
         connections.TryUpdate(token,refreshed,c);
         return refreshed;
     }
-    private async Task<T> Run<T>(string op,Connection c,object data,CancellationToken ct,Action<string>? progress=null)
+    private async Task<T> Run<T>(string op,Connection c,object data,CancellationToken ct,Action<string>? progress=null,Action<GpoLiveCheck>? checkProgress=null)
     {
         // Decryption exists only for this subprocess invocation. No request/payload logging.
         var bytes=protector.Unprotect(c.Password);
-        try{return await executor.RunAsync<T>(op,Configuration,new{credential=new{userName=c.UserName,password=Encoding.UTF8.GetString(bytes)},data},ct,progress);}
+        try{return await executor.RunAsync<T>(op,Configuration,new{credential=new{userName=c.UserName,password=Encoding.UTF8.GetString(bytes)},data},ct,progress,checkProgress);}
         finally{CryptographicOperations.ZeroMemory(bytes);}
     }
     public GpoInventory Inventory(string token,string actor)=>Get(token,actor).Inventory;
@@ -278,8 +278,15 @@ public sealed class GpoWorkflowService(IConfiguration config,Store store,Operati
                     var now=PolicyValues.Now();if(stages.Count>initialStageCount&&stages[^1].FinishedAt is null)stages[^1]=stages[^1] with{FinishedAt=now};
                     stages.Add(new(phase,now));run=run with{Stages=stages.ToArray(),UpdatedAt=now};store.Put("gpo_runs",id,run,run.Result.State);
                 }
+                void CheckProgress(GpoLiveCheck check){
+                    var checks=(run.LiveChecks??[]).ToList();
+                    var index=checks.FindIndex(x=>x.Phase==check.Phase&&string.Equals(x.Subject,check.Subject,StringComparison.OrdinalIgnoreCase));
+                    if(index>=0)checks[index]=check;else if(checks.Count<1024)checks.Add(check);
+                    run=run with{LiveChecks=checks.ToArray(),UpdatedAt=PolicyValues.Now()};
+                    store.Put("gpo_runs",id,run,run.Result.State);
+                }
                 Progress(operation.ToUpperInvariant()+"_STARTED");
-                result=await Run<GpoWorkflowResult>("gpo"+char.ToUpperInvariant(operation[0])+operation[1..],c,new{plan,mapping,previous=previous?.Result,refresh=operation=="refresh"?consent.Refresh:null,consent=operation=="apply"?consent:previous?.Approval,rollbackAnchor},CancellationToken.None,Progress);
+                result=await Run<GpoWorkflowResult>("gpo"+char.ToUpperInvariant(operation[0])+operation[1..],c,new{plan,mapping,previous=previous?.Result,refresh=operation=="refresh"?consent.Refresh:null,consent=operation=="apply"?consent:previous?.Approval,rollbackAnchor},CancellationToken.None,Progress,CheckProgress);
                 if(operation=="verify" && result.EndpointCoverage is not null)
                 {
                     var checks=(result.EndpointChecks??[]).ToList();
@@ -290,7 +297,7 @@ public sealed class GpoWorkflowService(IConfiguration config,Store store,Operati
                         result=result with{EndpointChecks=checks.ToArray()};
                         run=run with{Result=result with{State="VERIFYING"},UpdatedAt=PolicyValues.Now()};
                         store.Put("gpo_runs",id,run,"VERIFYING");
-                        result=await Run<GpoWorkflowResult>("gpoVerify",c,new{plan,mapping,verificationOffset=offset},CancellationToken.None,Progress);
+                        result=await Run<GpoWorkflowResult>("gpoVerify",c,new{plan,mapping,verificationOffset=offset},CancellationToken.None,Progress,CheckProgress);
                         checks.AddRange(result.EndpointChecks??[]);
                         if(result.EndpointCoverage is null || result.EndpointCoverage.Checked<=offset)
                             throw new PolicyException("ENDPOINT_VERIFICATION_STALLED","Endpoint verification did not advance; partial evidence was retained.");
@@ -308,7 +315,7 @@ public sealed class GpoWorkflowService(IConfiguration config,Store store,Operati
                         var offset=coverage.Checked;result=result with{RefreshResults=refreshResults.ToArray()};
                         run=run with{Result=result with{State="REFRESHING"},UpdatedAt=PolicyValues.Now()};store.Put("gpo_runs",id,run,"REFRESHING");
                         Progress("REFRESH_PAGE");
-                        result=await Run<GpoWorkflowResult>("gpoRefresh",c,new{plan,mapping,previous=previous?.Result,refresh=consent.Refresh,refreshOffset=offset},CancellationToken.None,Progress);
+                        result=await Run<GpoWorkflowResult>("gpoRefresh",c,new{plan,mapping,previous=previous?.Result,refresh=consent.Refresh,refreshOffset=offset},CancellationToken.None,Progress,CheckProgress);
                         refreshResults.AddRange(result.RefreshResults);
                         if(result.RefreshCoverage is null || result.RefreshCoverage.Checked<=offset)throw new PolicyException("ENDPOINT_REFRESH_STALLED","Refresh did not advance. Partial evidence was retained.");
                     }

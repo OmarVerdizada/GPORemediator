@@ -1,0 +1,14 @@
+verification-lifecycle.log
+PASS streamed checks do not contaminate the metadata return value
+PASS each controller emits checking and measured result before return
+PASS transport serializes product-owned information records as separate progress frames
+PASS verification page remains bounded
+
+transport-roundtrip.log
+PASS PowerShell information record survives default remoting serialization and forwarding as a separate JSON progress frame.
+
+workspace-initial.log
+PASS workspace: production async HTTP/identity isolation/idempotency, server refresh chain, serialized batch/rebase/first-snapshot rollback, scheduled checks, read-only scan, pilot boundaries, report escaping, streaming limits and restart recovery.
+
+release-Test-LivePolicyUi.log
+PASS live checking: queued, streamed stage/host updates, interrupted polling, unavailable result, missing-link plan, collapsed rail, mobile and exactly one read-only submission; fixture only.

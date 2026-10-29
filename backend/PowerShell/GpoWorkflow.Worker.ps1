@@ -608,6 +608,14 @@ function Snapshot-ExtensionsMatch($Manifest,[string]$Id,$Selection){
     return [string]$ad.gPCUserExtensionNames -ceq [string]$userBefore
 }
 function Remote-GpoFolder([string]$Server,[string]$Id){return ('\\'+$Server+'\SYSVOL\'+$domain.DNSRoot+'\Policies\'+([guid]$Id).ToString('B').ToUpperInvariant())}
+function Send-CheckProgress([string]$Phase,[string]$State,[string]$Subject,[string]$Message,[AllowNull()][string]$ActualValue=$null){
+    if([bool](Read-Field $cfg 'emitProgress' $false)){
+        # Information bypasses nested function return values. The transport alone
+        # redirects this stream, so progress never contaminates policy evidence.
+        $event=[pscustomobject]@{gpoCheck=[ordered]@{phase=$Phase;state=$State;subject=$Subject;message=$Message;actualValue=$ActualValue;checkedAt=[DateTimeOffset]::UtcNow.ToString('O')}}
+        Write-Information -MessageData $event -InformationAction Continue
+    }
+}
 function Verification-Metadata($S){
     $ad=Gpo-Ad $S.gpoId;$folder=Gpo-Folder $S.gpoId;$gpt=[string](Get-TemplateEntry ([IO.File]::ReadAllText((Join-Path $folder 'GPT.INI'))) 'General' 'Version');$adv=[BitConverter]::ToUInt32([BitConverter]::GetBytes([int]$ad.versionNumber),0);$warnings=@();$dcStatus=@();$localContent=Get-NormalizedGpoContentFingerprint $folder
     try{$bad=@(Get-ADReplicationPartnerMetadata -Target $env:COMPUTERNAME -Scope Server -ErrorAction Stop|Where-Object{$_.LastReplicationResult -ne 0});if($bad.Count){$warnings+=($bad.Count.ToString()+' replication partner(s) report a non-zero last result.')}}catch{$warnings+='AD replication partner metadata probe unavailable.'}
@@ -616,6 +624,7 @@ function Verification-Metadata($S){
     if($truncated){$warnings+='More than 50 domain controllers were discovered; convergence verification is limited to the first 50.';$dcs=@($dcs|Select-Object -First 50)}
     $gpoDn='CN='+([guid]$S.gpoId).ToString('B').ToUpperInvariant()+',CN=Policies,CN=System,'+$domainDn;$guidFolder=([guid]$S.gpoId).ToString('B').ToUpperInvariant()
     foreach($server in $dcs){
+      Send-CheckProgress 'REPLICATION' 'CHECKING' $server 'Reading AD and SYSVOL versions and policy content.'
       try{
         $remote=Get-ADObject -Identity $gpoDn -Server $server -Properties versionNumber,gPCMachineExtensionNames,gPCUserExtensionNames -ErrorAction Stop;$remoteAd=[BitConverter]::ToUInt32([BitConverter]::GetBytes([int]$remote.versionNumber),0)
         $unc=Join-Path (Remote-GpoFolder $server $S.gpoId) 'GPT.INI'
@@ -623,6 +632,7 @@ function Verification-Metadata($S){
         $remoteGpt=[string](Get-TemplateEntry ([IO.File]::ReadAllText($unc)) 'General' 'Version');$remoteContent=Get-NormalizedGpoContentFingerprint (Split-Path $unc -Parent);$contentMatches=$remoteContent -ceq $localContent;$extensionMatches=([string]$remote.gPCMachineExtensionNames -ceq [string]$ad.gPCMachineExtensionNames) -and ([string]$remote.gPCUserExtensionNames -ceq [string]$ad.gPCUserExtensionNames);$same=([string]$remoteAd -ceq $remoteGpt) -and ([string]$remoteAd -ceq [string]$adv) -and $contentMatches -and $extensionMatches
         $dcStatus+=@{domainController=$server;adVersion=[string]$remoteAd;gptVersion=$remoteGpt;reachable=$true;versionsMatch=[bool]$same;message=$(if($same){'AD/SYSVOL versions, policy content and computer/user extensions match the selected DC.'}else{'AD/SYSVOL version, policy content or computer/user extensions have not converged.'})}
       }catch{$dcStatus+=@{domainController=$server;adVersion=$null;gptVersion=$null;reachable=$false;versionsMatch=$false;message='Could not read AD and SYSVOL GPO versions from this DC.'};$warnings+=('Replication verification unavailable on '+$server+'.')}
+      $last=$dcStatus[-1];Send-CheckProgress 'REPLICATION' $(if(!$last.reachable){'UNAVAILABLE'}elseif($last.versionsMatch){'VERIFIED'}else{'MISMATCH'}) $server ([string]$last.message)
     }
     $converged=$dcStatus.Count -gt 0 -and !$truncated -and @($dcStatus|Where-Object{-not $_.versionsMatch}).Count -eq 0
     if(!$converged){$warnings+='Not every checked DC has converged to the selected GPO version yet.'}
@@ -712,6 +722,7 @@ function Verify-EffectiveSamples($Plan,$Map){
       if(!$hosts.Count){return @(@{hostname='<user-session>';state='PENDING';message='No preview endpoint remains in the current authorized endpoint scope.';actualValue=$null})}
       $expected=@(Endpoint-Expected $Map $s)
       foreach($hostName in $hosts){
+        Send-CheckProgress 'ENDPOINT' 'CHECKING' $hostName 'Reading effective policy on the endpoint.'
         try{
           $probe=Invoke-Command -ComputerName $hostName -Authentication Kerberos @remoteCredential -ErrorAction Stop -ArgumentList $sid,$expected -ScriptBlock {
             param($UserSid,$ExpectedItems)
@@ -728,7 +739,9 @@ function Verify-EffectiveSamples($Plan,$Map){
           }
           if([bool]$probe.supported){$checks+=@{hostname=$hostName;state=$(if([bool]$probe.match){'VERIFIED'}else{'MISMATCH'});message=([string]$probe.message+' User: '+$identity);actualValue=[string]$probe.actual}}else{$checks+=@{hostname=$hostName;state='PENDING';message=([string]$probe.message+' User: '+$identity);actualValue=[string]$probe.actual}}
         }catch{$checks+=@{hostname=$hostName;state='UNAVAILABLE';message=((Endpoint-FailureMessage $_)+' User: '+$identity);actualValue=$null}}
+        $check=$checks[-1];Send-CheckProgress 'ENDPOINT' ([string]$check.state) $hostName ([string]$check.message) ([string]$check.actualValue)
       }
+      foreach($check in $checks){Send-CheckProgress 'ENDPOINT' ([string]$check.state) ([string]$check.hostname) ([string]$check.message) ([string]$check.actualValue)}
       return @($checks)
     }
     $hosts=@();if($Plan.preview.impact -and $Plan.preview.impact.affectedObjects){$hosts+=@($Plan.preview.impact.affectedObjects.sampleHosts)};$hosts=@(Filter-EndpointHosts @(Verification-Page $Plan $hosts)|Sort-Object -Unique)
@@ -737,6 +750,7 @@ function Verify-EffectiveSamples($Plan,$Map){
     if(!$hosts.Count){return @(@{hostname='<scope>';state='PENDING';message='Preview sample endpoints no longer belong to the enabled target scope.';actualValue=$null})}
     $expected=@(Endpoint-Expected $Map $s);$handler=[string]$Map.handler
     foreach($hostName in $hosts){
+        Send-CheckProgress 'ENDPOINT' 'CHECKING' $hostName 'Reading effective policy on the endpoint.'
       try{
         $probe=Invoke-Command -ComputerName $hostName -Authentication Kerberos @remoteCredential -ErrorAction Stop -ArgumentList $handler,$expected,([string]$Map.comparator) -ScriptBlock {
           param($Handler,$ExpectedItems,$Comparator)
@@ -842,13 +856,22 @@ function Verify-EffectiveSamples($Plan,$Map){
         }
         if([bool]$probe.supported){$checks+=@{hostname=$hostName;state=$(if([bool]$probe.match){'VERIFIED'}else{'MISMATCH'});message=[string]$probe.message;actualValue=[string]$probe.actual}}else{$checks+=@{hostname=$hostName;state='PENDING';message=[string]$probe.message;actualValue=[string]$probe.actual}}
       }catch{$checks+=@{hostname=$hostName;state='UNAVAILABLE';message=(Endpoint-FailureMessage $_);actualValue=$null}}
+      $check=$checks[-1];Send-CheckProgress 'ENDPOINT' ([string]$check.state) $hostName ([string]$check.message) ([string]$check.actualValue)
     }
     return @($checks)
 }
 function Verify-Published($Plan,$Map,[bool]$CheckEndpoints=$false){
-    $s=$Plan.selection;$metadata=Verification-Metadata $s;$published=(Mapping-Matches $s.gpoId $Map $s) -and [bool]$metadata.versionsMatch;$link=Selected-Link $s.scopeDn $s.gpoId;$linked=$null -ne $link -and $link.enabled -and (!$s.firstLink -or $link.order -eq 1);$effective='GPO_VALUE_VERIFIED_ENDPOINT_PENDING';$endpointChecks=@()
+    $s=$Plan.selection
+    Send-CheckProgress 'GPO' 'CHECKING' ([string]$s.gpoId) 'Reading the stored GPO configuration.'
+    $contentMatches=Mapping-Matches $s.gpoId $Map $s
+    Send-CheckProgress 'GPO' $(if($contentMatches){'VERIFIED'}else{'MISMATCH'}) ([string]$s.gpoId) 'Compared stored GPO settings with the requested values.'
+    Send-CheckProgress 'LINK' 'CHECKING' ([string]$s.scopeDn) 'Reading the selected GPO link and priority.'
+    $link=Selected-Link $s.scopeDn $s.gpoId;$linked=$null -ne $link -and $link.enabled -and (!$s.firstLink -or $link.order -eq 1)
+    Send-CheckProgress 'LINK' $(if($linked){'VERIFIED'}else{'MISMATCH'}) ([string]$s.scopeDn) $(if($linked){'The selected direct link is enabled at the requested priority. Endpoint applicability still requires evidence.'}else{'The requested direct GPO link is missing, disabled or at a different priority.'})
+    $metadata=Verification-Metadata $s;$published=$contentMatches -and [bool]$metadata.versionsMatch;$effective='GPO_VALUE_VERIFIED_ENDPOINT_PENDING';$endpointChecks=@()
     $domainPolicy=$null
     if([bool]$Map.domainPolicySensitive){
+        Send-CheckProgress 'DOMAIN' 'CHECKING' ([string]$cfg.domainController) 'Reading the effective AD domain account policy.'
         try{
             $domainPolicy=Domain-PolicySnapshot $s $Map
             $match=Numeric-Complies $domainPolicy.value $domainPolicy.desiredValue ([string]$Map.comparator)
@@ -859,6 +882,7 @@ function Verify-Published($Plan,$Map,[bool]$CheckEndpoints=$false){
             $endpointChecks=@(@{hostname=[string]$cfg.domainController;state='UNAVAILABLE';actualValue=$null;message='The effective AD domain account policy could not be read. No successful application is established.'})
         }
     }elseif($CheckEndpoints){$endpointChecks=@(Verify-EffectiveSamples $Plan $Map);if(@($endpointChecks|Where-Object{$_.state -eq 'MISMATCH'}).Count){$effective='ENDPOINT_MISMATCH'}elseif(@($endpointChecks|Where-Object{$_.state -eq 'VERIFIED'}).Count -gt 0 -and @($endpointChecks|Where-Object{$_.state -ne 'VERIFIED'}).Count -eq 0){$effective='VERIFIED_ON_SAMPLE'}else{$effective='ENDPOINT_VERIFICATION_PENDING'}}
+    foreach($check in $endpointChecks){Send-CheckProgress $(if([bool]$Map.domainPolicySensitive){'DOMAIN'}else{'ENDPOINT'}) ([string]$check.state) ([string]$check.hostname) ([string]$check.message) ([string]$check.actualValue)}
     $coverage=$null;$all=Read-Field $Plan.preview 'verificationComputers' $null
     if($CheckEndpoints -and $null -ne $all -and ![bool]$Map.domainPolicySensitive){$offset=[int](Read-Field (Get-Variable Data -ValueOnly -ErrorAction SilentlyContinue) 'verificationOffset' 0);$count=@($all).Count;$coverage=@{total=$count;checked=[math]::Min($offset+25,$count);complete=($offset+25 -ge $count)};if(!$coverage.complete -and $effective -eq 'VERIFIED_ON_SAMPLE'){$effective='ENDPOINT_VERIFICATION_PENDING'}}
     # Never display endpoint effectiveness as verified when the source GPO or target link is wrong.

@@ -136,3 +136,34 @@ body.operator-custom-page .control-badges .status-chip.ready{color:var(--color-t
 
 body.operator-custom-page .brand-emblem::before,body.operator-custom-page .brand-emblem::after{content:none;display:none}
 body.operator-custom-page .result-identity.recorded-result-context{background:transparent;border:0;border-block:1px solid var(--color-border);border-radius:0;padding:16px 0}
+
+/* The compact rail has room for one control per row. */
+@media(min-width:701px){
+ :root[data-sidebar-collapsed=true] body.operator-custom-page .brand-lockup{flex-direction:column;gap:12px;padding:16px 8px;width:100%;min-height:100px;box-sizing:border-box}
+ :root[data-sidebar-collapsed=true] body.operator-custom-page .brand-copy{display:none}
+ :root[data-sidebar-collapsed=true] body.operator-custom-page .brand-lockup .ds-sidebar-toggle{width:30px;height:30px;flex:0 0 30px}
+ :root[data-sidebar-collapsed=true] body.operator-custom-page .sidebar .nav-link{margin-inline:auto;justify-content:center}
+}
+.target-value-boundary{margin:16px 0;padding:16px;border:1px solid var(--color-border);border-radius:8px;background:var(--color-surface-muted);font-size:13px}
+.target-value-boundary[data-link-state=REQUIRED],.target-value-boundary[data-link-state=DISABLED]{border-left:3px solid var(--color-warning)}
+.target-value-boundary>strong{display:block;font-size:14px;margin-bottom:6px}
+.target-value-boundary p{margin:6px 0;color:var(--color-text-muted);line-height:1.6}
+.target-value-boundary .stored-gpo-fact{display:flex;flex-wrap:wrap;gap:8px;align-items:baseline;padding-top:10px;border-top:1px solid var(--color-border);margin-top:12px}
+.stored-gpo-fact .value-source{font-size:11px}
+.live-verification{padding:24px;border:1px solid var(--color-primary);border-radius:12px;background:var(--color-surface);margin-bottom:20px}
+.live-verification header{display:flex;gap:12px;align-items:center;margin-bottom:18px}
+.live-verification h2{font-size:21px;margin:0 0 4px}
+.live-verification header p,.live-verification>p{font-size:12px;color:var(--color-text-muted);margin:4px 0}
+.live-check-list{list-style:none;margin:0;padding:0;display:grid;gap:8px}
+.live-check-list li{display:grid;grid-template-columns:24px minmax(0,1fr) auto;gap:10px;align-items:start;padding:12px;background:var(--color-surface-muted);border:1px solid var(--color-border);border-radius:7px}
+.live-check-list strong{font-size:13px;display:block;overflow-wrap:anywhere}
+.live-check-list small{display:block;font-size:12px;color:var(--color-text-muted);overflow-wrap:anywhere;margin-top:3px}
+.live-check-list b{font-size:11px;color:var(--color-text-muted)}
+.live-check-list pre{font-size:12px;white-space:pre-wrap;overflow-wrap:anywhere;margin:6px 0 0;padding:0}
+.live-check-list [data-check-state=VERIFIED]>span{color:var(--color-success)}
+.live-check-list [data-check-state=MISMATCH]>span{color:var(--color-danger)}
+.checking-dot{display:inline-block;width:16px;height:16px;border:2px solid var(--color-border);border-top-color:var(--color-primary);border-radius:50%;animation:checking-spin .8s linear infinite}
+.verification-explanation{padding:12px 14px;border-left:3px solid var(--color-warning);background:var(--color-warning-soft);font-size:12px;margin:0 0 18px;border-radius:4px;overflow-wrap:anywhere}
+@keyframes checking-spin{to{transform:rotate(360deg)}}
+@media(prefers-reduced-motion:reduce){.checking-dot{animation:none}}
+@media(max-width:600px){.live-verification{padding:18px}.live-check-list li{grid-template-columns:20px minmax(0,1fr)}.live-check-list li>b{grid-column:2}}
