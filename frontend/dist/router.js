@@ -1,8 +1,8 @@
 (() => {
   'use strict';
-  const routes=new Set(['#/assurance','#/password-policies','#/dashboard','#/benchmark','#/control','#/operations','#/workspace','#/audit','#/settings','#/reports','#/diagnostics']);
+  const routes=new Set(['#/assurance','#/dashboard','#/benchmark','#/control','#/operations','#/audit','#/settings','#/reports','#/diagnostics']);
   function current(){return routes.has(location.hash)?location.hash:'#/dashboard';}
-  function ensure(){if(!routes.has(location.hash))location.replace('#/dashboard');return current();}
+  function ensure(){if(location.hash==='#/workspace')location.replace('#/operations');else if(!routes.has(location.hash))location.replace('#/dashboard');return current();}
   function navigate(route){location.hash=routes.has(route)?route:'#/dashboard';}
   window.GpoRouter={routes,current,ensure,navigate};
 })();

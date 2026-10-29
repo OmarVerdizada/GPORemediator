@@ -956,15 +956,10 @@ function Operation-Failure($Record,[string]$Stage){
     return @{code=$code;stage=$Stage;message=('Stage '+$Stage+' failed ('+$reason+', '+$command+', worker line '+$line+'). '+$guidance)}
 }
 function Emit-Stage([string]$Name){$script:workerStage=$Name;if([bool](Read-Field $cfg 'emitProgress' $false)){Write-Output ([pscustomobject]@{gpoStage=$Name})}}
-# FGPP_FUNCTIONS
 # DIAGNOSTIC_FUNCTIONS
 $script:workerStage='VALIDATING'
 try {
 switch($Operation){
-    'fgppPreview'{return Fgpp-Preview $Data.request @(Read-Field $Data 'previousUsers' @())}
-    'fgppApply'{return Fgpp-Execute 'apply' $Data.plan}
-    'fgppVerify'{return Fgpp-Execute 'verify' $Data.plan}
-    'fgppRollback'{return Fgpp-Execute 'rollback' $Data.plan}
     'gpoReadiness'{return Environment-Status}
     'gpoInventory'{$gpos=@(Get-GPO -All -Domain $cfg.domain -Server $cfg.domainController|Sort-Object DisplayName|ForEach-Object{Gpo-Choice $_});if($gpos.Count -gt 5000){Fail 'DIRECTORY_TOO_LARGE' 'More than 5000 GPOs exist. Narrow the configured domain.'};return @{domain=$domain.DNSRoot;domainController=$dc.HostName;executionUser=[Security.Principal.WindowsIdentity]::GetCurrent().Name;gpos=$gpos;scopes=@(Scopes)}}
     'gpoExplain'{return Explain-Policy $Data.plan $Data.mapping ([string]$Data.hostname)}

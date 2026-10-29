@@ -6,7 +6,6 @@ $tokens=$null;$errors=$null
 $ast=[Management.Automation.Language.Parser]::ParseFile((Join-Path $repo 'backend/PowerShell/GpoWorkflow.Worker.ps1'),[ref]$tokens,[ref]$errors)
 foreach($fn in $ast.FindAll({param($n)$n -is [Management.Automation.Language.FunctionDefinitionAst]},$false)){. ([scriptblock]::Create($fn.Extent.Text))}
 . (Join-Path $repo 'backend/PowerShell/PolicyDiagnostics.ps1')
-. (Join-Path $repo 'backend/PowerShell/FineGrainedPassword.ps1')
 function Check($Ok,$Name){if(!$Ok){throw $Name};Write-Output ('PASS '+$Name)}
 $cfg=@{domain='example.test';domainController='dc.example.test';backupPath='C:\fixture-backups'};$domainDn='DC=example,DC=test'
 $script:selected='11111111-1111-1111-1111-111111111111';$script:winner=$script:selected;$script:deny=$false;$script:rsopUnavailable=$false;$script:unknown=$false;$script:remoteCalls=0
@@ -51,11 +50,4 @@ function Environment-Status {@{checks=@(@{id='backup';label='Backup';state='FAIL
 function Get-ADObject {param($Identity,$Server,$Properties,$ErrorAction) [pscustomobject]@{allowedChildClassesEffective=@('msDS-PasswordSettings')}}
 $v=Access-Report $selection $map
 Check (!$v.ready -and $v.checks[0].target -like 'CN={11111111*' -and @($v.checks|Where-Object{$_.target -eq 'C:\fixture-sysvol\GPT.INI' -and $_.state -eq 'DENIED'}).Count -eq 1) 'access report retains exact AD/file targets and denied state'
-Check (@($v.checks|Where-Object{$_.id -eq 'pso-create' -and !$_.required -and $_.state -eq 'ALLOWED'}).Count -eq 1) 'PSO creation is a separate capability and never grants implied edit/delete rights'
-$old=@([pscustomobject]@{guid='a';dn='CN=Old,OU=Pilot,DC=example,DC=test';name='a'},[pscustomobject]@{guid='b';dn='CN=Left,OU=Pilot,DC=example,DC=test';name='b'})
-$now=@([pscustomobject]@{guid='a';dn='CN=Moved,OU=Child,OU=Pilot,DC=example,DC=test';name='a'},[pscustomobject]@{guid='c';dn='CN=New,OU=Pilot,DC=example,DC=test';name='c'})
-$m=Fgpp-Membership @{subjects=@($old.dn)} $now $old $selection.scopeDn
-Check ($m.add.Count -eq 2 -and $m.remove.Count -eq 2 -and $m.moved.Count -eq 1 -and $m.departed.Count -eq 1 -and $m.baselineAvailable) 'FGPP additions removals renamed identities and departures compared without AD writes'
-$m=Fgpp-Membership @{subjects=@($now.dn.ToUpperInvariant())} $now @() $selection.scopeDn
-Check ($m.add.Count -eq 0 -and $m.remove.Count -eq 0 -and $m.unchanged -eq 2) 'FGPP subject comparison is case insensitive'
-Write-Output 'PASS diagnostic and membership regression; no live AD tested.'
+Write-Output 'PASS GPO access and endpoint diagnostics; no live AD tested.'

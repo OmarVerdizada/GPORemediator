@@ -1,4 +1,6 @@
-# GPO Remediator 3.16.9
+# GPO Remediator 3.17.0
+
+3.17.0 streamlines the workspace: one catalog hierarchy, a compact live dashboard, fewer appearance controls, and no Favorites, command palette, Impact graph, Workflow center page or Password policies feature. The server job runner still owns Apply, Verify, Refresh and rollback. See [release notes](docs/RELEASE-3.17.0.md).
 
 3.16.9 streams real verification stages and per-host evidence into the control screen, distinguishes stored GPO settings from an unverified OU value, and fixes compact navigation. See [release notes](docs/RELEASE-3.16.9.md) and [cleanup recommendations](docs/CLEANUP-RECOMMENDATIONS.md).
 
@@ -52,7 +54,7 @@ The application uses one domain-account sign-in to open the workspace and connec
 
 The 3.5.1 workspace adds neutral graphite surfaces, local Geist fonts, comfortable/compact density, three accent palettes, a control-by-control evidence map and accessible GUID/DN/hash copy actions. It builds on the existing navigation, operation tables, audit diagnostics and mobile layouts. See `RELEASE-NOTES-PREMIUM-3.5.1.md`.
 
-The new Recipes view lists all controls in numeric order with descriptions, recommended states, automation support and recorded implementation status, even without a domain connection. See `RELEASE-NOTES-RECIPES-3.3.1.md`.
+Version 3.3.1 introduced the Recipes view, retired in 3.17.0 in favor of one searchable hierarchy. Historical notes: `RELEASE-NOTES-RECIPES-3.3.1.md`.
 
 The redesigned frontend has a current-environment dashboard, clearer catalog statistics, consistent controls and refined mobile/dark layouts. See `RELEASE-NOTES-DESIGN-3.3.0.md`.
 

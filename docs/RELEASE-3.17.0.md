@@ -1,0 +1,11 @@
+# 3.17.0 — streamlined GPO workspace
+
+The workspace now has one searchable CIS hierarchy. Recipes/List layout switches, Favorites/Save, the Ctrl+K command palette, alternate accent colors, display-density options and the decorative Impact graph were removed. Impact still presents GPO/OU identity, inheritance, conflicts, filtering and affected-object evidence in a plain context table. Theme, large-text, high-contrast, keyboard navigation and CSV export remain available.
+
+The separate Workflow center and Password policies pages are removed from navigation and routing. Old Workflow center bookmarks open Operations; retired password-policy bookmarks return to Dashboard. The dedicated FGPP UI, service, request models, native handlers and endpoints are removed. Domain-account GPO settings and their approved AD write/read-back are separate functionality and remain supported.
+
+Apply, Verify, Refresh and rollback still use the server job runner, idempotency, scope validation, durable backups and approval gates. A small operation monitor replaces the Workflow center UI module and reads job/history APIs without fetching batch plans. Existing recorded batch recovery APIs and guards remain for historical operations. Existing database data and DC backups are not deleted; no FGPP or GPO rollback is performed by this upgrade.
+
+Dashboard now presents a single domain connection card, three concise operation counts, active server jobs, recent recorded results and a review list. Publication is not displayed as effective verification. Completed jobs update the dashboard automatically; failed polling is explicitly marked as stale recorded evidence. Decorative banners, coverage charts, heatmaps, duplicated analytics and their unused renderers/styles were removed.
+
+Regression coverage retains the GPO policy chain, explicit refresh, rollback, endpoint evidence, offline behavior, permission checks, mapping validation and backend workflow tests. The new workspace fixture exercises removed navigation and preferences, all 405 controls in the hierarchy, target context, queued/running/completed jobs, historical bookmark redirects and desktop/mobile layouts in both themes. Tests use local fixtures; this release does not certify live AD enforcement.

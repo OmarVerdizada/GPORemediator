@@ -1,7 +1,7 @@
 /* Generate every published manual procedure, then test the real scripts offline. */
 const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),vm=require('node:vm'),cp=require('node:child_process');
 const repo=path.resolve(__dirname,'..'),window={},sandbox=vm.createContext({window,Date,JSON,String,Number,Boolean});
-for(const file of ['components.js','manual-engine.js','manual-remediation.js','ui-domain.js','studio-ui.js','remediation-guides.js','control-view.js'])vm.runInContext(fs.readFileSync(path.join(repo,'frontend/source',file),'utf8'),sandbox);
+for(const file of ['components.js','manual-engine.js','manual-remediation.js','ui-domain.js','remediation-guides.js','control-view.js'])vm.runInContext(fs.readFileSync(path.join(repo,'frontend/source',file),'utf8'),sandbox);
 sandbox.GpoUiDomain=window.GpoUiDomain;
 const catalog=JSON.parse(fs.readFileSync(path.join(repo,'frontend/source/benchmark-v4.json'),'utf8'));
 const mappings=JSON.parse(fs.readFileSync(path.join(repo,'backend/data/gpo-production-mappings.json'),'utf8')).mappings;

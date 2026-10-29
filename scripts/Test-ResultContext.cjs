@@ -1,6 +1,6 @@
 const fs=require('node:fs'),path=require('node:path'),vm=require('node:vm'),assert=require('node:assert/strict');
 const root=path.join(__dirname,'../frontend/source'),window={},context=vm.createContext({window});
-for(const file of ['ui-domain.js','components.js','studio-ui.js','control-view.js'])vm.runInContext(fs.readFileSync(path.join(root,file),'utf8'),context);
+for(const file of ['ui-domain.js','components.js','control-view.js'])vm.runInContext(fs.readFileSync(path.join(root,file),'utf8'),context);
 context.GpoUiDomain=window.GpoUiDomain;
 const settings=[{id:'1.1.4',domainPolicySensitive:true,scope:'Domain'}];
 const run={id:'run-a',updatedAt:'2026-10-26T10:00:00Z',approval:{},plan:{selection:{setting:'1.1.4',gpoId:'11111111-1111-1111-1111-111111111111',scopeDn:'OU=Pilot,DC=example,DC=local',accountScope:'LocalComputers',refresh:'Scope'},preview:{gpo:{id:'11111111-1111-1111-1111-111111111111',name:'Pilot GPO'},scope:{name:'Pilot',dn:'OU=Pilot,DC=example,DC=local'},desiredValue:'14'}},result:{state:'REVIEW_REQUIRED',gpoPublished:true,linkVerified:true,effectiveStatus:'ENDPOINT_VERIFICATION_PENDING',currentValue:'14',verificationStages:[{stage:'GPO_CONFIGURATION',status:'GPO_APPLIED',evidence:'Saved read-back'}],refreshResults:[{computer:'pc.example.local',state:'FAILED',message:'Unavailable'}]}};

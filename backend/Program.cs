@@ -64,7 +64,6 @@ builder.Services.AddRateLimiter(OperatorSecurity.ConfigureLoginRateLimit);
 builder.Services.AddSingleton(new Store(dbPath));
 builder.Services.AddSingleton<OperationGate>();
 builder.Services.AddSingleton<GpoWorkflowService>();
-builder.Services.AddSingleton<FineGrainedPasswordService>();
 builder.Services.AddSingleton<IWorkflowOperations>(sp=>sp.GetRequiredService<GpoWorkflowService>());
 builder.Services.AddSingleton<WorkspaceWorkflows>();
 builder.Services.AddSingleton(TimeProvider.System);
@@ -276,10 +275,6 @@ app.MapGet("/api/gpo/settings",()=>ProductionGpoMappings.Settings.Select(x=>new 
     impactReason=x.DomainPolicySensitive?"Domain-wide authentication or lockout behavior may change.":x.RequiresRestart?"A restart-sensitive policy is involved.":x.RequiresGpUpdate?"Endpoint policy refresh and staged verification are required.":"The mapping is scoped and still requires preview and verification."
 }));
 app.MapGet("/api/gpo/history",(HttpContext context,GpoWorkflowService service)=>service.History(Operator(context)));
-app.MapGet("/api/password-policies",(HttpContext context,FineGrainedPasswordService service)=>service.History(Operator(context)));
-app.MapPost("/api/password-policies/preview",async(FineGrainedPasswordRequest request,HttpContext context,FineGrainedPasswordService service,CancellationToken ct)=>await service.Preview(GpoToken(context),Operator(context),request,ct));
-app.MapPost("/api/password-policies/{id}/reconcile-preview",async(string id,HttpContext context,FineGrainedPasswordService service,CancellationToken ct)=>await service.Reconcile(id,GpoToken(context),Operator(context),ct));
-app.MapPost("/api/password-policies/{id}/{action}",async(string id,string action,FineGrainedPasswordAction request,HttpContext context,FineGrainedPasswordService service,CancellationToken ct)=>await service.Execute(id,action,GpoToken(context),Operator(context),request.Confirmation,ct));
 app.MapGet("/api/gpo/{id}/evidence",(string id,HttpContext context,GpoWorkflowService service)=>service.Evidence(id,Operator(context)));
 app.MapPost("/api/gpo/target-access",async(GpoSelection request,HttpContext context,GpoWorkflowService service,CancellationToken ct)=>await service.CheckTargetAccessAsync(GpoToken(context),Operator(context),request,ct));
 app.MapPost("/api/gpo/preview",async(GpoSelection request,HttpContext context,GpoWorkflowService service,CancellationToken ct)=>await service.PreviewAsync(GpoToken(context),Operator(context),request,ct));

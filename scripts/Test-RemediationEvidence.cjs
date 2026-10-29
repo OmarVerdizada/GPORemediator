@@ -1,7 +1,7 @@
 const assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm'),path=require('node:path');
 const source=path.join(__dirname,'../frontend/source'),window={};
 const context=vm.createContext({window,Date,JSON,String,Number,Boolean});
-for(const name of ['ui-domain.js','components.js','studio-ui.js','control-view.js'])vm.runInContext(fs.readFileSync(path.join(source,name),'utf8'),context);
+for(const name of ['ui-domain.js','components.js','control-view.js'])vm.runInContext(fs.readFileSync(path.join(source,name),'utf8'),context);
 context.GpoUiDomain=window.GpoUiDomain;
 const catalog=JSON.parse(fs.readFileSync(path.join(source,'benchmark-v4.json'),'utf8'));
 const rule=catalog.rules.find(x=>x.id==='2.2.12');

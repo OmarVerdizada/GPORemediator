@@ -11,7 +11,7 @@ public sealed class WindowsPowerShellExecutor(ILogger<WindowsPowerShellExecutor>
     public async Task<T> RunAsync<T>(string operation, object configuration, object payload, CancellationToken ct,Action<string>? progress=null,Action<GpoLiveCheck>? checkProgress=null)
     {
         if (!OperatingSystem.IsWindows()) throw new PolicyException("WINDOWS_REQUIRED", "Real execution requires a domain-connected Windows management host.");
-        var gpo = new[] {"gpoExplain","gpoInventory","gpoReadiness","gpoPreview","gpoApply","gpoRollback","gpoRollbackInspect","gpoVerify","gpoRefresh","fgppPreview","fgppApply","fgppVerify","fgppRollback"}.Contains(operation);
+        var gpo = new[] {"gpoExplain","gpoInventory","gpoReadiness","gpoPreview","gpoApply","gpoRollback","gpoRollbackInspect","gpoVerify","gpoRefresh"}.Contains(operation);
         if (!gpo) throw new PolicyException("OPERATION_DENIED", "Only the production GPO workflow is exposed by the Windows executor.");
         var trustedScript = Path.Combine(AppContext.BaseDirectory, "PowerShell", "Invoke-GpoWorkflow.ps1");
         BundledAssets.VerifyScripts(Path.GetDirectoryName(trustedScript)!);
@@ -32,8 +32,8 @@ public sealed class WindowsPowerShellExecutor(ILogger<WindowsPowerShellExecutor>
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
         var operationTimeout = operation switch
         {
-            "gpoApply" or "gpoRollback" or "fgppApply" or "fgppRollback" => TimeSpan.FromMinutes(16),
-            "gpoExplain" or "gpoPreview" or "gpoRollbackInspect" or "gpoVerify" or "fgppPreview" or "fgppVerify" => TimeSpan.FromMinutes(10),
+            "gpoApply" or "gpoRollback" => TimeSpan.FromMinutes(16),
+            "gpoExplain" or "gpoPreview" or "gpoRollbackInspect" or "gpoVerify" => TimeSpan.FromMinutes(10),
             "gpoRefresh" => TimeSpan.FromMinutes(12),
             "gpoInventory" or "gpoReadiness" => TimeSpan.FromSeconds(90),
             _ when gpo => TimeSpan.FromMinutes(6),

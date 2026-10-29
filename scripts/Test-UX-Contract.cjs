@@ -1,26 +1,12 @@
-/* Static regression contract for the small, fast, truthful production UI.
-   Run after patch, without starting AD/DC/WinRM or modifying policies. */
 const fs=require('node:fs'),path=require('node:path'),assert=require('node:assert/strict');
-const root=path.resolve(__dirname,'../frontend');
-const read=(folder,file)=>fs.readFileSync(path.join(root,folder,file),'utf8');
-const workspace=read('source','workspace.js');
-const control=read('source','control-view.js');
-const catalog=read('source','catalog-view.js');
-const batch=read('source','workflow-center.js');
-const index=read('source','index.html');
-assert.equal((control.match(/function targetForm\(r\)\{/g)||[]).length,1,'Duplicate targetForm regression');
-assert.equal((workspace.match(/function dashboardView\(\)\{/g)||[]).length,1,'Duplicate dashboardView regression');
-for(const marker of ['ux-status-bar','ux-kpi-grid','ux-recent','ux-advanced-block','GpoRemediationGuides.dashboard','environmentHealth()','GpoPremium.heatmap'])
-  assert.ok(workspace.includes(marker),'Dashboard lost '+marker);
-for(const marker of ['ux-overview-layout','ux-more-tabs','data-control-start','function impactTab','function auditTab','GpoScopePicker.field'])
-  assert.ok(control.includes(marker),'Control flow lost '+marker);
-for(const marker of ['ux-catalog-strip','CIS sections are not AD domains','${state.favorites.size}'])
-  assert.ok(catalog.includes(marker),'Catalog lost '+marker);
-assert.ok(batch.includes('visibleControls=controls.slice(0,80)'),'Batch list must render no more than 80 controls initially');
-assert.ok(batch.includes('noncomputer')||batch.includes('Scope')||batch.includes('mapping?.scope'),'Batch safety flow unexpectedly missing');
-for(const file of ['workspace.js','control-view.js','product.js','catalog-view.js','workflow-center.js','index.html','ux-pro.css'])
-  assert.equal(read('source',file),read('dist',file),'Frontend/dist stale: '+file);
-for(const marker of ['/ux-pro.css?v=3.16.9','/gpo-scope-picker.js','/workspace.js?v='+(/buildLabel:'([^']+)'/.exec(workspace)||[])[1]])
-  assert.ok(index.includes(marker),'Missing frontend asset '+marker);
-assert.ok(!read('source','ux-pro.css').includes('!important'),'No !important allowed in UX overrides');
-console.log('PASS professional UX regression: single control form, compact dashboard, 80-row batch, dist sync, retained policy analysis');
+const root=path.resolve(__dirname,'../frontend'),read=(dir,file)=>fs.readFileSync(path.join(root,dir,file),'utf8').replace(/\r\n/g,'\n');
+const workspace=read('source','workspace.js'),control=read('source','control-view.js'),catalog=read('source','catalog-view.js'),index=read('source','index.html');
+assert.equal((workspace.match(/function dashboardView\(\)/g)||[]).length,1);
+assert.equal((control.match(/function targetForm\(r\)/g)||[]).length,1);
+for(const marker of ['dashboard-connection','dashboard-summary','dashboard-active-row','dashboard-attention','dashboard-result-row'])assert(workspace.includes(marker),marker);
+for(const marker of ['function impactTab','impact-context-table','function auditTab','GpoScopePicker.field','verification-details'])assert(control.includes(marker),marker);
+for(const marker of ['data-favorite','data-catalog-layout','data-command-open','preference-accent','preference-density'])assert(![workspace,control,catalog,index,read('source','preferences.js')].some(s=>s.includes(marker)),marker);
+assert(index.includes('/operation-monitor.js?v=3.17.0'));
+assert(!/src="\/(workflow-center|password-policies|studio-ui)\.js/.test(index));
+for(const file of ['workspace.js','control-view.js','catalog-view.js','product.js','operation-monitor.js','preferences.js','index.html','workspace-refinement.css'])assert.equal(read('source',file),read('dist',file),'Source/dist '+file);
+console.log('PASS streamlined UX contract: one control form, retained safety/verification, compact dashboard, retired entry points removed and source/dist synchronized.');

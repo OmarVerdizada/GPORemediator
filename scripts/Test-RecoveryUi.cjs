@@ -70,10 +70,10 @@ const server=http.createServer(async(req,res)=>{
   const largeDomain=page.locator('[data-domain="18"]');await largeDomain.scrollIntoViewIfNeeded();
   await largeDomain.click();assert.equal(await largeDomain.getAttribute('aria-expanded'),'true');
   const allRules=JSON.parse(fs.readFileSync(path.join(root,'benchmark-v4.json'),'utf8')).rules.filter(r=>r.id.startsWith('18.')).length;
-  assert.ok(await page.locator('#catalog-domain-18 .recipe-card').count()<allRules);
+  assert.ok(await page.locator('#catalog-domain-18 [data-rule]').count()<allRules);
   await page.screenshot({path:path.join(screens,'benchmark-subsections-desktop.png')});
-  await page.locator('[data-catalog-section="18"]').selectOption('ALL');
-  assert.equal(await page.locator('#catalog-domain-18 .recipe-card').count(),allRules);
+  while(await page.locator('#catalog-domain-18 [data-subsection][aria-expanded="false"]').count())await page.locator('#catalog-domain-18 [data-subsection][aria-expanded="false"]').first().click();
+  assert.equal(await page.locator('#catalog-domain-18 [data-rule]').count(),allRules);
   const next=page.locator('[data-domain="19"]');await next.scrollIntoViewIfNeeded();const anchor=(await next.boundingBox()).y;await next.click();
   assert.ok(Math.abs((await next.boundingBox()).y-anchor)<6,'Changing expanded domain moved the clicked header');
   assert.equal(await largeDomain.getAttribute('aria-expanded'),'false');
@@ -83,9 +83,9 @@ const server=http.createServer(async(req,res)=>{
   await page.locator('[data-domain="17"]').click();await page.locator('[data-rule="17.2.1"]').first().waitFor();
   await page.locator('#catalog-search').fill('');await page.locator('[data-domain="1"]').waitFor();
   await page.setViewportSize({width:390,height:844});await page.locator('[data-domain="18"]').click();
-  await page.locator('[data-catalog-section="18"]').selectOption({index:0});
+  assert.equal(await page.locator('[data-catalog-section]').count(),0,'The retired subsection dropdown must not return');
   await page.locator('[data-domain="18"]').scrollIntoViewIfNeeded();
-  assert.ok(await page.locator('.catalog-section-bar').evaluate(el=>el.scrollWidth<=el.clientWidth),'Subsection navigation overflows on mobile');
+  assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),'Subsection navigation overflows on mobile');
   await page.screenshot({path:path.join(screens,'benchmark-subsections-mobile.png')});
   await page.setViewportSize({width:1440,height:1000});
   await page.goto(`http://127.0.0.1:${server.address().port}/#/operations`);
@@ -264,7 +264,7 @@ const server=http.createServer(async(req,res)=>{
   await page.goto(`http://127.0.0.1:${server.address().port}/#/benchmark`);
   if(await page.locator('[data-dismiss-notice]').count())await page.locator('[data-dismiss-notice]').click();
   await page.locator('[data-domain="19"]').click({force:true});
-  await page.locator('[data-catalog-section="19"]').selectOption('19.5.1');
+  for(const section of ['19.5','19.5.1']){const header=page.locator('[data-subsection="'+section+'"]');if(await header.count()&&await header.getAttribute('aria-expanded')!=='true')await header.click();}
   await page.locator('[data-rule="19.5.1.1"]').first().click();
   assert.ok((await page.locator('.manual-script-source').textContent()).includes("$Action = 'Preview'"),'Changing controls must reset manual script mode');
   await page.locator('[data-tab=remediation]').click();
@@ -377,15 +377,6 @@ const server=http.createServer(async(req,res)=>{
    await page.locator('#gpo-selection>.primary-action').click();await page.waitForFunction(()=>!!document.querySelector('.plan-card'));
    assert.equal(previewSelections.at(-1).setting,m.id);assert.ok(previewSelections.at(-1).reviewContext.length>=10);assert.equal(previewSelections.at(-1).itemValues.length,m.items.length);
   }
-  await page.goto(`http://127.0.0.1:${server.address().port}/#/password-policies`);
-  await page.locator('#fgpp-preview').waitFor();
-  await page.waitForFunction(()=>!document.querySelector('#main-content')?.getAttribute('aria-busy')||document.querySelector('#main-content').getAttribute('aria-busy')==='false');
-  await page.evaluate(()=>window.scrollTo({top:0,left:0,behavior:'instant'}));
-  assert.ok(await page.evaluate(()=>document.querySelector('h1').getBoundingClientRect().top>=document.querySelector('#service-bar').getBoundingClientRect().bottom),'Password policy heading is obscured by the sticky toolbar');
-  await page.screenshot({path:path.join(screens,'fgpp-workspace-desktop.png'),fullPage:true});
-  await page.setViewportSize({width:390,height:844});
-  assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),'Password policy workspace overflows on mobile');
-  await page.screenshot({path:path.join(screens,'fgpp-workspace-mobile.png'),fullPage:true});
   assert.deepEqual(errors,[]);
   console.log('Recovery UI: PASS (desktop/mobile, recovery refresh, user OU/endpoint OU/verification identity targeting, and user PDC exclusion).');
  }finally{await browser.close();server.close();}

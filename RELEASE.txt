@@ -1,8 +1,8 @@
-GPO Remediator 3.16.9 - live verification and target-aware preview
+GPO Remediator 3.17.0 - streamlined GPO workspace
 
-See docs/RELEASE-3.16.9.md.
-Live checks display server stages and measured host results as they arrive.
-Stored GPO values and direct target link state are separate from endpoint evidence.
-Compact navigation keeps the logo and expand control inside the rail.
-See docs/CLEANUP-RECOMMENDATIONS.md for consolidation candidates.
-Deployment-domain verification remains required.
+See docs/RELEASE-3.17.0.md.
+Compact live dashboard and one searchable CIS hierarchy.
+Favorites, command palette, alternate catalog layouts and Impact graph removed.
+Workflow center UI and the dedicated Password policies feature removed.
+Approved GPO jobs, verification, access checks, audit and snapshot recovery remain server-owned.
+Existing backup files and recorded database rows are retained.

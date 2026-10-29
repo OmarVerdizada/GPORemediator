@@ -1,0 +1,17 @@
+Test-StreamlinedUi-release.log
+PASS streamlined workspace: removed feature entry points, stale preferences ignored, both themes/mobile, truthful live dashboard, target context table, job completion, legacy route redirects and no writes.
+
+Test-LivePolicyUi-release.log
+PASS live checking: queued, streamed stage/host updates, interrupted polling, unavailable result, missing-link plan, collapsed rail, mobile and exactly one read-only submission; fixture only.
+
+Test-RecoveryUi-release.log
+
+security-recheck.log
+PASS security: startup password/CSRF/identity/tamper/restart gate, role-free endpoints/case/trailing slash, unconfigured and legacy identities, CSRF/origin/identity isolation, anonymous denial, login rate limit, refresh JSON, host boundary, script tampering, DPAPI and compiled UI.
+
+Test-ManualRemediation-recheck.log
+PASS 800 generated PowerShell 5.1 scripts parsed. Complete offline Preview/Apply: registry, registry set, security template, audit, domain account, HKCU, literal custom input; backup order, read-back, idempotence, cancellation, failed backup, drift, partial write and read-only DC rejection. Live AD: NOT RUN.
+PASS 405-control manual coverage: 394 standalone writers, 11 read-only reviews; 800 exact scripts parsed, shared-source parity, escaping and offline templates
+
+package-final.log
+PRODUCTION PACKAGE VALIDATION: PASS

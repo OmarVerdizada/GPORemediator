@@ -35,7 +35,7 @@ $runtimeMarker = Join-Path $runtimeRoot 'production-backend-v4.ready'
 $runtimeInstallManifest = Join-Path $runtimeRoot 'runtime-install.json'
 $runtimeArchive = Join-Path $PSScriptRoot 'release\GpoRemediator-runtime-win-x64.zip'
 $runtimeArchiveHash = $runtimeArchive + '.sha256'
-$releaseVersion = '3.16.9'
+$releaseVersion = '3.17.0'
 # 3.1.2 keeps the 3.0 durable schema. It hardens startup recovery, removes the Setup->Windows restart race, and makes early backend failures self-diagnosing.
 # 3.1.2 intentionally uses fresh Setup/Windows state databases so incompatible serialized records from earlier preview builds cannot crash startup. Older databases are left untouched in ProgramData for archival/review.
 $stateSchemaVersion = '3.1.2'
@@ -120,7 +120,7 @@ function Test-RuntimeInstalled {
     $required=@(
         'GpoRemediator.exe','GpoRemediator.dll','GpoRemediator.deps.json','GpoRemediator.runtimeconfig.json',
         'appsettings.json','production-backend-v4.ready',
-        'PowerShell\Invoke-GpoWorkflow.ps1','PowerShell\GpoWorkflow.Worker.ps1','PowerShell\SecurityTemplate.psm1','PowerShell\FineGrainedPassword.ps1','PowerShell\PolicyDiagnostics.ps1'
+        'PowerShell\Invoke-GpoWorkflow.ps1','PowerShell\GpoWorkflow.Worker.ps1','PowerShell\SecurityTemplate.psm1','PowerShell\PolicyDiagnostics.ps1'
     )
     foreach($name in $required){ if(!(Test-Path -LiteralPath (Join-Path $runtimeRoot $name))){ return $false } }
     if(!(Test-Path -LiteralPath $runtimeInstallManifest)){ return $false }
@@ -140,7 +140,7 @@ function Install-Runtime {
     New-Item -ItemType Directory -Path $stage -Force | Out-Null
     try {
         Expand-Archive -LiteralPath $runtimeArchive -DestinationPath $stage -Force
-        foreach($required in @('GpoRemediator.exe','GpoRemediator.dll','GpoRemediator.deps.json','GpoRemediator.runtimeconfig.json','appsettings.json','production-backend-v4.ready','PowerShell\Invoke-GpoWorkflow.ps1','PowerShell\GpoWorkflow.Worker.ps1','PowerShell\SecurityTemplate.psm1','PowerShell\FineGrainedPassword.ps1','PowerShell\PolicyDiagnostics.ps1')) {
+        foreach($required in @('GpoRemediator.exe','GpoRemediator.dll','GpoRemediator.deps.json','GpoRemediator.runtimeconfig.json','appsettings.json','production-backend-v4.ready','PowerShell\Invoke-GpoWorkflow.ps1','PowerShell\GpoWorkflow.Worker.ps1','PowerShell\SecurityTemplate.psm1','PowerShell\PolicyDiagnostics.ps1')) {
             if(!(Test-Path -LiteralPath (Join-Path $stage $required))){ throw "Runtime archive is incomplete: $required is missing." }
         }
         @{ archiveSha256=$expected; installedAt=[DateTimeOffset]::UtcNow.ToString('o'); package='production-win-x64' } |

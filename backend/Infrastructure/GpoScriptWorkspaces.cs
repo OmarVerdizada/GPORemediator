@@ -164,7 +164,7 @@ public static class GpoScriptWorkspaces
 
     public static string SelectScript(string operation,object configuration,object payload,string trustedBootstrap)
     {
-        if(operation is "gpoInventory" or "gpoReadiness" or "fgppPreview" or "fgppApply" or "fgppVerify" or "fgppRollback")return trustedBootstrap;
+        if(operation is "gpoInventory" or "gpoReadiness")return trustedBootstrap;
         if(operation is not ("gpoExplain" or "gpoPreview" or "gpoApply" or "gpoVerify" or "gpoRollback" or "gpoRollbackInspect" or "gpoRefresh"))
             throw new PolicyException("OPERATION_DENIED","Unsupported isolated-GPO operation.");
         // Extract scope from the already typed server-owned request, not a user-supplied path.

@@ -19,17 +19,17 @@ async function main(){
  let iterations=0;
  const iterator=history[Symbol.iterator].bind(history);
  history[Symbol.iterator]=function*(){iterations++;yield* iterator();};
- product.coverage(sample);assert.equal(iterations,1,'Coverage must index history only once');
- iterations=0;sample.catalog.rules=Array.from({length:405},(_,i)=>({id:'0.'+i,backendSetting:String(i),title:'Control'}));
- window.GpoPremium.heatmap(sample);assert.equal(iterations,1,'405 heatmap cells must share one history index');
+ const lookup=product.latestByControl(history);
+ sample.catalog.rules=Array.from({length:405},(_,i)=>({id:'0.'+i,backendSetting:String(i),title:'Control'}));
+ sample.catalog.rules.forEach(r=>product.controlStatus(sample,r,lookup));assert.equal(iterations,1,'Catalog status must reuse one history index');
  assert.equal(product.latestByControl([{updatedAt:'bad',plan:{selection:{setting:'x'}}},{updatedAt:'bad',plan:{selection:{setting:'x'}}}]).size,1);
 
  let renders=0,calls=0,editing=false,fail=false,pending=null;
  const document={hidden:false,addEventListener(){},activeElement:{closest:()=>editing?{}:null}};
- const location={hash:'#/workspace'},state={session:{mode:'WINDOWS'},history:[]};
+ const location={hash:'#/dashboard'},state={session:{mode:'WINDOWS'},history:[]};
  const data={jobs:[],batches:[],history:[]};
- vm.runInNewContext(source('workflow-center.js'),{window,document,location,Date,JSON,Set});
- const center=window.GpoWorkflowCenter.create({state,esc:String,say:(a,b)=>b,render:()=>renders++,run:fn=>fn(),api:async url=>{
+ vm.runInNewContext(source('operation-monitor.js'),{window,document,location,Date,JSON,Set});
+ const center=window.GpoOperationMonitor.create({state,esc:String,say:(a,b)=>b,render:()=>renders++,run:fn=>fn(),api:async url=>{
   calls++;if(pending)await pending;if(fail)throw Error('Offline');
   return JSON.parse(JSON.stringify(url==='/workflows'?data.jobs:url==='/batches'?data.batches:data.history));
  }});
@@ -41,7 +41,7 @@ async function main(){
  editing=false;await center.poll();assert.equal(renders,2,'Deferred changes must render after editing even if unchanged');
  editing=true;data.jobs[0].state='COMPLETED';await center.poll();location.hash='#/benchmark';editing=false;
  await center.poll();assert.equal(renders,3,'A deferred terminal result must still render after navigation');
- location.hash='#/workspace';let release;pending=new Promise(resolve=>release=resolve);
+ location.hash='#/dashboard';let release;pending=new Promise(resolve=>release=resolve);
  const first=center.poll();before=calls;await center.poll();assert.equal(calls,before,'Slow requests must not overlap');release();await first;pending=null;
  fail=true;await center.poll();assert.equal(renders,4,'A new polling error must be visible');await center.poll();assert.equal(renders,4,'Repeated errors must not churn the DOM');
  fail=false;await center.poll();assert.equal(renders,5,'Recovery must clear the error');

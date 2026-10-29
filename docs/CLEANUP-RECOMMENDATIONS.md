@@ -1,5 +1,7 @@
 # Sadələşdirmə üçün konkret namizədlər
 
+Bu qiymətləndirmə 3.16.9 versiyasına aiddir. Sonrakı istifadəçi seçimi ilə çıxarılan hissələr [3.17.0 buraxılışında](RELEASE-3.17.0.md) qeyd edilib.
+
 Bu siyahı kod istinadlarına əsaslanır. İstifadə telemetriyası yoxdur; istifadə edilmədiyi ölçülməyən funksiyalar “ölü kod” sayılmır. İşlək funksional bölmələr bu dəyişiklikdə silinməyib.
 
 | Hissə | Kodda müşahidə | Təklif və qorunmalı davranış |

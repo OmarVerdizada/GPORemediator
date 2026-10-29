@@ -1,8 +1,8 @@
 /* GPO Remediator professional UI. No fake statuses, no JS dependencies, no forced specificity. */
 :root{--ux-ease:cubic-bezier(.22,1,.36,1);--ux-ring:0 0 0 3px color-mix(in srgb,var(--color-primary) 22%,transparent)}
 .product-main{max-width:1480px;margin-inline:auto;animation:ux-intro .35s var(--ux-ease) both}
-.pr-dashboard-head{margin-bottom:18px}
-.pr-dashboard-head h1,.library-hero h1,.control-title h1,.page-header h1{letter-spacing:-.035em}
+
+.library-hero h1,.control-title h1,.page-header h1{letter-spacing:-.035em}
 .ux-status-bar{display:flex;align-items:center;justify-content:space-between;gap:20px;padding:18px 22px;border:1px solid var(--color-border);border-radius:14px;background:var(--color-surface);box-shadow:var(--shadow-sm);margin:0 0 18px;flex-wrap:wrap}
 .ux-status-copy{display:flex;align-items:center;gap:14px;min-width:0}
 .ux-status-copy>div{display:grid;gap:4px;min-width:0}
@@ -49,7 +49,7 @@
 .ux-advanced-block>summary>span:last-child{color:var(--color-text-muted);transition:transform .2s}
 .ux-advanced-block[open]>summary>span:last-child{transform:rotate(180deg)}
 .ux-advanced-content{border-top:1px solid var(--color-border);padding:20px}
-.ux-advanced-content>.pr-heatmap,.ux-advanced-content>.pr-coverage{margin-top:20px}
+.ux-advanced-content>.pr-coverage{margin-top:20px}
 .ux-overview-layout{display:grid;grid-template-columns:minmax(0,1.65fr) minmax(250px,1fr);gap:18px;align-items:start}
 .ux-overview-main{padding:30px;background:var(--color-surface);border:1px solid var(--color-border);border-radius:14px;min-height:280px}
 .ux-overview-main h2{margin:12px 0 14px;letter-spacing:-.02em;font-size:clamp(21px,2.5vw,27px);color:var(--color-text)}
@@ -86,7 +86,7 @@
 .ent-rule:hover,.gpo-picker-trigger:hover,.visual-scope-trigger:hover{transform:translateY(-1px);border-color:var(--color-primary)}
 .gpo-modal,.visual-scope-modal{box-shadow:var(--shadow-lg);border-radius:16px}
 .gpo-option:hover,.visual-scope-item:hover{background:var(--color-primary-soft)}
-.pr-dashboard-head,.library-hero,.control-header{position:relative}
+.library-hero,.control-header{position:relative}
 button:focus-visible,a:focus-visible,input:focus-visible,summary:focus-visible,.visual-scope-item:focus-visible{outline:2px solid var(--color-primary);outline-offset:2px;box-shadow:var(--ux-ring)}
 @keyframes ux-pulse{0%,100%{box-shadow:0 0 0 5px var(--color-success-soft)}50%{box-shadow:0 0 0 8px var(--color-success-soft)}}
 @keyframes ux-intro{from{opacity:.7;transform:translateY(5px)}to{opacity:1;transform:translateY(0)}}

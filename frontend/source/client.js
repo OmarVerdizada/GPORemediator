@@ -30,7 +30,6 @@
   const storage = {
     get(key, fallback) { try { return sessionStorage.getItem(key) ?? fallback; } catch { return fallback; } },
     set(key, value) { try { sessionStorage.setItem(key, value); } catch { /* Storage may be disabled. */ } },
-    favorites() { try { const value = JSON.parse(this.get('gr-favorites', '[]')); return Array.isArray(value) ? value.filter(x => typeof x === 'string') : []; } catch { return []; } }
   };
   function localize() { document.documentElement.lang='en'; storage.set('gr-lang','en'); }
   const errors = {
@@ -64,8 +63,6 @@
     INVALID_DOMAIN:"Enter a domain and its DC FQDN, for example example.local and dc01.example.local.",
   };
   function policy(path) {
-    if (/\/password-policies\/[^/]+\/(apply|rollback)$/.test(path)) return { timeout: 980000, label: 'Backing up and changing the reviewed user password policy', cancelable: false };
-    if (/\/password-policies\/(preview|[^/]+\/(verify|reconcile-preview))$/.test(path)) return { timeout: 620000, label: 'Reading OU users and resultant password policies', cancelable: true };
     if (/\/gpo\/[^/]+\/(apply|rollback)$/.test(path)) return { timeout: 980000, label: 'Backup, policy change and verification', cancelable: false };
     if (/\/gpo\/[^/]+\/refresh$/.test(path)) return { timeout: 760000, label: 'Scheduling gpupdate and re-verifying policy', cancelable: false };
     if (/\/gpo\/(target-access|access-report|preview|[^/]+\/(explain|verify|replan|rollback-preview))$/.test(path)) return { timeout: 620000, label: 'Reading policy and verifying scope', cancelable: true };
@@ -75,7 +72,7 @@
   }
   async function request(path, { body, csrfToken, ...options } = {}) {
     const settings = { ...policy(path), ...options };
-    if (body !== undefined && !/^\/api\/(gpo\/(connect|discover|preview|target-access|access-report|[^/]+\/(explain|verify|replan|rollback-preview))|password-policies\/(preview|[^/]+\/(verify|reconcile-preview)))$/.test(path)) settings.cancelable = false;
+    if (body !== undefined && !/^\/api\/(gpo\/(connect|discover|preview|target-access|access-report|[^/]+\/(explain|verify|replan|rollback-preview)))$/.test(path)) settings.cancelable = false;
     const controller = new AbortController();
     const pending = { controller, path, ...settings, started: Date.now() };
     active.add(pending);

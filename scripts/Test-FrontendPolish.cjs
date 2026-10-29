@@ -37,7 +37,7 @@ const server=http.createServer(async(req,res)=>{try{
  await new Promise(r=>server.listen(0,'127.0.0.1',r));browser=await chromium.launch({headless:true,...(process.env.PLAYWRIGHT_CHANNEL?{channel:process.env.PLAYWRIGHT_CHANNEL}:{})});
  const page=await browser.newPage({viewport:{width:1440,height:900}}),errors=[];page.on('pageerror',e=>errors.push(e.message));page.setDefaultTimeout(15000);
  await page.addInitScript(()=>sessionStorage.setItem('gr-theme','dark'));
- await page.goto('http://127.0.0.1:'+server.address().port+'/#/dashboard');await page.locator('.studio-overview').waitFor();await page.evaluate(()=>document.fonts.ready);
+ await page.goto('http://127.0.0.1:'+server.address().port+'/#/dashboard');await page.locator('.dashboard-page').waitFor();await page.evaluate(()=>document.fonts.ready);
  const appearance=page.locator('.ds-preferences'),trigger=appearance.locator('summary');
  await trigger.click();await page.locator('#preference-theme').focus();await page.locator('#preference-theme').selectOption('light');
  assert.equal(await page.evaluate(()=>document.activeElement.id),'preference-theme','theme change must preserve keyboard focus');
@@ -45,9 +45,7 @@ const server=http.createServer(async(req,res)=>{try{
  await trigger.click();await page.locator('h1').first().click();assert.equal(await appearance.getAttribute('open'),null,'outside click closes appearance');
  for(const theme of ['light','dark']){
   await appearance.evaluate(el=>el.open=true);await page.locator('#preference-theme').selectOption(theme);
-  for(const accent of ['blue','cyan','violet']){
-   await appearance.evaluate(el=>el.open=true);await page.locator('#preference-accent').selectOption(accent);
-   assert.equal(await page.locator('html').getAttribute('data-accent'),accent);
+  {const accent='default';assert.equal(await page.locator('#preference-accent,#preference-density').count(),0);
    const ratios=await page.evaluate(()=>{
     const luminance=s=>(s.match(/[\d.]+/g)||[]).slice(0,3).map(Number).map(x=>{x/=255;return x<=.04045?x/12.92:((x+.055)/1.055)**2.4;}).reduce((sum,x,i)=>sum+x*[.2126,.7152,.0722][i],0);
     return [['--color-on-primary','--color-primary'],['--color-text-muted','--color-surface'],['--color-text-muted','--color-surface-muted'],['--color-success','--color-success-soft'],['--color-warning','--color-warning-soft'],['--color-danger','--color-danger-soft']].map(([fg,bg])=>{
@@ -60,7 +58,7 @@ const server=http.createServer(async(req,res)=>{try{
   await appearance.evaluate(el=>el.open=false);
   for(const width of [1440,768,390,320]){
    await page.setViewportSize({width,height:900});
-   for(const route of ['dashboard','benchmark','workspace','reports','diagnostics','audit','password-policies','assurance','operations']){
+   for(const route of ['dashboard','benchmark','reports','diagnostics','audit','assurance','operations']){
     await page.evaluate(route=>location.hash='#/'+route,route);await page.locator('#main-content').waitFor();await page.waitForFunction(()=>document.querySelector('#main-content')?.getAttribute('aria-busy')==='false');
     assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),theme+' '+width+' '+route+' horizontal overflow');
    }
@@ -68,8 +66,8 @@ const server=http.createServer(async(req,res)=>{try{
     const metrics=await page.locator('.sidebar nav').evaluate(nav=>({scroll:nav.scrollWidth>nav.clientWidth,links:[...nav.querySelectorAll('.nav-link')].map(a=>({width:a.getBoundingClientRect().width,caption:a.querySelector('.ds-nav-mobile')?.scrollWidth,available:a.getBoundingClientRect().width-8}))}));
     assert.ok(metrics.scroll,'mobile navigation should scroll internally');assert.ok(metrics.links.every(a=>a.width>=64&&(!a.caption||a.caption<=a.available)),'mobile navigation labels overlap');
    }
-   await page.evaluate(()=>location.hash='#/password-policies');await page.locator('#fgpp-preview').waitFor();
-   await page.screenshot({path:path.join(screens,theme+'-'+width+'-password-policies.png'),fullPage:true,animations:'disabled'});
+   await page.evaluate(()=>location.hash='#/dashboard');await page.locator('.dashboard-page').waitFor();
+   await page.screenshot({path:path.join(screens,theme+'-'+width+'-dashboard.png'),fullPage:true,animations:'disabled'});
   }
  }
  await page.setViewportSize({width:390,height:844});await appearance.evaluate(el=>el.open=true);

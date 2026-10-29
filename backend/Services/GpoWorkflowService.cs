@@ -84,12 +84,6 @@ public sealed class GpoWorkflowService(IConfiguration config,Store store,Operati
         finally{CryptographicOperations.ZeroMemory(bytes);}
     }
     public GpoInventory Inventory(string token,string actor)=>Get(token,actor).Inventory;
-    public Task<T> RunDirectoryOperation<T>(string operation,string token,string actor,object data,CancellationToken ct)
-    {
-        RequireReal();
-        if(operation is not ("fgppPreview" or "fgppApply" or "fgppVerify" or "fgppRollback"))throw new PolicyException("OPERATION_DENIED","Unsupported password policy operation.");
-        return Run<T>(operation,Get(token,actor),data,ct);
-    }
     public void ValidateConnection(string token,string actor){RequireReal();Get(token,actor);}
     public async Task<object> AccessReportAsync(GpoSelection selection,string token,string actor,CancellationToken ct){
         RequireReal();var c=Get(token,actor);
@@ -215,7 +209,7 @@ public sealed class GpoWorkflowService(IConfiguration config,Store store,Operati
     {
         RequireReal();
         if(operation=="rollback"&&rollbackAnchor is null&&store.List<WorkflowJob>("workflow_jobs").Any(job=>job.Action=="apply"&&job.PlanIds.Length>1&&job.CompletedIds.Contains(id)))
-            throw new PolicyException("BATCH_RECOVERY_REQUIRED","Use the Workflow center batch recovery action to restore the first full-GPO snapshot safely.");
+            throw new PolicyException("BATCH_RECOVERY_REQUIRED","Restore this recorded batch through its server recovery workflow using the first full-GPO snapshot. Single-control rollback cannot safely restore a multi-control batch.");
         var c=Get(token,actor);
         var plan=store.Require<GpoWorkflowPlan>("gpo_plans",id);AssertContext(plan,c,actor);
         var mapping=ProductionGpoMappings.Effective(plan.Selection);
@@ -350,7 +344,7 @@ public sealed class GpoWorkflowService(IConfiguration config,Store store,Operati
         var run=store.Require<GpoWorkflowRun>("gpo_runs",id);
         AssertContext(run.Plan,c,actor);
         if(store.List<WorkflowJob>("workflow_jobs").Any(job=>job.Action=="apply"&&job.PlanIds.Length>1&&job.CompletedIds.Contains(id)))
-            throw new PolicyException("BATCH_RECOVERY_REQUIRED","Use Workflow center batch recovery for operations in a multi-control batch.");
+            throw new PolicyException("BATCH_RECOVERY_REQUIRED","This is part of a recorded multi-control batch. Use its server recovery workflow instead of single-control rollback.");
         return await Run<object>("gpoRollbackInspect",c,new{plan=run.Plan},ct);
     }
     public GpoEvidence Evidence(string id,string actor)

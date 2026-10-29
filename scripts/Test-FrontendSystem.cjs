@@ -3,7 +3,7 @@ const source=path.join(__dirname,'../frontend/source'),window={GpoClient:{storag
 const workspaceSource=fs.readFileSync(path.join(source,'workspace.js'),'utf8');
 assert(!/allowedOperators|remediators|auditors|viewers/.test(workspaceSource),'Legacy application role fields remain in frontend setup payloads');
 const context=vm.createContext({window,Date,JSON,String,Number,Boolean});
-for(const name of ['ui-domain.js','components.js','product.js','premium.js','studio-ui.js','catalog-view.js','operation-view.js'])vm.runInContext(fs.readFileSync(path.join(source,name),'utf8'),context);
+for(const name of ['ui-domain.js','components.js','product.js','premium.js','catalog-view.js','operation-view.js'])vm.runInContext(fs.readFileSync(path.join(source,name),'utf8'),context);
 const ui=window.GpoComponents,s={lang:'en',history:[],favorites:new Set(),query:'',level:'ALL',automation:'ALL',savedView:'ALL',catalog:JSON.parse(fs.readFileSync(path.join(source,'benchmark-v4.json'),'utf8'))};
 assert.equal(ui.status(s,'ROLLED_BACK').tone,'neutral');
 assert.equal(ui.status(s,'PUBLISHED_REFRESH_FAILED').tone,'danger');
@@ -72,27 +72,13 @@ for(const marker of ['endpointScopeDn','verificationUser','User Configuration','
 // Domain-vs-local PDC/Scope behavior is exercised by Test-ControlTargeting.cjs.
 require('./Test-GpoScopePicker.cjs');
 console.log('Frontend system: PASS (honest evidence, status tones, escaping, grouping, audit mismatch, breadcrumb, packaged assets and canonical tokens).');
-// Publication alone and rollback must not become verification on the map.
-const premium=window.GpoPremium;
-s.history=[];
-let map=premium.heatmap(s);
-assert.equal((map.match(/class="pr-cell unknown"/g)||[]).length,405);
-assert.equal((map.match(/class="pr-map-domain"/g)||[]).length,19);
-const run=(state,id,result={})=>({id,updatedAt:'2026-10-09T08:00:00Z',plan:{selection:{setting:'1.2.1'}},result:{state,...result}});
-s.history=[run('PUBLISHED','pending',{gpoPublished:true})];
-map=premium.heatmap(s);
-assert.equal((map.match(/class="pr-cell pending"/g)||[]).length,1);
-assert.equal((map.match(/class="pr-cell good"/g)||[]).length,0);
-s.history=[run('ROLLED_BACK','rollback',{gpoPublished:true,linkVerified:true,verification:{replicationConverged:true},effectiveStatus:'VERIFIED_ON_SAMPLE'})];
-assert.equal((premium.heatmap(s).match(/class="pr-cell neutral"/g)||[]).length,1);
-s.history=[run('PUBLISHED','verified',{gpoPublished:true,linkVerified:true,verification:{replicationConverged:true},effectiveStatus:'VERIFIED_ON_SAMPLE'})];
-assert.equal((premium.heatmap(s).match(/class="pr-cell good"/g)||[]).length,1);
+const premium=window.GpoPremium;assert.equal(premium.heatmap,undefined);assert.equal(window.GpoProduct.recipes,undefined);
 const copied=premium.copyValue(s,'<unsafe>" & value','Hash');
 assert.ok(copied.includes('data-copy-value="&lt;unsafe&gt;&quot; &amp; value"'));
 assert.ok(!copied.includes('<unsafe>'));
 for(const name of ['Geist-Variable.woff2','GeistMono-Variable.woff2'])assert.equal(fs.readFileSync(path.join(source,'fonts',name)).subarray(0,4).toString(),'wOF2');
 assert.ok(fs.readFileSync(path.join(source,'fonts/LICENSE.txt'),'utf8').includes('SIL OPEN FONT LICENSE'));
-console.log('Premium: PASS (405 cells, 19 domains, status evidence, copy escaping and offline fonts).');
+console.log('PASS shared copy controls, removed heatmap/recipes and offline fonts.');
 
 // Configured-value provenance is independent of the resultant endpoint policy.
 const policySource={gpoId:'11111111-1111-1111-1111-111111111111',gpoName:'Baseline <unsafe>'};

@@ -17,6 +17,9 @@ using Microsoft.Extensions.Logging;
 
 static void Check(bool value,string message){if(!value)throw new Exception(message);}
 static void Reject(Action action,string code){try{action();throw new Exception("Expected "+code);}catch(PolicyException error){Check(error.Code==code,"Unexpected code "+error.Code);}}
+var retiredFeatureExecutor=new WindowsPowerShellExecutor(Microsoft.Extensions.Logging.Abstractions.NullLogger<WindowsPowerShellExecutor>.Instance);
+foreach(var retiredOperation in new[]{"fgppPreview","fgppApply","fgppVerify","fgppRollback"})
+ Reject(()=>retiredFeatureExecutor.RunAsync<object>(retiredOperation,new{},new{},CancellationToken.None).GetAwaiter().GetResult(),OperatingSystem.IsWindows()?"OPERATION_DENIED":"WINDOWS_REQUIRED");
 Check(EndpointTargeting.Resolve(null,[])=="SelectedOu","New empty config did not select OU targeting");
 Check(EndpointTargeting.Resolve(null,["ws.example.local"])=="ExplicitHosts","Legacy explicit host list expanded");
 Check(EndpointTargeting.Resolve("SelectedOu",["ws.example.local"])=="SelectedOu","Automatic mode remained restricted by old host list");
@@ -32,7 +35,7 @@ context.Request.Host=new HostString("localhost");context.Connection.RemoteIpAddr
 var sandbox=Path.Combine(Path.GetTempPath(),"gpo-security-tests-"+Guid.NewGuid().ToString("N"));Directory.CreateDirectory(sandbox);
 try{
  var scripts=Path.Combine(sandbox,"scripts");Directory.CreateDirectory(scripts);
- foreach(var name in new[]{"Invoke-GpoWorkflow.ps1","GpoWorkflow.Worker.ps1","SecurityTemplate.psm1","FineGrainedPassword.ps1","PolicyDiagnostics.ps1"})File.WriteAllBytes(Path.Combine(scripts,name),BundledAssets.Read("Scripts/"+name));
+ foreach(var name in new[]{"Invoke-GpoWorkflow.ps1","GpoWorkflow.Worker.ps1","SecurityTemplate.psm1","PolicyDiagnostics.ps1"})File.WriteAllBytes(Path.Combine(scripts,name),BundledAssets.Read("Scripts/"+name));
  BundledAssets.VerifyScripts(scripts);
  File.AppendAllText(Path.Combine(scripts,"GpoWorkflow.Worker.ps1"),"#tampered");
  Reject(()=>BundledAssets.VerifyScripts(scripts),"SCRIPT_INTEGRITY_FAILED");

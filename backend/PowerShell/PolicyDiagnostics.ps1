@@ -22,9 +22,6 @@ function Access-Report($Selection,$Map){
     foreach($check in @($environment.checks|Where-Object{$_.id -in @('backup','backup-acl','disk','sysvol')})){
         $rows+=@{id=$check.id;label=$check.label;target=$(if($check.id -like 'backup*' -or $check.id -eq 'disk'){[string]$cfg.backupPath}else{'Local DC SYSVOL'});state=$(if($check.state -eq 'PASS'){'ALLOWED'}elseif($check.state -eq 'FAIL'){'DENIED'}else{'UNKNOWN'});requiredRight=$(if($check.id -eq 'backup'){'Create/delete backup workspace files'}else{'Read/check component'});remedy=[string]$check.message;required=[bool]$check.required}
     }
-    $container='CN=Password Settings Container,CN=System,'+$domainDn;$pso='UNKNOWN'
-    try{$object=Get-ADObject -Identity $container -Server $cfg.domainController -Properties allowedChildClassesEffective -ErrorAction Stop;$classes=@(Read-Field $object 'allowedChildClassesEffective' @());if($classes.Count){$pso=if(@($classes|Where-Object{[string]$_ -match '(^|CN=)msDS-PasswordSettings(,|$)'}).Count){'ALLOWED'}else{'DENIED'}}}catch{}
-    $rows+=@{id='pso-create';label='PSO creation (separate from GPO)';target=$container;state=$pso;requiredRight='Create msDS-PasswordSettings child';remedy='ADAC > domain > System > Password Settings Container: delegate PSO creation. Editing subjects/settings and deletion need separate rights on the selected PSO. This row does not prove those rights.';required=$false}
     return @{executionUser=$access.executionUser;domain=$cfg.domain;domainController=$cfg.domainController;gpoId=$Selection.gpoId;scopeDn=$Selection.scopeDn;checkedAt=[DateTimeOffset]::UtcNow.ToString('O');checks=$rows;ready=(@($rows|Where-Object{$_.required -and $_.state -ne 'ALLOWED'}).Count -eq 0);note='Read-only AD/effective-ACL inspection. Backup readiness creates/deletes disposable local probe files; no policy or delegation is changed.'}
 }
 

@@ -72,12 +72,7 @@ foreach(var mapping in ProductionGpoMappings.Settings.Where(x=>!x.Writable)){
     Reject(()=>ProductionGpoMappings.Validate(s with{ItemValues=null}),"CONTROL_REVIEW_REQUIRED");
     Reject(()=>ProductionGpoMappings.Validate(s with{ReviewContext="short"}),"CONTROL_REVIEW_REQUIRED");
 }
-var passwordPolicy=new FineGrainedPasswordRequest("OU=Users,"+dn,"GPOR-Test");
-FineGrainedPasswordRules.Validate(passwordPolicy);
-Reject(()=>FineGrainedPasswordRules.Validate(passwordPolicy with{ScopeDn=dn}),"FGPP_OU_REQUIRED");
-Reject(()=>FineGrainedPasswordRules.Validate(passwordPolicy with{MinPasswordAgeDays=100,MaxPasswordAgeDays=90}),"FGPP_VALUES_INVALID");
-Reject(()=>FineGrainedPasswordRules.Validate(passwordPolicy with{Name="../other"}),"FGPP_VALUES_INVALID");
-Console.WriteLine("PASS 11 controls require explicit values/environment review; FGPP rejects invalid scope and policy data");
+Console.WriteLine("PASS 11 controls require explicit values/environment review");
 Console.WriteLine($"PASS {cases} control/refresh/priority combinations on a non-default GPO; {manual} controls block automatic writes");
 
 using(var auditStore=new Store(":memory:")) {
