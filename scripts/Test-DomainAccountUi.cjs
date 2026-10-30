@@ -1,7 +1,7 @@
 /* User-reported incident: GPO threshold 5, effective AD threshold 0. No live AD. */
 const fs=require('node:fs'),path=require('node:path'),http=require('node:http'),assert=require('node:assert/strict');
 const {chromium}=require('playwright');
-const root=path.resolve(__dirname,'../frontend/source'),shots=path.resolve(__dirname,'../work/screens/3.16.8');fs.mkdirSync(shots,{recursive:true});
+const root=path.resolve(__dirname,'../frontend/source'),shots=path.resolve(__dirname,'../work/screens/3.17.4');fs.mkdirSync(shots,{recursive:true});
 const dn='DC=example,DC=test',gpo={id:'31b2f340-016d-11d2-945f-00c04fb984f9',name:'Default Domain Policy',protected:true,selectable:true};
 const selection={setting:'1.2.2',gpoId:gpo.id,scopeDn:dn,accountScope:'Domain',refresh:'Pdc',firstLink:true,value:5};
 const domainPolicy={property:'LockoutThreshold',value:'0',desiredValue:'5',domainController:'dc01.example.test'};
@@ -54,8 +54,12 @@ const server=http.createServer(async(req,res)=>{try{
  await page.setViewportSize({width:1440,height:1000});
  result.verificationStages[1].status='ENDPOINT_VERIFIED';result.domainPolicy={...domainPolicy,value:'5'};result.effectiveStatus='DOMAIN_VALUE_MATCHES_ON_SELECTED_DC';result.endpointChecks=[{hostname:domainPolicy.domainController,state:'VERIFIED',actualValue:'5',message:'AD LockoutThreshold = 5.'}];
  await page.locator('.service-right [data-refresh]').click();await page.locator('[data-effective-outcome=VERIFIED]').waitFor();assert.equal(await page.locator('.effective-value strong').textContent(),'5');
+ // A persisted 3.17.3 record falsely said VERIFIED for AD 30/requested 15.
+ result.currentLink={target:dn,order:1,enforced:false,enabled:true};result.domainPolicy={property:'LockoutDuration',value:'30',desiredValue:'15',domainController:domainPolicy.domainController,notes:['Account lockout is disabled because LockoutThreshold is 0.']};result.endpointChecks=[{hostname:domainPolicy.domainController,state:'VERIFIED',actualValue:'30',message:'Legacy threshold check.'}];
+ await page.locator('.service-right [data-refresh]').click();await page.locator('[data-effective-outcome=MISMATCH]').waitFor();assert.equal(await page.locator('.effective-value strong').textContent(),'30');assert.match(await page.locator('.verification-explanation').textContent(),/exact requested value/);assert.match(await page.locator('.domain-policy-notes').textContent(),/Threshold is 0/);assert.match(await page.locator('.recorded-result-context').textContent(),/Enabled · priority 1/);
+ await page.screenshot({path:path.join(shots,'legacy-duration-mismatch.png'),fullPage:true});
  result.verificationStages[1].status='INSUFFICIENT_EVIDENCE';result.domainPolicy=null;result.effectiveStatus='DOMAIN_POLICY_UNAVAILABLE';result.endpointChecks=[{hostname:domainPolicy.domainController,state:'UNAVAILABLE',actualValue:null,message:'Domain policy could not be read.'}];
- await page.locator('.service-right [data-refresh]').click();await page.locator('[data-effective-outcome=PENDING]').waitFor();assert.equal(await page.locator('.effective-value strong').textContent(),'Not checked');assert.match(await page.locator('.result-summary-head h2').textContent(),/not verified/);
+ await page.locator('.service-right [data-refresh]').click();await page.locator('[data-effective-outcome=PENDING]').waitFor();assert.equal(await page.locator('.effective-value strong').textContent(),'AD value unavailable');assert.match(await page.locator('.result-summary-head h2').textContent(),/not verified/);
  result.verificationStages[1].status='ENDPOINT_MISMATCH';result.domainPolicy=domainPolicy;result.effectiveStatus='ENDPOINT_MISMATCH';result.endpointChecks=[{hostname:domainPolicy.domainController,state:'MISMATCH',actualValue:'0',message:'AD LockoutThreshold = 0; requested 5.'}];
  await page.locator('.service-right [data-refresh]').click();await page.locator('[data-effective-outcome=MISMATCH]').waitFor();await page.locator('[data-replan]').click();await page.locator('.domain-value-plan').waitFor();
  assert.equal(await page.locator('.diff-before strong').textContent(),'0');assert.equal(await page.locator('.diff-after strong').textContent(),'5');assert.match(await page.locator('.domain-value-plan').textContent(),/AD \+ GPO/);assert.equal(requests.filter(x=>x.path.endsWith('/replan')).length,1);

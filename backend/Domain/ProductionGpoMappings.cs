@@ -70,6 +70,14 @@ public static class ProductionGpoMappings
     private static readonly Lazy<GpoMappingCatalog> CatalogLazy = new(Load, true);
     public static GpoMappingCatalog Catalog => CatalogLazy.Value;
     public static GpoRuleMapping[] Settings => Catalog.Mappings;
+    // A remediation plan pins the fields the operator selected, including the
+    // recommendation's initial value. Benchmark scans retain range semantics.
+    public static GpoSelection ForRemediation(GpoSelection selection){
+        var mapping=Require(selection.Setting);
+        if(selection.ItemValues is not null||!mapping.Writable||mapping.RequiresInput||mapping.Comparator=="includes")return selection;
+        return selection with{ItemValues=mapping.Items.Select(item=>mapping.Handler=="AdvancedAudit"?[item.Mask!.Value.ToString(System.Globalization.CultureInfo.InvariantCulture)]:
+            mapping.AllowValueOverride?[selection.Value.ToString(System.Globalization.CultureInfo.InvariantCulture)]:item.Value?.ToArray()??[]).ToArray()};
+    }
 
     public static GpoRuleMapping Require(string id) => Settings.SingleOrDefault(x => string.Equals(x.Id, id, StringComparison.OrdinalIgnoreCase))
         ?? throw new PolicyException("GPO_SETTING_UNSUPPORTED", "This CIS control does not have a validated production mapping.");

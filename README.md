@@ -1,4 +1,6 @@
-# GPO Remediator 3.17.3
+# GPO Remediator 3.17.4
+
+3.17.4 pins selected remediation values exactly across the catalog, separates required-inclusion checks from exact equality, exposes checked link priority, rejects incompatible lockout dependencies before writes, and corrects legacy AD mismatch claims. See [release notes](docs/RELEASE-3.17.4.md).
 
 3.17.3 reads current user-right assignments from local LSA, reports per-host refresh progress and nested session failures, and authorizes successfully previewed GPO/scope pairs within the active connection without configuration changes or restart. See [release notes](docs/RELEASE-3.17.3.md).
 

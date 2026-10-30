@@ -26,7 +26,10 @@ const base=mappings.find(x=>x.id==='9.1.5'),selection={};
 window.GpoValueEditor.capture({querySelectorAll:()=>[{value:'32768'}]},base,selection);
 assert.equal(selection.itemValues[0][0],'32768');
 window.GpoValueEditor.capture({querySelectorAll:()=>[{value:'16384'}]},base,selection);
-assert.equal(selection.itemValues,null);
+assert.equal(selection.itemValues[0][0],'16384','The initial recommendation also pins an exact value');
+const exact=JSON.parse(fs.readFileSync(path.join(root,'work/audit/exact-values.json'),'utf8'));
+for(const fixture of exact){const resolved=window.GpoValueEditor.effective(mappings.find(x=>x.id===fixture.selection.setting),fixture.selection);assert.equal(resolved.comparator,fixture.mapping.comparator);for(let i=0;i<resolved.items.length;i++)for(const field of ['section','key','name','guid','state','mask','type','comparator','value'])assert.deepEqual(JSON.parse(JSON.stringify(resolved.items[i][field]??(field==='type'?'String':null))),fixture.mapping.items[i][field]??null,fixture.mapping.id+' '+field);}
+console.log('PASS all 413 exact remediation mapping cases match C# including inclusion/audit semantics');
 const quality=window.GpoUiDomain.classify({plan:{selection:{itemValues:[['0']]}},result:{gpoPublished:true,linkVerified:true,verification:{replicationConverged:true},effectiveStatus:'VERIFIED_ON_SAMPLE'}});
 assert.equal(quality.compliant,false);assert.equal(quality.custom,true);
 console.log('PASS 394 editable controls, C#/manual-script custom-value parity, capture/reset and custom values excluded from benchmark compliance');

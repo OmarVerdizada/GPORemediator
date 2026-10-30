@@ -3,6 +3,7 @@
   const upper = value => String(value || '').toUpperCase();
   const bad = value => /FAIL|MISMATCH|REVIEW|PARTIAL|DRIFT|ERROR|OVERRIDDEN/.test(upper(value));
   const effectiveVerified = value => /^(VERIFIED_ON_SAMPLE|VERIFIED_ON_ALL_TARGETS|DOMAIN_VALUE_MATCHES_ON_SELECTED_DC)$/.test(upper(value));
+  function domainMismatch(result){const d=result?.domainPolicy;if(!d||upper(result.state).startsWith('ROLLED_BACK'))return false;const a=String(d.value??'').trim(),b=String(d.desiredValue??'').trim();return !a||!b||!Number.isFinite(Number(a))||!Number.isFinite(Number(b))||Number(a)!==Number(b);}
   function coverageVerified(result){
     if(upper(result.effectiveStatus)!=='VERIFIED_ON_ALL_TARGETS')return true;
     const c=result.endpointCoverage,checks=result.endpointChecks;
@@ -13,7 +14,7 @@
     const result = run?.result || {};
     const publication = result.gpoPublished === true ? 'published' : bad(result.state) ? 'failed' : 'pending';
     const replication = result.verification?.replicationConverged ? 'converged' : (result.verification ? 'pending' : 'not_checked');
-    const effective = effectiveVerified(result.effectiveStatus)&&coverageVerified(result) ? 'verified' : bad(result.effectiveStatus) ? 'failed' : 'pending';
+    const effective = domainMismatch(result)?'failed':effectiveVerified(result.effectiveStatus)&&coverageVerified(result) ? 'verified' : bad(result.effectiveStatus) ? 'failed' : 'pending';
     const attention = bad(result.state) || publication === 'failed' || effective === 'failed' || (result.refreshResults||[]).some(x=>upper(x.state)==='FAILED');
     const custom=!!run?.plan?.selection?.itemValues;
     const compliant = !upper(result.state).startsWith('ROLLED_BACK') && !custom && !attention && publication === 'published' && result.linkVerified === true && replication === 'converged' && effective === 'verified';
@@ -53,7 +54,7 @@
   function resultState(run){
     const r=run?.result||{};
     if(/^(ROLLED_BACK|BATCH_ROLLED_BACK|APPLYING|VERIFYING|REFRESHING|ROLLBACKING|ROLLING_BACK)$/.test(r.state||''))return r.state;
-    return r.effectiveStatus==='ENDPOINT_MISMATCH'||r.effectiveStatus==='DOMAIN_VALUE_PENDING_OR_OVERRIDDEN'||(r.endpointChecks||[]).some(x=>x.state==='MISMATCH')?'ENDPOINT_MISMATCH':r.state;
+    return domainMismatch(r)||r.effectiveStatus==='ENDPOINT_MISMATCH'||r.effectiveStatus==='DOMAIN_VALUE_PENDING_OR_OVERRIDDEN'||(r.endpointChecks||[]).some(x=>x.state==='MISMATCH')?'ENDPOINT_MISMATCH':r.state;
   }
-  window.GpoUiDomain = Object.freeze({ classify, workflowStep, impact, bad, effectiveVerified, coverageVerified, isUserPolicy, refreshChoices, resultState });
+  window.GpoUiDomain = Object.freeze({ classify, workflowStep, impact, bad, effectiveVerified, coverageVerified, isUserPolicy, refreshChoices, resultState, domainMismatch });
 })();

@@ -1,6 +1,6 @@
-# Executes every automatic control's real verifier with Windows/AD APIs mocked.
+﻿# Executes every automatic control's real verifier with Windows/AD APIs mocked.
 # Synthetic policy equality/inequality is not a live enforcement certification.
-param([string]$ReportPath='work/audit/endpoint-controls.json')
+param([string]$ReportPath='work/audit/endpoint-controls.json',[switch]$ExactPlans)
 $ErrorActionPreference='Stop';Set-StrictMode -Version Latest
 $repo=Split-Path $PSScriptRoot -Parent
 $tokens=$null;$errors=$null
@@ -8,6 +8,7 @@ $ast=[Management.Automation.Language.Parser]::ParseFile((Join-Path $repo 'backen
 if($errors.Count){throw ($errors|Out-String)}
 foreach($fn in $ast.FindAll({param($n)$n -is [Management.Automation.Language.FunctionDefinitionAst]},$false)){. ([scriptblock]::Create($fn.Extent.Text))}
 $catalog=Get-Content (Join-Path $repo 'backend/data/gpo-production-mappings.json') -Raw|ConvertFrom-Json
+if($ExactPlans){$exact=Get-Content (Join-Path $repo 'work/audit/exact-values.json') -Raw|ConvertFrom-Json;$catalog.mappings=@($exact|ForEach-Object{$_.mapping})}
 $cfg=@{domainController='dc.example.test';allowedHosts=@('ws.example.test')};$domainDn='DC=example,DC=test'
 function Get-ADComputer {param($SearchBase,$SearchScope,$Filter,$Server,$Properties,$ResultSetSize,$ErrorAction) [pscustomobject]@{DNSHostName='ws.example.test'}}
 function Verification-User {param($Identity) [pscustomobject]@{SID=@{Value='S-1-5-21-100-200-300-1001'};Enabled=$true;DistinguishedName='CN=Pilot,OU=Users,DC=example,DC=test'}}
@@ -49,17 +50,18 @@ function Get-NetFirewallProfile {
  param($Name,$PolicyStore,$ErrorAction)
  if($PolicyStore -ne 'ActiveStore'){throw 'Wrong firewall policy store'}
  $properties=@{EnableFirewall='Enabled';DefaultInboundAction='DefaultInboundAction';DisableNotifications='NotifyOnListen';LogFilePath='LogFileName';LogFileSize='LogMaxSizeKilobytes';LogDroppedPackets='LogBlocked';LogSuccessfulConnections='LogAllowed';AllowLocalPolicyMerge='AllowLocalFirewallRules';AllowLocalIPsecPolicyMerge='AllowLocalIPsecRules'}
- $item=$script:expected[0];$value=switch($item.name){'DefaultInboundAction' {'Block'} 'DisableNotifications' {'False'} {$_ -in @('EnableFirewall','LogDroppedPackets','LogSuccessfulConnections')} {'True'} {$_ -in @('AllowLocalPolicyMerge','AllowLocalIPsecPolicyMerge')} {'False'} default {$item.expected}}
+ $item=$script:expected[0];$value=switch($item.name){'DefaultInboundAction' {if($item.expected -eq '1'){'Block'}else{'Allow'}} 'DisableNotifications' {if($item.expected -eq '1'){'False'}else{'True'}} {$_ -in @('EnableFirewall','LogDroppedPackets','LogSuccessfulConnections','AllowLocalPolicyMerge','AllowLocalIPsecPolicyMerge')} {if($item.expected -eq '1'){'True'}else{'False'}} default {$item.expected}}
  if($script:wrong){$value='__mismatch__'}
  [pscustomobject]@{($properties[$item.name])=$value}
 }
 function Verification-Metadata {param($S) @{versionsMatch=$true;replicationConverged=$true}}
 function Mapping-Matches {param($Id,$Map,$S) $true}
 function Mapping-Display {param($Id,$Map,$S,$Desired) 'fixture'}
+function Get-ItemCurrent {param($Id,$Map,$Item) Desired-Normalized $Map $Item $script:selection}
 function Selected-Link {param($Dn,$Id) @{enabled=$true;order=1}}
 function Get-ADDefaultDomainPasswordPolicy {
  param($Identity,$Server)
- $value=if($script:wrong){if($script:map.comparator -eq '<='){999999}else{0}}else{$script:selection.value}
+ $value=if($script:wrong){if($script:map.comparator -eq '<='){999999}else{0}}else{Desired-Normalized $script:map @($script:map.items)[0] $script:selection}
  @{PasswordHistoryCount=$value;MinPasswordAge=[timespan]::FromDays($value);MinPasswordLength=$value;ComplexityEnabled=(!$script:wrong);ReversibleEncryptionEnabled=$script:wrong;LockoutDuration=[timespan]::FromMinutes($value);LockoutThreshold=$value;LockoutObservationWindow=[timespan]::FromMinutes($value)}
 }
 $rows=@()
@@ -77,6 +79,14 @@ foreach($map in $catalog.mappings){
    if($passed -eq $wrong){throw ("Expected mismatch=$wrong; result="+($result|ConvertTo-Json -Depth 10 -Compress))}
   }
   $cases=2
+  if($ExactPlans -and !$map.domainPolicySensitive){
+   foreach($item in $script:expected|Where-Object{$_.type -in @('DWORD','Integer') -and $_.comparator -eq '=='}){
+    $script:wrong=$false;$original=$item.expected;$item.expected=[string]$(if($map.id -like '9.*' -and $item.name -ne 'LogFileSize'){if($original -eq '1'){0}else{1}}else{[uint64]$original+1})
+    $different=@(Verify-EffectiveSamples $plan $map)
+    if($different[0].state -ne 'MISMATCH'){throw ('Different numeric value accepted for an exact plan: '+($different|ConvertTo-Json -Compress))}
+    $item.expected=$original;$cases++
+   }
+  }
   foreach($item in $script:expected){
    $rule=if($item.comparator){$item.comparator}else{$map.comparator}
    if($map.domainPolicySensitive -or $rule -notin @('>=','<=','atMost')){continue}

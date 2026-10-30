@@ -2,6 +2,7 @@
 (()=>{'use strict';
 function defaults(m){return m.items.map(x=>m.handler==='AdvancedAudit'?[String(x.mask)]:m.allowValueOverride?[String(m.suggested??0)]:(x.value||[]).map(String));}
 function effective(m,s){
+ if(m.automation==='Automated'&&!m.requiresInput&&m.comparator!=='includes'&&!s?.itemValues)s={...s,itemValues:m.allowValueOverride?[[String(s?.value??m.suggested??0)]]:defaults(m)};
  if(m.automation!=='Automated'&&s?.reviewContext?.trim().length&&s.itemValues)m={...m,automation:'Automated',handler:m.handler==='Manual'?'SecurityTemplate':m.handler,source:m.source+' | explicit environment review',warnings:[...(m.warnings||[]),'ENVIRONMENT_REVIEW: '+s.reviewContext.trim()]};
  if(m.domainPolicySensitive&&s?.accountScope==='LocalComputers')m={...m,scope:'Computer',domainPolicySensitive:false,warnings:[...(m.warnings||[]).filter(w=>!w.startsWith('Domain user password/lockout policy must use')),'LOCAL_ACCOUNTS_ONLY: This OU policy affects local accounts on member computers. Domain users require domain-root policy or fine-grained password policies for users/global groups.']};
  if(!s?.itemValues)return m;
@@ -19,7 +20,7 @@ function capture(form,m,s){
  if(!m||m.requiresInput){s.itemValues=null;return;}
  const inputs=[...form.querySelectorAll('[data-policy-value]')];if(inputs.length!==m.items.length)return;
  const values=inputs.map((input,i)=>['MultiString','Principals'].includes(m.items[i].type)?input.value.split(/\r?\n/).filter(x=>x.length):[input.value]);
- s.itemValues=s.reviewContext!=null?values:JSON.stringify(values)===JSON.stringify(defaults(m))?null:values;
+ s.itemValues=m.comparator!=='includes'||s.reviewContext!=null?values:JSON.stringify(values)===JSON.stringify(defaults(m))?null:values;
 }
 function render(s,m){
  const {esc,text}=window.GpoComponents,t=(_fallback,en)=>text(s,_fallback,en);
@@ -27,7 +28,7 @@ function render(s,m){
  if(m.requiresInput)return `<label>${esc(m.inputLabel||'Desired value')}<input name="customValue" value="${esc(s.selection.customValue??m.inputDefault??'')}" maxlength="4096" required></label>`;
  if(m.automation!=='Automated'||m.handler==='Manual')return `<p>${'This control requires role-specific manual review.'}</p>`;
  const recommended=defaults(m),values=s.selection.itemValues||recommended;
- return `<section class="policy-value-editor"><header><strong>${'Desired value'}</strong><button type="button" data-recommended-values>${'Restore recommendation'}</button></header><p>${'The recommendation is the initial value; you can change it. Custom choices are used in preview and the manual script.'}</p>${m.items.map((item,i)=>{
+ return `<section class="policy-value-editor"><header><strong>${'Desired value'}</strong><button type="button" data-recommended-values>${'Restore recommendation'}</button></header><p>${m.allowValueOverride?'The selected number will be applied exactly, including the initial recommendation. Benchmark minimum/maximum compliance is separate.':'The recommendation is the initial value; you can change it. Custom choices are used in preview and the manual script.'}</p>${m.items.map((item,i)=>{
  const name=m.allowValueOverride&&i===0?'value':'policyValue'+i,value=values[i]||[],type=item.type||'String';
  const attrs=`name="${name}" data-policy-value="${i}" maxlength="4096"`;
  const input=m.handler==='AdvancedAudit'?`<select ${attrs}>${['No Auditing','Success','Failure','Success and Failure'].map((label,mask)=>`<option value="${mask}" ${String(value[0])===String(mask)?'selected':''}>${label} · ${mask}</option>`).join('')}</select>`:['MultiString','Principals'].includes(type)?`<textarea ${attrs} rows="3">${esc(value.join('\n'))}</textarea>`:`<input ${attrs} value="${esc(value[0]??'')}" ${['DWORD','Integer'].includes(type)?'inputmode="numeric" pattern="[0-9]+" required':''}>`;

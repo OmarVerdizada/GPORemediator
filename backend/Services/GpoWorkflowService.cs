@@ -189,6 +189,7 @@ public sealed class GpoWorkflowService(IConfiguration config,Store store,Operati
     {
         RequireReal();
         var c=Get(token,actor);ProductionGpoMappings.Validate(selection);
+        if(requireWriteAccess)selection=ProductionGpoMappings.ForRemediation(selection);
         var mapping=ProductionGpoMappings.Effective(selection);
         var gpo=c.Inventory.Gpos.SingleOrDefault(g=>string.Equals(g.Id,selection.GpoId,StringComparison.OrdinalIgnoreCase));
         var scope=c.Inventory.Scopes.SingleOrDefault(s=>string.Equals(s.Dn,selection.ScopeDn,StringComparison.OrdinalIgnoreCase));
@@ -231,6 +232,7 @@ public sealed class GpoWorkflowService(IConfiguration config,Store store,Operati
             GpoWorkflowRules.ValidateConsent(plan,consent);ProductionGpoMappings.Validate(plan.Selection);
             if(DateTimeOffset.UtcNow-DateTimeOffset.Parse(plan.CreatedAt)>TimeSpan.FromMinutes(10))throw new PolicyException("GPO_PLAN_EXPIRED","Prepare a fresh plan.");
             if(store.Get<GpoWorkflowRun>("gpo_runs",id) is not null)throw new PolicyException("GPO_ALREADY_STARTED","This plan already has an execution; inspect it instead of replaying Apply.");
+            if(plan.Selection.ItemValues is null&&ProductionGpoMappings.ForRemediation(plan.Selection).ItemValues is not null)throw new PolicyException("GPO_PLAN_REVIEW_REQUIRED","Create a fresh preview to pin the selected values before Apply.");
         }else{
             var run=store.Require<GpoWorkflowRun>("gpo_runs",id);
             if(operation=="rollback"&&(consent.Confirmation!="ROLLBACK"||string.IsNullOrEmpty(run.Result.BackupId)))throw new PolicyException("ROLLBACK_NOT_AVAILABLE","Type ROLLBACK and select an operation with a completed backup.");
@@ -274,6 +276,7 @@ public sealed class GpoWorkflowService(IConfiguration config,Store store,Operati
                 GpoWorkflowRules.ValidateConsent(plan,consent);
                 if(previous is not null)return previous;
                 if(DateTimeOffset.UtcNow-DateTimeOffset.Parse(plan.CreatedAt)>TimeSpan.FromMinutes(10))throw new PolicyException("GPO_PLAN_EXPIRED","Prepare a fresh GPO plan.");
+                if(plan.Selection.ItemValues is null&&ProductionGpoMappings.ForRemediation(plan.Selection).ItemValues is not null)throw new PolicyException("GPO_PLAN_REVIEW_REQUIRED","Create a fresh preview to pin the selected values before Apply.");
             }else if(operation=="rollback"){
                 if(consent.Confirmation!="ROLLBACK")throw new PolicyException("CONFIRMATION_REQUIRED","Type ROLLBACK.");
                 if(previous is null)throw new PolicyException("NOT_FOUND","No execution exists for this plan.");
@@ -387,7 +390,7 @@ public sealed class GpoWorkflowService(IConfiguration config,Store store,Operati
             run.Plan.ExecutionUser,run.Plan.Domain,run.Plan.DomainController,ProductionGpoMappings.Require(run.Plan.Selection.Setting).ControlId,run.Plan.Selection.Setting,
             run.Plan.Selection.GpoId,run.Plan.Preview.Gpo.Name,run.Plan.Selection.ScopeDn,run.Plan.Preview.PreviousValue,
             ProductionGpoMappings.Effective(run.Plan.Selection).DesiredDisplay(run.Plan.Selection),run.Result.State,run.Result.BackupId,run.Result.BackupDirectory,run.Result.EffectiveStatus,
-            run.Result.Verification,run.Plan.Preview.Warnings,"",run.Approval?.ChangeReference,run.Approval?.ApprovedBy,ProductionGpoMappings.Require(run.Plan.Selection.Setting).Handler,ProductionGpoMappings.Effective(run.Plan.Selection).Source,run.Result.EndpointChecks,run.CorrelationId,run.Result.CurrentValue,run.Plan.Preview.PreviousValueSource,run.Result.CurrentValueSource,run.Result.DomainPolicy);
+            run.Result.Verification,run.Plan.Preview.Warnings,"",run.Approval?.ChangeReference,run.Approval?.ApprovedBy,ProductionGpoMappings.Require(run.Plan.Selection.Setting).Handler,ProductionGpoMappings.Effective(run.Plan.Selection).Source,run.Result.EndpointChecks,run.CorrelationId,run.Result.CurrentValue,run.Plan.Preview.PreviousValueSource,run.Result.CurrentValueSource,run.Result.DomainPolicy,run.Result.CurrentLink);
         evidence=evidence with{IntegrityHash=GpoWorkflowRules.EvidenceHash(evidence)};
         store.Put("gpo_evidence",id+"-"+evidence.IntegrityHash,evidence,"IMMUTABLE");
         return evidence;

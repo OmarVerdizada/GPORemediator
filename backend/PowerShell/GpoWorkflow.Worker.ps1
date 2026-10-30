@@ -539,7 +539,16 @@ function Domain-PolicyRead([string]$Property,[string]$Desired){
         {$_ -in @('ComplexityEnabled','ReversibleEncryptionEnabled')} {[int][bool]$value}
         default {$value}
     }
-    return @{property=$Property;value=([double]$number).ToString([Globalization.CultureInfo]::InvariantCulture);desiredValue=$Desired;domainController=[string]$cfg.domainController}
+    $result=@{property=$Property;value=([double]$number).ToString([Globalization.CultureInfo]::InvariantCulture);desiredValue=$Desired;domainController=[string]$cfg.domainController}
+    if($Property -like 'Lockout*' -and [int](Read-Field $policy 'LockoutThreshold' -1) -eq 0){$result.notes=@('Account lockout is disabled because LockoutThreshold is 0. Setting a duration does not enable account lockout. Threshold and observation window are separate settings and are not changed by this control.')}
+    return $result
+}
+function Domain-ValidateChange([string]$Property,[string]$Desired){
+    if($Property -notin @('LockoutDuration','LockoutObservationWindow','LockoutThreshold')){return}
+    $policy=Get-ADDefaultDomainPasswordPolicy -Identity $domainDn -Server $cfg.domainController -ErrorAction Stop
+    $threshold=[int]$policy.LockoutThreshold;$duration=[double]$policy.LockoutDuration.TotalMinutes;$window=[double]$policy.LockoutObservationWindow.TotalMinutes
+    switch($Property){'LockoutThreshold'{$threshold=[int]$Desired}'LockoutDuration'{$duration=[double]::Parse($Desired,[Globalization.CultureInfo]::InvariantCulture)}'LockoutObservationWindow'{$window=[double]::Parse($Desired,[Globalization.CultureInfo]::InvariantCulture)}}
+    if($duration -gt 0 -and $duration -lt $window){Fail 'DOMAIN_LOCKOUT_DEPENDENCY' ('Requested settings would have LockoutDuration '+$duration+' minutes below LockoutObservationWindow '+$window+' minutes. The AD cmdlet requires duration to be at least the reset-counter window. Review duration (1.2.1) and first set a compatible reset-counter window (1.2.4); no related setting is changed automatically.')}
 }
 function Domain-PolicySnapshot($S,$Map){
     $property=Domain-PolicyProperty $Map;if(!$property){return $null}
@@ -547,6 +556,7 @@ function Domain-PolicySnapshot($S,$Map){
 }
 function Domain-PolicyWrite([string]$Property,[string]$Value){
     if($Property -notin @('PasswordHistoryCount','MinPasswordAge','MinPasswordLength','ComplexityEnabled','ReversibleEncryptionEnabled','LockoutDuration','LockoutThreshold','LockoutObservationWindow')){Fail 'DOMAIN_POLICY_UNSUPPORTED' 'Unrecognized domain account property.'}
+    Domain-ValidateChange $Property $Value
     $number=[double]::Parse($Value,[Globalization.CultureInfo]::InvariantCulture)
     $typed=switch($Property){
         'MinPasswordAge' {[timespan]::FromDays($number)}
@@ -590,8 +600,10 @@ function Preview($S,$Map,[bool]$RequireWriteAccess=$true){
     $contentMatches=Mapping-Matches $S.gpoId $Map $S;$linkMatches=$null -ne $existing -and $existing.enabled -and (!$S.firstLink -or $existing.order -eq 1);$desired=Mapping-Display $S.gpoId $Map $S $true
     $domainPolicy=Domain-PolicySnapshot $S $Map
     if($domainPolicy -and $RequireWriteAccess){Domain-PolicyAccess ([string]$domainPolicy.property)}
+    if($domainPolicy -and $RequireWriteAccess){Domain-ValidateChange ([string]$domainPolicy.property) ([string]$domainPolicy.desiredValue)}
     if($domainPolicy){$warnings+=('DOMAIN_ACCOUNT_WRITE: '+$domainPolicy.property+' on '+$domainPolicy.domainController+': '+$domainPolicy.value+' -> '+$domainPolicy.desiredValue+'. Apply backs up and updates this AD property as well as the GPO.')}
-    $domainMatches=(!$domainPolicy -or (Numeric-Complies $domainPolicy.value $domainPolicy.desiredValue ([string]$Map.comparator)))
+    if($domainPolicy -and (Read-Field $domainPolicy 'notes' $null)){$warnings+=@($domainPolicy.notes)}
+    $domainMatches=(!$domainPolicy -or (Numeric-Complies $domainPolicy.value $domainPolicy.desiredValue $(if($RequireWriteAccess){'=='}else{[string]$Map.comparator})))
     $choice=Gpo-Choice $gpo;$previous=Mapping-Display $S.gpoId $Map $S $false
     return @{gpo=$choice;scope=$scope;previousValue=$previous;previousValueSource=(Value-Source $choice $previous);desiredValue=$desired;noChange=($contentMatches -and $linkMatches -and $domainMatches);domainPolicy=$domainPolicy;fingerprint=(Fingerprint $S.gpoId $scope.dn);scopeLinks=$raw;existingLink=$existing;refreshComputers=$computers;verificationComputers=$verificationComputers;warnings=$warnings;impact=$impact;preflight=$preflight}
 }
@@ -599,14 +611,21 @@ function Atomic-Text([string]$Path,[string]$Text,[Text.Encoding]$Encoding){
     $null=[IO.Directory]::CreateDirectory([IO.Path]::GetDirectoryName($Path));$temp=$Path+'.'+[guid]::NewGuid().ToString('N')+'.tmp'
     try{
         [IO.File]::WriteAllText($temp,$Text,$Encoding)
-        try{if([IO.File]::Exists($Path)){[IO.File]::Replace($temp,$Path,[System.Management.Automation.Language.NullString]::Value)}else{[IO.File]::Move($temp,$Path)}}
-        catch [UnauthorizedAccessException]{
-            # Standard GPMC "Edit settings" SYSVOL ACLs grant RX, W and DC,
-            # but not DELETE on each existing file. ReplaceFile requires that
-            # extra right, so use a durable in-place write after the backup and
-            # manifest have already been committed.
-            $bytes=$Encoding.GetBytes($Text);$stream=[IO.File]::Open($Path,[IO.FileMode]::Create,[IO.FileAccess]::Write,[IO.FileShare]::None)
-            try{$stream.Write($bytes,0,$bytes.Length);$stream.Flush($true)}finally{$stream.Dispose()}
+        for($attempt=0;;$attempt++){
+            try{if([IO.File]::Exists($Path)){[IO.File]::Replace($temp,$Path,[System.Management.Automation.Language.NullString]::Value)}else{[IO.File]::Move($temp,$Path)};break}
+            catch{
+                $failure=$_.Exception;while($failure.InnerException){$failure=$failure.InnerException}
+                $native=$failure.HResult -band 0xffff
+                if($failure -is [IO.IOException] -and $native -in @(32,33,1175) -and $attempt -lt 3){Start-Sleep -Milliseconds (50*($attempt+1));continue}
+                if($failure -isnot [UnauthorizedAccessException] -and !($failure -is [IO.IOException] -and $native -eq 1175)){throw}
+                # Standard GPMC Edit settings can grant write without DELETE.
+                # ReplaceFile reports this as access denied or 1175 (unable to
+                # remove the replaced file). Preserve the durable write path;
+                # sharing/lock errors must fail rather than truncate the file.
+                $bytes=$Encoding.GetBytes($Text);$stream=[IO.File]::Open($Path,[IO.FileMode]::Create,[IO.FileAccess]::Write,[IO.FileShare]::None)
+                try{$stream.Write($bytes,0,$bytes.Length);$stream.Flush($true)}finally{$stream.Dispose()}
+                break
+            }
         }
     }finally{if([IO.File]::Exists($temp)){[IO.File]::Delete($temp)}}
 }
@@ -930,6 +949,7 @@ function Verify-Published($Plan,$Map,[bool]$CheckEndpoints=$false){
     $s=$Plan.selection
     Send-CheckProgress 'GPO' 'CHECKING' ([string]$s.gpoId) 'Reading the stored GPO configuration.'
     $contentMatches=Mapping-Matches $s.gpoId $Map $s
+    if([bool]$Map.domainPolicySensitive){foreach($item in Mapping-Items $Map){if(!(Numeric-Complies (Get-ItemCurrent $s.gpoId $Map $item) (Desired-Normalized $Map $item $s) '==')){$contentMatches=$false}}}
     Send-CheckProgress 'GPO' $(if($contentMatches){'VERIFIED'}else{'MISMATCH'}) ([string]$s.gpoId) 'Compared stored GPO settings with the requested values.'
     Send-CheckProgress 'LINK' 'CHECKING' ([string]$s.scopeDn) 'Reading the selected GPO link and priority.'
     $link=Selected-Link $s.scopeDn $s.gpoId;$linked=$null -ne $link -and $link.enabled -and (!$s.firstLink -or $link.order -eq 1)
@@ -940,7 +960,7 @@ function Verify-Published($Plan,$Map,[bool]$CheckEndpoints=$false){
         Send-CheckProgress 'DOMAIN' 'CHECKING' ([string]$cfg.domainController) 'Reading the effective AD domain account policy.'
         try{
             $domainPolicy=Domain-PolicySnapshot $s $Map
-            $match=Numeric-Complies $domainPolicy.value $domainPolicy.desiredValue ([string]$Map.comparator)
+            $match=Numeric-Complies $domainPolicy.value $domainPolicy.desiredValue '=='
             $effective=if($match){'DOMAIN_VALUE_MATCHES_ON_SELECTED_DC'}else{'ENDPOINT_MISMATCH'}
             $endpointChecks=@(@{hostname=$domainPolicy.domainController;state=$(if($match){'VERIFIED'}else{'MISMATCH'});actualValue=[string]$domainPolicy.value;message=('AD '+$domainPolicy.property+' = '+$domainPolicy.value+'; requested '+$domainPolicy.desiredValue+'. Read from the domain account policy, independently of the GPO file.')})
         }catch{
@@ -956,7 +976,7 @@ function Verify-Published($Plan,$Map,[bool]$CheckEndpoints=$false){
     if(!$published){$effective='GPO_PUBLICATION_MISMATCH'}
     elseif(!$linked){$effective='GPO_LINK_MISMATCH'}
     elseif(!$metadata.replicationConverged -and $effective -notin @('ENDPOINT_MISMATCH','DOMAIN_POLICY_UNAVAILABLE')){$effective='REPLICATION_PENDING'}
-    return @{published=[bool]$published;linked=[bool]$linked;effective=$effective;verification=$metadata;endpointChecks=@($endpointChecks);endpointCoverage=$coverage;domainPolicy=$domainPolicy;currentValue=(Mapping-Display $s.gpoId $Map $s $false)}
+    return @{published=[bool]$published;linked=[bool]$linked;link=$link;effective=$effective;verification=$metadata;endpointChecks=@($endpointChecks);endpointCoverage=$coverage;domainPolicy=$domainPolicy;currentValue=(Mapping-Display $s.gpoId $Map $s $false)}
 }
 function Verify-Rollback($Plan,$Map,$Manifest){
     $s=$Plan.selection
@@ -1000,7 +1020,7 @@ function Result([string]$State,[string]$Message,$Manifest,$V,$Refresh){
     $current=Read-Field $V 'currentValue' $null
     $planData=Get-Variable Data -ValueOnly -ErrorAction SilentlyContinue
     $sourceGpo=Read-Field (Read-Field (Read-Field $planData 'plan' $null) 'preview' $null) 'gpo' $null
-    return @{state=$State;message=$Message;backupId=$backupId;backupDirectory=$backupDirectory;postFingerprint=$postFingerprint;gpoPublished=[bool](Read-Field $V 'published' $false);linkVerified=[bool](Read-Field $V 'linked' $false);refreshResults=@($Refresh);effectiveStatus=[string](Read-Field $V 'effective' 'UNKNOWN');verification=$verification;endpointChecks=$endpointChecks;currentValue=$current;currentValueSource=(Value-Source $sourceGpo $current);domainPolicy=(Read-Field $V 'domainPolicy' $null);endpointCoverage=Read-Field $V 'endpointCoverage' $null}
+    return @{state=$State;message=$Message;backupId=$backupId;backupDirectory=$backupDirectory;postFingerprint=$postFingerprint;gpoPublished=[bool](Read-Field $V 'published' $false);linkVerified=[bool](Read-Field $V 'linked' $false);refreshResults=@($Refresh);effectiveStatus=[string](Read-Field $V 'effective' 'UNKNOWN');verification=$verification;endpointChecks=$endpointChecks;currentValue=$current;currentValueSource=(Value-Source $sourceGpo $current);domainPolicy=(Read-Field $V 'domainPolicy' $null);currentLink=(Read-Field $V 'link' $null);endpointCoverage=Read-Field $V 'endpointCoverage' $null}
 }
 
 function Operation-Failure($Record,[string]$Stage){
@@ -1063,7 +1083,7 @@ switch($Operation){
                 Emit-Stage 'DOMAIN_POLICY_WRITE'
                 $currentDomain=Domain-PolicySnapshot $s $map
                 if([string]$currentDomain.value -cne [string]$domainBefore.value){Fail 'DOMAIN_POLICY_CHANGED' 'AD domain account policy changed after backup. Inspect the retained backup before retrying.'}
-                $manifest.afterDomainPolicy=if(Numeric-Complies $currentDomain.value $currentDomain.desiredValue ([string]$map.comparator)){$currentDomain}else{Domain-PolicyWrite ([string]$currentDomain.property) ([string]$currentDomain.desiredValue)}
+                $manifest.afterDomainPolicy=if(Numeric-Complies $currentDomain.value $currentDomain.desiredValue '=='){$currentDomain}else{Domain-PolicyWrite ([string]$currentDomain.property) ([string]$currentDomain.desiredValue)}
                 Save-Manifest $manifest $directory
             }
             Emit-Stage 'PUBLICATION_CHECK'
@@ -1209,6 +1229,7 @@ switch($Operation){
             $null=Assert-SelectionAccess $s $map
             $domainBefore=Read-Field $manifest 'beforeDomainPolicy' $null
             if($domainBefore){Domain-PolicyAccess ([string]$domainBefore.property)}
+            if($domainBefore){Domain-ValidateChange ([string]$domainBefore.property) ([string]$domainBefore.value)}
             Emit-Stage 'RESTORING_GPO'
             $manifest | Add-Member -NotePropertyName rollbackAttempts -NotePropertyValue ([int](Read-Field $manifest 'rollbackAttempts' 0)+1) -Force
             $manifest.phase='ROLLING_BACK';Save-Manifest $manifest $directory

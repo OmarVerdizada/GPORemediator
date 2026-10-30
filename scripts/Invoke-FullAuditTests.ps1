@@ -25,7 +25,10 @@ try{
   Run-Check $script 'powershell.exe' $arguments
  }
  Run-Check 'Test-LsaUserRights' 'powershell.exe' @('-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-File','scripts/Test-LsaUserRights.ps1') 'read-only local LSA native API; no AD or policy writes'
+ Run-Check 'Test-AtomicText' 'powershell.exe' @('-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-File','scripts/Test-AtomicText.ps1') 'real private filesystem; bounded replacement failure injection'
  Run-Check 'Test-ReviewedRemediationChain' 'powershell.exe' @('-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-File','scripts/Test-RemediationChain.ps1','-ReviewedControlsOnly','-ReportPath',($OutputDirectory+'/reviewed-remediation-controls.json'))
+ Run-Check 'Test-ExactRemediationChain' 'powershell.exe' @('-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-File','scripts/Test-RemediationChain.ps1','-ExactPlans','-ReportPath',($OutputDirectory+'/exact-remediation-controls.json')) 'all 405 controls / 413 scopes; real worker, private fixtures, mocked AD'
+ Run-Check 'Test-ExactEndpointMappings' 'powershell.exe' @('-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-File','scripts/Test-AllEndpointMappings.ps1','-ExactPlans','-ReportPath',($OutputDirectory+'/exact-endpoint-controls.json')) 'all 413 exact/inclusion mappings; real verifier, native APIs mocked'
  Run-Check 'frontend-syntax' $node @('-e',"const fs=require('fs'),cp=require('child_process');for(const x of fs.readdirSync('frontend/source').filter(x=>x.endsWith('.js'))){const r=cp.spawnSync(process.execPath,['--check','frontend/source/'+x],{stdio:'inherit'});if(r.status)process.exit(r.status)}") 'syntax'
  Run-Check 'Test-EndpointBatching' 'powershell.exe' @('-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-File','scripts/Test-EndpointBatching.ps1')
  Run-Check 'Test-AssuranceScale' $node @('scripts/Test-AssuranceScale.cjs')

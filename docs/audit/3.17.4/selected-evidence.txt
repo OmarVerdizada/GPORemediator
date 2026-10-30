@@ -1,0 +1,77 @@
+Test-LsaUserRights
+PASS native LSA reader compiled and propagated access denial (5); assignments unavailable to the local test identity; no policy changed
+PASS LSA reader input bounds; native buffers and policy handles are released in finally
+
+Test-EndpointEvidence
+PASS endpoint evidence: merged policy, scope boundary, SID normalization, missing data, native failures, audit/deny inclusion and asynchronous refresh
+PASS firewall reported-state regression: size equality/bounds, disabled logging mismatch, independent profiles, path case, unavailable evidence
+PASS OU-wide user-policy selection without a verification user; optional HKCU evidence stays pending
+
+Test-EndpointDiagnostics
+PASS mixed refresh retains every requested host
+PASS one denied host does not discard successful refresh
+PASS transport failure maps to the denied host with actionable access guidance
+PASS failure evidence excludes raw exceptions and credentials
+PASS refresh streams each host opening and completion as refresh evidence, not endpoint values
+PASS distinct diagnostic: ENDPOINT_DISK_FULL
+PASS distinct diagnostic: ENDPOINT_DISK_FULL
+PASS distinct diagnostic: ENDPOINT_AUTHENTICATION_FAILED
+PASS distinct diagnostic: ENDPOINT_CONNECTION_FAILED
+PASS distinct diagnostic: ENDPOINT_PROBE_FAILED
+PASS distinct diagnostic: ENDPOINT_SESSION_BROKEN
+PASS distinct diagnostic: ENDPOINT_JOB_FAILED
+PASS wrapped JobFailure retains Windows 1726 without exposing native text
+PASS failed effective probe retains its access cause without fabricating a measured value
+
+WorkflowRegression
+PASS full read-only inventory with explicit write boundary enforcement
+PASS 413 exact remediation mappings across all 405 controls; benchmark scans and required inclusion preserved
+PASS 11 controls require explicit values/environment review
+PASS 1560 control/refresh/priority combinations on a non-default GPO; 11 controls block automatic writes
+PASS audit integrity: empty chain, valid chain and first tampered event
+PASS mapping upgrades: stale writes blocked; snapshot rollback and restored-snapshot verification remain available
+PASS legacy domain threshold success cannot hide exact-value mismatch
+PASS invalid OU/PDC refresh rejected at submission and execution without replacing recorded result or invoking native executor
+PASS real user refresh submission: top-level Scope reaches validation and stored consent; PDC and missing session endpoint OU rejected before enqueue; no native execution
+PASS fresh evidence snapshots, preserved prior exports, five independent stages, scheduled-not-completed and endpoint mismatch separation
+PASS session target authorization: second GPO without config changes/restart; preview/readiness, exact pair, actor, other-session, disconnect and absolute-expiry guards; no native execution
+PASS optional-comparator legacy hash compatibility and version-only evidence migration boundary
+PASS custom value resolution/types/read-only boundary, canonical mapping isolation and legacy selection serialization; optional user samples
+
+Test-AllEndpointMappings
+All endpoint fixtures: 394 PASS, 0 FAIL, 11 unsupported; 806 synthetic cases; no live AD validation.
+
+Test-ManualVerification
+PASS 405 generated PowerShell commands parsed without execution
+PASS manual check stops before reading the wrong host and reads the expected host
+PASS generated Guest check reads renamed RID 501 status without secedit or an INF
+
+Test-RecoveryUi
+Recovery UI: PASS (desktop/mobile, recovery refresh, user OU/endpoint OU/verification identity targeting, and user PDC exclusion).
+
+Test-LivePolicyUi
+PASS live checking: queued, streamed stage/host updates, interrupted polling, unavailable result, missing-link plan, collapsed rail, mobile and exactly one read-only submission; fixture only.
+
+Test-ReviewedTargetUi
+PASS reviewed 2.2.6 form, visible user/computer scope, whitespace validation, preserved principal/review drafts, fresh repair steps, visible escaped failure, unknown-value semantics, light/dark and 320/390px layouts; no policy operations
+
+built-source-match
+PASS current backend/frontend source fingerprints and distributed runtime ZIP SHA-256
+
+Test-AtomicText
+PASS atomic text commits: normal replacement, transient sharing/lock recovery, bounded retries, 1175/access-denied durable fallback and unchanged original on sharing/disk failures; no live AD
+
+Test-ExactEndpointMappings
+All endpoint fixtures: 413 PASS, 0 FAIL, 0 unsupported; 1148 synthetic cases; no live AD validation.
+
+Test-ExactRemediationChain
+PASS 30/30/0 incident blocks incompatible duration 15 in preview before backup/write/link
+PASS Explicit 1.2.4 change updates only window, preserving duration and disabled threshold
+PASS Rollback rejects incompatible peer state before restoring GPO
+PASS GPO 15 / AD 30 with a live link is not NO_CHANGE
+PASS Exact duration Apply changes AD 30 to 15, retains peers and records enabled priority-1 link
+PASS Re-verify AD 30/requested 15 never accepts benchmark minimum compliance
+PASS Duration rollback restores actual AD snapshot 30
+PASS Earlier full-GPO snapshot does not overwrite later GPO changes
+PASS User incident: GPO 5 / AD 0 is measured as mismatch with actual value 0
+PASS real worker chain: preview, readiness, backup, write, link, publication, rollback and re-verification with mocked directory APIs only

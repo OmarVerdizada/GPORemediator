@@ -1,6 +1,6 @@
-# Real worker dispatch + writer + manifests against private filesystem fixtures.
+﻿# Real worker dispatch + writer + manifests against private filesystem fixtures.
 # AD, GPMC, DNS and remote endpoints are mocked. No live domain is contacted.
-param([switch]$AllControls,[switch]$ReviewedControlsOnly,[string]$ReportPath)
+param([switch]$AllControls,[switch]$ReviewedControlsOnly,[switch]$ExactPlans,[string]$ReportPath)
 $ErrorActionPreference='Stop';Set-StrictMode -Version Latest
 $repo=Split-Path $PSScriptRoot -Parent
 $temp=Join-Path ([IO.Path]::GetTempPath()) ('gpr-chain-'+[guid]::NewGuid().ToString('N'))
@@ -72,6 +72,37 @@ function Import-GPO {param($BackupId,$TargetGuid,$Path,$Domain,$Server)
  $script:version=$script:snapshot.version;$script:extensions=$script:snapshot.extensions;$script:userExtensions=$script:snapshot.userExtensions;$script:registry=$script:snapshot.registry.Clone()
 }
 function Invoke-GPUpdate {param($Computer,$Force,$RandomDelayInMinutes,$ErrorAction,$Target) $script:refreshes++}
+function Test-ExactLockoutIncident($Selection,$Mapping,$ExactFixtures){
+ $script:domainState.LockoutDuration=[timespan]::FromMinutes(30);$script:domainState.LockoutObservationWindow=[timespan]::FromMinutes(30)
+ $fingerprint=Fingerprint $Selection.gpoId $Selection.scopeDn;$beforeFiles=@(Get-ChildItem -LiteralPath $cfg.backupPath -Recurse -File).Count
+ $blocked=$false;try{$null=Preview $Selection $Mapping}catch{$blocked=$_.Exception.Message -match 'DOMAIN_LOCKOUT_DEPENDENCY'}
+ Check ($blocked -and (Fingerprint $Selection.gpoId $Selection.scopeDn) -ceq $fingerprint -and @(Get-ChildItem -LiteralPath $cfg.backupPath -Recurse -File).Count -eq $beforeFiles -and $script:domainState.LockoutThreshold -eq 0) '30/30/0 incident blocks incompatible duration 15 in preview before backup/write/link'
+ $windowFixture=$ExactFixtures|Where-Object{$_.mapping.id -eq '1.2.4' -and $_.selection.accountScope -eq 'Domain'}
+ $windowS=$Selection.Clone();$windowS.setting='1.2.4';$windowS.value=15;$windowS.itemValues=@(@('15'))
+ $windowMap=$windowFixture.mapping
+ $windowPlan=@{id=[guid]::NewGuid().ToString('N');domain=$cfg.domain;domainController=$cfg.domainController;selection=$windowS;preview=(Preview $windowS $windowMap)}
+ $Operation='gpoApply';$Data=@{plan=$windowPlan;mapping=$windowMap;consent=@{confirmation='APPLY'}};$windowResult=& $dispatch
+ Check ($windowResult.state -eq 'PUBLISHED' -and $script:domainState.LockoutObservationWindow.TotalMinutes -eq 15 -and $script:domainState.LockoutDuration.TotalMinutes -eq 30 -and $script:domainState.LockoutThreshold -eq 0) 'Explicit 1.2.4 change updates only window, preserving duration and disabled threshold'
+ $script:domainState.LockoutDuration=[timespan]::FromMinutes(15);$Operation='gpoRollback';$Data=@{plan=$windowPlan;mapping=$windowMap};$blockedResult=& $dispatch
+ Check ($blockedResult.state -eq 'FAILED_SAFE' -and $script:domainState.LockoutObservationWindow.TotalMinutes -eq 15) 'Rollback rejects incompatible peer state before restoring GPO'
+ $script:domainState.LockoutDuration=[timespan]::FromMinutes(30)
+ # Stored duration is already 15, while AD still has 30: the original incident.
+ $null=Write-Mapping @{selection=$Selection} $Mapping
+ $durationPreview=Preview $Selection $Mapping
+ Check (!$durationPreview.noChange -and $durationPreview.previousValue -eq '15' -and $durationPreview.domainPolicy.value -eq '30') 'GPO 15 / AD 30 with a live link is not NO_CHANGE'
+ $durationPlan=@{id=[guid]::NewGuid().ToString('N');domain=$cfg.domain;domainController=$cfg.domainController;selection=$Selection;preview=$durationPreview}
+ $Operation='gpoApply';$Data=@{plan=$durationPlan;mapping=$Mapping;consent=@{confirmation='APPLY'}};$durationResult=& $dispatch
+ Check ($durationResult.state -eq 'PUBLISHED' -and $durationResult.domainPolicy.value -eq '15' -and $durationResult.currentLink.enabled -and $durationResult.currentLink.order -eq 1 -and $script:domainState.LockoutObservationWindow.TotalMinutes -eq 15 -and $script:domainState.LockoutThreshold -eq 0) 'Exact duration Apply changes AD 30 to 15, retains peers and records enabled priority-1 link'
+ $script:domainState.LockoutDuration=[timespan]::FromMinutes(30);$Operation='gpoVerify';$observed=& $dispatch
+ Check ($observed.effectiveStatus -eq 'ENDPOINT_MISMATCH' -and $observed.endpointChecks[0].state -eq 'MISMATCH') 'Re-verify AD 30/requested 15 never accepts benchmark minimum compliance'
+ $script:domainState.LockoutDuration=[timespan]::FromMinutes(15);$Operation='gpoRollback';$restored=& $dispatch
+ Check ($restored.state -eq 'ROLLED_BACK' -and $script:domainState.LockoutDuration.TotalMinutes -eq 30) 'Duration rollback restores actual AD snapshot 30'
+ $Data=@{plan=$windowPlan;mapping=$windowMap}
+ # Duration publication changed the same GPO after window publication; recovery
+ # correctly requires the original window post-state, never overwrites drift.
+ $Operation='gpoRollback';$blocked=$false;try{$null=& $dispatch}catch{$blocked=$_.Exception.Message -match 'ROLLBACK_CONFLICT'}
+ Check ($blocked) 'Earlier full-GPO snapshot does not overwrite later GPO changes'
+}
 $catalog=(Get-Content (Join-Path $repo 'backend/data/gpo-production-mappings.json') -Raw|ConvertFrom-Json).mappings
 try{
  $cases=@(@('1.1.1','LocalComputers'),@('1.1.1','Domain'),@('1.2.2','Domain'),@('2.3.1.1','LocalComputers'),@('18.4.4','LocalComputers'),@('17.1.1','LocalComputers'),@('19.5.1.1','Users'))
@@ -85,9 +116,15 @@ try{
   $cases=@();foreach($entry in $reviewed){$cases+=,@([string]$entry.mapping.id,'LocalComputers')}
  }
  $report=@()
+ if($ExactPlans){
+  $exact=Get-Content -LiteralPath (Join-Path $repo 'work/audit/exact-values.json') -Raw|ConvertFrom-Json
+  Check (@($exact).Count -eq 413) 'C# exact mapping fixtures cover all 405 controls and both account scopes'
+  $cases=@();foreach($entry in $exact){$cases+=,@([string]$entry.mapping.id,[string]$entry.selection.accountScope)}
+ }
  foreach($case in $cases){
   $map=($catalog|Where-Object id -eq $case[0])|ConvertTo-Json -Depth 15|ConvertFrom-Json
   if($ReviewedControlsOnly){$map=($reviewed|Where-Object{$_.mapping.id -eq $case[0]}).mapping}
+  if($ExactPlans){$approved=$exact|Where-Object{$_.mapping.id -eq $case[0] -and $_.selection.accountScope -eq $case[1]};$map=$approved.mapping}
   Check ($null -ne $map) ('mapping exists '+$case[0])
   if($map.automation -ne 'Automated'){$map.automation='Automated';if($map.handler -eq 'Manual'){$map.handler='SecurityTemplate'}}
   if($case[1] -eq 'LocalComputers' -and $map.domainPolicySensitive){$map.scope='Computer';$map.domainPolicySensitive=$false}
@@ -98,7 +135,8 @@ try{
   $script:version=0;$script:extensions='';$script:userExtensions='';$script:rawLinks='';$script:registry=@{}
   $s=@{gpoId=$gpoId;scopeDn=$(if($case[1] -eq 'Domain'){$domainDn}else{$target});setting=$map.id;value=$map.suggested;customValue=$(if($map.requiresInput){if($map.inputDefault){[string]$map.inputDefault}else{'Authorized use only'}}else{''});refresh='None';firstLink=($case[1] -eq 'Domain');accountScope=$case[1];endpointScopeDn='';verificationUser=''}
   if($ReviewedControlsOnly){$approved=($reviewed|Where-Object{$_.mapping.id -eq $map.id});$s.itemValues=$approved.selection.itemValues;$s.reviewContext=$approved.selection.reviewContext}
-  $script:domainState=@{PasswordHistoryCount=0;MinPasswordAge=[timespan]::Zero;MinPasswordLength=7;ComplexityEnabled=$false;ReversibleEncryptionEnabled=$true;LockoutDuration=[timespan]::FromMinutes(30);LockoutThreshold=0;LockoutObservationWindow=[timespan]::FromMinutes(30)};$script:domainWriteDenied=$false;$script:domainWriteNoOp=$false
+  if($ExactPlans){$s.itemValues=Read-Field $approved.selection 'itemValues' $null;$s.reviewContext=Read-Field $approved.selection 'reviewContext' $null;$s.value=$approved.selection.value}
+  $script:domainState=@{PasswordHistoryCount=0;MinPasswordAge=[timespan]::Zero;MinPasswordLength=7;ComplexityEnabled=$false;ReversibleEncryptionEnabled=$true;LockoutDuration=[timespan]::FromMinutes(30);LockoutThreshold=0;LockoutObservationWindow=[timespan]::FromMinutes(15)};$script:domainWriteDenied=$false;$script:domainWriteNoOp=$false
   if($map.id -eq '1.2.2' -and $case[1] -eq 'Domain'){$null=Write-Mapping @{selection=$s} $map}
   $Operation='gpoPreview';$Data=@{selection=$s;mapping=$map};$script:workerStage='VALIDATING';$preview=& $dispatch
   if($map.id -eq '1.2.2' -and $case[1] -eq 'Domain'){Check (!$preview.noChange -and $preview.previousValue -eq '5' -and $preview.domainPolicy.value -eq '0') 'GPO 5 / AD 0 is a real change, never NO_CHANGE'}else{Check ($null -eq $preview.previousValue -and $null -eq $preview.previousValueSource) ('unconfigured source '+$map.id)}
@@ -175,6 +213,7 @@ try{
     Check ($restored.state -eq 'ROLLED_BACK') 'reviewed repair retains snapshot rollback'
    }finally{Set-Item Function:\Write-Mapping $writerFn;Set-Item Function:\Verify-EffectiveSamples $probeFn}
   }
+  if($ExactPlans -and $map.id -eq '1.2.1' -and $case[1] -eq 'Domain'){Test-ExactLockoutIncident $s $map $exact}
   $report+=@{controlId=[string]$map.id;domain=([string]$map.id -split '\.')[0];scope=$case[1];state='PASS';steps=$(if($case[1] -eq 'Users'){@('preview','backup','write','link','source','rollback','verify')}else{@('preview','backup','write','link','source','refresh','rollback','verify')})}
  }
  if($ReportPath){$output=[IO.Path]::GetFullPath($ReportPath);$null=New-Item -ItemType Directory -Path (Split-Path $output -Parent) -Force;$report|ConvertTo-Json -Depth 6|Set-Content -LiteralPath $output -Encoding UTF8}

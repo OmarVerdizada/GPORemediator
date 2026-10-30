@@ -78,6 +78,28 @@ foreach(var mapping in ProductionGpoMappings.Settings.Where(x=>!x.Writable)){
 }
 Directory.CreateDirectory("work/audit");
 File.WriteAllText("work/audit/reviewed-values.json",System.Text.Json.JsonSerializer.Serialize(reviewedCases,new System.Text.Json.JsonSerializerOptions{PropertyNamingPolicy=System.Text.Json.JsonNamingPolicy.CamelCase}));
+var exactCases=new List<object>();
+foreach(var mapping in ProductionGpoMappings.Settings){
+    foreach(var scope in mapping.DomainPolicySensitive?new[]{"LocalComputers","Domain"}:new[]{mapping.Scope=="User"?"Users":"LocalComputers"}){
+        var s=new GpoSelection(gpo,scope=="Domain"?dn:"OU=Pilot,"+dn,mapping.Id,mapping.Suggested??0,scope,FirstLink:scope=="Domain",
+            CustomValue:mapping.RequiresInput?(string.IsNullOrEmpty(mapping.InputDefault)?"Authorized use only":mapping.InputDefault):null,
+            ItemValues:!mapping.Writable?mapping.Items.Select(x=>x.Value??[]).ToArray():null,ReviewContext:!mapping.Writable?"Reviewed":null);
+        s=ProductionGpoMappings.ForRemediation(s);ProductionGpoMappings.Validate(s);
+        Check(PolicyValues.Hash(s)==PolicyValues.Hash(ProductionGpoMappings.ForRemediation(s)),"Remediation normalization is not idempotent: "+mapping.Id);
+        var resolved=ProductionGpoMappings.Effective(s);
+        if(mapping.Comparator=="includes")Check(s.ItemValues is null&&resolved.Comparator=="includes","Required inclusion lost its non-destructive semantics: "+mapping.Id);
+        else if(!mapping.RequiresInput)Check(s.ItemValues is not null&&resolved.Items.All(x=>x.Comparator is "==" or "exact"),"Requested value was not pinned: "+mapping.Id);
+        Check(ProductionGpoMappings.Effective(s with{ItemValues=null,ReviewContext=null}).Comparator==mapping.Comparator,"Read-only benchmark semantics changed: "+mapping.Id);
+        exactCases.Add(new{selection=s,mapping=resolved});
+    }
+}
+Check(exactCases.Count==413,"Exact remediation matrix incomplete");
+var isolatedSelection=ProductionGpoMappings.ForRemediation(selected with{Setting="9.1.5"});
+var catalogValue=ProductionGpoMappings.Require("9.1.5").Items[0].Value![0];
+isolatedSelection.ItemValues![0][0]="999";
+Check(ProductionGpoMappings.Require("9.1.5").Items[0].Value![0]==catalogValue,"Pinned plan values aliased the authoritative catalog");
+File.WriteAllText("work/audit/exact-values.json",System.Text.Json.JsonSerializer.Serialize(exactCases,new System.Text.Json.JsonSerializerOptions{PropertyNamingPolicy=System.Text.Json.JsonNamingPolicy.CamelCase}));
+Console.WriteLine("PASS 413 exact remediation mappings across all 405 controls; benchmark scans and required inclusion preserved");
 Console.WriteLine("PASS 11 controls require explicit values/environment review");
 Console.WriteLine($"PASS {cases} control/refresh/priority combinations on a non-default GPO; {manual} controls block automatic writes");
 
@@ -104,6 +126,10 @@ Console.WriteLine("PASS mapping upgrades: stale writes blocked; snapshot rollbac
 
 var evidencePlan=new GpoWorkflowPlan("evidence-fixture","EXAMPLE\\Operator","EXAMPLE\\Executor","WINDOWS","example.local","dc.example.local",selected with{Setting="1.1.4"},new(new(gpo,"Test GPO",false,true),new(dn,"Domain","Domain"),"1","fingerprint","",null,[],[],DesiredValue:"14"),PolicyValues.Now());
 var evidenceResult=new GpoWorkflowResult("PUBLISHED","Published",null,null,null,true,true,[new("ws.example.local","SCHEDULED","scheduled")],"VERIFIED_ON_SAMPLE",new("1","1",true,[],[],PolicyValues.Now(),true),[new("ws.example.local","VERIFIED","sample only","14")],"14");
+var legacyDomain=evidenceResult with{EffectiveStatus="DOMAIN_VALUE_MATCHES_ON_SELECTED_DC",DomainPolicy=new("LockoutDuration","30","15","dc.example.local")};
+Check(!GpoAssurance.EffectiveVerified(legacyDomain)&&GpoAssurance.Stages(legacyDomain).Any(x=>x.Stage=="ENDPOINT_CONFIGURATION"&&x.Status=="ENDPOINT_MISMATCH"),"Legacy AD 30/requested 15 falsely verified");
+Check(GpoAssurance.EffectiveVerified(legacyDomain with{DomainPolicy=legacyDomain.DomainPolicy with{Value="15"}}),"Exact AD match did not verify");
+Console.WriteLine("PASS legacy domain threshold success cannot hide exact-value mismatch");
 // Real submission/execution preflight, private in-memory session, and an invalid
 // ciphertext guard: a regression cannot reach the native executor or live AD.
 using(var refreshStore=new Store(":memory:")){
@@ -166,7 +192,7 @@ using(var grantStore=new Store(":memory:")){
  var grantSessions=typeof(GpoWorkflowService).GetField("connections",BindingFlags.Instance|BindingFlags.NonPublic)!.GetValue(grantService)!;
  void ConnectGrant(string token,DateTimeOffset created){var connection=Activator.CreateInstance(grantType,BindingFlags.Instance|BindingFlags.Public|BindingFlags.NonPublic,null,["EXAMPLE\\Operator",grantInv.ExecutionUser,Array.Empty<byte>(),grantInv,DateTimeOffset.UtcNow.AddMinutes(15),created],null)!;grantSessions.GetType().GetMethod("TryAdd")!.Invoke(grantSessions,[token,connection]);}
  ConnectGrant("one",DateTimeOffset.UtcNow);ConnectGrant("two",DateTimeOffset.UtcNow);
- var grantSelection=localAccount with{GpoId=other,ScopeDn=secondScope,Refresh="None"};
+ var grantSelection=ProductionGpoMappings.ForRemediation(localAccount with{GpoId=other,ScopeDn=secondScope,Refresh="None"});
  var grantPreview=new GpoPreview(grantInv.Gpos[1],grantInv.Scopes[1],null,"fp","",null,[],[],Preflight:new(grantInv.Domain,grantInv.DomainController,grantInv.ExecutionUser,true,[],PolicyValues.Now()));
  Check(!grantService.AuthorizePreviewTarget("one","EXAMPLE\\Operator",grantSelection,grantPreview,false),"Read-only scan granted write authorization");
  Check(!grantService.AuthorizePreviewTarget("one","EXAMPLE\\Operator",grantSelection,grantPreview with{Preflight=grantPreview.Preflight! with{Ready=false}},true),"Failed readiness granted write authorization");

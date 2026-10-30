@@ -6,9 +6,12 @@ public record GpoAssuranceStage(string Stage,string Status,string Evidence);
 // completion, applicability, or runtime enforcement from a stored policy value.
 public static class GpoAssurance
 {
+    public static bool DomainMismatch(GpoWorkflowResult r)=>r.DomainPolicy is { } d&&
+        (!decimal.TryParse(d.Value,System.Globalization.NumberStyles.Float,System.Globalization.CultureInfo.InvariantCulture,out var actual)||
+         !decimal.TryParse(d.DesiredValue,System.Globalization.NumberStyles.Float,System.Globalization.CultureInfo.InvariantCulture,out var desired)||actual!=desired);
     public static bool EffectiveVerified(GpoWorkflowResult r)
     {
-        if(!r.GpoPublished || !r.LinkVerified || r.Verification?.ReplicationConverged!=true)return false;
+        if(!r.GpoPublished || !r.LinkVerified || r.Verification?.ReplicationConverged!=true||DomainMismatch(r))return false;
         if(r.EffectiveStatus=="DOMAIN_VALUE_MATCHES_ON_SELECTED_DC")return true;
         var checks=r.EndpointChecks??[];
         if(checks.Length==0 || checks.Any(x=>x.State!="VERIFIED"))return false;
@@ -23,7 +26,7 @@ public static class GpoAssurance
         var processing=r.RefreshResults.Length==0?"NOT_TESTED":r.RefreshResults.All(x=>x.State=="FAILED")?"FAILED":r.RefreshResults.Any(x=>x.State=="FAILED")?"PARTIAL_SUCCESS":
             r.RefreshResults.All(x=>x.State=="COMPLETED")?"GPUPDATE_COMPLETED":
             r.RefreshResults.Any(x=>x.State=="STARTED")?"GPUPDATE_STARTED":r.RefreshResults.All(x=>x.State=="SCHEDULED")?"GPUPDATE_SCHEDULED":"INSUFFICIENT_EVIDENCE";
-        var endpoint=checks.Any(x=>x.State=="MISMATCH")?"ENDPOINT_MISMATCH":
+        var endpoint=DomainMismatch(r)||checks.Any(x=>x.State=="MISMATCH")?"ENDPOINT_MISMATCH":
             checks.Length>0&&checks.All(x=>x.State=="VERIFIED")&&(r.EndpointCoverage is null||r.EndpointCoverage is {Complete:true} coverage&&checks.Length==coverage.Total)?"ENDPOINT_VERIFIED":
             r.EffectiveStatus=="DOMAIN_VALUE_MATCHES_ON_SELECTED_DC"?"ENDPOINT_VERIFIED":"INSUFFICIENT_EVIDENCE";
         return [
@@ -37,6 +40,7 @@ public static class GpoAssurance
     public static string[] Diagnose(GpoWorkflowResult r)
     {
         var notes=new List<string>();
+        if(DomainMismatch(r))notes.Add("The recorded AD domain value differs from the exact requested value. Benchmark threshold compliance is not proof that the requested change was applied. Re-verify live state and create a fresh exact-value plan if needed.");
         if(!r.GpoPublished)notes.Add("Check selected domain/DC/GPO, mapping storage/type, write authority, CSE metadata and local AD/SYSVOL versions.");
         if(!r.LinkVerified)notes.Add("Check selected target OU/domain, direct link enablement and priority.");
         if(r.Verification?.ReplicationConverged!=true)notes.Add("Inspect per-DC replication evidence; unavailable probes and equal versions alone are not content convergence.");

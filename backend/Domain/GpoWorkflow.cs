@@ -11,7 +11,8 @@ public sealed class GpoLoginRequest
 public record GpoChoice(string Id, string Name, bool Protected, bool Selectable);
 public record GpoScope(string Dn, string Name, string Kind);
 public record GpoValueSource(string GpoId, string GpoName);
-public record GpoDomainPolicy(string Property, string Value, string DesiredValue, string DomainController);
+public record GpoDomainPolicy(string Property, string Value, string DesiredValue, string DomainController,
+    [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] string[]? Notes = null);
 public record GpoInventory(string Domain, string DomainController, string ExecutionUser, GpoChoice[] Gpos, GpoScope[] Scopes);
 
 public record GpoSelection(string GpoId, string ScopeDn, string Setting, int Value,
@@ -58,7 +59,8 @@ public record GpoWorkflowResult(string State, string Message, string? BackupId, 
     GpoVerificationDetails? Verification = null, GpoEndpointCheck[]? EndpointChecks = null, string? CurrentValue = null,
     [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] EndpointCoverage? EndpointCoverage = null,
     [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] EndpointCoverage? RefreshCoverage = null,
-    GpoValueSource? CurrentValueSource = null, GpoDomainPolicy? DomainPolicy = null)
+    GpoValueSource? CurrentValueSource = null, GpoDomainPolicy? DomainPolicy = null,
+    [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] GpoLink? CurrentLink = null)
 {
     public GpoAssuranceStage[] VerificationStages => GpoAssurance.Stages(this);
     public string[] Diagnosis => GpoAssurance.Diagnose(this);
@@ -74,7 +76,8 @@ public record GpoEvidence(string SchemaVersion, string Product, string Benchmark
     string? BackupId, string? BackupDirectory, string EffectiveStatus, GpoVerificationDetails? Verification,
     string[] Warnings, string IntegrityHash, string? ChangeReference = null, string? ApprovedBy = null, string? Handler = null, string? MappingSource = null,
     GpoEndpointCheck[]? EndpointChecks = null, string? CorrelationId = null, string? CurrentValue = null,
-    GpoValueSource? BeforeValueSource = null, GpoValueSource? CurrentValueSource = null, GpoDomainPolicy? DomainPolicy = null);
+    GpoValueSource? BeforeValueSource = null, GpoValueSource? CurrentValueSource = null, GpoDomainPolicy? DomainPolicy = null,
+    [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] GpoLink? CurrentLink = null);
 
 public static class GpoWorkflowRules
 {
