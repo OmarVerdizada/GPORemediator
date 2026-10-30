@@ -77,10 +77,10 @@ public static class ProductionGpoMappings
     public static GpoRuleMapping Effective(GpoSelection selection)
     {
         var mapping=Require(selection.Setting);
-        if(!mapping.Writable && !string.IsNullOrWhiteSpace(selection.ReviewContext))
+        if(!mapping.Writable && selection.ReviewContext is not null)
         {
-            if(selection.ReviewContext.Trim().Length<10||selection.ReviewContext.Length>2048||selection.ReviewContext.Contains('\0'))
-                throw new PolicyException("CONTROL_REVIEW_REQUIRED","Record the reviewed OS support, server roles and approved principal exceptions (10–2048 characters).");
+            if(string.IsNullOrWhiteSpace(selection.ReviewContext)||selection.ReviewContext.Length>2048||selection.ReviewContext.Contains('\0'))
+                throw new PolicyException("CONTROL_REVIEW_REQUIRED","Record the environment review and approved exceptions (up to 2048 characters).");
             if(selection.ItemValues is null)
                 throw new PolicyException("CONTROL_REVIEW_REQUIRED","Explicitly approve every policy field for this reviewed control.");
             mapping=mapping with{Automation="Automated",Handler=mapping.Handler=="Manual"?"SecurityTemplate":mapping.Handler,

@@ -71,7 +71,8 @@ public static class GpoScriptWorkspaces
             $code='GPO_ISOLATION_DENIED'
             if($message -notmatch '^GPO_ISOLATION_DENIED\|'){$message='Domain/GPO isolation guard could not validate the request.'}
             else{$message=$message.Substring('GPO_ISOLATION_DENIED|'.Length)}
-            [Console]::Out.Write((@{ok=$false;code=$code;message=$message} | ConvertTo-Json -Compress))
+            [Console]::Out.WriteLine()
+            [Console]::Out.WriteLine('GPO_RESULT:'+(@{ok=$false;code=$code;message=$message} | ConvertTo-Json -Compress))
             exit 1
         } finally {
             $requestText=$null

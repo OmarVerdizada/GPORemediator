@@ -1,9 +1,9 @@
-GPO Remediator 3.17.1 - target guidance and reviewed-operation clarity
+GPO Remediator 3.17.2 - native response transport and stored-value clarity
 
-See docs/RELEASE-3.17.1.md.
-User, computer and domain-account targeting is explained before OU selection.
-Reviewed-control justification has a full-width field, length guidance and trimmed validation.
-Fresh plan steps are separate from recorded operation steps.
-Interrupted-operation errors and safe next steps are visible on the result page.
-Unmeasured stored values display Not checked instead of implying Not configured.
-Role/environment-sensitive reviewed controls no longer receive a Low impact default.
+See docs/RELEASE-3.17.2.md.
+PowerShell result frames remain separate from module stdout and progress.
+Dictionary-shaped live checks are forwarded correctly.
+Transport failures report safe exit/stage and policy/parse diagnostics.
+Environment review accepts short nonempty notes; the ten-character minimum is removed.
+The plan compares the stored GPO value and its source with the requested value.
+Absent settings and failed reads are displayed separately.

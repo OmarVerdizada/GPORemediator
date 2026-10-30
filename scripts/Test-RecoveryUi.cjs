@@ -371,11 +371,11 @@ const server=http.createServer(async(req,res)=>{
    await page.goto(`http://127.0.0.1:${server.address().port}/#/benchmark`);
    await page.locator('#catalog-search').fill(m.id);await page.locator(`[data-rule="${m.id}"]`).first().click();await page.locator('[data-tab=remediation]').click();
    await page.locator('[data-reviewed-execution]').click();
-   await page.locator('[name=reviewContext]').fill('Reviewed endpoint OS, server roles and explicit principal exceptions.');
+   await page.locator('[name=reviewContext]').fill('OK');
    await page.locator('[data-gpo-toggle]').click();await page.locator('[data-gpo="11111111-1111-1111-1111-111111111111"]').click();
    await page.locator('[data-scope-open="scopeDn"]').click();await page.locator('[data-scope-choose="OU=Endpoints,DC=test,DC=local"]').click();
    await page.locator('#gpo-selection>.primary-action').click();await page.waitForFunction(()=>!!document.querySelector('.plan-card'));
-   assert.equal(previewSelections.at(-1).setting,m.id);assert.ok(previewSelections.at(-1).reviewContext.length>=10);assert.equal(previewSelections.at(-1).itemValues.length,m.items.length);
+   assert.equal(previewSelections.at(-1).setting,m.id);assert.equal(previewSelections.at(-1).reviewContext,'OK');assert.equal(previewSelections.at(-1).itemValues.length,m.items.length);
   }
   assert.deepEqual(errors,[]);
   console.log('Recovery UI: PASS (desktop/mobile, recovery refresh, user OU/endpoint OU/verification identity targeting, and user PDC exclusion).');

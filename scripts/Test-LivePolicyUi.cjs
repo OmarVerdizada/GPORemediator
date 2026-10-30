@@ -1,7 +1,7 @@
 /* User-reported incident: GPO threshold 5, effective AD threshold 0. No live AD. */
 const fs=require('node:fs'),path=require('node:path'),http=require('node:http'),assert=require('node:assert/strict');
 const {chromium}=require('playwright');
-const root=path.resolve(__dirname,'../frontend/source'),shots=path.resolve(__dirname,'../work/screens/3.16.9');fs.mkdirSync(shots,{recursive:true});
+const root=path.resolve(__dirname,'../frontend/source'),shots=path.resolve(__dirname,'../work/screens/3.17.2');fs.mkdirSync(shots,{recursive:true});
 const dn='OU=Workstations,DC=example,DC=test',gpo={id:'31b2f340-016d-11d2-945f-00c04fb984f9',name:'Default Domain Policy',protected:true,selectable:true};
 const selection={setting:'1.2.2',gpoId:gpo.id,scopeDn:dn,accountScope:'LocalComputers',refresh:'None',firstLink:false,value:5};
 const domainPolicy={property:'LockoutThreshold',value:'0',desiredValue:'5',domainController:'dc01.example.test'};
@@ -46,12 +46,12 @@ const server=http.createServer(async(req,res)=>{try{
  assert(logo.x>=rail.x&&toggle.x+toggle.width<=rail.x+rail.width&&toggle.y>=logo.y+logo.height,'Collapsed logo and toggle overlap or overflow');
  await page.evaluate(()=>window.scrollTo(0,0));await page.screenshot({path:path.join(shots,'collapsed-sidebar.png'),fullPage:true});
  await page.locator('[data-replan]').click();await page.locator('[data-link-state=REQUIRED]').waitFor();
- assert.equal(await page.locator('.diff-before strong').textContent(),'Not checked');assert.match(await page.locator('.stored-gpo-fact').textContent(),/Stored GPO value\s*5/);assert.match(await page.locator('.target-value-boundary').textContent(),/inherited policy/);
+ assert.equal(await page.locator('.diff-before strong').textContent(),'5');assert.match(await page.locator('.stored-gpo-fact').textContent(),/Stored GPO value\s*5/);assert.match(await page.locator('.diff-before .value-source').textContent(),/Default Domain Policy/);assert.match(await page.locator('.diff-before .value-source').textContent(),new RegExp(gpo.id));assert.match(await page.locator('.target-value-boundary').textContent(),/inherited policy/);
  await page.evaluate(()=>window.scrollTo(0,0));await page.screenshot({path:path.join(shots,'unlinked-ou-plan.png'),fullPage:true});
  for(const [link,firstLink,expected] of [[{enabled:false,order:1},false,'DISABLED'],[{enabled:true,order:2},true,'PRIORITY'],[{enabled:true,order:1},true,'PRESENT']]){
   plan.preview.existingLink=link;plan.selection.firstLink=firstLink;
   await page.locator('[data-tab=verification]').click();await page.locator('[data-replan]').click();await page.locator('[data-link-state='+expected+']').waitFor();
-  assert.equal(await page.locator('.diff-before strong').textContent(),'Not checked','An enabled link must not invent an endpoint measurement');
+  assert.equal(await page.locator('.diff-before strong').textContent(),'5','Preview must identify the stored GPO value independently of the target link');
  }
  await page.locator('[data-tab=verification]').click();await page.locator('[data-verify]').click();await page.locator('[data-live-verification]').waitFor();
  assert.match(await page.locator('.live-verification').textContent(),/Waiting for the server worker/);assert.equal(await page.locator('.result-summary').count(),0,'Old result remained visible as the current check');

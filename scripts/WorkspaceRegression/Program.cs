@@ -30,6 +30,25 @@ using(var reader=new StreamReader(new MemoryStream(Encoding.UTF8.GetBytes("GPO_S
  var output=await WindowsPowerShellExecutor.ReadOutputAsync(reader,1024,CancellationToken.None,phases.Add);
  Check(output=="{\"ok\":true}"&&phases.SequenceEqual(new[]{"BACKUP","WRITING"}),"Streaming protocol mixed stages and result");
 }
+using(var reader=new StreamReader(new MemoryStream(Encoding.UTF8.GetBytes("module banner\nGPO_STAGE:REPLICATION_ENDPOINT_CHECK\nGPO_RESULT:{\"ok\":true,\"data\":{\"state\":\"PUBLISHED\"}}\nmodule cleanup output")))){
+ var output=await WindowsPowerShellExecutor.ReadOutputAsync(reader,8192,CancellationToken.None);
+ using var response=JsonDocument.Parse(output);
+ Check(response.RootElement.GetProperty("data").GetProperty("state").GetString()=="PUBLISHED","Module stdout corrupted the framed operation response");
+}
+using(var reader=new StreamReader(new MemoryStream(Encoding.UTF8.GetBytes("GPO_RESULT:{\"ok\":false,\"code\":\"TEST_DENIED\"}\n")))){
+ var output=await WindowsPowerShellExecutor.ReadOutputAsync(reader,8192,CancellationToken.None);
+ Check(!JsonDocument.Parse(output).RootElement.GetProperty("ok").GetBoolean(),"A framed failure became success");
+}
+using(var reader=new StreamReader(new MemoryStream(Encoding.UTF8.GetBytes("GPO_RESULT:{\"ok\":true}\nGPO_RESULT:{\"ok\":false}")))){
+ try{await WindowsPowerShellExecutor.ReadOutputAsync(reader,8192,CancellationToken.None);throw new Exception("Duplicate response accepted");}catch(PolicyException error){Check(error.Code=="POWERSHELL_PROTOCOL","Duplicate response must fail closed");}
+}
+foreach(var pair in new[]{("PSSecurityException private secret","SCRIPT_POLICY_BLOCKED","POWERSHELL_POLICY_BLOCKED"),("ParserError private secret","SCRIPT_PARSE_ERROR","POWERSHELL_SCRIPT_PARSE"),("private secret","UNCLASSIFIED_STDERR","POWERSHELL_TRANSPORT"),("","NO_STDERR","POWERSHELL_TRANSPORT")}){
+ using var reader=new StreamReader(new MemoryStream(Encoding.UTF8.GetBytes(pair.Item1)));
+ var hint=await WindowsPowerShellExecutor.ReadErrorSummaryAsync(reader,CancellationToken.None);
+ var error=WindowsPowerShellExecutor.TransportError(1,"REPLICATION_ENDPOINT_CHECK",0,hint);
+ Check(hint==pair.Item2&&error.Code==pair.Item3&&!error.Message.Contains("private secret")&&error.Message.Contains("REPLICATION_ENDPOINT_CHECK"),"Stderr diagnosis leaked output, hid the stage or misclassified failure");
+}
+Console.WriteLine("PASS framed PowerShell responses tolerate module stdout, preserve failures, reject duplicate results and expose safe policy/parse/exit/stage diagnostics without stderr contents");
 using(var reader=new StreamReader(new MemoryStream(Encoding.UTF8.GetBytes(new string('x',10000))))){
  try{await WindowsPowerShellExecutor.ReadOutputAsync(reader,100,CancellationToken.None);throw new Exception("Unbounded output accepted");}catch(PolicyException error){Check(error.Code=="RESPONSE_TOO_LARGE","Output cap");}
 }

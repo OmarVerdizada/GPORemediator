@@ -9,6 +9,12 @@ $InformationPreference='SilentlyContinue'
 $stage='configuration'
 $clock=[Diagnostics.Stopwatch]::StartNew()
 $session=$null;$secure=$null;$credential=$null;$request=$null
+function Write-GpoResponse($Response){
+    # Isolate the response from unsolicited module/native stdout, including text
+    # without a trailing newline. No credentials or raw error streams are saved.
+    [Console]::Out.WriteLine()
+    [Console]::Out.WriteLine('GPO_RESULT:'+($Response|ConvertTo-Json -Depth 50 -Compress))
+}
 try {
     $request=if($PSBoundParameters.ContainsKey('RequestJson')){$RequestJson | ConvertFrom-Json}else{[Console]::In.ReadToEnd() | ConvertFrom-Json}
     $RequestJson=$null
@@ -38,12 +44,14 @@ try {
     $module=[IO.File]::ReadAllText((Join-Path $PSScriptRoot 'SecurityTemplate.psm1'))
     $data=$null
     Invoke-Command -Session $session -ScriptBlock ([scriptblock]::Create($worker)) -ArgumentList ([string]$request.operation),$cfg,$request.payload.data,$module,$credential 6>&1 | ForEach-Object {
-        if($_.PSObject.Properties['MessageData'] -and $_.MessageData.PSObject.Properties['gpoCheck']){[Console]::Out.WriteLine('GPO_CHECK:'+($_.MessageData.gpoCheck | ConvertTo-Json -Depth 5 -Compress))}
-        elseif($_ -is [Management.Automation.InformationRecord]){ }
+        $information=$_.PSObject.Properties['MessageData']
+        $check=if($information -and $_.MessageData -is [Collections.IDictionary]){$_.MessageData['gpoCheck']}elseif($information -and $_.MessageData -and $_.MessageData.PSObject.Properties['gpoCheck']){$_.MessageData.gpoCheck}else{$null}
+        if($check){[Console]::Out.WriteLine('GPO_CHECK:'+($check | ConvertTo-Json -Depth 5 -Compress))}
+        elseif($information -or $_ -is [Management.Automation.InformationRecord]){ }
         elseif($_.PSObject.Properties['gpoStage']){[Console]::Out.WriteLine('GPO_STAGE:'+([string]$_.gpoStage))}
         else{$data=$_}
     }
-    [Console]::Out.Write((@{ok=$true;data=$data;durationMs=$clock.ElapsedMilliseconds} | ConvertTo-Json -Depth 50 -Compress))
+    Write-GpoResponse @{ok=$true;data=$data;durationMs=$clock.ElapsedMilliseconds}
 } catch {
     $message=[string]$_.Exception.Message
     if($message -match '^([A-Z][A-Z0-9_]+)\|(.+)$'){$code=$Matches[1];$safe=$Matches[2]}
@@ -62,7 +70,7 @@ try {
             default {$code='GPO_OPERATION_FAILED';$safe='The operation could not finish. Open Operations and verify its recorded state before trying a change again.'}
         }
     }
-    [Console]::Out.Write((@{ok=$false;code=$code;message=$safe;stage=$stage;durationMs=$clock.ElapsedMilliseconds} | ConvertTo-Json -Compress))
+    Write-GpoResponse @{ok=$false;code=$code;message=$safe;stage=$stage;durationMs=$clock.ElapsedMilliseconds}
     exit 1
 } finally {
     if($session){Remove-PSSession $session -ErrorAction SilentlyContinue}

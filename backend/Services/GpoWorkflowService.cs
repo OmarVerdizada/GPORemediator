@@ -42,7 +42,7 @@ public sealed class GpoWorkflowService(IConfiguration config,Store store,Operati
         Expire();
         RequireReal();
         request.UserName=WindowsAccount.Normalize(request.UserName);
-        if(connections.Count>=32) throw new PolicyException("GPO_CONNECTION_LIMIT","Too many active GPO sessions. Disconnect unused sessions or wait for the 30-minute idle timeout.");
+        if(connections.Count>=32) throw new PolicyException("GPO_CONNECTION_LIMIT","Too many active GPO sessions. Disconnect unused sessions or wait for the 15-minute idle timeout.");
         if(request.Password is null||request.UserName.Length>256||request.Password.Length>1024||request.UserName.IndexOfAny(['\r','\n','\0'])>=0) throw new PolicyException("CREDENTIAL_FORMAT","Invalid login fields.");
         if(string.IsNullOrWhiteSpace(request.UserName)||string.IsNullOrEmpty(request.Password)) throw new PolicyException("DELEGATED_CREDENTIAL_REQUIRED","Supply an explicit delegated DOMAIN\\user credential. The backend service identity is never used for GPO execution.");
         if(!await loginSlots.WaitAsync(0,ct))throw new PolicyException("GPO_CONNECTION_LIMIT","Too many concurrent connection attempts. Retry later.");

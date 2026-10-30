@@ -1,7 +1,7 @@
 /* Reproduce the reviewed user-rights target form and interrupted operation. No AD. */
 const fs=require('node:fs'),path=require('node:path'),http=require('node:http'),assert=require('node:assert/strict');
 const {chromium}=require('playwright');
-const root=path.resolve(__dirname,'../frontend/source'),shots=path.resolve(__dirname,'../work/screens/3.17.1');fs.mkdirSync(shots,{recursive:true});
+const root=path.resolve(__dirname,'../frontend/source'),shots=path.resolve(__dirname,'../work/screens/3.17.2');fs.mkdirSync(shots,{recursive:true});
 const mappings=JSON.parse(fs.readFileSync(path.resolve(__dirname,'../backend/data/gpo-production-mappings.json'),'utf8')).mappings;
 const dn='OU=Mixed,DC=example,DC=test',gpo={id:'11111111-1111-1111-1111-111111111111',name:'Pilot policy',protected:false,selectable:true};
 const inventory={domain:'example.test',domainController:'dc.example.test',executionUser:'EXAMPLE\\operator',gpos:[gpo],scopes:[{dn,name:'Mixed users and computers',kind:'OU'}]};
@@ -43,7 +43,9 @@ const server=http.createServer(async(req,res)=>{try{
  await page.locator('#gpo-selection [data-policy-target=Computer]').waitFor();
  assert.match(await page.locator('.policy-target-guidance').textContent(),/computer accounts.*user rights/s);
  const field=page.locator('#review-context');await field.fill('Test');
- assert.match(await page.locator('#review-context-count').textContent(),/4 \/ 10/);
+ assert.match(await page.locator('#review-context-count').textContent(),/4 \/ 2048/);
+ assert.equal(await field.evaluate(x=>x.validity.valid),true,'Short nonempty review must be accepted');
+ assert.equal(await field.getAttribute('minlength'),null);
  await page.locator('[data-gpo-toggle]').click();await page.locator('[data-gpo="'+gpo.id+'"]').click();
  await page.locator('[data-scope-open=scopeDn]').click();await page.locator('[data-scope-choose="'+dn+'"]').click();
  assert.equal(await field.inputValue(),'Test','Target selection lost the review draft');
@@ -57,12 +59,16 @@ const server=http.createServer(async(req,res)=>{try{
  await screenshot('reviewed-computer-target.png');
  await page.locator('#gpo-selection button.primary-action').click();await page.locator('.plan-card').waitFor();
  const posted=requests.filter(x=>x.path==='/api/gpo/preview').at(-1).data;
+ assert.equal(await page.locator('.diff-before strong').textContent(),'Not configured in selected GPO');
+ assert(!/Not checked/.test(await page.locator('.plan-card').textContent()),'Absent GPO setting must be explicit');
+ const targetIdentity=await page.locator('.plan-facts .pr-identity code').boundingBox(),targetCell=await page.locator('.plan-facts>div').nth(1).boundingBox();
+ assert(targetIdentity.x+targetIdentity.width<=targetCell.x+targetCell.width,'Target DN overflows into the next plan fact');
  assert.equal(posted.reviewContext,reviewed);assert.deepEqual(posted.itemValues,selection.itemValues);assert.equal(posted.scopeDn,dn);
  assert.equal(await page.locator('.step[aria-current=step] span').textContent(),'Preview','Old operation overrode the fresh plan stage');
  assert.equal(await page.locator('.step').filter({hasText:'Apply'}).locator('b').textContent(),'5');
  await page.locator('[data-tab=verification]').click();assert.equal(await page.locator('.verification-explanation').textContent(),error);
  assert.equal(await page.locator('.verification-explanation').evaluate(x=>!!x.closest('details')),false,'Primary failure is hidden');
- assert.match(await page.locator('.configured-value').textContent(),/Not checked/);
+ assert.match(await page.locator('.configured-value').textContent(),/Read unavailable/);
  assert.equal(await page.locator('.verification-explanation unsafe').count(),0,'Failure message became markup');
  assert.match(await page.locator('.operation-failure-guidance').textContent(),/read-only Re-verify/);
  await screenshot('interrupted-operation.png');

@@ -274,4 +274,8 @@ body.operator-custom-page .dashboard-connection .conn{display:flex;flex-directio
 .operation-failure-guidance small{color:var(--color-text-muted)}
 .verification-explanation{white-space:pre-wrap;overflow-wrap:anywhere}
 .configured-value>.value-source{display:block;margin-top:8px}
+.plan-facts>div,.plan-facts strong{min-width:0}
+.plan-facts .pr-identity{display:flex;max-width:100%;align-items:flex-start;min-width:0}
+.plan-facts .pr-identity code{flex:1;min-width:0;white-space:normal;overflow-wrap:anywhere}
+.plan-facts .pr-copy{flex:none}
 @media(max-width:700px){body.operator-custom-page #service-bar{display:flex;flex-wrap:nowrap;align-items:center;gap:8px;min-height:64px;height:auto;padding:10px 14px}body.operator-custom-page #service-bar .service-left{flex:1;min-width:0}body.operator-custom-page #service-bar .service-left strong{font-size:12px;white-space:nowrap}body.operator-custom-page #service-bar .service-right{display:flex;flex:0 0 auto;width:auto;margin:0;justify-content:flex-end;gap:6px}}

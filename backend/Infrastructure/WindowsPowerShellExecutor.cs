@@ -46,28 +46,33 @@ public sealed class WindowsPowerShellExecutor(ILogger<WindowsPowerShellExecutor>
         {
             process.Start();
             started=true;
-            var stdout = ReadOutputAsync(process.StandardOutput,8_000_000,timeout.Token,progress,checkProgress);
-            var stderr = DrainAsync(process.StandardError,timeout.Token);
+            string? lastStage=null;
+            var stdout = ReadOutputAsync(process.StandardOutput,8_000_000,timeout.Token,phase=>{lastStage=phase;progress?.Invoke(phase);},checkProgress);
+            var stderr = ReadErrorSummaryAsync(process.StandardError,timeout.Token);
             await process.StandardInput.WriteAsync(JsonDefaults.Serialize(new { operation, configuration, payload }).AsMemory(), timeout.Token);
             process.StandardInput.Close();
             await process.WaitForExitAsync(timeout.Token);
             var output = await stdout;
-            await stderr; // Never log raw command output: it may include domain information.
+            var errorHint=await stderr; // Classifications only; never persist or expose raw stderr.
             JsonDocument document;
             try { document = JsonDocument.Parse(output); }
             catch (JsonException)
             {
-                throw new PolicyException("POWERSHELL_TRANSPORT", "PowerShell returned no valid structured response. Check script execution policy/signing and management-host event logs.");
+                throw TransportError(process.ExitCode,lastStage,output.Length,errorHint);
             }
             using (document)
             {
                 var root = document.RootElement;
-                if (!root.TryGetProperty("ok", out var ok) || !ok.GetBoolean())
+                if(root.ValueKind!=JsonValueKind.Object||!root.TryGetProperty("ok",out var ok)||ok.ValueKind is not (JsonValueKind.True or JsonValueKind.False))
+                    throw new PolicyException("POWERSHELL_PROTOCOL","PowerShell returned an invalid response envelope. No successful result was accepted.");
+                if (!ok.GetBoolean())
                     throw new PolicyException(root.TryGetProperty("code", out var code) ? code.GetString()! : "WINDOWS_OPERATION_FAILED",
                         root.TryGetProperty("message", out var message) ? message.GetString()! : "The Windows operation failed.");
                 if (process.ExitCode != 0) throw new PolicyException("POWERSHELL_EXIT", "Windows operation exited abnormally; inspect management-host logs.");
-                var result=root.GetProperty("data").Deserialize<T>(JsonDefaults.Options)
-                       ?? throw new PolicyException("EMPTY_RESPONSE", "Windows operation returned an empty result.");
+                if(!root.TryGetProperty("data",out var data))throw new PolicyException("POWERSHELL_PROTOCOL","PowerShell returned no operation data. No successful result was accepted.");
+                T result;
+                try{result=data.Deserialize<T>(JsonDefaults.Options)??throw new PolicyException("EMPTY_RESPONSE","Windows operation returned an empty result.");}
+                catch(JsonException){throw new PolicyException("POWERSHELL_PROTOCOL","PowerShell returned operation data with an invalid format. No successful result was accepted.");}
                 logger.LogInformation("Windows operation {Operation} completed in {ElapsedMs} ms",operation,clock.ElapsedMilliseconds);
                 return result;
             }
@@ -95,6 +100,7 @@ public sealed class WindowsPowerShellExecutor(ILogger<WindowsPowerShellExecutor>
     internal static async Task<string> ReadOutputAsync(StreamReader reader,int limit,CancellationToken ct,Action<string>? progress=null,Action<GpoLiveCheck>? checkProgress=null)
     {
         var output=new StringBuilder();var pending=new StringBuilder();var buffer=new char[4096];bool exceeded=false;int read,total=0;
+        string? framedResult=null;bool duplicateResult=false;
         void Line(){
             var line=pending.ToString().TrimEnd('\r');pending.Clear();
             if(line.StartsWith("GPO_STAGE:",StringComparison.Ordinal)){
@@ -110,6 +116,9 @@ public sealed class WindowsPowerShellExecutor(ILogger<WindowsPowerShellExecutor>
                        check.Subject is {Length:<=256} && check.Message is {Length:<=2048} && check.ActualValue is null or {Length:<=4096})
                         checkProgress?.Invoke(check with{CheckedAt=PolicyValues.Now()});
                 }catch(JsonException){ }
+            }else if(line.StartsWith("GPO_RESULT:",StringComparison.Ordinal)){
+                if(framedResult is not null)duplicateResult=true;
+                else framedResult=line[11..];
             }else output.Append(line);
         }
         while((read=await reader.ReadAsync(buffer.AsMemory(),ct))>0){
@@ -119,10 +128,27 @@ public sealed class WindowsPowerShellExecutor(ILogger<WindowsPowerShellExecutor>
         }
         if(!exceeded&&pending.Length>0)Line();
         if(exceeded)throw new PolicyException("RESPONSE_TOO_LARGE","Windows operation returned too much data; narrow the authorized scope.");
-        return output.ToString();
+        if(duplicateResult)throw new PolicyException("POWERSHELL_PROTOCOL","PowerShell returned more than one final response. No result was accepted; inspect the recorded operation before retrying a write.");
+        // Existing structured launchers remain readable. New launchers always
+        // frame the result, so ordinary stdout cannot corrupt the JSON document.
+        return framedResult??output.ToString();
     }
-    private static async Task DrainAsync(StreamReader reader,CancellationToken ct)
+    internal static async Task<string> ReadErrorSummaryAsync(StreamReader reader,CancellationToken ct)
     {
-        var buffer=new char[4096];while(await reader.ReadAsync(buffer.AsMemory(),ct)>0) { }
+        var prefix=new StringBuilder();var buffer=new char[4096];int count;
+        while((count=await reader.ReadAsync(buffer.AsMemory(),ct))>0){if(prefix.Length<32768)prefix.Append(buffer,0,Math.Min(count,32768-prefix.Length));}
+        var text=prefix.ToString();
+        if(System.Text.RegularExpressions.Regex.IsMatch(text,"PSSecurityException|AuthorizationManagerCheckFailed|running scripts is disabled|not digitally signed",System.Text.RegularExpressions.RegexOptions.IgnoreCase))return "SCRIPT_POLICY_BLOCKED";
+        if(System.Text.RegularExpressions.Regex.IsMatch(text,"ParserError|ParseException|UnexpectedToken|MissingEndCurlyBrace",System.Text.RegularExpressions.RegexOptions.IgnoreCase))return "SCRIPT_PARSE_ERROR";
+        return text.Length==0?"NO_STDERR":"UNCLASSIFIED_STDERR";
+    }
+    internal static PolicyException TransportError(int exitCode,string? lastStage,int responseLength,string hint)
+    {
+        var detail=$"Exit code: {exitCode}; last stage: {lastStage??"not received"}; response characters: {responseLength}; stderr: {hint}.";
+        return hint switch{
+            "SCRIPT_POLICY_BLOCKED"=>new("POWERSHELL_POLICY_BLOCKED","Windows blocked the bundled PowerShell script under the management host execution/signing policy. Review script signing and downloaded-file blocking. "+detail),
+            "SCRIPT_PARSE_ERROR"=>new("POWERSHELL_SCRIPT_PARSE","Windows PowerShell could not parse the installed script. Install the complete matching release and verify its file hashes. "+detail),
+            _=>new("POWERSHELL_TRANSPORT","PowerShell ended without a valid structured response. No successful operation is established. Inspect the retained operation and management-host PowerShell event logs before retrying a write. "+detail)
+        };
     }
 }

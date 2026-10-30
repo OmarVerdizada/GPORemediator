@@ -71,7 +71,8 @@ foreach(var mapping in ProductionGpoMappings.Settings.Where(x=>!x.Writable)){
     ProductionGpoMappings.Validate(s);
     Check(ProductionGpoMappings.Effective(s).Writable,"Reviewed control did not produce an executable mapping: "+mapping.Id);
     Reject(()=>ProductionGpoMappings.Validate(s with{ItemValues=null}),"CONTROL_REVIEW_REQUIRED");
-    Reject(()=>ProductionGpoMappings.Validate(s with{ReviewContext="short"}),"CONTROL_REVIEW_REQUIRED");
+    ProductionGpoMappings.Validate(s with{ReviewContext="R"});
+    Reject(()=>ProductionGpoMappings.Validate(s with{ReviewContext="  "}),"CONTROL_REVIEW_REQUIRED");
     if(mapping.Id=="2.2.6")s=s with{ItemValues=[["S-1-5-19","S-1-5-20","S-1-5-32-544"]]};
     reviewedCases.Add(new{selection=s,mapping=ProductionGpoMappings.Effective(s)});
 }

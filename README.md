@@ -1,4 +1,6 @@
-# GPO Remediator 3.17.1
+# GPO Remediator 3.17.2
+
+3.17.2 frames native PowerShell results independently of module stdout, forwards dictionary-shaped live checks, removes the ten-character review minimum and places stored GPO values with their source in the primary plan comparison. See [release notes](docs/RELEASE-3.17.2.md).
 
 3.17.1 explains user/computer/domain targeting before OU selection, improves reviewed-control forms, separates fresh plan steps from recorded results, and surfaces interrupted-operation errors with recovery guidance. See [release notes](docs/RELEASE-3.17.1.md).
 

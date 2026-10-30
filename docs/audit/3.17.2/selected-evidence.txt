@@ -1,0 +1,37 @@
+Test-PowerShellTransport
+PASS real PowerShell bootstrap success: one framed result, live progress, no credential output and no remoting
+PASS real PowerShell bootstrap error: one framed result, live progress, no credential output and no remoting
+
+WorkspaceRegression
+PASS framed PowerShell responses tolerate module stdout, preserve failures, reject duplicate results and expose safe policy/parse/exit/stage diagnostics without stderr contents
+
+WorkflowRegression
+PASS full read-only inventory with explicit write boundary enforcement
+PASS 11 controls require explicit values/environment review
+PASS 1560 control/refresh/priority combinations on a non-default GPO; 11 controls block automatic writes
+PASS audit integrity: empty chain, valid chain and first tampered event
+PASS mapping upgrades: stale writes blocked; snapshot rollback and restored-snapshot verification remain available
+PASS invalid OU/PDC refresh rejected at submission and execution without replacing recorded result or invoking native executor
+PASS real user refresh submission: top-level Scope reaches validation and stored consent; PDC and missing session endpoint OU rejected before enqueue; no native execution
+PASS fresh evidence snapshots, preserved prior exports, five independent stages, scheduled-not-completed and endpoint mismatch separation
+PASS optional-comparator legacy hash compatibility and version-only evidence migration boundary
+PASS custom value resolution/types/read-only boundary, canonical mapping isolation and legacy selection serialization; optional user samples
+
+Test-ValueEditor
+PASS 394 editable controls, C#/manual-script custom-value parity, capture/reset and custom values excluded from benchmark compliance
+PASS 11 reviewed controls remain read-only while justification is unfinished and generate explicit approved values after review
+
+Test-RecoveryUi
+Recovery UI: PASS (desktop/mobile, recovery refresh, user OU/endpoint OU/verification identity targeting, and user PDC exclusion).
+
+Test-LivePolicyUi
+PASS live checking: queued, streamed stage/host updates, interrupted polling, unavailable result, missing-link plan, collapsed rail, mobile and exactly one read-only submission; fixture only.
+
+Test-ReviewedTargetUi
+PASS reviewed 2.2.6 form, visible user/computer scope, whitespace validation, preserved principal/review drafts, fresh repair steps, visible escaped failure, unknown-value semantics, light/dark and 320/390px layouts; no policy operations
+
+Test-PowerShellSyntax
+PASS Windows PowerShell 5.1 syntax: 50 source scripts/modules; none executed.
+
+built-source-match
+PASS current backend/frontend source fingerprints and distributed runtime ZIP SHA-256

@@ -12,7 +12,7 @@ function context(s,r,m){
 function generate(s,r,action='Preview'){
  const original=mappingFor(s,r);if(!original)return null;
  const selection=s.selection?.setting===(r.backendSetting||r.id)?s.selection:{};
- const pendingReview=!writable(original)&&(!selection.reviewContext||selection.reviewContext.trim().length<10);
+ const pendingReview=!writable(original)&&!selection.reviewContext?.trim();
  const effective=window.GpoValueEditor?.effective(original,pendingReview?{...selection,itemValues:null}:selection)||original;
  const m={...effective,items:effective.items.map(x=>({section:null,key:null,name:null,type:'String',value:null,guid:null,state:null,mask:null,...x}))};
  const c=context(s,r,m),engine=window.GpoManualEngine;
