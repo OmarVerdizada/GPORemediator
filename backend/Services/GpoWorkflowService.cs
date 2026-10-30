@@ -11,7 +11,10 @@ public sealed class GpoWorkflowService(IConfiguration config,Store store,Operati
 {
     private static readonly TimeSpan ConnectionIdleTimeout=TimeSpan.FromMinutes(15);
     private static readonly TimeSpan AbsoluteConnectionLifetime=TimeSpan.FromHours(2);
-    private sealed record Connection(string Actor,string UserName,byte[] Password,GpoInventory Inventory,DateTimeOffset Expires,DateTimeOffset Created);
+    private sealed record Connection(string Actor,string UserName,byte[] Password,GpoInventory Inventory,DateTimeOffset Expires,DateTimeOffset Created)
+    {
+        public ConcurrentDictionary<string,byte> WriteTargets {get;}=new(StringComparer.Ordinal);
+    }
     private readonly SemaphoreSlim loginSlots=new(4,4);
     private readonly ConcurrentDictionary<string,Connection> connections=new();
     private readonly IDataProtector protector=protection.CreateProtector("GpoWorkflow.EphemeralLogin.v1");
@@ -26,6 +29,34 @@ public sealed class GpoWorkflowService(IConfiguration config,Store store,Operati
     private string[] AllowedHosts=>config.GetSection("Windows:AllowedHosts").Get<string[]>()??[];
     private string Targeting=>EndpointTargeting.Resolve(config["Windows:EndpointTargeting"],AllowedHosts);
     private string ConfigHash=>PolicyValues.Hash(new{domain=Domain,dc=Dc,backupPath=config["Windows:BackupPath"],approvedGpos=ApprovedGpos,authorizedOus=AuthorizedOus,allowedHosts=AllowedHosts,endpointTargeting=Targeting});
+    private static string TargetKey(GpoSelection selection)=>PolicyValues.Hash(new{gpo=Guid.Parse(selection.GpoId).ToString("D"),scope=selection.ScopeDn.ToLowerInvariant(),endpoint=(selection.EndpointScopeDn??"").ToLowerInvariant()});
+    private bool TargetAuthorized(Connection connection,GpoSelection selection)=>GpoWorkflowRules.IsWriteAuthorized(ApprovedGpos,AuthorizedOus,selection)||connection.WriteTargets.ContainsKey(TargetKey(selection));
+    private void ValidateWriteAuthorization(Connection connection,GpoSelection selection){
+        GpoWorkflowRules.ValidateWriteScope(ApprovedGpos,AuthorizedOus);
+        if(!TargetAuthorized(connection,selection))throw new PolicyException("GPO_WRITE_NOT_AUTHORIZED","Prepare a fresh preview with this connected account to validate and authorize the selected GPO and scope.");
+    }
+    // Only a completed, server-owned write-access preview can extend this
+    // connection's exact GPO/scope pair. Nothing is saved to configuration and
+    // no other actor/session or GPO/OU cross-product inherits the authorization.
+    internal bool AuthorizePreviewTarget(string token,string actor,GpoSelection selection,GpoPreview preview,bool requireWriteAccess){
+        var connection=Get(token,actor);
+        if(TargetAuthorized(connection,selection))return true;
+        if(!config.GetValue<bool>("Windows:EnableWrites")||!requireWriteAccess||preview.Preflight?.Ready!=true)return false;
+        GpoWorkflowRules.ValidateWriteScope(ApprovedGpos,AuthorizedOus);
+        if(!Guid.TryParse(preview.Gpo.Id,out var previewId)||previewId!=Guid.Parse(selection.GpoId)||!preview.Scope.Dn.Equals(selection.ScopeDn,StringComparison.OrdinalIgnoreCase))
+            throw new PolicyException("GPO_PLAN_CONTEXT","The completed preview does not match the selected GPO and scope.");
+        if(!connection.Inventory.Gpos.Any(x=>x.Selectable&&Guid.TryParse(x.Id,out var id)&&id==Guid.Parse(selection.GpoId))||
+           !connection.Inventory.Scopes.Any(x=>x.Dn.Equals(selection.ScopeDn,StringComparison.OrdinalIgnoreCase))||
+           !string.IsNullOrEmpty(selection.EndpointScopeDn)&&!connection.Inventory.Scopes.Any(x=>x.Dn.Equals(selection.EndpointScopeDn,StringComparison.OrdinalIgnoreCase)))
+            throw new PolicyException("GPO_SELECTION_REQUIRED","Choose discovered GPO and scope objects.");
+        bool added;
+        lock(connection.WriteTargets){
+            if(connection.WriteTargets.Count>=256&&!connection.WriteTargets.ContainsKey(TargetKey(selection)))throw new PolicyException("GPO_AUTHORIZATION_LIMIT","This connection reached its target authorization limit. Reconnect to start a new session.");
+            added=connection.WriteTargets.TryAdd(TargetKey(selection),0);
+        }
+        if(added)store.Audit("GPO_SESSION_TARGET_AUTHORIZED",actor,gpoId:selection.GpoId,details:new{selection.ScopeDn,selection.EndpointScopeDn,connection.Inventory.ExecutionUser,expiresWithConnection=true});
+        return true;
+    }
     private GpoInventory Authorize(GpoInventory source)
     {
         // Discovery/preview are read-only under the delegated account. A saved
@@ -172,7 +203,8 @@ public sealed class GpoWorkflowService(IConfiguration config,Store store,Operati
             store.Audit("GPO_PREVIEW_ACCESS_BLOCKED",actor,controlId:selection.Setting,gpoId:selection.GpoId,details:new{selection.ScopeDn,c.Inventory.ExecutionUser,error.Code});
             throw;
         }
-        var plan=new GpoWorkflowPlan(Guid.NewGuid().ToString("N"),actor,c.Inventory.ExecutionUser,Mode,Domain,Dc,selection,preview,PolicyValues.Now(),PolicyValues.Hash(mapping),ConfigHash,GpoWorkflowRules.IsWriteAuthorized(ApprovedGpos,AuthorizedOus,selection));
+        var authorized=AuthorizePreviewTarget(token,actor,selection,preview,requireWriteAccess);
+        var plan=new GpoWorkflowPlan(Guid.NewGuid().ToString("N"),actor,c.Inventory.ExecutionUser,Mode,Domain,Dc,selection,preview,PolicyValues.Now(),PolicyValues.Hash(mapping),ConfigHash,authorized);
         store.Put("gpo_plans",plan.Id,plan);store.Audit("GPO_PLAN_PREPARED",actor,details:plan);
         return plan;
     }
@@ -183,7 +215,7 @@ public sealed class GpoWorkflowService(IConfiguration config,Store store,Operati
     }
     public GpoWorkflowPlan ValidateSubmission(string id,string operation,GpoConsent consent,string token,string actor)
     {
-        RequireReal();var plan=store.Require<GpoWorkflowPlan>("gpo_plans",id);AssertContext(plan,Get(token,actor),actor);
+        RequireReal();var plan=store.Require<GpoWorkflowPlan>("gpo_plans",id);var connection=Get(token,actor);AssertContext(plan,connection,actor);
         if(operation=="refresh"){
             if(consent.Refresh is not ("Pdc" or "Scope"))throw new PolicyException("GPO_OPTIONS_INVALID","Choose PDC or scope computers for policy refresh.");
             var mapping=ProductionGpoMappings.Effective(plan.Selection);
@@ -193,7 +225,7 @@ public sealed class GpoWorkflowService(IConfiguration config,Store store,Operati
         }
         if(operation!="verify"){
             if(!config.GetValue<bool>("Windows:EnableWrites"))throw new PolicyException("WRITES_DISABLED","Enable the production change gate first.");
-            GpoWorkflowRules.ValidateWriteScope(ApprovedGpos,AuthorizedOus);GpoWorkflowRules.ValidateWriteSelection(ApprovedGpos,AuthorizedOus,plan.Selection);
+            ValidateWriteAuthorization(connection,plan.Selection);
         }
         if(operation=="apply"){
             GpoWorkflowRules.ValidateConsent(plan,consent);ProductionGpoMappings.Validate(plan.Selection);
@@ -227,8 +259,7 @@ public sealed class GpoWorkflowService(IConfiguration config,Store store,Operati
         if(operation!="verify")
         {
             if(!config.GetValue<bool>("Windows:EnableWrites"))throw new PolicyException("WRITES_DISABLED","Enable the production change gate first.");
-            GpoWorkflowRules.ValidateWriteScope(ApprovedGpos,AuthorizedOus);
-            GpoWorkflowRules.ValidateWriteSelection(ApprovedGpos,AuthorizedOus,plan.Selection);
+            ValidateWriteAuthorization(c,plan.Selection);
         }
         // Read and validate the latest execution record only after claiming the GPO.
         // Verification and refresh must not overwrite another operation's result.

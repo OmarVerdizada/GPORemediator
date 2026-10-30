@@ -2,6 +2,7 @@
 const fs=require('node:fs'),path=require('node:path'),assert=require('node:assert/strict'),cp=require('node:child_process');
 const root=path.resolve(__dirname,'..');global.window={};
 eval(fs.readFileSync(path.join(root,'frontend/source/components.js'),'utf8'));
+eval(fs.readFileSync(path.join(root,'frontend/source/manual-engine.js'),'utf8'));
 const settings=JSON.parse(fs.readFileSync(path.join(root,'backend/data/gpo-production-mappings.json'),'utf8')).mappings;
 const dir=path.join(root,'work/audit');fs.mkdirSync(dir,{recursive:true});
 const commands=settings.map(m=>({id:m.id,command:window.GpoComponents.manualCheck({settings},{plan:{selection:{setting:m.id,verificationUser:"EXAMPLE\\User'Name"}}},{hostname:'ws.example.test'})}));
@@ -13,6 +14,8 @@ assert(userCheck.includes('HKEY_CURRENT_USER'));assert(userCheck.includes('Run i
 assert(commands.find(x=>x.id==='19.5.1.1').command.includes('HKEY_USERS'));
 assert(commands.find(x=>x.id==='19.5.1.1').command.includes("User''Name"));
 assert(commands.find(x=>x.id==='9.1.5').command.includes('-PolicyStore ActiveStore'));
+assert(commands.find(x=>x.id==='2.2.16').command.includes('UserRightsV1]::Read'));
+assert(commands.find(x=>x.id==='2.2.16').command.includes('SeCreateGlobalPrivilege'));
 assert(commands.find(x=>x.id==='9.1.5').command.includes('Format-List Name, LogMaxSizeKilobytes'));
 assert(!commands.find(x=>x.id==='9.1.5').command.includes('LogBlocked'));
 assert(commands.find(x=>x.id==='9.1.6').command.includes('Format-List Name, LogBlocked'));

@@ -1,5 +1,9 @@
 # GPO Remediator API contract — production backend
 
+Version 3.17.3: with the production write gate already enabled and an explicit configured boundary, a successful write-access/readiness Preview may return `writeAuthorized: true` for an additional discovered GPO/scope pair. The exact GPO/OU/endpoint-OU grant belongs only to the current delegated connection, is memory-only, and does not modify saved configuration or require restart. Read-only scans grant nothing. Mutation validation checks the actual connection grant or configured boundary, not a client-supplied authorization flag; consent and native write checks still apply. Disconnect/expiry/restart removes grants. Existing plans for a target outside the configured boundary may require a fresh write-access Preview after reconnecting.
+
+Live checks also accept phase `REFRESH` for per-host refresh opening/completion/failure. These frames are distinct from actual endpoint values. Privilege-right endpoint verification uses current local LSA assignments; failed LSA reads remain unverified and are not replaced with security-export equality.
+
 All endpoints are local-only and served from the same origin. In Windows mode the request must also pass Windows Integrated Authentication; there is no application role or operator allowlist. Non-GET API requests require the exact Origin and `X-CSRF-Token` returned by `/api/session`.
 
 `GET /api/v1/health/live` returns the API contract version and the running product assembly version. `GET /api/v1/health/ready` reports process readiness and mode.

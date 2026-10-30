@@ -13,7 +13,16 @@ function Get-ADComputer {param($SearchBase,$SearchScope,$Filter,$Server,$Propert
 $cfg=@{domainController='dc.example.local';allowedHosts=@('ws.example.local','dc.example.local')}
 $plan=@{selection=@{scopeDn='OU=Endpoints,DC=example,DC=local'};preview=@{refreshComputers=@('dc.example.local');impact=@{affectedObjects=@{sampleHosts=@('ws.example.local','outside.example.local')}}}}
 $map=@{handler='SecurityTemplate';scope='Computer';domainPolicySensitive=$false;requiresInput=$false;allowValueOverride=$false;comparator=$null;items=@(@{name= $null;guid= $null;section='Privilege Rights';key='SeSystemtimePrivilege';type='Principals';value=@('S-1-5-19','S-1-5-32-544')})}
-$script:hosts=@();$script:nativeExit=0;$script:ini="[Privilege Rights]`nSeSystemtimePrivilege = *S-1-5-32-544,*S-1-5-19"
+$script:hosts=@();$script:nativeExit=0;$script:lsaOverride=$null;$script:ini="[Privilege Rights]`nSeSystemtimePrivilege = *S-1-5-32-544,*S-1-5-19"
+. (Join-Path $root 'scripts/fixtures/Mock-LsaUserRights.ps1')
+[GpoRemediator.ReadOnly.UserRightsV1]::Probe=[Func[string,string[]]]{
+ param($name)
+ if($script:nativeExit){throw [ComponentModel.Win32Exception]::new(5)}
+ if($null -ne $script:lsaOverride){return ,([string[]]$script:lsaOverride)}
+ $match=[regex]::Match($script:ini,'(?m)^'+[regex]::Escape($name)+'\s*=\s*(.*)$')
+ if(!$match.Success){return ,([string[]]@())}
+ return ,([string[]]@(($match.Groups[1].Value -split ',')|ForEach-Object{$_.Trim().TrimStart('*')}|Where-Object{$_}))
+}
 function Invoke-Command {param($ComputerName,$Authentication,$ArgumentList,$ScriptBlock) $script:hosts+=@($ComputerName);& $ScriptBlock @ArgumentList}
 function secedit.exe {
     Assert-Test ($args -contains '/mergedpolicy') 'Effective probe omitted domain policy'
@@ -24,13 +33,17 @@ function secedit.exe {
 $checks=@(Verify-EffectiveSamples $plan $map)
 Assert-Test ($checks.Count -eq 1 -and $checks[0].state -eq 'VERIFIED') 'SID ordering/asterisks produced false mismatch'
 Assert-Test (($script:hosts -join ',') -eq 'ws.example.local') 'PDC outside scope or unauthorized host was probed'
+$script:lsaOverride=@('S-1-5-32-544')
+$lsacheck=@(Verify-EffectiveSamples $plan $map)[0]
+Assert-Test ($lsacheck.state -eq 'MISMATCH' -and $lsacheck.message -match 'local LSA') 'Matching security export cannot conceal a different live LSA assignment'
+$script:lsaOverride=$null
 $script:ini="[Privilege Rights]`nSeSystemtimePrivilege = *S-1-5-32-544"
 $checks=@(Verify-EffectiveSamples $plan $map)
 Assert-Test ($checks[0].state -eq 'MISMATCH' -and $checks[0].actualValue -match 'S-1-5-32-544') 'Real mismatch lost its actual evidence'
 $script:nativeExit=5
 Assert-Test ((@(Verify-EffectiveSamples $plan $map))[0].state -eq 'PENDING') 'Failed native export was treated as policy evidence'
 $script:nativeExit=0;$script:ini='[Privilege Rights]';$map.items[0].value=@()
-Assert-Test ((@(Verify-EffectiveSamples $plan $map))[0].state -eq 'MISMATCH') 'Absent policy passed as an explicitly empty policy'
+Assert-Test ((@(Verify-EffectiveSamples $plan $map))[0].state -eq 'VERIFIED') 'LSA no assigned accounts must match an explicitly empty assignment'
 $map.items[0].value=@('S-1-5-32-546');$map.comparator='includes';$script:ini="[Privilege Rights]`nSeSystemtimePrivilege = *S-1-5-32-546,*S-1-5-113"
 Assert-Test ((@(Verify-EffectiveSamples $plan $map))[0].state -eq 'VERIFIED') 'Additional deny principals were treated as noncompliant'
 $map.handler='AdvancedAudit';$map.items=@(@{name= $null;section= $null;key= $null;type= $null;guid='{0CCE9235-69AE-11D9-BED3-505054503030}';mask=1});$script:auditMask=3

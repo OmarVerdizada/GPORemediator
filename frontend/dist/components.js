@@ -50,7 +50,8 @@
   function manualCheck(s,h,endpoint){
     // Scope/session placeholders are evidence context, never executable hosts.
     if(endpoint&&!/^[A-Za-z0-9](?:[A-Za-z0-9.-]*[A-Za-z0-9])?$/.test(String(endpoint?.hostname||'')))return '';
-    const mapping=s.settings?.find(x=>x.id===h.plan?.selection?.setting),items=mapping?.items||mapping?.Items||[],handler=String(mapping?.handler||mapping?.Handler||'');
+    const mapping=s.settings?.find(x=>x.id===h.plan?.selection?.setting),items=mapping?.items||mapping?.Items||[],rawHandler=String(mapping?.handler||mapping?.Handler||'');
+    const handler=rawHandler==='Manual'&&items.length&&items.every(x=>(x.section||x.Section)==='Privilege Rights'&&(x.type||x.Type)==='Principals')?'SecurityTemplate':rawHandler;
     let lines=[];
     if(/^Registry(Set)?$/i.test(handler)){
       const user=String(mapping?.scope||mapping?.Scope).toLowerCase()==='user',identity=h.plan?.selection?.verificationUser;
@@ -71,6 +72,10 @@
         lines.push(key.startsWith('Enable')?`$account | Select-Object Name, Enabled, SID, @{Name=${psQuote(key)};Expression={[int]$_.Enabled}}`:'$account | Select-Object Name, Enabled, SID');
       }
     }
+    else if(/^SecurityTemplate$/i.test(handler)&&items.length&&items.every(x=>(x.section||x.Section)==='Privilege Rights'&&(x.type||x.Type)==='Principals')&&window.GpoManualEngine?.userRightProbe){
+      lines=[window.GpoManualEngine.userRightProbe,"if (!('GpoRemediator.ReadOnly.UserRightsV1' -as [type])) { Add-Type -TypeDefinition (UserRight-ProbeSource) -ErrorAction Stop }"];
+      for(const item of items)lines.push(`[GpoRemediator.ReadOnly.UserRightsV1]::Read(${psQuote(item.key||item.Key)}) | Sort-Object -Unique`);
+    }
     else if(/^SecurityTemplate$/i.test(handler)){
       const checks=items.filter(x=>x.key||x.Key).map(x=>`Select-String -LiteralPath $policyFile -Pattern ${psQuote('^\\s*'+String(x.key||x.Key).replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'\\s*=')}`);
       lines=[`$policyFile = Join-Path $env:TEMP ([guid]::NewGuid().ToString('N') + '.inf')\ntry {\n  secedit.exe /export /mergedpolicy /cfg $policyFile /quiet | Out-Null\n  if ($LASTEXITCODE -ne 0) { throw 'secedit export failed' }\n  ${checks.join('\n  ')}\n} finally { Remove-Item -LiteralPath $policyFile -Force -ErrorAction SilentlyContinue }`];
@@ -80,7 +85,7 @@
     const host=String(endpoint?.hostname||'').split('.')[0];
     // Keep the guard and probe in one block. A terminating error on the first
     // pasted line must not leave subsequent console statements free to run.
-    return host?`& {\n  if ($env:COMPUTERNAME -ine ${psQuote(host)}) { throw ${psQuote('Wrong computer. Run this check on endpoint '+endpoint.hostname+'. No policy value was read.')} }\n${lines.join('\n').split('\n').map(line=>'  '+line).join('\n')}\n}`:lines.join('\n');
+    return host?`& {\n  if ($env:COMPUTERNAME -ine ${psQuote(host)}) { throw ${psQuote('Wrong computer. Run this check on endpoint '+endpoint.hostname+'. No policy value was read.')} }\n${lines.join('\n').split('\n').map(line=>line.trimEnd()==="'@"||line.trimEnd()==='"@'?line:'  '+line).join('\n')}\n}`:lines.join('\n');
   }
   function rollbackCheck(s,h){
     const item=s.rollbackChecks?.[h.id],age=Date.now()-(item?.at||0);

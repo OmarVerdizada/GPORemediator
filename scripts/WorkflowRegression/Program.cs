@@ -157,6 +157,35 @@ Check(assurance.Length==5&&assurance.Single(x=>x.Stage=="GPO_APPLICABILITY").Sta
 Check(assurance.Single(x=>x.Stage=="CLIENT_PROCESSING").Status=="GPUPDATE_SCHEDULED","Scheduled refresh was promoted to completion");
 Check((evidenceResult with{EndpointChecks=[new("ws.example.local","MISMATCH","auditpol disagrees","0")]}).VerificationStages.Single(x=>x.Stage=="ENDPOINT_CONFIGURATION").Status=="ENDPOINT_MISMATCH","GPO publication hid an endpoint mismatch");
 Console.WriteLine("PASS fresh evidence snapshots, preserved prior exports, five independent stages, scheduled-not-completed and endpoint mismatch separation");
+using(var grantStore=new Store(":memory:")){
+ var firstScope="OU=One,"+dn;var secondScope="OU=Two,"+dn;
+ var grantCfg=new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string,string?>{{"Mode","Windows"},{"Windows:Domain","example.local"},{"Windows:DomainController","dc.example.local"},{"Windows:EnableWrites","true"},{"Windows:ApprovedGpoIds:0",gpo},{"Windows:AuthorizedOus:0",firstScope}}).Build();
+ using var grantService=new GpoWorkflowService(grantCfg,grantStore,new OperationGate(grantStore),new EphemeralDataProtectionProvider(),new WindowsPowerShellExecutor(NullLogger<WindowsPowerShellExecutor>.Instance));
+ var grantInv=new GpoInventory("example.local","dc.example.local","EXAMPLE\\Executor",[new(gpo,"First",false,true),new(other,"Second",false,true)],[new(firstScope,"One","OU"),new(secondScope,"Two","OU")]);
+ var grantType=typeof(GpoWorkflowService).GetNestedType("Connection",BindingFlags.NonPublic)!;
+ var grantSessions=typeof(GpoWorkflowService).GetField("connections",BindingFlags.Instance|BindingFlags.NonPublic)!.GetValue(grantService)!;
+ void ConnectGrant(string token,DateTimeOffset created){var connection=Activator.CreateInstance(grantType,BindingFlags.Instance|BindingFlags.Public|BindingFlags.NonPublic,null,["EXAMPLE\\Operator",grantInv.ExecutionUser,Array.Empty<byte>(),grantInv,DateTimeOffset.UtcNow.AddMinutes(15),created],null)!;grantSessions.GetType().GetMethod("TryAdd")!.Invoke(grantSessions,[token,connection]);}
+ ConnectGrant("one",DateTimeOffset.UtcNow);ConnectGrant("two",DateTimeOffset.UtcNow);
+ var grantSelection=localAccount with{GpoId=other,ScopeDn=secondScope,Refresh="None"};
+ var grantPreview=new GpoPreview(grantInv.Gpos[1],grantInv.Scopes[1],null,"fp","",null,[],[],Preflight:new(grantInv.Domain,grantInv.DomainController,grantInv.ExecutionUser,true,[],PolicyValues.Now()));
+ Check(!grantService.AuthorizePreviewTarget("one","EXAMPLE\\Operator",grantSelection,grantPreview,false),"Read-only scan granted write authorization");
+ Check(!grantService.AuthorizePreviewTarget("one","EXAMPLE\\Operator",grantSelection,grantPreview with{Preflight=grantPreview.Preflight! with{Ready=false}},true),"Failed readiness granted write authorization");
+ var grantBefore=PolicyValues.Hash(grantCfg.AsEnumerable().ToArray());
+ Check(grantService.AuthorizePreviewTarget("one","EXAMPLE\\Operator",grantSelection,grantPreview,true),"Successful target preview did not authorize the second GPO");
+ Check(grantService.AuthorizePreviewTarget("one","EXAMPLE\\Operator",grantSelection,grantPreview,false),"Same connected account lost its exact target grant");
+ Check(!grantService.AuthorizePreviewTarget("two","EXAMPLE\\Operator",grantSelection,grantPreview,false),"Another connection inherited a target grant");
+ Check(!grantService.AuthorizePreviewTarget("one","EXAMPLE\\Operator",grantSelection with{GpoId=gpo},grantPreview,false),"GPO/OU cross-product inherited a target grant");
+ Check(grantBefore==PolicyValues.Hash(grantCfg.AsEnumerable().ToArray()),"Target authorization modified configuration or required a restart");
+ var grantHash=(string)typeof(GpoWorkflowService).GetProperty("ConfigHash",BindingFlags.Instance|BindingFlags.NonPublic)!.GetValue(grantService)!;
+ var grantPlan=new GpoWorkflowPlan("session-grant","EXAMPLE\\Operator",grantInv.ExecutionUser,"WINDOWS",grantInv.Domain,grantInv.DomainController,grantSelection,grantPreview,PolicyValues.Now(),PolicyValues.Hash(ProductionGpoMappings.Effective(grantSelection)),grantHash,true);
+ grantStore.Put("gpo_plans",grantPlan.Id,grantPlan);
+ grantService.ValidateSubmission(grantPlan.Id,"apply",new("APPLY",true,ChangeReference:"CHG-test"),"one",grantPlan.Actor);
+ Reject(()=>grantService.ValidateSubmission(grantPlan.Id,"apply",new("APPLY",true,ChangeReference:"CHG-test"),"two",grantPlan.Actor),"GPO_WRITE_NOT_AUTHORIZED");
+ Reject(()=>grantService.ValidateSubmission(grantPlan.Id,"apply",new("APPLY",true,ChangeReference:"CHG-test"),"one","EXAMPLE\\Other"),"GPO_LOGIN_REQUIRED");
+ grantService.Disconnect("one");Reject(()=>grantService.AuthorizePreviewTarget("one",grantPlan.Actor,grantSelection,grantPreview,false),"GPO_LOGIN_REQUIRED");
+ ConnectGrant("expired",DateTimeOffset.UtcNow.AddHours(-3));Reject(()=>grantService.AuthorizePreviewTarget("expired",grantPlan.Actor,grantSelection,grantPreview,false),"GPO_LOGIN_REQUIRED");
+ Console.WriteLine("PASS session target authorization: second GPO without config changes/restart; preview/readiness, exact pair, actor, other-session, disconnect and absolute-expiry guards; no native execution");
+}
 var compatibleItem=new GpoMappingItem(Key:"HKLM\\Software\\Test",Name:"Enabled",Type:"DWORD",Value:["1"]);
 Check(PolicyValues.Hash(compatibleItem)==PolicyValues.Hash(new{compatibleItem.Section,compatibleItem.Key,compatibleItem.Name,compatibleItem.Type,compatibleItem.Value,compatibleItem.Guid,compatibleItem.State,compatibleItem.Mask}),"Adding an absent optional item comparator invalidated unchanged historical mapping hashes");
 Check(evidenceResult.VerificationStages.Single(x=>x.Stage=="AD_SYSVOL_REPLICATION").Status=="INSUFFICIENT_EVIDENCE","Legacy version-only record was upgraded to content verification without a probe");

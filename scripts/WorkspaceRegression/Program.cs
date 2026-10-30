@@ -49,6 +49,11 @@ foreach(var pair in new[]{("PSSecurityException private secret","SCRIPT_POLICY_B
  Check(hint==pair.Item2&&error.Code==pair.Item3&&!error.Message.Contains("private secret")&&error.Message.Contains("REPLICATION_ENDPOINT_CHECK"),"Stderr diagnosis leaked output, hid the stage or misclassified failure");
 }
 Console.WriteLine("PASS framed PowerShell responses tolerate module stdout, preserve failures, reject duplicate results and expose safe policy/parse/exit/stage diagnostics without stderr contents");
+var refreshChecks=new List<GpoLiveCheck>();
+using(var reader=new StreamReader(new MemoryStream(Encoding.UTF8.GetBytes("GPO_CHECK:"+liveFrame.Replace("ENDPOINT","REFRESH")+"\nGPO_RESULT:{\"ok\":true}")))){
+ await WindowsPowerShellExecutor.ReadOutputAsync(reader,8192,CancellationToken.None,null,refreshChecks.Add);
+ Check(refreshChecks.Count==1&&refreshChecks[0].Phase=="REFRESH","Refresh progress was discarded or converted to endpoint-value evidence");
+}
 using(var reader=new StreamReader(new MemoryStream(Encoding.UTF8.GetBytes(new string('x',10000))))){
  try{await WindowsPowerShellExecutor.ReadOutputAsync(reader,100,CancellationToken.None);throw new Exception("Unbounded output accepted");}catch(PolicyException error){Check(error.Code=="RESPONSE_TOO_LARGE","Output cap");}
 }

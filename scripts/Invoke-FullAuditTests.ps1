@@ -24,6 +24,7 @@ try{
   if($script -eq 'Test-AllEndpointMappings'){$arguments+=@('-ReportPath',($OutputDirectory+'/endpoint-controls.json'))}
   Run-Check $script 'powershell.exe' $arguments
  }
+ Run-Check 'Test-LsaUserRights' 'powershell.exe' @('-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-File','scripts/Test-LsaUserRights.ps1') 'read-only local LSA native API; no AD or policy writes'
  Run-Check 'Test-ReviewedRemediationChain' 'powershell.exe' @('-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-File','scripts/Test-RemediationChain.ps1','-ReviewedControlsOnly','-ReportPath',($OutputDirectory+'/reviewed-remediation-controls.json'))
  Run-Check 'frontend-syntax' $node @('-e',"const fs=require('fs'),cp=require('child_process');for(const x of fs.readdirSync('frontend/source').filter(x=>x.endsWith('.js'))){const r=cp.spawnSync(process.execPath,['--check','frontend/source/'+x],{stdio:'inherit'});if(r.status)process.exit(r.status)}") 'syntax'
  Run-Check 'Test-EndpointBatching' 'powershell.exe' @('-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-File','scripts/Test-EndpointBatching.ps1')

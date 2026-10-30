@@ -111,6 +111,44 @@ function Principal-Sid([string]$Name){
     if($known.ContainsKey($n.ToLowerInvariant())){return $known[$n.ToLowerInvariant()]}
     try{return ([Security.Principal.NTAccount]$n).Translate([Security.Principal.SecurityIdentifier]).Value}catch{Fail 'PRINCIPAL_RESOLUTION_FAILED' ('Could not resolve policy principal: '+$n)}
 }
+function UserRight-ProbeSource {
+    # This read-only source is passed to the endpoint, never supplied by a caller.
+    return @'
+using System;
+using System.Collections.Generic;
+using System.ComponentModel;
+using System.Runtime.InteropServices;
+using System.Security.Principal;
+namespace GpoRemediator.ReadOnly {
+ public static class UserRightsV1 {
+  [StructLayout(LayoutKind.Sequential)] struct Attributes { public uint Length; public IntPtr RootDirectory,ObjectName; public uint Flags; public IntPtr SecurityDescriptor,SecurityQualityOfService; }
+  [StructLayout(LayoutKind.Sequential)] struct UnicodeString { public ushort Length,MaximumLength; public IntPtr Buffer; }
+  [DllImport("advapi32.dll")] static extern uint LsaOpenPolicy(IntPtr system,ref Attributes attributes,uint access,out IntPtr policy);
+  [DllImport("advapi32.dll")] static extern uint LsaEnumerateAccountsWithUserRight(IntPtr policy,ref UnicodeString right,out IntPtr buffer,out uint count);
+  [DllImport("advapi32.dll")] static extern uint LsaNtStatusToWinError(uint status);
+  [DllImport("advapi32.dll")] static extern uint LsaClose(IntPtr policy);
+  [DllImport("advapi32.dll")] static extern uint LsaFreeMemory(IntPtr buffer);
+  public static string[] Read(string name) {
+   if(String.IsNullOrEmpty(name)||name.Length>256)throw new ArgumentException("Invalid user right");
+   IntPtr policy=IntPtr.Zero,buffer=IntPtr.Zero;
+   var attributes=new Attributes();attributes.Length=(uint)Marshal.SizeOf(typeof(Attributes));
+   var right=new UnicodeString();right.Length=checked((ushort)(name.Length*2));right.MaximumLength=checked((ushort)(right.Length+2));right.Buffer=Marshal.StringToHGlobalUni(name);
+   try {
+    uint status=LsaOpenPolicy(IntPtr.Zero,ref attributes,0x801,out policy);
+    if(status!=0)throw new Win32Exception((int)LsaNtStatusToWinError(status));
+    uint count;status=LsaEnumerateAccountsWithUserRight(policy,ref right,out buffer,out count);
+    if(status==0x8000001A)return new string[0];
+    if(status!=0)throw new Win32Exception((int)LsaNtStatusToWinError(status));
+    if(count>100000||count>0&&buffer==IntPtr.Zero)throw new InvalidOperationException("Invalid LSA result");
+    var values=new List<string>();
+    for(int i=0;i<count;i++){var sid=Marshal.ReadIntPtr(buffer,i*IntPtr.Size);values.Add(new SecurityIdentifier(sid).Value);}
+    return values.ToArray();
+   } finally { if(buffer!=IntPtr.Zero)LsaFreeMemory(buffer);if(policy!=IntPtr.Zero)LsaClose(policy);Marshal.FreeHGlobal(right.Buffer); }
+  }
+ }
+}
+'@
+}
 function Principals-Desired($Values){return ((@($Values)|ForEach-Object{'*'+(Principal-Sid ([string]$_))}) -join ',')}
 function Normalize-Principals([AllowNull()][string]$Raw){
     if($null -eq $Raw){return $null};if([string]::IsNullOrWhiteSpace($Raw)){return ''}
@@ -656,14 +694,28 @@ function Endpoint-FailureMessage($Record){
     $id=([string]$Record.FullyQualifiedErrorId -replace '[^A-Za-z0-9_.,-]','')
     if($id.Length -gt 160){$id=$id.Substring(0,160)}
     $native=[string]$Record.Exception.Message
+    $codes=@();$exception=$Record.Exception
+    for($depth=0;$depth -lt 6 -and $exception;$depth++){
+        foreach($field in @('ErrorCode','NativeErrorCode','HResult')){$number=Read-Field $exception $field $null;if($null -ne $number){try{$codes+=([int64]$number -band 65535)}catch{}}}
+        $nested=Read-Field $exception 'ErrorRecord' $null
+        if($nested){$nestedId=([string](Read-Field $nested 'FullyQualifiedErrorId' '') -replace '[^A-Za-z0-9_.,-]','');if($nestedId -and $id -notlike ('*'+$nestedId+'*')){$id+=','+$nestedId}}
+        $exception=Read-Field $exception 'InnerException' $null
+    }
+    if($id.Length -gt 160){$id=$id.Substring(0,160)}
     if($id -match '^(?:112|39)(?:,|$)|ERROR_DISK_FULL|ERROR_HANDLE_DISK_FULL' -or $native -match '(?i)0x80070070|not enough space on the disk'){
         $reason='ENDPOINT_DISK_FULL. Windows reported insufficient disk space. Check free space and quotas on the endpoint system, profile and temporary-file volumes, then retry the remote session. A listening WinRM port does not establish that a host process can start.'
     }elseif($category -eq 'PermissionDenied' -or $native -match '(?i)access.*denied|unauthorized|0x80070005' -or $id -match 'AccessDenied'){
         $reason='ENDPOINT_ACCESS_DENIED. Check this account''s Execute access to the endpoint Microsoft.PowerShell session and the privileges required by the native probe. GPO Edit settings and Link GPOs do not grant endpoint access.'
     }elseif($id -match 'Kerberos|Authentication|Logon' -or $native -match '(?i)Kerberos|logon failure|unknown user name|user name or password|0x8009030e|0x80090322'){
         $reason='ENDPOINT_AUTHENTICATION_FAILED. Check the endpoint FQDN, domain DNS, Kerberos/SPN, clock and current delegated credentials.'
+    }elseif($id -match '1726|PSSessionStateBroken' -or $codes -contains 1726 -or $native -match '(?i)0x800706be'){
+        $reason='ENDPOINT_SESSION_BROKEN. The remote PowerShell session broke before a trustworthy completion result was received.'
+        if($id -match '1726' -or $codes -contains 1726 -or $native -match '(?i)0x800706be'){$reason+=' Windows 1726: the remote procedure call failed.'}
+        $reason+=' Check the selected DC-to-endpoint WinRM path and endpoint WinRM/PowerShell Operational events. A listener alone does not prove the session or command can complete; no policy value or refresh completion was established.'
     }elseif($category -in @('OpenError','ResourceUnavailable','ConnectionError') -or $id -match 'PSSessionOpenFailed|CannotConnect|NetworkPathNotFound'){
         $reason='ENDPOINT_CONNECTION_FAILED. Check host availability, WinRM listener/service, firewall and the connection path from the selected DC to this endpoint.'
+    }elseif($id -match 'JobFailure'){
+        $reason='ENDPOINT_JOB_FAILED. The remote job failed without a usable endpoint result. This does not identify a secedit, permission or policy-value failure. Check endpoint WinRM/PowerShell Operational events at the recorded check time, then retry read-only verification.'
     }else{
         $reason='ENDPOINT_PROBE_FAILED. The remote command failed. Check endpoint permissions and the native security-policy tools; no effective value was established.'
     }
@@ -671,6 +723,7 @@ function Endpoint-FailureMessage($Record){
 }
 function Refresh-ComputerPolicy([string[]]$Computer){
     $credential=Endpoint-CredentialOptions
+    foreach($name in $Computer){Send-CheckProgress 'REFRESH' 'CHECKING' $name 'Opening the endpoint session for explicit gpupdate. Completion and policy value will be checked separately.'}
     # Run on the endpoint with an explicit delegated credential: no Kerberos
     # second-hop dependency. /wait:-1 plus the process deadline distinguish
     # actual process completion from mere RPC task scheduling.
@@ -690,7 +743,7 @@ function Refresh-ComputerPolicy([string[]]$Computer){
     } -ErrorAction SilentlyContinue -ErrorVariable remoteErrors)
     foreach($computerName in $Computer){
         $result=@($results|Where-Object{[string]$_.PSComputerName -ieq $computerName}|Select-Object -Last 1)
-        if($result.Count){$result[0];continue}
+        if($result.Count){Send-CheckProgress 'REFRESH' $(if($result[0].state -eq 'COMPLETED'){'VERIFIED'}else{'UNAVAILABLE'}) $computerName ([string]$result[0].message);$result[0];continue}
         $failure=@($remoteErrors|Where-Object{
             $origin=Read-Field $_ 'OriginInfo' $null
             $target=Read-Field $_ 'TargetObject' $null
@@ -699,6 +752,7 @@ function Refresh-ComputerPolicy([string[]]$Computer){
         }|Select-Object -First 1)
         if(!$failure.Count -and $Computer.Count -eq 1){$failure=@($remoteErrors|Select-Object -First 1)}
         $message=if($failure.Count){Endpoint-FailureMessage $failure[0]}else{'ENDPOINT_NO_COMPLETION. No per-host completion result was received. Check endpoint WinRM/Kerberos and execution permissions.'}
+        Send-CheckProgress 'REFRESH' 'UNAVAILABLE' $computerName $message
         [pscustomobject]@{PSComputerName=$computerName;state='FAILED';message=$message}
     }
 }
@@ -752,8 +806,8 @@ function Verify-EffectiveSamples($Plan,$Map){
     foreach($hostName in $hosts){
         Send-CheckProgress 'ENDPOINT' 'CHECKING' $hostName 'Reading effective policy on the endpoint.'
       try{
-        $probe=Invoke-Command -ComputerName $hostName -Authentication Kerberos @remoteCredential -ErrorAction Stop -ArgumentList $handler,$expected,([string]$Map.comparator) -ScriptBlock {
-          param($Handler,$ExpectedItems,$Comparator)
+        $probe=Invoke-Command -ComputerName $hostName -Authentication Kerberos @remoteCredential -ErrorAction Stop -ArgumentList $handler,$expected,([string]$Map.comparator),(UserRight-ProbeSource) -ScriptBlock {
+          param($Handler,$ExpectedItems,$Comparator,$UserRightNativeSource)
           $ErrorActionPreference='Stop'
           function Read-IniValue([string]$Text,[string]$Section,[string]$Key){$inside=$false;foreach($line in ($Text -split "`r?`n")){$t=$line.Trim();if($t -match '^\[(.+)\]$'){$inside=($Matches[1] -ieq $Section);continue};if($inside -and $t -match '^([^=]+)=(.*)$' -and $Matches[1].Trim() -ieq $Key){return $Matches[2].Trim()}};return $null}
           function Normalize-Sids([string]$Raw){if($null -eq $Raw){return $null};$v=@();foreach($part in ($Raw -split ',')){if($part.Trim()){$name=$part.Trim().TrimStart('*');if($name -notmatch '^S-\d-(?:\d+-){1,14}\d+$'){$name=([Security.Principal.NTAccount]$name).Translate([Security.Principal.SecurityIdentifier]).Value};$v+=$name}};return (($v|Sort-Object -Unique)-join ',')}
@@ -793,6 +847,18 @@ function Verify-EffectiveSamples($Plan,$Map){
             return @{supported=$true;match=$ok;actual=($actual -join '; ');message='Endpoint policy registry values were read directly. This evidence does not prove runtime enforcement; restart, logon, service and tamper-protection requirements still apply.'}
           }
           if($Handler -eq 'SecurityTemplate'){
+            if(@($ExpectedItems).Count -gt 0 -and @($ExpectedItems|Where-Object{[string]$_.section -ne 'Privilege Rights' -or [string]$_.type -ne 'Principals'}).Count -eq 0){
+              try{
+                if(!('GpoRemediator.ReadOnly.UserRightsV1' -as [type])){Add-Type -TypeDefinition $UserRightNativeSource -ErrorAction Stop}
+                foreach($item in @($ExpectedItems)){
+                  $current=(@([GpoRemediator.ReadOnly.UserRightsV1]::Read([string]$item.key))|Sort-Object -Unique)-join ','
+                  $actual+=([string]$item.key+'='+$current)
+                  if($Comparator -eq 'includes'){if(@(([string]$item.expected -split ',')|Where-Object{$_ -and $_ -notin @($current -split ',')}).Count){$ok=$false}}
+                  elseif(!(Value-Matches $current $item.expected $(if($item.comparator){$item.comparator}else{$Comparator}))){$ok=$false}
+                }
+                return @{supported=$true;match=$ok;actual=($actual -join '; ');message='Current user-right assignments were read directly from the local LSA policy with LsaEnumerateAccountsWithUserRight. This measures assigned account/group SIDs on this endpoint, not a security-template export, token privileges or winning GPO.'}
+              }catch{return @{supported=$false;match=$false;actual='';message='LSA_USER_RIGHTS_UNAVAILABLE. Current user-right assignments could not be read. Check endpoint LSA read access and PowerShell language mode. An exported INF alone is not substituted for live LSA evidence.'}}
+            }
             $samKeys=@('EnableGuestAccount','EnableAdminAccount','NewGuestName','NewAdministratorName')
             if(@($ExpectedItems).Count -gt 0 -and @($ExpectedItems|Where-Object{[string]$_.section -ne 'System Access' -or [string]$_.key -notin $samKeys}).Count -eq 0){
               # These settings describe built-in SAM accounts. An exported INF

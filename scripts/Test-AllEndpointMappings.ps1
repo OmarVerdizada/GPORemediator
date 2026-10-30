@@ -13,6 +13,13 @@ function Get-ADComputer {param($SearchBase,$SearchScope,$Filter,$Server,$Propert
 function Verification-User {param($Identity) [pscustomobject]@{SID=@{Value='S-1-5-21-100-200-300-1001'};Enabled=$true;DistinguishedName='CN=Pilot,OU=Users,DC=example,DC=test'}}
 function Refresh-Targets {param($Strategy,$ScopeDn,$EndpointScopeDn,$PolicyScope) @('ws.example.test')}
 function Invoke-Command {param($ComputerName,$Authentication,$ArgumentList,$ScriptBlock) & $ScriptBlock @ArgumentList}
+. (Join-Path $repo 'scripts/fixtures/Mock-LsaUserRights.ps1')
+[GpoRemediator.ReadOnly.UserRightsV1]::Probe=[Func[string,string[]]]{
+ param($name)
+ if($script:wrong){return ,([string[]]@('S-1-5-21-999-888-777-1001'))}
+ $item=@($script:expected|Where-Object{$_.key -eq $name})[0]
+ return ,([string[]]@(([string]$item.expected -split ',')|Where-Object{$_}))
+}
 function Test-Path {param($LiteralPath) if($LiteralPath -like 'Registry::*'){return $true};Microsoft.PowerShell.Management\Test-Path -LiteralPath $LiteralPath}
 function Get-ItemPropertyValue {param($LiteralPath,$Name,$ErrorAction) if($Name -eq 'SCENoApplyLegacyAuditPolicy' -and $script:map.handler -eq 'AdvancedAudit'){return 1};$entry=@($script:expected|Where-Object{$_.name -ceq $Name})[0];$value=$entry.expected;if($script:wrong){return '__mismatch__'};if($entry.type -eq 'MultiString'){return ,([string[]]@($value -split '\|'))};return $value}
 function Get-Item {param($LiteralPath,$ErrorAction) $result=[pscustomobject]@{};$result|Add-Member ScriptMethod GetValueKind {param($name) return (@($script:expected|Where-Object{$_.name -ceq $name})[0].type)};return $result}

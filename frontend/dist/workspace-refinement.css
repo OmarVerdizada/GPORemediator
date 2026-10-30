@@ -274,6 +274,7 @@ body.operator-custom-page .dashboard-connection .conn{display:flex;flex-directio
 .operation-failure-guidance small{color:var(--color-text-muted)}
 .verification-explanation{white-space:pre-wrap;overflow-wrap:anywhere}
 .configured-value>.value-source{display:block;margin-top:8px}
+.verification-details .configured-value{display:grid;grid-template-columns:minmax(0,1fr);gap:7px;align-items:start;overflow-wrap:anywhere}
 .plan-facts>div,.plan-facts strong{min-width:0}
 .plan-facts .pr-identity{display:flex;max-width:100%;align-items:flex-start;min-width:0}
 .plan-facts .pr-identity code{flex:1;min-width:0;white-space:normal;overflow-wrap:anywhere}

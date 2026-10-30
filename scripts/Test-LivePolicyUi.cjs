@@ -1,7 +1,7 @@
 /* User-reported incident: GPO threshold 5, effective AD threshold 0. No live AD. */
 const fs=require('node:fs'),path=require('node:path'),http=require('node:http'),assert=require('node:assert/strict');
 const {chromium}=require('playwright');
-const root=path.resolve(__dirname,'../frontend/source'),shots=path.resolve(__dirname,'../work/screens/3.17.2');fs.mkdirSync(shots,{recursive:true});
+const root=path.resolve(__dirname,'../frontend/source'),shots=path.resolve(__dirname,'../work/screens/3.17.3');fs.mkdirSync(shots,{recursive:true});
 const dn='OU=Workstations,DC=example,DC=test',gpo={id:'31b2f340-016d-11d2-945f-00c04fb984f9',name:'Default Domain Policy',protected:true,selectable:true};
 const selection={setting:'1.2.2',gpoId:gpo.id,scopeDn:dn,accountScope:'LocalComputers',refresh:'None',firstLink:false,value:5};
 const domainPolicy={property:'LockoutThreshold',value:'0',desiredValue:'5',domainController:'dc01.example.test'};
@@ -66,9 +66,17 @@ const server=http.createServer(async(req,res)=>{try{
  pollFailed=false;history[0].liveChecks[2]={phase:'ENDPOINT',state:'UNAVAILABLE',subject:'ws.example.test',message:'WinRM connection unavailable.'};
  await page.locator('[data-check-state=UNAVAILABLE]').waitFor();
  jobs[0].state='CHECKS_INCOMPLETE';jobs[0].message='Endpoint check unavailable; review WinRM connectivity.';result.state='PUBLISHED';result.linkVerified=true;result.effectiveStatus='ENDPOINT_VERIFICATION_PENDING';result.endpointChecks=[{hostname:'ws.example.test',state:'UNAVAILABLE',actualValue:null,message:'WinRM connection unavailable.'}];
- await page.locator('[data-effective-outcome=PENDING]').waitFor();assert.equal(await page.locator('.effective-value strong').textContent(),'Not checked');assert.match(await page.locator('.verification-explanation').textContent(),/WinRM connection unavailable/);
+ await page.locator('[data-effective-outcome=PENDING]').waitFor();assert.equal(await page.locator('.effective-value strong').textContent(),'Endpoint unavailable');assert.match(await page.locator('.verification-explanation').textContent(),/WinRM connection unavailable/);
  assert.equal(requests.filter(x=>x.path==='/api/workflows/verify').length,1,'Polling resubmitted an operation');
  assert.equal(requests.filter(x=>/\/(apply|refresh|rollback)$/.test(x.path)).length,0,'Read-only verification caused a mutation');
+ result.refreshResults=[{computer:'ws.example.test',state:'FAILED',message:'ENDPOINT_SESSION_BROKEN. Windows 1726: remote session broke.'}];
+ result.endpointChecks=[{hostname:'ws.example.test',state:'UNAVAILABLE',actualValue:null,message:'ENDPOINT_JOB_FAILED. No usable endpoint result. Error ID: JobFailure.'}];
+ await page.locator('.service-right [data-refresh]').click();await page.getByRole('heading',{name:'Endpoint refresh failed',exact:true}).waitFor();
+ assert.match(await page.locator('.verification-explanation').textContent(),/1726[\s\S]*JobFailure/,'Refresh cause was hidden by the less-specific value-check error');
+ assert.match(await page.locator('.recorded-result-context').textContent(),/Inspected endpoints[\s\S]*ws.example.test/);
+ const storedBox=await page.locator('.configured-value>strong').boundingBox(),sourceBox=await page.locator('.configured-value>.value-source').boundingBox();assert(sourceBox.y>=storedBox.y+storedBox.height,'GPO source overlaps the stored value');
+ await page.screenshot({path:path.join(shots,'endpoint-session-failure.png'),fullPage:true});
+ result.refreshResults=[];
  result.effectiveStatus='ENDPOINT_MISMATCH';result.endpointChecks=[{hostname:'ws1.example.test',state:'VERIFIED',actualValue:'5',message:'Measured 5.'},{hostname:'ws2.example.test',state:'MISMATCH',actualValue:'0',message:'Measured 0.'}];
  await page.locator('.service-right [data-refresh]').click();await page.locator('[data-effective-outcome=MISMATCH]').waitFor();assert.equal(await page.locator('.effective-value strong').textContent(),'Mixed values · see hosts','Different endpoint values must not be summarized as the first value');
  for(const width of [390,320]){await page.setViewportSize({width,height:844});assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),'Mobile overflow '+width);await page.screenshot({path:path.join(shots,'result-'+width+'.png'),fullPage:true});}

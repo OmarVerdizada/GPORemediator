@@ -111,7 +111,7 @@ public sealed class WindowsPowerShellExecutor(ILogger<WindowsPowerShellExecutor>
                 if(line.Length>8192)return;
                 try{
                     var check=JsonSerializer.Deserialize<GpoLiveCheck>(line[10..],new JsonSerializerOptions{PropertyNameCaseInsensitive=true});
-                    if(check is not null && check.Phase is "GPO" or "LINK" or "REPLICATION" or "DOMAIN" or "ENDPOINT" &&
+                    if(check is not null && check.Phase is "GPO" or "LINK" or "REPLICATION" or "DOMAIN" or "ENDPOINT" or "REFRESH" &&
                        check.State is "CHECKING" or "VERIFIED" or "MISMATCH" or "UNAVAILABLE" or "PENDING" &&
                        check.Subject is {Length:<=256} && check.Message is {Length:<=2048} && check.ActualValue is null or {Length:<=4096})
                         checkProgress?.Invoke(check with{CheckedAt=PolicyValues.Now()});

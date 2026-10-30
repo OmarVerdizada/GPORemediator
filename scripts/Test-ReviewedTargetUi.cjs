@@ -1,10 +1,11 @@
 /* Reproduce the reviewed user-rights target form and interrupted operation. No AD. */
 const fs=require('node:fs'),path=require('node:path'),http=require('node:http'),assert=require('node:assert/strict');
 const {chromium}=require('playwright');
-const root=path.resolve(__dirname,'../frontend/source'),shots=path.resolve(__dirname,'../work/screens/3.17.2');fs.mkdirSync(shots,{recursive:true});
+const root=path.resolve(__dirname,'../frontend/source'),shots=path.resolve(__dirname,'../work/screens/3.17.3');fs.mkdirSync(shots,{recursive:true});
 const mappings=JSON.parse(fs.readFileSync(path.resolve(__dirname,'../backend/data/gpo-production-mappings.json'),'utf8')).mappings;
 const dn='OU=Mixed,DC=example,DC=test',gpo={id:'11111111-1111-1111-1111-111111111111',name:'Pilot policy',protected:false,selectable:true};
-const inventory={domain:'example.test',domainController:'dc.example.test',executionUser:'EXAMPLE\\operator',gpos:[gpo],scopes:[{dn,name:'Mixed users and computers',kind:'OU'}]};
+const secondGpo={...gpo,id:'22222222-2222-2222-2222-222222222222',name:'Second policy'};
+const inventory={domain:'example.test',domainController:'dc.example.test',executionUser:'EXAMPLE\\operator',gpos:[gpo,secondGpo],scopes:[{dn,name:'Mixed users and computers',kind:'OU'}]};
 const reviewed='Windows member computers reviewed; IIS roles and approved principal exceptions checked.';
 const selection={setting:'2.2.6',gpoId:gpo.id,scopeDn:dn,accountScope:'LocalComputers',refresh:'None',firstLink:false,value:0,reviewContext:reviewed,itemValues:[['S-1-5-19','S-1-5-20','S-1-5-32-544']]};
 const plan={id:'interrupted-right',selection,executionUser:inventory.executionUser,domain:inventory.domain,domainController:inventory.domainController,writeAuthorized:true,preview:{gpo,scope:inventory.scopes[0],previousValue:null,desiredValue:'S-1-5-19,S-1-5-20,S-1-5-32-544',existingLink:null,refreshComputers:[],warnings:[],preflight:{ready:true,checks:[]}}};
@@ -23,7 +24,7 @@ const server=http.createServer(async(req,res)=>{try{
   else if(url.pathname==='/api/gpo/history')response=history;
   else if(url.pathname==='/api/gpo/readiness')response={ready:true,checks:[]};
   else if(url.pathname==='/api/gpo/target-access')response={authorized:true};
-  else if(url.pathname==='/api/gpo/preview')response={...plan,id:'fresh-preview',selection:data};
+  else if(url.pathname==='/api/gpo/preview')response={...plan,id:'fresh-preview',selection:data,preview:{...plan.preview,gpo:inventory.gpos.find(x=>x.id===data.gpoId)}};
   else if(url.pathname==='/api/gpo/'+plan.id+'/replan')response={...plan,id:'repair-plan'};
   else if(url.pathname==='/api/setup/config')response={exists:true,...inventory,approvedGpoIds:[gpo.id],authorizedOus:[dn],endpointTargeting:'SelectedOu',allowedHosts:[]};
   else if(['/api/workflows','/api/audit'].includes(url.pathname))response=[];
@@ -80,6 +81,10 @@ const server=http.createServer(async(req,res)=>{try{
  await screenshot('reviewed-target-320.png');
  await page.setViewportSize({width:1440,height:1100});await page.locator('#appearance-trigger').click();await page.locator('#preference-theme').selectOption('dark');await page.locator('#appearance-trigger').click();await screenshot('reviewed-target-dark.png');
  await selectControl('19.7.5.2');await page.locator('#gpo-selection [data-policy-target=User]').waitFor();assert.match(await page.locator('.policy-target-guidance').textContent(),/OU containing the user accounts/);
+ await page.locator('[data-gpo-toggle]').click();await page.locator('[data-gpo="'+secondGpo.id+'"]').click();await page.locator('[data-scope-open=scopeDn]').click();await page.locator('[data-scope-choose="'+dn+'"]').click();
+ await page.locator('#gpo-selection button.primary-action').click();await page.locator('.plan-card').waitFor();
+ assert.equal(await page.locator('.plan-card [data-enable-write]').count(),0,'A session-authorized second GPO requested another change-gate transition');
+ assert(!requests.some(x=>x.method==='POST'&&x.path.startsWith('/api/setup/')),'Second GPO preview changed configuration or restarted the service');
  assert.deepEqual(errors,[]);assert(!requests.some(x=>/\/workflows\/|\/apply$|\/rollback$|\/refresh$/.test(x.path)),'Presentation check submitted a policy operation');
  console.log('PASS reviewed 2.2.6 form, visible user/computer scope, whitespace validation, preserved principal/review drafts, fresh repair steps, visible escaped failure, unknown-value semantics, light/dark and 320/390px layouts; no policy operations');
 }finally{if(browser)await browser.close();await new Promise(r=>server.close(r));}})().catch(e=>{console.error(e);process.exitCode=1;});

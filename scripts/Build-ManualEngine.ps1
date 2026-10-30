@@ -24,7 +24,7 @@ foreach($name in @('Write-Mapping','Mapping-Display','Validate-Selection','Finge
 $text=(@($selected.Keys|Sort-Object|ForEach-Object{$selected[$_].Extent.Text.Replace("`r`n","`n")}) -join "`n`n")
 $template=[IO.File]::ReadAllText((Join-Path $repo 'backend/PowerShell/ManualGpo.Template.ps1')).Replace("`r`n","`n")
 $mappings=Get-Content -LiteralPath (Join-Path $repo 'backend/data/gpo-production-mappings.json') -Raw|ConvertFrom-Json
-$payload=[ordered]@{functions=$text;template=$template;functionNames=@($selected.Keys|Sort-Object);mappings=@($mappings.mappings)}
+$payload=[ordered]@{functions=$text;template=$template;functionNames=@($selected.Keys|Sort-Object);mappings=@($mappings.mappings);userRightProbe=$functions['UserRight-ProbeSource'].Extent.Text}
 $output="/* Generated from the production PowerShell worker. Run scripts/Build-ManualEngine.ps1; do not edit. */`nwindow.GpoManualEngine=Object.freeze("+($payload|ConvertTo-Json -Depth 5 -Compress)+");`n"
 $path=Join-Path $repo 'frontend/source/manual-engine.js'
 if($Check){if(!(Test-Path -LiteralPath $path) -or [IO.File]::ReadAllText($path).Replace("`r`n","`n") -cne $output){throw 'Manual PowerShell engine is stale. Run scripts/Build-ManualEngine.ps1.'}}

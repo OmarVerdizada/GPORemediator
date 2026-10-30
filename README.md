@@ -1,4 +1,6 @@
-# GPO Remediator 3.17.2
+# GPO Remediator 3.17.3
+
+3.17.3 reads current user-right assignments from local LSA, reports per-host refresh progress and nested session failures, and authorizes successfully previewed GPO/scope pairs within the active connection without configuration changes or restart. See [release notes](docs/RELEASE-3.17.3.md).
 
 3.17.2 frames native PowerShell results independently of module stdout, forwards dictionary-shaped live checks, removes the ten-character review minimum and places stored GPO values with their source in the primary plan comparison. See [release notes](docs/RELEASE-3.17.2.md).
 

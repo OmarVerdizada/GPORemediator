@@ -41,7 +41,8 @@ const server=http.createServer(async(req,res)=>{try{
  assert.match(await page.locator('.result-summary-head h2').textContent(),/not effective/);
  assert.equal(await page.locator('.effective-value strong').textContent(),'0');
  assert.match(await page.locator('.measured-values').textContent(),/Requested\s*5/);
- assert.match(await page.locator('.configured-value').textContent(),/Stored GPO value: 5/);
+ assert.equal(await page.locator('.configured-value>strong').textContent(),'5');
+ assert.match(await page.locator('.configured-value>.value-source').textContent(),/Default Domain Policy/);
  assert.equal(await page.locator('.stepper').count(),1,'Duplicate workflow/context bars remain');
  assert.equal(await page.locator('.brand-lockup .ds-sidebar-toggle').count(),1,'Sidebar toggle must sit inside the brand header');
  assert(!/Published/.test(await page.locator('.result-summary-head').textContent()),'Publication hid the actual domain mismatch');
