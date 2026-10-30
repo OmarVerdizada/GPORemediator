@@ -238,3 +238,26 @@ Check(!System.Text.Json.JsonSerializer.Serialize(selected).Contains("ItemValues"
 Directory.CreateDirectory("work/audit");
 File.WriteAllText("work/audit/custom-values.json",System.Text.Json.JsonSerializer.Serialize(customCases,new System.Text.Json.JsonSerializerOptions{PropertyNamingPolicy=System.Text.Json.JsonNamingPolicy.CamelCase}));
 Console.WriteLine("PASS custom value resolution/types/read-only boundary, canonical mapping isolation and legacy selection serialization; optional user samples");
+var standard=ProductionGpoMappings.ForRemediation(selected);
+Check(!ProductionGpoMappings.IsCustomSelection(standard)&&ProductionGpoMappings.IsCustomSelection(standard with{ItemValues=[["30"]]}),"Exact recommendation and custom values were conflated");
+Check(!GpoWorkflowRules.ScopeContains("OU=Servers,"+dn,"OU=Outside\\,OU=Servers,"+dn)&&GpoWorkflowRules.ScopeContains("OU=Servers,"+dn,"OU=Pilot,OU=Servers,"+dn),"Escaped DN boundary was parsed as an ancestor");
+using(var auditFixStore=new Store(":memory:")){
+    using var fixService=new GpoWorkflowService(config,auditFixStore,new OperationGate(auditFixStore),new EphemeralDataProtectionProvider(),new WindowsPowerShellExecutor(NullLogger<WindowsPowerShellExecutor>.Instance));
+    for(int i=0;i<405;i++){var p=evidencePlan with{Id="audit-"+i,Selection=standard,Preview=evidencePlan.Preview with{DomainPolicy=new("LockoutDuration","30","15","dc.example.local")}};auditFixStore.Put("gpo_plans",p.Id,p);auditFixStore.Put("gpo_runs",p.Id,new GpoWorkflowRun(p.Id,p,evidenceResult with{RefreshResults=[new("ws.example.local","FAILED","fixture")],EndpointCoverage=new(1,1,true),RefreshCoverage=new(1,1,true)},PolicyValues.Now()));}
+    var page1=fixService.HistoryPage(evidencePlan.Actor,0,200);var page2=fixService.HistoryPage(evidencePlan.Actor,page1.NextOffset!.Value,200,page1.Snapshot);var page3=fixService.HistoryPage(evidencePlan.Actor,page2.NextOffset!.Value,200,page1.Snapshot);
+    Check(page1.Total==405&&page1.Items.Length+page2.Items.Length+page3.Items.Length==405&&page3.NextOffset is null&&fixService.HistoryPage("OTHER\\User",0,200).Total==0,"History paging lost rows or actor isolation");
+    var extra=evidencePlan with{Id="new-during-paging"};auditFixStore.Put("gpo_runs",extra.Id,new GpoWorkflowRun(extra.Id,extra,evidenceResult,PolicyValues.Now()));
+    auditFixStore.Put("gpo_runs","audit-0",auditFixStore.Require<GpoWorkflowRun>("gpo_runs","audit-0") with{UpdatedAt=PolicyValues.Now()});
+    var stable=fixService.HistoryPage(evidencePlan.Actor,200,200,page1.Snapshot);
+    Check(stable.Total==405&&stable.Items.Select(x=>x.Id).SequenceEqual(page2.Items.Select(x=>x.Id)),"History snapshot moved after concurrent insert/update");
+    Check(page1.Items.All(x=>x.Plan.Preview.CustomValues==false),"Legacy pinned recommendations were not annotated");
+    var bundle=fixService.Evidence("audit-0",evidencePlan.Actor);
+    Check(bundle.SchemaVersion=="1.2"&&bundle.RefreshResults![0].State=="FAILED"&&bundle.EndpointCoverage?.Total==1&&bundle.RefreshCoverage?.Total==1&&bundle.BeforeDomainPolicy?.Value=="30","Evidence omitted refresh, coverage or before AD context");
+    Check(GpoWorkflowRules.EvidenceHash(bundle with{RefreshCoverage=new(2,1,false)})!=bundle.IntegrityHash,"Coverage was outside the evidence integrity hash");
+    var ct=typeof(GpoWorkflowService).GetNestedType("Connection",BindingFlags.NonPublic)!;
+    var c=Activator.CreateInstance(ct,BindingFlags.Instance|BindingFlags.Public|BindingFlags.NonPublic,null,[evidencePlan.Actor,evidencePlan.ExecutionUser,Array.Empty<byte>(),inventory,DateTimeOffset.UtcNow.AddMinutes(15),DateTimeOffset.UtcNow],null)!;
+    var dictionary=typeof(GpoWorkflowService).GetField("connections",BindingFlags.Instance|BindingFlags.NonPublic)!.GetValue(fixService)!;dictionary.GetType().GetMethod("TryAdd")!.Invoke(dictionary,["audit-fix",c]);
+    fixService.SessionStatus("audit-fix",evidencePlan.Actor);fixService.UpdateInventory("audit-fix",evidencePlan.Actor,inventory with{Gpos=[..inventory.Gpos,new("33333333-3333-3333-3333-333333333333","New policy",false,true)]});
+    Check(fixService.Inventory("audit-fix",evidencePlan.Actor).Gpos.Length==3,"Heartbeat dropped discovered inventory");
+    Console.WriteLine("PASS audit fixes: default/custom intent, escaped DN ancestry, all 405 history rows, actor isolation, complete hashed evidence and discovery after heartbeat");
+}

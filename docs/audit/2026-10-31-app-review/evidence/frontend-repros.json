@@ -1,0 +1,88 @@
+[
+  {
+    "case": "exact default recommendation classified as custom",
+    "classification": {
+      "publication": "published",
+      "replication": "converged",
+      "effective": "verified",
+      "attention": false,
+      "compliant": false,
+      "custom": true
+    },
+    "catalogLabel": "Custom value · benchmark not verified"
+  },
+  {
+    "case": "legacy AD mismatch report disagreement",
+    "controlClassification": {
+      "publication": "published",
+      "replication": "converged",
+      "effective": "failed",
+      "attention": true,
+      "compliant": false,
+      "custom": true
+    },
+    "report": {
+      "id": "audit-fixture",
+      "controlId": "1.2.1",
+      "date": "2026-10-31T00:00:00Z",
+      "operator": "EXAMPLE\\Operator",
+      "executionUser": "",
+      "domain": "",
+      "gpo": "Example GPO",
+      "gpoId": "",
+      "scopeDn": "DC=example,DC=test",
+      "before": "30",
+      "requested": "15",
+      "observed": "30",
+      "state": "PUBLISHED",
+      "effectiveStatus": "DOMAIN_VALUE_MATCHES_ON_SELECTED_DC",
+      "status": "EVIDENCE_VERIFIED",
+      "publication": true,
+      "linkVerified": true,
+      "replicationConverged": true,
+      "replicationCheckedAt": null,
+      "endpointChecks": [
+        {
+          "host": "dc.example.test",
+          "state": "VERIFIED",
+          "message": "",
+          "actualValue": "30"
+        }
+      ],
+      "endpointCoverage": null,
+      "refreshCoverage": null,
+      "backupId": null,
+      "changeReference": null,
+      "approvedBy": null,
+      "correlationId": null,
+      "note": ""
+    },
+    "catalogLabel": "Custom value · benchmark not verified"
+  },
+  {
+    "case": "failed refresh report disagreement",
+    "controlClassification": {
+      "publication": "published",
+      "replication": "converged",
+      "effective": "verified",
+      "attention": true,
+      "compliant": false,
+      "custom": true
+    },
+    "reportStatus": "EVIDENCE_VERIFIED"
+  },
+  {
+    "case": "offline domain impact",
+    "impact": {
+      "name": "Low",
+      "cls": "low",
+      "copy": "Preview and post-change verification are still required."
+    }
+  },
+  {
+    "case": "accepted job reload failure disables polling on control page",
+    "acceptedJobState": "QUEUED",
+    "knownWorkflowJobs": 0,
+    "newApiCallsAfterRecovery": 0
+  }
+]

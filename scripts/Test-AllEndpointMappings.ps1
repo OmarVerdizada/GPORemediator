@@ -9,7 +9,7 @@ if($errors.Count){throw ($errors|Out-String)}
 foreach($fn in $ast.FindAll({param($n)$n -is [Management.Automation.Language.FunctionDefinitionAst]},$false)){. ([scriptblock]::Create($fn.Extent.Text))}
 $catalog=Get-Content (Join-Path $repo 'backend/data/gpo-production-mappings.json') -Raw|ConvertFrom-Json
 if($ExactPlans){$exact=Get-Content (Join-Path $repo 'work/audit/exact-values.json') -Raw|ConvertFrom-Json;$catalog.mappings=@($exact|ForEach-Object{$_.mapping})}
-$cfg=@{domainController='dc.example.test';allowedHosts=@('ws.example.test')};$domainDn='DC=example,DC=test'
+$cfg=@{domain='example.test';domainController='dc.example.test';allowedHosts=@('ws.example.test')};$domainDn='DC=example,DC=test'
 function Get-ADComputer {param($SearchBase,$SearchScope,$Filter,$Server,$Properties,$ResultSetSize,$ErrorAction) [pscustomobject]@{DNSHostName='ws.example.test'}}
 function Verification-User {param($Identity) [pscustomobject]@{SID=@{Value='S-1-5-21-100-200-300-1001'};Enabled=$true;DistinguishedName='CN=Pilot,OU=Users,DC=example,DC=test'}}
 function Refresh-Targets {param($Strategy,$ScopeDn,$EndpointScopeDn,$PolicyScope) @('ws.example.test')}
@@ -55,6 +55,7 @@ function Get-NetFirewallProfile {
  [pscustomobject]@{($properties[$item.name])=$value}
 }
 function Verification-Metadata {param($S) @{versionsMatch=$true;replicationConverged=$true}}
+function Get-GPO {param($Guid,$Domain,$Server,$ErrorAction) @{GpoStatus='AllSettingsEnabled'}}
 function Mapping-Matches {param($Id,$Map,$S) $true}
 function Mapping-Display {param($Id,$Map,$S,$Desired) 'fixture'}
 function Get-ItemCurrent {param($Id,$Map,$Item) Desired-Normalized $Map $Item $script:selection}

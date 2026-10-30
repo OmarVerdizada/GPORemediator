@@ -2,31 +2,6 @@
 (() => {
   'use strict';
   const active = new Set();
-  // Browser-tab memory only. The delegated password is never written to
-  // sessionStorage/localStorage/disk. This short-lived cache exists only so a
-  // launcher-managed backend restart does not force the operator to type the
-  // same account again during one remediation workflow.
-  let delegatedSecret = null;
-  const credentialIdleMs = 30 * 60 * 1000;
-  const ephemeralCredential = {
-    set(userName, password) {
-      this.clear();
-      const bytes = new TextEncoder().encode(String(password || ''));
-      delegatedSecret = { userName: String(userName || ''), bytes, lastUsed: Date.now() };
-    },
-    get() {
-      if (!delegatedSecret) return null;
-      if (Date.now() - delegatedSecret.lastUsed > credentialIdleMs) { this.clear(); return null; }
-      delegatedSecret.lastUsed = Date.now();
-      return { userName: delegatedSecret.userName, password: new TextDecoder().decode(delegatedSecret.bytes) };
-    },
-    touch() { if (delegatedSecret) delegatedSecret.lastUsed = Date.now(); },
-    clear() {
-      if (delegatedSecret?.bytes) delegatedSecret.bytes.fill(0);
-      delegatedSecret = null;
-    },
-    available() { return !!this.get(); }
-  };
   const storage = {
     get(key, fallback) { try { return sessionStorage.getItem(key) ?? fallback; } catch { return fallback; } },
     set(key, value) { try { sessionStorage.setItem(key, value); } catch { /* Storage may be disabled. */ } },
@@ -96,7 +71,17 @@
         error.correlationId = data.correlationId || response.headers.get('X-Correlation-ID');
         throw error;
       }
-      if (path.startsWith('/api/gpo/') && !path.endsWith('/disconnect')) ephemeralCredential.touch();
+      if(path.split('?')[0]==='/api/gpo/history'&&Array.isArray(data)&&!settings.historyPage){
+        let next=response.headers.get('X-History-Next-Offset'),offset=Number(new URL(path,location.origin).searchParams.get('offset')||0),snapshot=response.headers.get('X-History-Snapshot');
+        while(next!==null){
+          const value=Number(next);if(!Number.isSafeInteger(value)||value<=offset)throw new Error('History pagination did not advance. Refresh the history.');
+          const pageUrl=new URL(path,location.origin);pageUrl.searchParams.set('offset',String(value));
+          if(snapshot!==null)pageUrl.searchParams.set('snapshot',snapshot);
+          const page=await request(pageUrl.pathname+pageUrl.search,{historyPage:true});
+          if(!Array.isArray(page.items))throw new Error('History page returned an invalid response.');
+          data.push(...page.items);next=page.next;offset=value;
+        }
+      }else if(settings.historyPage)return {items:data,next:response.headers.get('X-History-Next-Offset')};
       return data;
     } catch (error) {
       if (controller.signal.aborted) {
@@ -114,28 +99,8 @@
       throw error;
     } finally { clearTimeout(timer); active.delete(pending); }
   }
-  let reconnectPending = null;
-  function reconnectDelegated() {
-    if (!reconnectPending) reconnectPending = restoreDelegated().finally(() => { reconnectPending = null; });
-    return reconnectPending;
-  }
-  async function restoreDelegated() {
-    const credential = ephemeralCredential.get();
-    if (!credential) return null;
-    try {
-      const session = await request('/api/session', { timeout: 5000 });
-      const inventory = await request('/api/gpo/connect', { body: credential, csrfToken: session.csrfToken, timeout: 110000 });
-      credential.password = '';
-      const gpoSession = await request('/api/gpo/session', { timeout: 5000 });
-      return { session, inventory, gpoSession };
-    } catch (error) {
-      credential.password = '';
-      if (/AUTH|CREDENTIAL|LOGIN/.test(String(error?.code || ''))) ephemeralCredential.clear();
-      throw error;
-    }
-  }
   window.GpoClient = {
-    request, storage, localize, ephemeralCredential, reconnectDelegated,
+    request, storage, localize,
     progress() { return [...active].at(-1); },
     cancelReadOnly() { for (const p of active) if (p.cancelable) p.controller.abort(); }
   };

@@ -57,7 +57,7 @@
       if(service.processId!==previous){
         state.service=service;state.serviceOffline=false;state.session=await window.GpoClient.request('/api/session',{timeout:5000});
         if(service.mode==='WINDOWS'){
-          try{const restored=await window.GpoClient.reconnectDelegated();if(restored){state.session=restored.session;state.gpoSession=restored.gpoSession;state.notice='Service restart completed and the delegated session was restored.';}else state.notice='Service restart completed. Credentials are no longer in browser memory; sign in again on Dashboard when needed.';}catch(e){state.gpoSession=null;state.notice=e.message;}
+          state.gpoSession=null;state.notice='Service restart completed. Sign in again to reconnect the delegated account.';
           window.dispatchEvent(new CustomEvent('gr:service-ready',{detail:{service}}));state.loaded=false;draft=null;await load();return;
         }
         if(service.mode==='SETUP'){window.dispatchEvent(new CustomEvent('gr:service-ready',{detail:{service}}));state.loaded=false;draft=null;await load();return;}

@@ -1,0 +1,18 @@
+{
+  "evidence/backend-repros.json": "4711a369da3ab5772dcaa376f86dd1133a29840c42be7636a0ab55bc5815e0a3",
+  "evidence/browser-repros.json": "83be88b363f7537113f92c72b2667e3a8da2f60ffd75049d2cf885c40d699d7f",
+  "evidence/ci-references.json": "7915aac9dbbb23b6ba911fed42402ddca7f0dfb738f20cee8e037db7e5850cca",
+  "evidence/frontend-repros.json": "7ec86d0b686524e4479dd85b1c5247f8b60016cf4f0ddfd383d895c8785f9fb0",
+  "evidence/gpo-modal-keyboard.png": "234c208ef968f7d984079e53b7b95db677d76209986106f0606b456a20cd7834",
+  "evidence/powershell-repros.json": "f6122b1d712ce7535e63e1ba837dc641ea8122671f1cd6ddd0ccc8b0de07af20",
+  "evidence/reports-legacy-mismatch.png": "02fef05fb5749e89fb40d0837cc7fc9f786f6d599bce5991e26505c7bc9b83e3",
+  "evidence/workflow-link-report.html": "1f5812eab40804b0495d38ae8684c803fbecdf21efca3df56f77bcb5fe41e655",
+  "findings.json": "9e5b157b6b65ed254ec7980493e5b6439f81acfe849bc2c232cee5b5c21f3100",
+  "PROBLEMS.md": "970dff66741c0cf4dfe518e833d9e5e0b2aa7dc857b2871937a03474d6875d38",
+  "reproducers/browser.cjs": "af4df777af450d08290b933ac0293d86182df04807d1e47b11252f8581ec1a1e",
+  "reproducers/Program.cs": "f8032b851b592b170c71c326a3c3e3d1483b2ee69370e920a58b32e5789740d9",
+  "reproducers/repro.cjs": "783012391c160ffad4aafc041364cb204ee12227d5798946dbf241767b8c99ad",
+  "reproducers/repro.ps1": "3f9415acbaa06b6eea44d9b8fa29ed62523a3fd188dadcded9e3b129332aa1cf",
+  "reproducers/Review.csproj": "2f9caaf419e7a033dc94d5984115bb63309d7d1d8d58c835ecfa9ecc331a3717",
+  "RESOLUTION.md": "063869ab4caedb07c51ecb1bda3acf1f139121ce258d9ad7b008a766169f36ab"
+}

@@ -166,7 +166,14 @@ restoreFailure=await Done(jobs,restoreFailure.Id);Check(restoreFailure.State=="N
 fake.Actions.Clear();fake.PreviewAccessRequirements.Clear();var scan=jobs.Scan(new(Guid.NewGuid().ToString(),selection,["2.3.1.1","1.2.3"]),"secret-session","TEST\\Admin");scan=await Done(jobs,scan.Id);
 Check(scan.State=="COMPLETED"&&scan.ScanRows!.Length==2&&scan.ScanRows.Any(x=>x.State=="NOT_CHECKED")&&fake.Actions.Count==0,"Read-only scan wrote or hid a manual control");
 Check(fake.PreviewAccessRequirements.Count>0&&fake.PreviewAccessRequirements.All(x=>!x),"Read-only scan required write permissions");
+fake.PreviewSelections.Clear();var domainScan=jobs.Scan(new(Guid.NewGuid().ToString(),selection with{ScopeDn="DC=test,DC=local",AccountScope="Domain"},["1.2.1"]),"secret-session","TEST\\Admin");domainScan=await Done(jobs,domainScan.Id);
+Check(domainScan.State=="COMPLETED"&&fake.PreviewSelections.Single().AccountScope=="Domain"&&fake.PreviewSelections.Single().FirstLink&&fake.Actions.Count==0,"Domain scan lost scope intent or performed a write");
+Console.WriteLine("PASS domain scan preserves account scope and first-link intent without native writes");
 using(var req=new HttpRequestMessage(HttpMethod.Get,"/api/workflows/"+jobId+"/report")){req.Headers.Add("Test-Identity","TEST\\Admin");using var response=await http.SendAsync(req);var html=await response.Content.ReadAsStringAsync();Check(response.IsSuccessStatusCode&&html.Contains("&lt;unsafe&gt;")&&!html.Contains("<unsafe>"),"Report escaping failed");}
+var reportSource=store.Require<WorkflowJob>("workflow_jobs",jobId).CompletedIds[0];var reportRun=store.Require<GpoWorkflowRun>("gpo_runs",reportSource);
+store.Put("gpo_runs",reportSource,reportRun with{Result=reportRun.Result with{CurrentLink=new(reportRun.Plan.Selection.ScopeDn,2,false,false)}});
+using(var req=new HttpRequestMessage(HttpMethod.Get,"/api/workflows/"+jobId+"/report")){req.Headers.Add("Test-Identity","TEST\\Admin");using var response=await http.SendAsync(req);var html=await response.Content.ReadAsStringAsync();Check(html.Contains("Intent: enable;")&&html.Contains("Observed: Enabled=False, order=2"),"HTML report confused link intent and measured disabled state");}
+store.Put("gpo_runs",reportSource,reportRun);
 using(var req=new HttpRequestMessage(HttpMethod.Get,"/api/workflows/"+jobId+"/report?format=json")){req.Headers.Add("Test-Identity","TEST\\Admin");using var response=await http.SendAsync(req);var report=await response.Content.ReadFromJsonAsync<JsonElement>();Check(report.GetProperty("integrityHash").GetString()==PolicyValues.Hash(report.GetProperty("payload")),"Report payload integrity hash does not match exported JSON");}
 await app.StopAsync();await jobs.StopAsync(CancellationToken.None);
 // Simulate service death: stored queued writes must become review records, not replay.
@@ -180,10 +187,12 @@ Console.WriteLine("PASS workspace: production async HTTP/identity isolation/idem
 sealed class FakeOperations(Store store,OperationGate gate):IWorkflowOperations
 {
  public readonly List<bool> PreviewAccessRequirements=[];
+ public readonly List<GpoSelection> PreviewSelections=[];
  public readonly List<string> Actions=[];public TaskCompletionSource? Block;public bool FailNext;public bool DriftAfterApply;public bool RefreshFails;public bool EndpointMismatch;public bool EndpointUnavailable;public GpoRollbackAnchor? LastAnchor;public string? LastRestore;private string fingerprint="initial";
  public void ValidateConnection(string token,string actor){if(token!="secret-session")throw new PolicyException("GPO_LOGIN_REQUIRED","Reconnect.");}
  public Task<GpoWorkflowPlan> PreviewAsync(string token,string actor,GpoSelection selection,CancellationToken ct,bool requireWriteAccess=true){
   PreviewAccessRequirements.Add(requireWriteAccess);
+  PreviewSelections.Add(selection);
   ValidateConnection(token,actor);var preview=new GpoPreview(new(selection.GpoId,"<unsafe>",false,true),new(selection.ScopeDn,"Pilot","OU"),"0",fingerprint,"links",null,[],[],new("",false,[],new(2,0,2,0,["ws.test.local"],false),[],[],null),DesiredValue:"1");
   var plan=new GpoWorkflowPlan(Guid.NewGuid().ToString("N"),actor,"TEST\\Executor","WINDOWS","test.local","dc.test.local",selection,preview,PolicyValues.Now());store.Put("gpo_plans",plan.Id,plan);return Task.FromResult(plan);
  }

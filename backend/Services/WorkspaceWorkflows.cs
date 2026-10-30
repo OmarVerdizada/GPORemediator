@@ -187,10 +187,11 @@ public sealed class WorkspaceWorkflows(Store store,IWorkflowOperations service,O
         var rows=new List<ScanRow>();
         foreach(var control in job.ScanControls??[]){
             ct.ThrowIfCancellationRequested();var original=ProductionGpoMappings.Require(control);
-            var selection=job.ScanTarget! with{Setting=control,Value=original.Suggested??0,Refresh="None",AccountScope="LocalComputers",FirstLink=false,CustomValue=null,ItemValues=null};
+            var domainAccount=original.DomainPolicySensitive&&job.ScanTarget!.AccountScope=="Domain";
+            var selection=job.ScanTarget! with{Setting=control,Value=original.Suggested??0,Refresh="None",AccountScope=domainAccount?"Domain":original.Scope=="User"?"Users":"LocalComputers",FirstLink=domainAccount,CustomValue=null,ItemValues=null,ReviewContext=null};
             var mapping=ProductionGpoMappings.Effective(selection);
             try{
-                if(!mapping.Writable||mapping.RequiresInput||mapping.Scope!="Computer")rows.Add(new(control,"NOT_CHECKED",null,null,"Manual, user-session targeting or organization-specific input requires individual review; no compliance claim was made.",PolicyValues.Now()));
+                if(!mapping.Writable||mapping.RequiresInput||mapping.Scope=="User")rows.Add(new(control,"NOT_CHECKED",null,null,"Manual, user-session targeting or organization-specific input requires individual review; no compliance claim was made.",PolicyValues.Now()));
                 else{
                     var plan=await service.PreviewAsync(work.Token,job.Actor,selection,ct,requireWriteAccess:false);
                     rows.Add(new(control,plan.Preview.NoChange?"GPO_MATCH":"DIFFERENT",plan.Preview.PreviousValue,plan.Preview.DesiredValue,"Read-only GPO content/link comparison; effective endpoint compliance is not inferred.",PolicyValues.Now(),plan.Id,plan.Preview.PreviousValueSource));

@@ -1,6 +1,7 @@
 /* GPO Remediator professional UI. No fake statuses, no JS dependencies, no forced specificity. */
 :root{--ux-ease:cubic-bezier(.22,1,.36,1);--ux-ring:0 0 0 3px color-mix(in srgb,var(--color-primary) 22%,transparent)}
-.product-main{max-width:1480px;margin-inline:auto;animation:ux-intro .35s var(--ux-ease) both}
+.product-main{max-width:1480px;margin-inline:auto;animation:ux-intro .35s var(--ux-ease)}
+.product-modal-open .product-main{animation:none}
 
 .library-hero h1,.control-title h1,.page-header h1{letter-spacing:-.035em}
 .ux-status-bar{display:flex;align-items:center;justify-content:space-between;gap:20px;padding:18px 22px;border:1px solid var(--color-border);border-radius:14px;background:var(--color-surface);box-shadow:var(--shadow-sm);margin:0 0 18px;flex-wrap:wrap}
@@ -89,7 +90,7 @@
 .library-hero,.control-header{position:relative}
 button:focus-visible,a:focus-visible,input:focus-visible,summary:focus-visible,.visual-scope-item:focus-visible{outline:2px solid var(--color-primary);outline-offset:2px;box-shadow:var(--ux-ring)}
 @keyframes ux-pulse{0%,100%{box-shadow:0 0 0 5px var(--color-success-soft)}50%{box-shadow:0 0 0 8px var(--color-success-soft)}}
-@keyframes ux-intro{from{opacity:.7;transform:translateY(5px)}to{opacity:1;transform:translateY(0)}}
+@keyframes ux-intro{from{opacity:.7}to{opacity:1}}
 @media(max-width:1100px){.ux-catalog-strip p{margin-left:0;width:100%;max-width:none}.ux-status-bar{align-items:flex-start}.ux-advanced-block>summary>small{display:none}}
 @media(max-width:780px){.ux-kpi-grid{grid-template-columns:1fr 1fr}.ux-overview-layout{grid-template-columns:1fr}.ux-overview-main{padding:22px}.ux-recent-state{max-width:120px}.ux-status-bar{padding:16px}.ux-quick-links{width:100%}.ux-quick-links a{flex:1;justify-content:center}.ux-overview-main h2{font-size:22px}}
 @media(max-width:520px){.ux-kpi-grid{grid-template-columns:1fr}.ux-quick-links a{font-size:11px;padding:9px}.ux-recent-row{flex-wrap:wrap;padding:13px}.ux-recent-state{margin-left:49px}.ux-section-head{padding:17px}.ux-more-tabs{margin-left:0}.ux-overview-fact{padding:17px}.ux-catalog-strip{gap:14px}}

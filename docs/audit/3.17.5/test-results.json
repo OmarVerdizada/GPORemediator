@@ -1,0 +1,810 @@
+[
+  {
+    "name": "build-portable",
+    "kind": "build/package",
+    "status": "PASS",
+    "exitCode": 0,
+    "log": "work/audit/3.17.5/build-final.log",
+    "logSha256": "F594DA0D71C7868D9761565A9CCFC9CA150D37A597353F47AAD97404835A3AC9",
+    "initialAttempt": {
+      "name": "build-portable",
+      "kind": "build/package",
+      "status": "PASS",
+      "exitCode": 0,
+      "startedAt": "2026-10-30T21:05:43.7868058+00:00",
+      "durationSeconds": 54.99,
+      "log": "work/audit/3.17.5/full/build-portable.log",
+      "logSha256": "4AC435C1539A6241ACF6F3AD07A0CFD800ED957D3910ED7572B5C83A8E9F0C01"
+    }
+  },
+  {
+    "name": "SecurityRegression",
+    "kind": "offline regression",
+    "status": "PASS",
+    "exitCode": 0,
+    "startedAt": "2026-10-30T21:06:39.1875400+00:00",
+    "durationSeconds": 20.76,
+    "log": "work/audit/3.17.5/full/SecurityRegression.log",
+    "logSha256": "EA0B665AA0A17FC5B9DBC62B7C2D178D5D59D29DE3A8E6406DBC1ACBECCE77E7"
+  },
+  {
+    "name": "WorkflowRegression",
+    "kind": "offline regression",
+    "status": "PASS",
+    "exitCode": 0,
+    "log": "work/audit/3.17.5/workflow-final.log",
+    "logSha256": "435EE12E16B8A09C72B6F25E402C388F1487C6E772DFDE1AFB3FF2887B37BE2A",
+    "initialAttempt": {
+      "name": "WorkflowRegression",
+      "kind": "offline regression",
+      "status": "PASS",
+      "exitCode": 0,
+      "startedAt": "2026-10-30T21:06:59.9687683+00:00",
+      "durationSeconds": 12.68,
+      "log": "work/audit/3.17.5/full/WorkflowRegression.log",
+      "logSha256": "CC8DF7A7355F82A0221D13446F230BBD21F706BCC547DE584C36625E22701FFA"
+    }
+  },
+  {
+    "name": "WorkspaceRegression",
+    "kind": "offline regression",
+    "status": "PASS",
+    "exitCode": 0,
+    "log": "work/audit/3.17.5/workspace-final.log",
+    "logSha256": "84401166871695AF92005D4AC1D3064968B157B991AB3910F049F4A5EED2FE90",
+    "initialAttempt": {
+      "name": "WorkspaceRegression",
+      "kind": "offline regression",
+      "status": "PASS",
+      "exitCode": 0,
+      "startedAt": "2026-10-30T21:07:12.6624992+00:00",
+      "durationSeconds": 14.43,
+      "log": "work/audit/3.17.5/full/WorkspaceRegression.log",
+      "logSha256": "017CB717D0A525FAC8CB36B1C4478E2D1F54B7E1673BA6A954393E30C779E88D"
+    }
+  },
+  {
+    "name": "HardeningRegression",
+    "kind": "offline regression",
+    "status": "PASS",
+    "exitCode": 0,
+    "startedAt": "2026-10-30T21:07:27.1052489+00:00",
+    "durationSeconds": 24.17,
+    "log": "work/audit/3.17.5/full/HardeningRegression.log",
+    "logSha256": "CBE4F7A6D83A1EA8F39935FC71221A25F0167177AD921782387753E34F9567B1"
+  },
+  {
+    "name": "Test-SecurityFiles",
+    "kind": "offline regression",
+    "status": "PASS",
+    "exitCode": 0,
+    "startedAt": "2026-10-30T21:07:51.2876813+00:00",
+    "durationSeconds": 2.06,
+    "log": "work/audit/3.17.5/full/Test-SecurityFiles.log",
+    "logSha256": "6ED1045A946E4F7B5605906785C5BC52FA80D268C3FEA5A0885E692C8A39CE6D"
+  },
+  {
+    "name": "Test-DomainSignIn",
+    "kind": "offline regression",
+    "status": "PASS",
+    "exitCode": 0,
+    "startedAt": "2026-10-30T21:07:53.3873044+00:00",
+    "durationSeconds": 1.56,
+    "log": "work/audit/3.17.5/full/Test-DomainSignIn.log",
+    "logSha256": "DCA6A6913C7CB3A598F9E6694513E6B8B4E3B1E0BCA57D96A4474A9A2E4F3C09"
+  },
+  {
+    "name": "Test-EndpointTargeting",
+    "kind": "offline regression",
+    "status": "PASS",
+    "exitCode": 0,
+    "startedAt": "2026-10-30T21:07:54.9572742+00:00",
+    "durationSeconds": 2.31,
+    "log": "work/audit/3.17.5/full/Test-EndpointTargeting.log",
+    "logSha256": "5076AD3DD8D20F5D39516775ABC36324E45CAACAFDCADF1B18DF0B9099AD55E2"
+  },
+  {
+    "name": "Test-SelectionAccess",
+    "kind": "offline regression",
+    "status": "PASS",
+    "exitCode": 0,
+    "startedAt": "2026-10-30T21:07:57.2738850+00:00",
+    "durationSeconds": 3.95,
+    "log": "work/audit/3.17.5/full/Test-SelectionAccess.log",
+    "logSha256": "23F6D7A81F272530B8F3CA4CB4C1173781343A01214958DBDBF2C29DECBC232C"
+  },
+  {
+    "name": "Test-SysvolDiscovery",
+    "kind": "offline regression",
+    "status": "PASS",
+    "exitCode": 0,
+    "startedAt": "2026-10-30T21:08:01.2403965+00:00",
+    "durationSeconds": 2.33,
+    "log": "work/audit/3.17.5/full/Test-SysvolDiscovery.log",
+    "logSha256": "9B1E64614D7B5F1722157262BDCC0C889D0E24B4579BE6DC0E5BCFBB0E3E9043"
+  },
+  {
+    "name": "Test-RemediationChain",
+    "kind": "offline regression",
+    "status": "PASS",
+    "exitCode": 0,
+    "log": "work/audit/3.17.5/chain-final.log",
+    "logSha256": "38465F112C536A57C11182E78CC6B43C16AFF583EB50C0A47440B3692A568C04",
+    "initialAttempt": {
+      "name": "Test-RemediationChain",
+      "kind": "offline regression",
+      "status": "PASS",
+      "exitCode": 0,
+      "startedAt": "2026-10-30T21:08:03.5874541+00:00",
+      "durationSeconds": 32.64,
+      "log": "work/audit/3.17.5/full/Test-RemediationChain.log",
+      "logSha256": "8CD517A8F4E92E4659B1D5BF5C9DCF5758E483E4B12398D1E71BA1B7D9C9CE56"
+    }
+  },
+  {
+    "name": "Test-RuntimeIntegrity",
+    "kind": "offline regression",
+    "status": "PASS",
+    "exitCode": 0,
+    "log": "work/audit/3.17.5/runtime-integrity-final.log",
+    "logSha256": "A56D8D99DB778F06071E3FDBFDE56A7850FCAE88118995BBCA41F0E81322A712",
+    "initialAttempt": {
+      "name": "Test-RuntimeIntegrity",
+      "kind": "offline regression",
+      "status": "PASS",
+      "exitCode": 0,
+      "startedAt": "2026-10-30T21:08:36.2385500+00:00",
+      "durationSeconds": 1.92,
+      "log": "work/audit/3.17.5/full/Test-RuntimeIntegrity.log",
+      "logSha256": "FE3678F621B227EA9304F51591BB245E4C044B987C912CD8FA875E14FBEF82A8"
+    }
+  },
+  {
+    "name": "Test-GpoMappings",
+    "kind": "offline regression",
+    "status": "PASS",
+    "exitCode": 0,
+    "startedAt": "2026-10-30T21:08:38.1744328+00:00",
+    "durationSeconds": 22.33,
+    "log": "work/audit/3.17.5/full/Test-GpoMappings.log",
+    "logSha256": "FF60287E52DED5E24A437769D74A4734F026E941618C73F6645C57DD187A8A2F"
+  },
+  {
+    "name": "Test-EndpointEvidence",
+    "kind": "offline regression",
+    "status": "PASS",
+    "exitCode": 0,
+    "startedAt": "2026-10-30T21:09:00.5242836+00:00",
+    "durationSeconds": 3.21,
+    "log": "work/audit/3.17.5/full/Test-EndpointEvidence.log",
+    "logSha256": "F75B4DA0D708068371E4C2C50FF9CF24F2875705B55D470FA6D166B62C7B796D"
+  },
+  {
+    "name": "Test-AllEndpointMappings",
+    "kind": "offline regression",
+    "status": "PASS",
+    "exitCode": 0,
+    "startedAt": "2026-10-30T21:09:03.7522751+00:00",
+    "durationSeconds": 11.05,
+    "log": "work/audit/3.17.5/full/Test-AllEndpointMappings.log",
+    "logSha256": "CE13A8D575407388D5303EDE074092D1AE8419CA8D09998A92684CC53F2E55D8"
+  },
+  {
+    "name": "Test-VerificationLifecycle",
+    "kind": "offline regression",
+    "status": "PASS",
+    "exitCode": 0,
+    "startedAt": "2026-10-30T21:09:14.8124590+00:00",
+    "durationSeconds": 2.76,
+    "log": "work/audit/3.17.5/full/Test-VerificationLifecycle.log",
+    "logSha256": "BB46A74C88378A3520F7AD06B07DAF4A8731EBF8B7F0A22A9C05F07AFBE0538E"
+  },
+  {
+    "name": "Test-PowerShellSyntax",
+    "kind": "offline regression",
+    "status": "PASS",
+    "exitCode": 0,
+    "startedAt": "2026-10-30T21:09:17.5882530+00:00",
+    "durationSeconds": 1.42,
+    "log": "work/audit/3.17.5/full/Test-PowerShellSyntax.log",
+    "logSha256": "D533F0C046EA22DA3EBA60C4DE5BB0262D6B9D5C62D956ECD209868A2D892BF9"
+  },
+  {
+    "name": "Test-PowerShellTransport",
+    "kind": "offline regression",
+    "status": "PASS",
+    "exitCode": 0,
+    "startedAt": "2026-10-30T21:09:19.0208341+00:00",
+    "durationSeconds": 5.02,
+    "log": "work/audit/3.17.5/full/Test-PowerShellTransport.log",
+    "logSha256": "CAF892E9F95F32CB1BC0D0FD303FBADC130E06FFC970299CAA195F8B3B9C317B"
+  },
+  {
+    "name": "Test-ServiceControl",
+    "kind": "offline regression",
+    "status": "PASS",
+    "exitCode": 0,
+    "startedAt": "2026-10-30T21:09:24.0550019+00:00",
+    "durationSeconds": 1.49,
+    "log": "work/audit/3.17.5/full/Test-ServiceControl.log",
+    "logSha256": "5F4B40E1F90C1ABD3EB3ABC2F7E5E74CA8D93DB16E8FE8657E1FC3DF24E761C4"
+  },
+  {
+    "name": "Test-PolicyDiagnostics",
+    "kind": "offline regression",
+    "status": "PASS",
+    "exitCode": 0,
+    "startedAt": "2026-10-30T21:09:25.5668801+00:00",
+    "durationSeconds": 2.99,
+    "log": "work/audit/3.17.5/full/Test-PolicyDiagnostics.log",
+    "logSha256": "41BF09E94CBA9EE937BCFDAF86AD47C629AC4498241BD18771D7B894F1B9FF9B"
+  },
+  {
+    "name": "Test-LivePilotSafety",
+    "kind": "offline regression",
+    "status": "PASS",
+    "exitCode": 0,
+    "startedAt": "2026-10-30T21:09:28.5720028+00:00",
+    "durationSeconds": 2.18,
+    "log": "work/audit/3.17.5/full/Test-LivePilotSafety.log",
+    "logSha256": "EDD0A95C25589865F0EE467A30E0DFF33B3C1B5A6A55383194C28DB4C2890BD9"
+  },
+  {
+    "name": "Test-LivePilotFlow",
+    "kind": "offline regression",
+    "status": "PASS",
+    "exitCode": 0,
+    "startedAt": "2026-10-30T21:09:30.8208211+00:00",
+    "durationSeconds": 10.71,
+    "log": "work/audit/3.17.5/full/Test-LivePilotFlow.log",
+    "logSha256": "8A650D9DA567990FB24DDE44D55FFE573A68B839CC4B9BEF1D33451A7DF3D6E1"
+  },
+  {
+    "name": "Test-ReleaseInstaller",
+    "kind": "offline regression",
+    "status": "PASS",
+    "exitCode": 0,
+    "startedAt": "2026-10-30T21:09:41.5300427+00:00",
+    "durationSeconds": 4.95,
+    "log": "work/audit/3.17.5/full/Test-ReleaseInstaller.log",
+    "logSha256": "4CD8B88270D25387236F368E6D88B7232FB4061491DCE63F24C75DB62C9E1116"
+  },
+  {
+    "name": "Test-EndpointDiagnostics",
+    "kind": "offline regression",
+    "status": "PASS",
+    "exitCode": 0,
+    "startedAt": "2026-10-30T21:09:46.4967429+00:00",
+    "durationSeconds": 1.86,
+    "log": "work/audit/3.17.5/full/Test-EndpointDiagnostics.log",
+    "logSha256": "9A9B60B67ED144C3B0F34116FBC7AB6382F1ACF00196AB6AD5DA19D254926A93"
+  },
+  {
+    "name": "Test-LocalAccountEvidence",
+    "kind": "offline regression",
+    "status": "PASS",
+    "exitCode": 0,
+    "startedAt": "2026-10-30T21:09:48.3681193+00:00",
+    "durationSeconds": 1.59,
+    "log": "work/audit/3.17.5/full/Test-LocalAccountEvidence.log",
+    "logSha256": "5BC21864155424E6AACB941996E03CB36C5CAFF68F30C52D2AC61EA42BF29626"
+  },
+  {
+    "name": "Test-LsaUserRights",
+    "kind": "read-only local LSA native API; no AD or policy writes",
+    "status": "PASS",
+    "exitCode": 0,
+    "startedAt": "2026-10-30T21:09:49.9624557+00:00",
+    "durationSeconds": 1.51,
+    "log": "work/audit/3.17.5/full/Test-LsaUserRights.log",
+    "logSha256": "A29713D6FA5C3CAF8EE3AC0BD5CAA2DFB909A07C2B366A780E11C3D6375D9485"
+  },
+  {
+    "name": "Test-AtomicText",
+    "kind": "real private filesystem; bounded replacement failure injection",
+    "status": "PASS",
+    "exitCode": 0,
+    "startedAt": "2026-10-30T21:09:51.4893431+00:00",
+    "durationSeconds": 2.17,
+    "log": "work/audit/3.17.5/full/Test-AtomicText.log",
+    "logSha256": "43864D6DEF8319C762FCECF659EF1EC731D39ACBB9C13AB6381AE503624804B8"
+  },
+  {
+    "name": "Test-AuditSafety",
+    "kind": "private ACL/filesystem and launcher mocks; no AD or real process stops",
+    "status": "PASS",
+    "exitCode": 0,
+    "log": "work/audit/3.17.5/safety-final.log",
+    "logSha256": "796DAB649A7535D1936210719E002D5A7C64647B3A788E0EC951A560EE18DAF5",
+    "initialAttempt": {
+      "name": "Test-AuditSafety",
+      "kind": "private ACL/filesystem and launcher mocks; no AD or real process stops",
+      "status": "PASS",
+      "exitCode": 0,
+      "startedAt": "2026-10-30T21:09:53.6736177+00:00",
+      "durationSeconds": 1.96,
+      "log": "work/audit/3.17.5/full/Test-AuditSafety.log",
+      "logSha256": "50A74673881C7A903C119D059D08B605C02A79EE6F81264CEFF48FEAA36269DF"
+    }
+  },
+  {
+    "name": "Test-ReviewedRemediationChain",
+    "kind": "offline regression",
+    "status": "PASS",
+    "exitCode": 0,
+    "startedAt": "2026-10-30T21:09:55.6398649+00:00",
+    "durationSeconds": 20.94,
+    "log": "work/audit/3.17.5/full/Test-ReviewedRemediationChain.log",
+    "logSha256": "51C08E4BE63699ACA12384C1562C58B27932E7AEE81DD1389581A59202FB9EFD"
+  },
+  {
+    "name": "Test-ExactRemediationChain",
+    "kind": "all 405 controls / 413 scopes; real worker, private fixtures, mocked AD",
+    "status": "PASS",
+    "exitCode": 0,
+    "startedAt": "2026-10-30T21:10:16.5975068+00:00",
+    "durationSeconds": 499.22,
+    "log": "work/audit/3.17.5/full/Test-ExactRemediationChain.log",
+    "logSha256": "0572166CE7CEE27D637C6B9A13639EF754E13020258D57859B9A085BCF915C07"
+  },
+  {
+    "name": "Test-ExactEndpointMappings",
+    "kind": "all 413 exact/inclusion mappings; real verifier, native APIs mocked",
+    "status": "PASS",
+    "exitCode": 0,
+    "startedAt": "2026-10-30T21:18:35.8592396+00:00",
+    "durationSeconds": 23.39,
+    "log": "work/audit/3.17.5/full/Test-ExactEndpointMappings.log",
+    "logSha256": "1EEF4636AE49AE9A800FC9D2C77EAF2900D678A6ADC572A5B4BC1BD8A11A8621"
+  },
+  {
+    "name": "frontend-syntax",
+    "kind": "syntax",
+    "status": "PASS",
+    "exitCode": 0,
+    "startedAt": "2026-10-30T21:18:59.2665436+00:00",
+    "durationSeconds": 4.63,
+    "log": "work/audit/3.17.5/full/frontend-syntax.log",
+    "logSha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855"
+  },
+  {
+    "name": "Test-EndpointBatching",
+    "kind": "offline regression",
+    "status": "PASS",
+    "exitCode": 0,
+    "startedAt": "2026-10-30T21:19:03.9051403+00:00",
+    "durationSeconds": 3.22,
+    "log": "work/audit/3.17.5/full/Test-EndpointBatching.log",
+    "logSha256": "9324FB6041A71EAB6A6082E62D737F73530DB451E297DA45F050F97ACBCB1FCC"
+  },
+  {
+    "name": "Test-AssuranceScale",
+    "kind": "offline regression",
+    "status": "PASS",
+    "exitCode": 0,
+    "startedAt": "2026-10-30T21:19:07.1404238+00:00",
+    "durationSeconds": 11.03,
+    "log": "work/audit/3.17.5/full/Test-AssuranceScale.log",
+    "logSha256": "D0F777C5B9535BB60F3544A5E3AC7EDA3C4C141EB62A83F4DD3C643D531363F6"
+  },
+  {
+    "name": "Test-AuditFrontend",
+    "kind": "offline regression",
+    "status": "PASS",
+    "exitCode": 0,
+    "startedAt": "2026-10-30T21:19:18.1769181+00:00",
+    "durationSeconds": 0.22,
+    "log": "work/audit/3.17.5/full/Test-AuditFrontend.log",
+    "logSha256": "56D26DCA678D19726138E8492E7681D7DDC11587131083111BE8283CCF3E8A27"
+  },
+  {
+    "name": "Test-AuditUi",
+    "kind": "real Chromium, mocked API; no AD writes",
+    "status": "PASS",
+    "exitCode": 0,
+    "log": "work/audit/3.17.5/ui-final.log",
+    "logSha256": "D2F58507F54164CFF67E1AED413985F78043EE06718093AE05DCEC8E794E8DA2",
+    "initialAttempt": {
+      "name": "Test-AuditUi",
+      "kind": "real Chromium, mocked API; no AD writes",
+      "status": "PASS",
+      "exitCode": 0,
+      "startedAt": "2026-10-30T21:19:18.4038929+00:00",
+      "durationSeconds": 5.82,
+      "log": "work/audit/3.17.5/full/Test-AuditUi.log",
+      "logSha256": "64B7A89642D11F79AF06C2B690684922FA4285CE3E5E66A9E68CA81A4AC690E6"
+    }
+  },
+  {
+    "name": "Test-FrontendPolish",
+    "kind": "offline regression",
+    "status": "PASS",
+    "exitCode": 0,
+    "startedAt": "2026-10-30T21:19:24.2363103+00:00",
+    "durationSeconds": 7.4,
+    "log": "work/audit/3.17.5/full/Test-FrontendPolish.log",
+    "logSha256": "6372F6CFC37BDEDEFC403C3791645D1DA75D7D8DB2287674DCA6E4B5257943BE"
+  },
+  {
+    "name": "stylesheet-build",
+    "kind": "offline regression",
+    "status": "PASS",
+    "exitCode": 0,
+    "startedAt": "2026-10-30T21:19:31.6461352+00:00",
+    "durationSeconds": 0.22,
+    "log": "work/audit/3.17.5/full/stylesheet-build.log",
+    "logSha256": "66EE90B345BFA1960D5EC964FAC052EB0F8333747E795182BBDE382C8489E953"
+  },
+  {
+    "name": "Test-Responsiveness",
+    "kind": "offline regression",
+    "status": "PASS",
+    "exitCode": 0,
+    "log": "work/audit/3.17.5/responsiveness-final.log",
+    "logSha256": "6815EEDA222B60F00D9DC6CACB6DB6BFD7DC34E0110A3642CCA7597D1FBCECEB",
+    "initialAttempt": {
+      "name": "Test-Responsiveness",
+      "kind": "offline regression",
+      "status": "PASS",
+      "exitCode": 0,
+      "startedAt": "2026-10-30T21:19:31.8770939+00:00",
+      "durationSeconds": 0.42,
+      "log": "work/audit/3.17.5/full/Test-Responsiveness.log",
+      "logSha256": "6E3D332B1A12EF429CDBE99A335CFE9FDDE05F0C00E2D016377B3B5697D3449F"
+    }
+  },
+  {
+    "name": "Test-FrontendSystem",
+    "kind": "offline regression",
+    "status": "PASS",
+    "exitCode": 0,
+    "startedAt": "2026-10-30T21:19:32.3099653+00:00",
+    "durationSeconds": 0.25,
+    "log": "work/audit/3.17.5/full/Test-FrontendSystem.log",
+    "logSha256": "69BFB72AED42AB87308C80D1C28FA3F89761B4B5F619EE6DBE05A2D011BF6951"
+  },
+  {
+    "name": "Test-RemediationEvidence",
+    "kind": "offline regression",
+    "status": "PASS",
+    "exitCode": 0,
+    "startedAt": "2026-10-30T21:19:32.5743593+00:00",
+    "durationSeconds": 0.22,
+    "log": "work/audit/3.17.5/full/Test-RemediationEvidence.log",
+    "logSha256": "28A95F4FA74D7262CB0C80CC335D76B0C0A116A55A2C4DF54E6D281565EC6313"
+  },
+  {
+    "name": "Test-CatalogState",
+    "kind": "offline regression",
+    "status": "PASS",
+    "exitCode": 0,
+    "startedAt": "2026-10-30T21:19:32.8075665+00:00",
+    "durationSeconds": 0.26,
+    "log": "work/audit/3.17.5/full/Test-CatalogState.log",
+    "logSha256": "730F2A56D1B4C01107A96DE3C7536636883AA4F00607C26385BD49CE5846EE95"
+  },
+  {
+    "name": "Test-GuidedRemediation",
+    "kind": "offline regression",
+    "status": "PASS",
+    "exitCode": 0,
+    "startedAt": "2026-10-30T21:19:33.0785460+00:00",
+    "durationSeconds": 1.62,
+    "log": "work/audit/3.17.5/full/Test-GuidedRemediation.log",
+    "logSha256": "89D2DA44E4EE744D739EFCCF1287A2050CA13A00D2D0F26EC358AB0D5D8E1689"
+  },
+  {
+    "name": "Test-GpoScopePicker",
+    "kind": "offline regression",
+    "status": "PASS",
+    "exitCode": 0,
+    "log": "work/audit/3.17.5/scope-ui-final.log",
+    "logSha256": "00DC45D8ECEF0417BB4B7AB76751B98308A1AF5CD763354D04FEBABB83729592",
+    "initialAttempt": {
+      "name": "Test-GpoScopePicker",
+      "kind": "offline regression",
+      "status": "PASS",
+      "exitCode": 0,
+      "startedAt": "2026-10-30T21:19:34.7066798+00:00",
+      "durationSeconds": 0.22,
+      "log": "work/audit/3.17.5/full/Test-GpoScopePicker.log",
+      "logSha256": "248B120E81725F26496C1EF672EE5E27B268740E0F8387261FDD9CA66B527665"
+    }
+  },
+  {
+    "name": "Test-ControlTargeting",
+    "kind": "offline regression",
+    "status": "PASS",
+    "exitCode": 0,
+    "startedAt": "2026-10-30T21:19:34.9365005+00:00",
+    "durationSeconds": 0.24,
+    "log": "work/audit/3.17.5/full/Test-ControlTargeting.log",
+    "logSha256": "B76ABE0AE2ECF98A2876E55F88A66367A60FCE63F908ECD0F2965EF21A983904"
+  },
+  {
+    "name": "Test-UX-Contract",
+    "kind": "offline regression",
+    "status": "PASS",
+    "exitCode": 0,
+    "startedAt": "2026-10-30T21:19:35.1827235+00:00",
+    "durationSeconds": 0.23,
+    "log": "work/audit/3.17.5/full/Test-UX-Contract.log",
+    "logSha256": "D25786CDBBBC45E9FDD9AB676296FF353329705D866F666595570743FEBE3EEB"
+  },
+  {
+    "name": "Test-EnterpriseCenter",
+    "kind": "offline regression",
+    "status": "PASS",
+    "exitCode": 0,
+    "startedAt": "2026-10-30T21:19:35.4250352+00:00",
+    "durationSeconds": 0.24,
+    "log": "work/audit/3.17.5/full/Test-EnterpriseCenter.log",
+    "logSha256": "69CBDCB08B44DDA5BADB7992E224EA28700767C25511A0C2262CB38CC037A71A"
+  },
+  {
+    "name": "Test-ManualVerification",
+    "kind": "offline regression",
+    "status": "PASS",
+    "exitCode": 0,
+    "startedAt": "2026-10-30T21:19:35.6781543+00:00",
+    "durationSeconds": 3.32,
+    "log": "work/audit/3.17.5/full/Test-ManualVerification.log",
+    "logSha256": "D703B04845FACFDB9D61585427F34E831ED67477F7158F22A5A072F11AF7F717"
+  },
+  {
+    "name": "Test-ValueEditor",
+    "kind": "offline regression",
+    "status": "PASS",
+    "exitCode": 0,
+    "startedAt": "2026-10-30T21:19:39.0101461+00:00",
+    "durationSeconds": 0.24,
+    "log": "work/audit/3.17.5/full/Test-ValueEditor.log",
+    "logSha256": "A5B8A8268922B6DB2BD9653FDAFFC39978BD62775053B08B704FCEE9E896CEB9"
+  },
+  {
+    "name": "Test-ManualRemediation",
+    "kind": "offline regression",
+    "status": "PASS",
+    "exitCode": 0,
+    "startedAt": "2026-10-30T21:19:39.2649266+00:00",
+    "durationSeconds": 22.04,
+    "log": "work/audit/3.17.5/full/Test-ManualRemediation.log",
+    "logSha256": "B8C9A2352B738D0C581824B7851EBFEC4A2BE8850C7F724F5F7C69861BCD2574"
+  },
+  {
+    "name": "Test-RecoveryUi",
+    "kind": "offline regression",
+    "status": "PASS",
+    "exitCode": 0,
+    "log": "work/audit/3.17.5/recovery-ui-final.log",
+    "logSha256": "CC9C7B648E19EE50000ABF9821D22EA0EE604F6C380B78AA08BF038ED2A42C5D",
+    "initialAttempt": {
+      "name": "Test-RecoveryUi",
+      "kind": "offline regression",
+      "status": "PASS",
+      "exitCode": 0,
+      "startedAt": "2026-10-30T21:20:01.3179979+00:00",
+      "durationSeconds": 173.78,
+      "log": "work/audit/3.17.5/full/Test-RecoveryUi.log",
+      "logSha256": "681C8ED10A1867CA02337D15371D46E4A3663C4E530C1145B35752C036881928"
+    }
+  },
+  {
+    "name": "Test-EndpointTargetingUi",
+    "kind": "offline regression",
+    "status": "PASS",
+    "exitCode": 0,
+    "startedAt": "2026-10-30T21:22:55.1188495+00:00",
+    "durationSeconds": 2.91,
+    "log": "work/audit/3.17.5/full/Test-EndpointTargetingUi.log",
+    "logSha256": "094ED1CD8C81D7142A4E7292A9ECE50C684CA0FB9F44D8B5532EAA297F57EDE0"
+  },
+  {
+    "name": "Test-EnglishThemes",
+    "kind": "offline regression",
+    "status": "PASS",
+    "exitCode": 0,
+    "startedAt": "2026-10-30T21:22:58.0455705+00:00",
+    "durationSeconds": 13.78,
+    "log": "work/audit/3.17.5/full/Test-EnglishThemes.log",
+    "logSha256": "B8FA2F6E914901EFA79C9EFF268858FF04F3A04BBEF03F0FB74A20E2E0CEA926"
+  },
+  {
+    "name": "Test-UserRefreshUi",
+    "kind": "offline regression",
+    "status": "PASS",
+    "exitCode": 0,
+    "startedAt": "2026-10-30T21:23:11.8406015+00:00",
+    "durationSeconds": 11.13,
+    "log": "work/audit/3.17.5/full/Test-UserRefreshUi.log",
+    "logSha256": "E84BD2D0B791D3526C312C5E4859010845B1376FB5CDE926E68BCA5651D14744"
+  },
+  {
+    "name": "Test-EndpointResultUi",
+    "kind": "offline regression",
+    "status": "PASS",
+    "exitCode": 0,
+    "startedAt": "2026-10-30T21:23:22.9918877+00:00",
+    "durationSeconds": 0.29,
+    "log": "work/audit/3.17.5/full/Test-EndpointResultUi.log",
+    "logSha256": "8CBEE46647B2FB51922DF21E5DF0EA65403DDB51DA223C0BBD5D1F6B7C66A32D"
+  },
+  {
+    "name": "Test-ResultContext",
+    "kind": "offline regression",
+    "status": "PASS",
+    "exitCode": 0,
+    "startedAt": "2026-10-30T21:23:23.3009697+00:00",
+    "durationSeconds": 0.31,
+    "log": "work/audit/3.17.5/full/Test-ResultContext.log",
+    "logSha256": "359F81651C8EF30D30736D54D0A6DF55B2F0006DDF36AAE2AB481F6717675231"
+  },
+  {
+    "name": "Test-ResultOfflineUi",
+    "kind": "offline regression",
+    "status": "PASS",
+    "exitCode": 0,
+    "startedAt": "2026-10-30T21:23:23.6301675+00:00",
+    "durationSeconds": 9.37,
+    "log": "work/audit/3.17.5/full/Test-ResultOfflineUi.log",
+    "logSha256": "813B330171B5D742A4DED02BB382A2F4F83DE26665B2E2734A605B1BDAB005C6"
+  },
+  {
+    "name": "Test-DomainAccountUi",
+    "kind": "offline regression",
+    "status": "PASS",
+    "exitCode": 0,
+    "startedAt": "2026-10-30T21:23:33.0197783+00:00",
+    "durationSeconds": 14.9,
+    "log": "work/audit/3.17.5/full/Test-DomainAccountUi.log",
+    "logSha256": "A73D41576D051101D9EA82DA7470E40260307D4AEB08FD2389626A2946C19E3C"
+  },
+  {
+    "name": "Test-LivePolicyUi",
+    "kind": "offline regression",
+    "status": "PASS",
+    "exitCode": 0,
+    "startedAt": "2026-10-30T21:23:47.9541933+00:00",
+    "durationSeconds": 49.5,
+    "log": "work/audit/3.17.5/full/Test-LivePolicyUi.log",
+    "logSha256": "5116A9371B511C779B5F3CB72E7668855FF13795BECD359DD9B0B8B2AFE2CB9A"
+  },
+  {
+    "name": "Test-StreamlinedUi",
+    "kind": "offline regression",
+    "status": "PASS",
+    "exitCode": 0,
+    "startedAt": "2026-10-30T21:24:37.4815516+00:00",
+    "durationSeconds": 24.63,
+    "log": "work/audit/3.17.5/full/Test-StreamlinedUi.log",
+    "logSha256": "4749D629C9371F766A22604427FD937CEAE23FCF95AF56D229377D2F1AD90CE6"
+  },
+  {
+    "name": "Test-ReviewedTargetUi",
+    "kind": "offline regression",
+    "status": "PASS",
+    "exitCode": 0,
+    "startedAt": "2026-10-30T21:25:02.1417509+00:00",
+    "durationSeconds": 23.73,
+    "log": "work/audit/3.17.5/full/Test-ReviewedTargetUi.log",
+    "logSha256": "78FED997B5E043D3FF2FBC59D3D80F6BF46D900917A43BC060512902E8D356E7"
+  },
+  {
+    "name": "mapping-generation",
+    "kind": "offline regression",
+    "status": "PASS",
+    "exitCode": 0,
+    "startedAt": "2026-10-30T21:25:25.8934229+00:00",
+    "durationSeconds": 0.39,
+    "log": "work/audit/3.17.5/full/mapping-generation.log",
+    "logSha256": "48CB60FC029650841341D721C1F155285688E1AC7263C1C289E7F5AA23972131"
+  },
+  {
+    "name": "Test-ProductionMappings",
+    "kind": "offline regression",
+    "status": "PASS",
+    "exitCode": 0,
+    "startedAt": "2026-10-30T21:25:26.3089925+00:00",
+    "durationSeconds": 0.34,
+    "log": "work/audit/3.17.5/full/Test-ProductionMappings.log",
+    "logSha256": "066C3FAD48B4394364ECF088C8A2FD70113C4F4BAF4780BF4BBF4B5664BCA179"
+  },
+  {
+    "name": "Test-MappingSources",
+    "kind": "offline regression",
+    "status": "PASS",
+    "exitCode": 0,
+    "startedAt": "2026-10-30T21:25:26.6843315+00:00",
+    "durationSeconds": 2.51,
+    "log": "work/audit/3.17.5/full/Test-MappingSources.log",
+    "logSha256": "CA89A7B0E6CE5073CF5CAA34EDFF99D601E887A7B111D435E1BCC0FC43E9CDC3"
+  },
+  {
+    "name": "Audit-PolicyScopes",
+    "kind": "offline regression",
+    "status": "PASS",
+    "exitCode": 0,
+    "startedAt": "2026-10-30T21:25:29.2164550+00:00",
+    "durationSeconds": 0.38,
+    "log": "work/audit/3.17.5/full/Audit-PolicyScopes.log",
+    "logSha256": "17DF986D24B6813F9490F15CA57A92FCF100DD5CF21DD2F9A56E082FA5E8CF0B"
+  },
+  {
+    "name": "Validate-ProductionPackage",
+    "kind": "offline regression",
+    "status": "PASS",
+    "exitCode": 0,
+    "startedAt": "2026-10-30T21:25:29.6186907+00:00",
+    "durationSeconds": 7.41,
+    "log": "work/audit/3.17.5/full/Validate-ProductionPackage.log",
+    "logSha256": "6C451871B992D8AE2EE9CC0971A12843FA03208481A8C02A9D87BC35B3810AF6"
+  },
+  {
+    "name": "installed-admx-review",
+    "kind": "local ADMX comparison; not policy execution",
+    "status": "PASS",
+    "exitCode": 0,
+    "startedAt": "2026-10-30T21:25:37.0524055+00:00",
+    "durationSeconds": 2.22,
+    "log": "work/audit/3.17.5/full/installed-admx-review.log",
+    "logSha256": "F9D3D6E422DA99B12E658CA24E93893FEECA2180ECC428625FE4B73675B5B858"
+  },
+  {
+    "name": "secret-guard-selftest",
+    "kind": "offline regression",
+    "status": "PASS",
+    "exitCode": 0,
+    "startedAt": "2026-10-30T21:25:39.3008468+00:00",
+    "durationSeconds": 0.4,
+    "log": "work/audit/3.17.5/full/secret-guard-selftest.log",
+    "logSha256": "1D0F7D21941D8CB80444B3954CFF3D9C9D365E950C5BBB46057004463711342C"
+  },
+  {
+    "name": "secret-guard",
+    "kind": "offline regression",
+    "status": "PASS",
+    "exitCode": 0,
+    "startedAt": "2026-10-30T21:25:39.7270350+00:00",
+    "durationSeconds": 3.35,
+    "log": "work/audit/3.17.5/full/secret-guard.log",
+    "logSha256": "DE0811E75AB0DF2FF1A9A57C50B7647EA498858EE8CBE9E6B98DBEE508E1477E"
+  },
+  {
+    "name": "domain-gpo-isolation",
+    "kind": "offline regression",
+    "status": "PASS",
+    "exitCode": 0,
+    "startedAt": "2026-10-30T21:25:43.0971478+00:00",
+    "durationSeconds": 19.74,
+    "log": "work/audit/3.17.5/full/domain-gpo-isolation.log",
+    "logSha256": "E340FF375FCAC9E2CCBE3E5296EC024F340CE3AFFAF4232CA29FFC063432B494"
+  },
+  {
+    "name": "dependency-vulnerability-query",
+    "kind": "dependency advisory query with completeness/vulnerability checks",
+    "status": "PASS",
+    "exitCode": 0,
+    "startedAt": "2026-10-30T21:26:02.8808826+00:00",
+    "durationSeconds": 18.15,
+    "log": "work/audit/3.17.5/full/dependency-vulnerability-query.log",
+    "logSha256": "AAC186963B8F6B1C62FC7E63DACF8FF81CFDE2E0C81A8B151C0E7D9DAEC1FBA4"
+  },
+  {
+    "name": "built-source-match",
+    "kind": "current source/distribution compatibility",
+    "status": "PASS",
+    "exitCode": 0,
+    "log": "work/audit/3.17.5/source-match-final.log",
+    "logSha256": "5049C58A18FC19EB9EC9890946075ED695C4EA34F75B63FE1DD1852006114D27",
+    "initialAttempt": {
+      "name": "built-source-match",
+      "kind": "current source/distribution compatibility",
+      "status": "PASS",
+      "exitCode": 0,
+      "startedAt": "2026-10-30T21:26:21.0502897+00:00",
+      "durationSeconds": 4.46,
+      "log": "work/audit/3.17.5/full/built-source-match.log",
+      "logSha256": "4BFE3995AB11EBDCEEC51B333EEC3D826801F73DA887B01EBB7BC6D892FBBC77"
+    }
+  }
+]

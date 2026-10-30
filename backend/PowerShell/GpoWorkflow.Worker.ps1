@@ -319,13 +319,13 @@ function Validate-Selection($S,$Map){
       if($duration -and $reset -and [int]$reset -gt [int]$duration){Fail 'LOCKOUT_INTERVAL_CONFLICT' 'Reset lockout counter interval cannot exceed lockout duration.'}
     }
 }
-function Backup-AclIsUnsafe($Acl){
+function Backup-AclIsUnsafe($Acl,[bool]$IncludeInheritOnly=$false){
     # FullControl/Modify include READ bits and must not be used as an overlap
     # mask: broad read-only grants are valid, broad mutation grants are not.
     $mask=[int64]([Security.AccessControl.FileSystemRights]::Write -bor [Security.AccessControl.FileSystemRights]::Delete -bor [Security.AccessControl.FileSystemRights]::DeleteSubdirectoriesAndFiles -bor [Security.AccessControl.FileSystemRights]::ChangePermissions -bor [Security.AccessControl.FileSystemRights]::TakeOwnership)
     foreach($rule in @($Acl.Access)){
         if([string]$rule.AccessControlType -ne 'Allow'){continue}
-        if(([int]$rule.PropagationFlags -band [int][Security.AccessControl.PropagationFlags]::InheritOnly) -ne 0){continue}
+        if(!$IncludeInheritOnly -and ([int]$rule.PropagationFlags -band [int][Security.AccessControl.PropagationFlags]::InheritOnly) -ne 0){continue}
         $sid='';try{$sid=[string]$rule.IdentityReference.Translate([Security.Principal.SecurityIdentifier]).Value}catch{}
         $broad=$sid -in @('S-1-1-0','S-1-5-11','S-1-5-32-545') -or $sid -match '^S-1-5-21-\d+-\d+-\d+-513$'
         if($broad -and (([int64]$rule.FileSystemRights -band $mask) -ne 0)){return $true}
@@ -349,6 +349,12 @@ function Test-BackupRepository([string]$Root){
     }finally{if([IO.Directory]::Exists($probe)){[IO.Directory]::Delete($probe,$false)}}
     return $work
 }
+function Assert-BackupStorage([string]$Path,[switch]$Recurse){
+    $entry=Get-Item -LiteralPath $Path -Force -ErrorAction Stop
+    if(($entry.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0){Fail 'BACKUP_PATH_INVALID' 'Backup storage cannot redirect through a junction or file link.'}
+    if(Backup-AclIsUnsafe (Get-Acl -LiteralPath $Path -ErrorAction Stop) $true){Fail 'BACKUP_ACL_UNSAFE' 'Broad groups can modify the selected backup storage or its new children. Repair its ACL before continuing.'}
+    if($Recurse -and $entry.PSIsContainer){foreach($child in @(Get-ChildItem -LiteralPath $Path -Force -ErrorAction Stop)){Assert-BackupStorage $child.FullName -Recurse}}
+}
 function Environment-Status {
     $checks=New-Object 'System.Collections.Generic.List[object]'
     function Add-Check([string]$Id,[string]$Label,[string]$State,[string]$Message,[bool]$Required=$true){$checks.Add([pscustomobject]@{id=$Id;label=$Label;state=$State;message=$Message;required=$Required})|Out-Null}
@@ -361,10 +367,13 @@ function Environment-Status {
     try{$work=Test-BackupRepository ([string]$cfg.backupPath);Add-Check 'backup' 'Backup repository' 'PASS' ('Execution workspace is writable on '+$dc.HostName+': '+$work)}catch{Add-Check 'backup' 'Backup repository' 'FAIL' ('Cannot create/delete backup workspace files on '+$dc.HostName+' as '+[Security.Principal.WindowsIdentity]::GetCurrent().Name+'. Check Modify and inheritance on '+[string]$cfg.backupPath+' and its GpoWorkflow child. Upgrade the complete Control Panel/launcher folder to migrate old private backup ACLs, then reconnect.')}
     try{
       $root=[IO.Path]::GetFullPath([string]$cfg.backupPath)
-      $acl=Get-Acl -LiteralPath $root -ErrorAction Stop
-      if(Backup-AclIsUnsafe $acl){Add-Check 'backup-acl' 'Backup repository ACL' 'FAIL' 'Broad user groups have write/modify permissions on the GPO backup directory. Remove unsafe ACEs before Apply.'}
-      else{Add-Check 'backup-acl' 'Backup repository ACL' 'PASS' 'No broad user group has write/modify permissions on the backup root.'}
-    }catch{Add-Check 'backup-acl' 'Backup repository ACL' 'FAIL' ('Cannot read backup ACL on '+$dc.HostName+' as '+[Security.Principal.WindowsIdentity]::GetCurrent().Name+'. Check Read permissions and Modify delegation on '+[string]$cfg.backupPath+'.')}
+      Assert-BackupStorage $root
+      $workspace=Join-Path $root 'GpoWorkflow';if(Test-Path -LiteralPath $workspace){Assert-BackupStorage $workspace}
+      Add-Check 'backup-acl' 'Backup repository ACL' 'PASS' 'Backup root and workspace ACLs are safe. Selected backup trees are checked again before use.'
+    }catch{
+      $detail=if($_.Exception.Message -like 'BACKUP_ACL_UNSAFE|*'){'A broad group can modify the backup root or GpoWorkflow workspace. Repair that ACL before Apply.'}elseif($_.Exception.Message -like 'BACKUP_PATH_INVALID|*'){'Backup storage redirects through a link. Use a local protected repository.'}else{'Cannot read backup ACLs. Check Read permissions and Modify delegation for the execution account on the root and workspace.'}
+      Add-Check 'backup-acl' 'Backup repository ACL' 'FAIL' $detail
+    }
 
     try{$backupRoot=[IO.Path]::GetFullPath([string]$cfg.backupPath);$drive=[IO.DriveInfo]::new([IO.Path]::GetPathRoot($backupRoot));$free=[long]$drive.AvailableFreeSpace;if($free -le 0){Add-Check 'disk' 'Backup volume free space' 'WARN' 'Backup drive free space could not be established.' $false}elseif($free -lt 2GB){Add-Check 'disk' 'Backup volume free space' 'WARN' ('Only '+[math]::Round($free/1GB,2)+' GB free; review backup capacity.') $false}else{Add-Check 'disk' 'Backup volume free space' 'PASS' ([math]::Round($free/1GB,2).ToString()+' GB free on backup volume.') $false}}catch{Add-Check 'disk' 'Backup volume free space' 'WARN' 'Could not inspect the local backup disk.' $false}
     try{$bad=@(Get-ADReplicationPartnerMetadata -Target $env:COMPUTERNAME -Scope Server -ErrorAction Stop|Where-Object{$_.LastReplicationResult -ne 0});if($bad.Count){Add-Check 'replication' 'AD replication' 'WARN' ($bad.Count.ToString()+' replication partner(s) report a non-zero last result.') $false}else{Add-Check 'replication' 'AD replication' 'PASS' 'Local DC replication metadata reports no failed last result.' $false}}catch{Add-Check 'replication' 'AD replication' 'WARN' 'Replication metadata could not be read; Apply will still verify AD/SYSVOL versions for the selected GPO.' $false}
@@ -947,8 +956,10 @@ function Verify-EffectiveSamples($Plan,$Map){
 }
 function Verify-Published($Plan,$Map,[bool]$CheckEndpoints=$false){
     $s=$Plan.selection
+    $status=[string](Get-GPO -Guid ([guid]$s.gpoId) -Domain $cfg.domain -Server $cfg.domainController -ErrorAction Stop).GpoStatus
+    $policyEnabled=$status -ne 'AllSettingsDisabled' -and !([string]$Map.scope -eq 'User' -and $status -eq 'UserSettingsDisabled') -and !([string]$Map.scope -ne 'User' -and $status -eq 'ComputerSettingsDisabled')
     Send-CheckProgress 'GPO' 'CHECKING' ([string]$s.gpoId) 'Reading the stored GPO configuration.'
-    $contentMatches=Mapping-Matches $s.gpoId $Map $s
+    $contentMatches=(Mapping-Matches $s.gpoId $Map $s) -and $policyEnabled
     if([bool]$Map.domainPolicySensitive){foreach($item in Mapping-Items $Map){if(!(Numeric-Complies (Get-ItemCurrent $s.gpoId $Map $item) (Desired-Normalized $Map $item $s) '==')){$contentMatches=$false}}}
     Send-CheckProgress 'GPO' $(if($contentMatches){'VERIFIED'}else{'MISMATCH'}) ([string]$s.gpoId) 'Compared stored GPO settings with the requested values.'
     Send-CheckProgress 'LINK' 'CHECKING' ([string]$s.scopeDn) 'Reading the selected GPO link and priority.'
@@ -973,7 +984,8 @@ function Verify-Published($Plan,$Map,[bool]$CheckEndpoints=$false){
     if($CheckEndpoints -and $null -ne $all -and ![bool]$Map.domainPolicySensitive){$offset=[int](Read-Field (Get-Variable Data -ValueOnly -ErrorAction SilentlyContinue) 'verificationOffset' 0);$count=@($all).Count;$coverage=@{total=$count;checked=[math]::Min($offset+25,$count);complete=($offset+25 -ge $count)};if(!$coverage.complete -and $effective -eq 'VERIFIED_ON_SAMPLE'){$effective='ENDPOINT_VERIFICATION_PENDING'}}
     # Never display endpoint effectiveness as verified when the source GPO or target link is wrong.
     # A matching sample is evidence only for inspected hosts; a scheduled gpupdate is not evidence.
-    if(!$published){$effective='GPO_PUBLICATION_MISMATCH'}
+    if(!$policyEnabled){$effective='GPO_POLICY_DISABLED';Send-CheckProgress 'GPO' 'MISMATCH' ([string]$s.gpoId) 'The selected GPO policy half is disabled. Stored values do not establish application.'}
+    elseif(!$published){$effective='GPO_PUBLICATION_MISMATCH'}
     elseif(!$linked){$effective='GPO_LINK_MISMATCH'}
     elseif(!$metadata.replicationConverged -and $effective -notin @('ENDPOINT_MISMATCH','DOMAIN_POLICY_UNAVAILABLE')){$effective='REPLICATION_PENDING'}
     return @{published=[bool]$published;linked=[bool]$linked;link=$link;effective=$effective;verification=$metadata;endpointChecks=@($endpointChecks);endpointCoverage=$coverage;domainPolicy=$domainPolicy;currentValue=(Mapping-Display $s.gpoId $Map $s $false)}
@@ -1004,7 +1016,14 @@ function Refresh-Targets([string]$Strategy,[string]$ScopeDn,[string]$EndpointSco
     }
     return @(Filter-EndpointHosts $targets|Sort-Object -Unique)
 }
-function Run-Directory($Plan){if($Plan.id -notmatch '^[a-f0-9]{32}$' -or $Plan.domain -ine $cfg.domain -or $Plan.domainController -ine $cfg.domainController){Fail 'PLAN_CONTEXT_CHANGED' 'Plan context does not match the selected DC/domain.'};$root=[IO.Path]::GetFullPath([string]$cfg.backupPath);if($root -notmatch '^[A-Za-z]:\\'){Fail 'BACKUP_PATH_INVALID' 'A local backup path on the selected DC is required.'};return Join-Path $root ('GpoWorkflow\'+$Plan.id)}
+function Run-Directory($Plan){
+    if($Plan.id -notmatch '^[a-f0-9]{32}$' -or $Plan.domain -ine $cfg.domain -or $Plan.domainController -ine $cfg.domainController){Fail 'PLAN_CONTEXT_CHANGED' 'Plan context does not match the selected DC/domain.'}
+    $root=[IO.Path]::GetFullPath([string]$cfg.backupPath);if($root -notmatch '^[A-Za-z]:\\'){Fail 'BACKUP_PATH_INVALID' 'A local backup path on the selected DC is required.'}
+    foreach($parent in @($root,(Join-Path $root 'GpoWorkflow'))){if(Test-Path -LiteralPath $parent){Assert-BackupStorage $parent}}
+    $directory=Join-Path $root ('GpoWorkflow\'+$Plan.id)
+    if(Test-Path -LiteralPath $directory){Assert-BackupStorage $directory -Recurse}
+    return $directory
+}
 function Save-Manifest($Manifest,[string]$Directory){Atomic-Text (Join-Path $Directory 'manifest.json') ($Manifest|ConvertTo-Json -Depth 50) ([Text.UTF8Encoding]::new($false))}
 function Read-Field($Object,[string]$Name,$Default=$null){
     if($null -eq $Object){return $Default}

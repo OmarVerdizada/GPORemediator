@@ -1,4 +1,4 @@
-# Real source functions, isolated file fixtures and mocked directory calls only.
+﻿# Real source functions, isolated file fixtures and mocked directory calls only.
 $ErrorActionPreference='Stop';Set-StrictMode -Version Latest
 $repo=Split-Path $PSScriptRoot -Parent
 $temp=Join-Path $repo ('work/verification-'+[guid]::NewGuid().ToString('N'))
@@ -8,11 +8,12 @@ $tokens=$null;$errors=$null
 $ast=[Management.Automation.Language.Parser]::ParseFile((Join-Path $repo 'backend/PowerShell/GpoWorkflow.Worker.ps1'),[ref]$tokens,[ref]$errors)
 foreach($fn in $ast.FindAll({param($n)$n -is [Management.Automation.Language.FunctionDefinitionAst]},$false)){. ([scriptblock]::Create($fn.Extent.Text))}
 function Assert-Test($Value,$Name){if(!$Value){throw $Name};Write-Output ('PASS '+$Name)}
-$cfg=@{domainController='dc.example.test'};$domain=@{DNSRoot='example.test'};$domainDn='DC=example,DC=test'
+$cfg=@{domain='example.test';domainController='dc.example.test'};$domain=@{DNSRoot='example.test'};$domainDn='DC=example,DC=test'
 $script:count=2;$script:remoteExtensions='fixture-extension';$script:unavailable=$false;$script:userExtensions='fixture-user-extension'
 foreach($name in @('local','remote')){$null=New-Item -ItemType Directory -Path (Join-Path $temp $name);[IO.File]::WriteAllText((Join-Path $temp ($name+'/GPT.INI')),"[General]`r`nVersion=1`r`n");[IO.File]::WriteAllText((Join-Path $temp ($name+'/policy.txt')),'same')}
 function Gpo-Folder {param($Id) Join-Path $temp 'local'}
 function Gpo-Ad {param($Id) @{versionNumber=1;gPCMachineExtensionNames='fixture-extension';gPCUserExtensionNames='fixture-user-extension'}}
+function Get-GPO {param($Guid,$Domain,$Server,$ErrorAction) @{GpoStatus='AllSettingsEnabled'}}
 function Get-ADReplicationPartnerMetadata {param($Target,$Scope,$ErrorAction) @()}
 function Get-ADDomainController {param($Filter,$Server) 1..$script:count|ForEach-Object{[pscustomobject]@{HostName=('dc'+$_+'.example.test')}}}
 function Get-ADObject {param($Identity,$Server,$Properties,$ErrorAction) if($script:unavailable){throw 'fixture network unavailable'};@{versionNumber=1;gPCMachineExtensionNames=$script:remoteExtensions;gPCUserExtensionNames=$script:userExtensions}}

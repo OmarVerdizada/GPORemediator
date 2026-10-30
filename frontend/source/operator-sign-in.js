@@ -31,7 +31,7 @@ function prompt(initial){return new Promise(resolve=>{
    if(!response.ok){if(response.status===429)throw new Error('Too many attempts. Wait a minute; incorrect passwords can lock your account.');let detail;try{detail=await response.json();}catch{}throw new Error(detail?.message||'Sign-in failed. Check the account, password and DC connection.');}
    current=await session();if(current.operatorConfirmationRequired===true)throw new Error('Sign-in cookie was not accepted. Check browser settings.');
    // No password is retained in browser memory or replayed after restart.
-   window.GpoClient.ephemeralCredential.clear();finish();
+   finish();
   }catch(ex){error.textContent=ex.message;password.value='';try{const next=await session();if(next.domainSignIn!==current?.domainSignIn){current=next;configure();}else current=next;}catch{current=null;}password.focus();}finally{button.disabled=false;}
  });
  function finish(){password.value='';overlay.remove();root.hidden=false;root.inert=false;resolve();}

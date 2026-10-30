@@ -78,6 +78,21 @@ public static class ProductionGpoMappings
         return selection with{ItemValues=mapping.Items.Select(item=>mapping.Handler=="AdvancedAudit"?[item.Mask!.Value.ToString(System.Globalization.CultureInfo.InvariantCulture)]:
             mapping.AllowValueOverride?[selection.Value.ToString(System.Globalization.CultureInfo.InvariantCulture)]:item.Value?.ToArray()??[]).ToArray()};
     }
+    public static bool IsCustomSelection(GpoSelection selection){
+        var mapping=Require(selection.Setting);
+        if(!mapping.Writable||mapping.RequiresInput)return true;
+        if(selection.ItemValues is null)return mapping.AllowValueOverride&&selection.Value!=mapping.Suggested;
+        if(selection.ItemValues.Length!=mapping.Items.Length)return true;
+        var resolved=Effective(selection);
+        for(var i=0;i<mapping.Items.Length;i++){
+            var item=mapping.Items[i];
+            string[] expected=mapping.Handler=="AdvancedAudit"?[item.Mask!.Value.ToString(System.Globalization.CultureInfo.InvariantCulture)]:mapping.AllowValueOverride?[mapping.Suggested!.Value.ToString(System.Globalization.CultureInfo.InvariantCulture)]:item.Value??[];
+            var actual=mapping.Handler=="AdvancedAudit"?[resolved.Items[i].Mask!.Value.ToString(System.Globalization.CultureInfo.InvariantCulture)]:resolved.Items[i].Value??[];
+            if(item.Type is "Principals" or "MultiString"){actual=actual.Order(StringComparer.Ordinal).ToArray();expected=expected.Order(StringComparer.Ordinal).ToArray();}
+            if(!actual.SequenceEqual(expected,StringComparer.Ordinal))return true;
+        }
+        return false;
+    }
 
     public static GpoRuleMapping Require(string id) => Settings.SingleOrDefault(x => string.Equals(x.Id, id, StringComparison.OrdinalIgnoreCase))
         ?? throw new PolicyException("GPO_SETTING_UNSUPPORTED", "This CIS control does not have a validated production mapping.");

@@ -14,7 +14,7 @@ window.GpoOperationMonitor={create({state,api,render}){
  }
  async function poll(){
   if(polling||state.busy||document.hidden||state.session?.mode!=='WINDOWS')return;
-  if(!['#/dashboard','#/operations'].includes(location.hash)&&!(state.workflowJobs||[]).some(active)&&!state.history.some(window.GpoProduct.active)&&!renderPending)return;
+  if(!['#/dashboard','#/operations'].includes(location.hash)&&!active(state.singleOperation?.job||{})&&!(state.workflowJobs||[]).some(active)&&!state.history.some(window.GpoProduct.active)&&!renderPending)return;
   polling=true;
   try{if(await reload())renderPending=true;}
   catch(e){if(state.singleOperation)state.singleOperation.pollError=e.message;state.operationMonitorError=e.message;if(error!==e.message){error=e.message;renderPending=true;}}
@@ -25,7 +25,8 @@ window.GpoOperationMonitor={create({state,api,render}){
   const job=await api('/workflows/'+action,{requestId:crypto.randomUUID(),planIds:[id],consent,refresh,verificationDelays:[]});
   const selection=(state.history.find(h=>h.id===id)?.plan||state.plan)?.selection;
   state.singleOperation={id,selection:selection?{...selection}:null,setting:selection?.setting||state.selectedRule?.backendSetting,jobId:job.id,action,startedAt:new Date().toISOString(),job,pollError:''};
-  await reload();return job;
+  try{await reload();}catch(e){state.singleOperation.pollError=e.message;state.operationMonitorError=e.message;error=e.message;renderPending=true;}
+  return job;
  }
  return {poll,submitSingle};
 }};

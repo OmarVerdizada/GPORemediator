@@ -59,14 +59,7 @@ function Invoke-RemediatorServiceAction {
             if($status -eq 423){throw 'Service control is blocked by an active operation or maintenance. Wait for it to finish, then retry Stop.'}
             throw
         }
-        # A dead/unresponsive backend must not keep the old launcher alive forever.
-        @{requestedAt=[DateTimeOffset]::UtcNow.ToString('o');source='UnreachableBackendStop'} |
-            ConvertTo-Json | Set-Content -LiteralPath $stopMarker -Encoding UTF8
-        try {
-            $p=Get-Process -Id ([int]$state.processId) -ErrorAction Stop
-            if($p.ProcessName -ieq 'GpoRemediator'){ Stop-Process -Id $p.Id -Force -ErrorAction Stop }
-        } catch { }
-        $parsed=[pscustomobject]@{action='stop';accepted=$true;forced=$true}
+        throw 'The backend did not confirm a safe stop. No process was terminated. Inspect active operations; use the explicit administrator Emergency stop only for recovery.'
     }
     if($Action -eq 'stop'){
         for($i=0;$i -lt 40;$i++){ Start-Sleep -Milliseconds 250; if(!(Get-RemediatorService)){ break } }

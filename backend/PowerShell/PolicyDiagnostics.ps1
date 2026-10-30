@@ -19,6 +19,11 @@ function Access-Report($Selection,$Map){
         $rows+=@{id='file';label='Policy file/directory';target=$path;state=$(if(Test-FileSystemWrite $path){'ALLOWED'}else{'DENIED'});requiredRight='Read/execute and write';remedy='Inspect Effective Access for the execution account on this exact path and its parent.';required=$true}
     }}catch{$rows+=@{id='file';label='Policy file paths';target=$displayFolder;state='UNKNOWN';requiredRight='Read effective filesystem permissions';remedy='Check SYSVOL reachability and metadata/ACL read access.';required=$true}}
     $environment=Environment-Status
+    if([bool](Read-Field $Map 'domainPolicySensitive' $false)){
+        $property=Domain-PolicyProperty $Map
+        try{Domain-PolicyAccess $property;$state='ALLOWED'}catch{$state=if($_.Exception.Message -like 'DOMAIN_POLICY_ACCESS_DENIED|*'){'DENIED'}else{'UNKNOWN'}}
+        $rows+=@{id='domain-property-write';label=('AD domain account property: '+$property);target=$domainDn;state=$state;requiredRight=('Write the AD attribute backing '+$property);remedy='Delegate the selected domain account attribute write right separately from GPO Edit settings and OU Link GPOs.';required=$true}
+    }
     foreach($check in @($environment.checks|Where-Object{$_.id -in @('backup','backup-acl','disk','sysvol')})){
         $rows+=@{id=$check.id;label=$check.label;target=$(if($check.id -like 'backup*' -or $check.id -eq 'disk'){[string]$cfg.backupPath}else{'Local DC SYSVOL'});state=$(if($check.state -eq 'PASS'){'ALLOWED'}elseif($check.state -eq 'FAIL'){'DENIED'}else{'UNKNOWN'});requiredRight=$(if($check.id -eq 'backup'){'Create/delete backup workspace files'}else{'Read/check component'});remedy=[string]$check.message;required=[bool]$check.required}
     }

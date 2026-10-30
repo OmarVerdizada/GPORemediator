@@ -1,4 +1,4 @@
-# Executes the real endpoint probe locally with native commands mocked; never contacts AD.
+﻿# Executes the real endpoint probe locally with native commands mocked; never contacts AD.
 $ErrorActionPreference='Stop'
 Set-StrictMode -Version Latest
 $root=Split-Path $PSScriptRoot -Parent
@@ -10,7 +10,7 @@ function Assert-Test($Condition,$Message){if(!$Condition){throw $Message}}
 $script:auditOverride=1
 function Get-ItemPropertyValue {param($LiteralPath,$Name,$ErrorAction) if($Name -eq 'SCENoApplyLegacyAuditPolicy'){return $script:auditOverride};throw 'Unexpected fixture registry read'}
 function Get-ADComputer {param($SearchBase,$SearchScope,$Filter,$Server,$Properties,$ResultSetSize,$ErrorAction) [pscustomobject]@{DNSHostName='ws.example.local'}}
-$cfg=@{domainController='dc.example.local';allowedHosts=@('ws.example.local','dc.example.local')}
+$cfg=@{domain='example.test';domainController='dc.example.local';allowedHosts=@('ws.example.local','dc.example.local')}
 $plan=@{selection=@{scopeDn='OU=Endpoints,DC=example,DC=local'};preview=@{refreshComputers=@('dc.example.local');impact=@{affectedObjects=@{sampleHosts=@('ws.example.local','outside.example.local')}}}}
 $map=@{handler='SecurityTemplate';scope='Computer';domainPolicySensitive=$false;requiresInput=$false;allowValueOverride=$false;comparator=$null;items=@(@{name= $null;guid= $null;section='Privilege Rights';key='SeSystemtimePrivilege';type='Principals';value=@('S-1-5-19','S-1-5-32-544')})}
 $script:hosts=@();$script:nativeExit=0;$script:lsaOverride=$null;$script:ini="[Privilege Rights]`nSeSystemtimePrivilege = *S-1-5-32-544,*S-1-5-19"

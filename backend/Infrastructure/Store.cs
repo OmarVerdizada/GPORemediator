@@ -137,16 +137,18 @@ public sealed class Store : IDisposable
             return Convert.ToInt32(command.ExecuteScalar());
         }
     }
-    public GpoWorkflowRun[] GpoRunsForActor(string actor,int limit=200)
+    public GpoWorkflowRun[] GpoRunsForActor(string actor,int limit=200,int offset=0,long snapshot=long.MaxValue)
     {
         lock(gate)
         {
-            using var command=Command("SELECT data FROM gpo_runs WHERE json_extract(data,'$.plan.actor')=$actor COLLATE NOCASE ORDER BY updated_at DESC,id LIMIT $limit",("$actor",actor),("$limit",Math.Clamp(limit,1,500)));
+            using var command=Command("SELECT data FROM gpo_runs WHERE json_extract(data,'$.plan.actor')=$actor COLLATE NOCASE AND rowid<=$snapshot ORDER BY rowid DESC LIMIT $limit OFFSET $offset",("$actor",actor),("$limit",Math.Clamp(limit,1,500)),("$offset",Math.Max(0,offset)),("$snapshot",snapshot));
             using var reader=command.ExecuteReader(); var items=new List<GpoWorkflowRun>();
             while(reader.Read()) items.Add(JsonDefaults.Deserialize<GpoWorkflowRun>(reader.GetString(0)));
             return items.ToArray();
         }
     }
+    public long GpoRunSnapshot(string actor){lock(gate){using var command=Command("SELECT COALESCE(MAX(rowid),0) FROM gpo_runs WHERE json_extract(data,'$.plan.actor')=$actor COLLATE NOCASE",("$actor",actor));return Convert.ToInt64(command.ExecuteScalar());}}
+    public int GpoRunCount(string actor,long snapshot=long.MaxValue){lock(gate){using var command=Command("SELECT COUNT(*) FROM gpo_runs WHERE json_extract(data,'$.plan.actor')=$actor COLLATE NOCASE AND rowid<=$snapshot",("$actor",actor),("$snapshot",snapshot));return Convert.ToInt32(command.ExecuteScalar());}}
     public void Audit(string eventName, string operatorName, string? jobId = null, string? controlId = null, string? gpoId = null, object? details = null)
     {
         lock(gate)

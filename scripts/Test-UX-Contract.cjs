@@ -6,7 +6,7 @@ assert.equal((control.match(/function targetForm\(r\)/g)||[]).length,1);
 for(const marker of ['dashboard-connection','dashboard-summary','dashboard-active-row','dashboard-attention','dashboard-result-row'])assert(workspace.includes(marker),marker);
 for(const marker of ['function impactTab','impact-context-table','function auditTab','GpoScopePicker.field','verification-details'])assert(control.includes(marker),marker);
 for(const marker of ['data-favorite','data-catalog-layout','data-command-open','preference-accent','preference-density'])assert(![workspace,control,catalog,index,read('source','preferences.js')].some(s=>s.includes(marker)),marker);
-assert(index.includes('/operation-monitor.js?v=3.17.4'));
+assert(index.includes('/operation-monitor.js?v=3.17.5'));
 assert(!/src="\/(workflow-center|password-policies|studio-ui)\.js/.test(index));
 for(const file of ['workspace.js','control-view.js','catalog-view.js','product.js','operation-monitor.js','preferences.js','index.html','workspace-refinement.css'])assert.equal(read('source',file),read('dist',file),'Source/dist '+file);
 console.log('PASS streamlined UX contract: one control form, retained safety/verification, compact dashboard, retired entry points removed and source/dist synchronized.');

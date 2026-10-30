@@ -26,12 +26,15 @@ try{
  }
  Run-Check 'Test-LsaUserRights' 'powershell.exe' @('-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-File','scripts/Test-LsaUserRights.ps1') 'read-only local LSA native API; no AD or policy writes'
  Run-Check 'Test-AtomicText' 'powershell.exe' @('-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-File','scripts/Test-AtomicText.ps1') 'real private filesystem; bounded replacement failure injection'
+ Run-Check 'Test-AuditSafety' 'powershell.exe' @('-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-File','scripts/Test-AuditSafety.ps1') 'private ACL/filesystem and launcher mocks; no AD or real process stops'
  Run-Check 'Test-ReviewedRemediationChain' 'powershell.exe' @('-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-File','scripts/Test-RemediationChain.ps1','-ReviewedControlsOnly','-ReportPath',($OutputDirectory+'/reviewed-remediation-controls.json'))
  Run-Check 'Test-ExactRemediationChain' 'powershell.exe' @('-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-File','scripts/Test-RemediationChain.ps1','-ExactPlans','-ReportPath',($OutputDirectory+'/exact-remediation-controls.json')) 'all 405 controls / 413 scopes; real worker, private fixtures, mocked AD'
  Run-Check 'Test-ExactEndpointMappings' 'powershell.exe' @('-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-File','scripts/Test-AllEndpointMappings.ps1','-ExactPlans','-ReportPath',($OutputDirectory+'/exact-endpoint-controls.json')) 'all 413 exact/inclusion mappings; real verifier, native APIs mocked'
  Run-Check 'frontend-syntax' $node @('-e',"const fs=require('fs'),cp=require('child_process');for(const x of fs.readdirSync('frontend/source').filter(x=>x.endsWith('.js'))){const r=cp.spawnSync(process.execPath,['--check','frontend/source/'+x],{stdio:'inherit'});if(r.status)process.exit(r.status)}") 'syntax'
  Run-Check 'Test-EndpointBatching' 'powershell.exe' @('-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-File','scripts/Test-EndpointBatching.ps1')
  Run-Check 'Test-AssuranceScale' $node @('scripts/Test-AssuranceScale.cjs')
+ Run-Check 'Test-AuditFrontend' $node @('scripts/Test-AuditFrontend.cjs')
+ Run-Check 'Test-AuditUi' $node @('scripts/Test-AuditUi.cjs') 'real Chromium, mocked API; no AD writes'
  Run-Check 'Test-FrontendPolish' $node @('scripts/Test-FrontendPolish.cjs')
  Run-Check 'stylesheet-build' $node @('scripts/Build-Styles.cjs','--check')
  foreach($test in @('Test-Responsiveness','Test-FrontendSystem','Test-RemediationEvidence','Test-CatalogState','Test-GuidedRemediation','Test-GpoScopePicker','Test-ControlTargeting','Test-UX-Contract','Test-EnterpriseCenter','Test-ManualVerification','Test-ValueEditor','Test-ManualRemediation','Test-RecoveryUi','Test-EndpointTargetingUi','Test-EnglishThemes','Test-UserRefreshUi','Test-EndpointResultUi','Test-ResultContext','Test-ResultOfflineUi','Test-DomainAccountUi','Test-LivePolicyUi','Test-StreamlinedUi','Test-ReviewedTargetUi')){Run-Check $test $node @('scripts/'+$test+'.cjs')}

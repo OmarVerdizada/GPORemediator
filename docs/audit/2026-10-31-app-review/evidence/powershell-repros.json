@@ -1,0 +1,34 @@
+[
+    {
+        "fingerprintChanged":  false,
+        "differentContents":  true,
+        "test":  "hidden GPO file omitted from drift fingerprint"
+    },
+    {
+        "forcedStopInvoked":  true,
+        "activeOperationStopRejected":  true,
+        "realProcessTerminated":  false,
+        "test":  "migration overrides idle-safe stop rejection"
+    },
+    {
+        "effective":  "VERIFIED_ON_SAMPLE",
+        "gpoStatus":  "ComputerSettingsDisabled",
+        "statusReads":  0,
+        "linked":  true,
+        "test":  "verification omits current GPO disabled status",
+        "published":  true
+    },
+    {
+        "backupAclState":  "PASS",
+        "childBroadModify":  true,
+        "workspaceAclRead":  false,
+        "ready":  true,
+        "test":  "backup readiness checks safe root but not unsafe workspace ACL"
+    },
+    {
+        "domainWriteAllowed":  false,
+        "domainWriteChecks":  0,
+        "ready":  true,
+        "test":  "domain permission report omits AD property write authority"
+    }
+]

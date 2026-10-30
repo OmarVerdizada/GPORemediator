@@ -1,4 +1,4 @@
-GPO Remediator 3.17.4 - exact selected values and verified link evidence
+GPO Remediator 3.17.5 - complete application audit fixes
 
-See docs/RELEASE-3.17.4.md.
-All 405 controls are covered by the 413-scope offline remediation matrix; live AD validation is not available in this checkout.
+See docs/RELEASE-3.17.5.md and docs/audit/2026-10-31-app-review/RESOLUTION.md.
+Live AD validation is not available in this checkout.

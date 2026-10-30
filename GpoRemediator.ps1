@@ -35,7 +35,7 @@ $runtimeMarker = Join-Path $runtimeRoot 'production-backend-v4.ready'
 $runtimeInstallManifest = Join-Path $runtimeRoot 'runtime-install.json'
 $runtimeArchive = Join-Path $PSScriptRoot 'release\GpoRemediator-runtime-win-x64.zip'
 $runtimeArchiveHash = $runtimeArchive + '.sha256'
-$releaseVersion = '3.17.4'
+$releaseVersion = '3.17.5'
 # 3.1.2 keeps the 3.0 durable schema. It hardens startup recovery, removes the Setup->Windows restart race, and makes early backend failures self-diagnosing.
 # 3.1.2 intentionally uses fresh Setup/Windows state databases so incompatible serialized records from earlier preview builds cannot crash startup. Older databases are left untouched in ProgramData for archival/review.
 $stateSchemaVersion = '3.1.2'
@@ -411,35 +411,17 @@ function Backup-WindowsDatabaseForRecovery {
 function Stop-OrphanedRuntimeProcesses {
     $tracked=Get-RemediatorService
     $keepPid=if($tracked){[int]$tracked.processId}else{-1}
-    try {
-        $items=Get-CimInstance Win32_Process -Filter "Name='GpoRemediator.exe'" -ErrorAction Stop
-        foreach($item in $items){
-            $pidValue=[int]$item.ProcessId
-            if($pidValue -eq $keepPid){ continue }
-            $path=[string]$item.ExecutablePath
-            if($path -and $path -match '(?i)GpoRemediator'){
-                Write-Log ('Stopping orphaned GpoRemediator runtime PID '+$pidValue+' from '+$path) Yellow
-                Stop-Process -Id $pidValue -Force -ErrorAction SilentlyContinue
-            }
+    $items=@(Get-CimInstance Win32_Process -Filter "Name='GpoRemediator.exe'" -ErrorAction Stop)
+    foreach($item in $items){
+        if([int]$item.ProcessId -ne $keepPid -and $item.ExecutablePath){
+            throw ('Untracked GpoRemediator runtime PID '+$item.ProcessId+' is still running. Inspect its operations and stop it explicitly before migration. No process was terminated.')
         }
-    } catch { }
+    }
 }
 
 function Assert-LocalPortAvailable {
-    try {
-        $listener=Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction SilentlyContinue | Select-Object -First 1
-        if(!$listener){ return }
-        $owner=[int]$listener.OwningProcess
-        $proc=Get-Process -Id $owner -ErrorAction SilentlyContinue
-        if($proc -and $proc.ProcessName -ieq 'GpoRemediator'){
-            Stop-Process -Id $owner -Force -ErrorAction SilentlyContinue
-            Start-Sleep -Milliseconds 350
-            return
-        }
-        throw "Local port $Port is already used by PID $owner ($($proc.ProcessName)). Stop that application or choose another port."
-    } catch {
-        if($_.Exception.Message -like 'Local port*'){ throw }
-    }
+    $listener=Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction SilentlyContinue | Select-Object -First 1
+    if($listener){throw ('Local port '+$Port+' is already used by PID '+$listener.OwningProcess+'. Stop that application safely or choose another port. No process was terminated.')}
 }
 
 function Stop-StaleProductInstance {
@@ -454,13 +436,11 @@ function Stop-StaleProductInstance {
         throw 'GPO Remediator is already running. Open the existing Local Control Center instead of starting a second instance.'
     }
     Write-Log 'An older GPO Remediator instance is still registered. Requesting a controlled stop before migration.' Yellow
-    try { Invoke-RemediatorServiceAction -Action stop | Out-Null } catch {
-        try {
-            $p=Get-Process -Id ([int]$existing.processId) -ErrorAction Stop
-            if($p.ProcessName -ieq 'GpoRemediator'){ Stop-Process -Id $p.Id -Force -ErrorAction Stop }
-        } catch { throw 'An older GPO Remediator instance could not be stopped. Stop it manually before starting this release.' }
-    }
+    # A busy/denied stop is authoritative. Only the explicit emergency action
+    # may override it; migration must never terminate an active policy change.
+    Invoke-RemediatorServiceAction -Action stop | Out-Null
     for($i=0;$i -lt 30;$i++){ if(!(Get-RemediatorService)){ break }; Start-Sleep -Milliseconds 250 }
+    if(Get-RemediatorService){throw 'The previous instance has not stopped. Wait for its operations to finish before starting this release.'}
     Remove-Item -LiteralPath $stateFile -Force -ErrorAction SilentlyContinue
 }
 

@@ -1,11 +1,11 @@
-# Actual endpoint verifier; all SAM/CIM/AD/remoting functions are fixture doubles.
+﻿# Actual endpoint verifier; all SAM/CIM/AD/remoting functions are fixture doubles.
 $ErrorActionPreference='Stop';Set-StrictMode -Version Latest
 $repo=Split-Path $PSScriptRoot -Parent;$tokens=$null;$errors=$null
 $ast=[Management.Automation.Language.Parser]::ParseFile((Join-Path $repo 'backend/PowerShell/GpoWorkflow.Worker.ps1'),[ref]$tokens,[ref]$errors)
 if($errors.Count){throw ($errors|Out-String)}
 foreach($fn in $ast.FindAll({param($n)$n -is [Management.Automation.Language.FunctionDefinitionAst]},$false)){. ([scriptblock]::Create($fn.Extent.Text))}
 function Check($ok,$message){if(!$ok){throw $message};Write-Output ('PASS '+$message)}
-$cfg=@{domainController='dc.example.test';allowedHosts=@('ws.example.test')}
+$cfg=@{domain='example.test';domainController='dc.example.test';allowedHosts=@('ws.example.test')}
 $plan=@{selection=@{scopeDn='OU=Pilot,DC=example,DC=test'};preview=@{impact=$null;verificationComputers=@('ws.example.test')}}
 $map=@{handler='SecurityTemplate';scope='Computer';domainPolicySensitive=$false;requiresInput=$false;allowValueOverride=$false;comparator=$null;items=@(@{section='System Access';key='EnableGuestAccount';name=$null;guid=$null;type='Integer';value=@('0')})}
 $script:useCim=$false;$script:readDenied=$false;$script:domainRole=3

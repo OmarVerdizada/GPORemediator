@@ -33,9 +33,9 @@
     const quality=window.GpoUiDomain.classify(run),state=String(run.result?.state||'').toUpperCase();
     if(state==='ROLLED_BACK')return {tone:'unknown',label:'Rolled back',run};
     if(active(run))return {tone:'unknown',label:'In progress',run};
+    if(quality.attention)return {tone:'warning',label:'Needs review',run};
     if(quality.custom)return {tone:'warning',label:'Custom value · benchmark not verified',run};
     if(quality.compliant)return {tone:'good',label:'Sample configuration verified',run};
-    if(quality.attention)return {tone:'warning',label:'Needs review',run};
     return {tone:'unknown',label:'Verification pending',run};
   }
   function domainHeader(s, domain, rules, open) {

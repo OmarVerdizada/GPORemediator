@@ -1,0 +1,21 @@
+const fs=require('fs'),vm=require('vm'),path=require('path');
+const root=path.resolve(__dirname,'../../../..'),window={};
+const output=path.join(root,'work/review3174');fs.mkdirSync(output,{recursive:true});
+const ctx=vm.createContext({window,Date,JSON,String,Number,Boolean,Map,Set,Intl});
+for(const name of ['ui-domain','product','enterprise-center'])vm.runInContext(fs.readFileSync(path.join(root,'frontend/source',name+'.js'),'utf8'),ctx);
+const run={id:'audit-fixture',updatedAt:'2026-10-31T00:00:00Z',plan:{actor:'EXAMPLE\\Operator',selection:{setting:'1.2.1',scopeDn:'DC=example,DC=test',itemValues:[['15']]},preview:{gpo:{name:'Example GPO'},desiredValue:'15',previousValue:'30'}},result:{state:'PUBLISHED',gpoPublished:true,linkVerified:true,effectiveStatus:'DOMAIN_VALUE_MATCHES_ON_SELECTED_DC',domainPolicy:{property:'LockoutDuration',value:'15',desiredValue:'15'},verification:{replicationConverged:true},refreshResults:[],endpointChecks:[{hostname:'dc.example.test',state:'VERIFIED',actualValue:'15'}]}};
+const findings=[];
+findings.push({case:'exact default recommendation classified as custom',classification:window.GpoUiDomain.classify(run),catalogLabel:window.GpoProduct.controlStatus({history:[run]},{id:'1.2.1'}).label});
+const mismatch=JSON.parse(JSON.stringify(run));mismatch.result.domainPolicy.value='30';mismatch.result.endpointChecks[0].actualValue='30';
+findings.push({case:'legacy AD mismatch report disagreement',controlClassification:window.GpoUiDomain.classify(mismatch),report:window.GpoEnterpriseCenter.record(mismatch),catalogLabel:window.GpoProduct.controlStatus({history:[mismatch]},{id:'1.2.1'}).label});
+const refresh=JSON.parse(JSON.stringify(run));refresh.result.refreshResults=[{computer:'dc.example.test',state:'FAILED',message:'fixture refresh failure'}];
+findings.push({case:'failed refresh report disagreement',controlClassification:window.GpoUiDomain.classify(refresh),reportStatus:window.GpoEnterpriseCenter.record(refresh).status});
+findings.push({case:'offline domain impact',impact:window.GpoUiDomain.impact({automation:'Automated',domainPolicySensitive:true,requiresGpUpdate:true})});
+fs.writeFileSync(path.join(output,'frontend-repros.json'),JSON.stringify(findings,null,2));
+for(const item of findings)console.log(JSON.stringify(item));
+vm.runInContext(fs.readFileSync(path.join(root,'frontend/source/operation-monitor.js'),'utf8'),Object.assign(ctx,{document:{hidden:false,activeElement:null},location:{hash:'#/control'},crypto:{randomUUID:()=> 'fixture'}}));
+(async()=>{let apiCalls=0,failReload=true;const state={session:{mode:'WINDOWS'},history:[],workflowJobs:[],plan:run.plan,selectedRule:{backendSetting:'1.2.1'}};
+const api=async(p,body)=>{apiCalls++;if(body)return {id:'queued-fixture',state:'QUEUED'};if(failReload&&p==='/workflows')throw Error('Transient reload failure');return [];};
+const monitor=window.GpoOperationMonitor.create({state,api,render(){}});try{await monitor.submitSingle('apply',run.id,{confirmation:'APPLY'});}catch{}
+failReload=false;const before=apiCalls;await monitor.poll();findings.push({case:'accepted job reload failure disables polling on control page',acceptedJobState:state.singleOperation.job.state,knownWorkflowJobs:state.workflowJobs.length,newApiCallsAfterRecovery:apiCalls-before});
+fs.writeFileSync(path.join(output,'frontend-repros.json'),JSON.stringify(findings,null,2));console.log(JSON.stringify(findings.at(-1)));})();

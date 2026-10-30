@@ -16,7 +16,7 @@
     const replication = result.verification?.replicationConverged ? 'converged' : (result.verification ? 'pending' : 'not_checked');
     const effective = domainMismatch(result)?'failed':effectiveVerified(result.effectiveStatus)&&coverageVerified(result) ? 'verified' : bad(result.effectiveStatus) ? 'failed' : 'pending';
     const attention = bad(result.state) || publication === 'failed' || effective === 'failed' || (result.refreshResults||[]).some(x=>upper(x.state)==='FAILED');
-    const custom=!!run?.plan?.selection?.itemValues;
+    const custom=run?.plan?.preview?.customValues??!!run?.plan?.selection?.itemValues;
     const compliant = !upper(result.state).startsWith('ROLLED_BACK') && !custom && !attention && publication === 'published' && result.linkVerified === true && replication === 'converged' && effective === 'verified';
     return { publication, replication, effective, attention, compliant, custom };
   }
@@ -43,7 +43,7 @@
   }
   function impact(mapping) {
     const reviewed=mapping&&mapping.automation!=='Automated';
-    const level = mapping?.operationalImpact || (reviewed?'HIGH':'LOW');
+    const level = mapping?.operationalImpact || (reviewed||mapping?.domainPolicySensitive||mapping?.requiresRestart?'HIGH':mapping?.requiresGpUpdate||['SecurityTemplate','AdvancedAudit'].includes(mapping?.handler)?'MEDIUM':'LOW');
     const normalized = upper(level);
     return normalized === 'HIGH'
       ? { name: 'High', cls: 'high', copy: mapping?.impactReason || (reviewed?'Environment-specific OS, server-role or account exceptions require explicit review before execution.':'Requires a constrained rollout and explicit dependency review.') }

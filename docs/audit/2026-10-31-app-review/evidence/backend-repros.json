@@ -1,0 +1,38 @@
+[
+  {
+    "test": "escaped-comma DN suffix treated as descendant",
+    "authorizedOu": "OU=Servers,DC=example,DC=test",
+    "outsideOu": "OU=Outside\\,OU=Servers,DC=example,DC=test",
+    "authorized": true
+  },
+  {
+    "test": "history hard cap",
+    "stored": 201,
+    "apiReturned": 200
+  },
+  {
+    "test": "evidence omissions",
+    "liveRefreshResults": 1,
+    "exportHasRefreshResults": false,
+    "exportHasEndpointCoverage": false,
+    "exportHasRefreshCoverage": false
+  },
+  {
+    "test": "HTML workflow report hardcodes enabled link",
+    "actualLinkEnabled": false,
+    "reportLinkRow": "\u003Ctr\u003E\u003Ctd\u003ELink\u003C/td\u003E\u003Ctd\u003EAbsent\u003C/td\u003E\u003Ctd\u003EEnabled; preserve existing order, or append a new link\u003C/td\u003E\u003C/tr\u003E"
+  },
+  {
+    "test": "domain scan silently becomes local account scan",
+    "requested": "Domain",
+    "forwarded": "LocalComputers",
+    "state": "NOT_CHECKED",
+    "message": "LOCAL_ACCOUNT_OU_REQUIRED"
+  },
+  {
+    "test": "discovery stale compare-and-swap after heartbeat",
+    "inventoryUpdateAccepted": false,
+    "sessionInventoryCount": 1,
+    "discoveredInventoryCount": 2
+  }
+]

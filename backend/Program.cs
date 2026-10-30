@@ -274,7 +274,13 @@ app.MapGet("/api/gpo/settings",()=>ProductionGpoMappings.Settings.Select(x=>new 
     operationalImpact=!x.Writable||x.DomainPolicySensitive||x.RequiresRestart?"HIGH":x.RequiresGpUpdate||x.Handler is "SecurityTemplate" or "AdvancedAudit"?"MEDIUM":"LOW",
     impactReason=!x.Writable?"Environment-specific OS, server-role or account exceptions require explicit review before execution.":x.DomainPolicySensitive?"Domain-wide authentication or lockout behavior may change.":x.RequiresRestart?"A restart-sensitive policy is involved.":x.RequiresGpUpdate?"Endpoint policy refresh and staged verification are required.":"The mapping is scoped and still requires preview and verification."
 }));
-app.MapGet("/api/gpo/history",(HttpContext context,GpoWorkflowService service)=>service.History(Operator(context)));
+app.MapGet("/api/gpo/history",(HttpContext context,GpoWorkflowService service,int offset=0,int limit=200,long? snapshot=null)=>{
+    var page=service.HistoryPage(Operator(context),offset,limit,snapshot);
+    context.Response.Headers["X-History-Total"]=page.Total.ToString(System.Globalization.CultureInfo.InvariantCulture);
+    context.Response.Headers["X-History-Snapshot"]=page.Snapshot.ToString(System.Globalization.CultureInfo.InvariantCulture);
+    if(page.NextOffset is int next)context.Response.Headers["X-History-Next-Offset"]=next.ToString(System.Globalization.CultureInfo.InvariantCulture);
+    return Results.Json(page.Items);
+});
 app.MapGet("/api/gpo/{id}/evidence",(string id,HttpContext context,GpoWorkflowService service)=>service.Evidence(id,Operator(context)));
 app.MapPost("/api/gpo/target-access",async(GpoSelection request,HttpContext context,GpoWorkflowService service,CancellationToken ct)=>await service.CheckTargetAccessAsync(GpoToken(context),Operator(context),request,ct));
 app.MapPost("/api/gpo/preview",async(GpoSelection request,HttpContext context,GpoWorkflowService service,CancellationToken ct)=>await service.PreviewAsync(GpoToken(context),Operator(context),request,ct));

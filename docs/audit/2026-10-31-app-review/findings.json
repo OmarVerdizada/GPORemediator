@@ -1,0 +1,450 @@
+{
+  "date": "2026-10-31",
+  "timezone": "Asia/Baku",
+  "version": "3.17.4",
+  "commit": "ea5dcf7e85c2adac26dae33c676b81157c20b40c",
+  "scope": "Frontend/backend/PowerShell/authorization/reports/launcher/CI; local static and controlled runtime review",
+  "liveAd": false,
+  "codeFixesApplied": true,
+  "total": 18,
+  "counts": {
+    "P1": 4,
+    "P2": 11,
+    "P3": 3
+  },
+  "findings": [
+    {
+      "id": "A01",
+      "priority": "P1",
+      "status": "RESOLVED_LOCAL",
+      "title": "Aktiv əməliyyatın Stop qoruması launcher tərəfindən keçilə bilir",
+      "area": "Launcher / recovery",
+      "sources": [
+        {
+          "file": "GpoRemediator.ps1",
+          "line": 445
+        },
+        {
+          "file": "GpoRemediator.ps1",
+          "line": 460
+        }
+      ],
+      "proof": "Stop-StaleProductInstance təkrar sınağında normal Stop aktiv əməliyyat səbəbilə rədd edildi. Buna baxmayaraq catch Stop-Process -Force çağırdı: forcedStopInvoked=true. Real proses dayandırılmadı; çağırış mock idi.",
+      "impact": "Fərqli qovluqdakı yeni versiyanı açmaq davam edən Apply/backup/rollback prosesini kəsə bilər. DC-də iş davam edərkən yerli qeyd qeyri-müəyyən qala bilər.",
+      "recommendation": "403/423 kimi normal rədd cavablarını yuxarı qaytarmaq; zorla dayandırmanı yalnız ayrıca, açıq emergency əməliyyatına buraxmaq.",
+      "acceptance": "Aktiv iş üçün migration və ikinci launcher açılışı Force çağırmamalı, mövcud iş tamamlanmalıdır.",
+      "resolution": "RESOLUTION.md#application-audit-resolution--3175"
+    },
+    {
+      "id": "A02",
+      "priority": "P1",
+      "status": "RESOLVED_LOCAL",
+      "title": "Hidden GPO faylları drift fingerprint-inə daxil edilmir",
+      "area": "PowerShell / rollback integrity",
+      "sources": [
+        {
+          "file": "backend/PowerShell/SecurityTemplate.psm1",
+          "line": 86
+        },
+        {
+          "file": "backend/PowerShell/SecurityTemplate.psm1",
+          "line": 92
+        }
+      ],
+      "proof": "Real müvəqqəti Registry.pol faylı Hidden atributu ilə yaradıldı. Məzmun before-dan after-a dəyişdi, atribut yenidən Hidden oldu. Get-NormalizedGpoContentFingerprint əvvəl və sonra eyni hash verdi.",
+      "impact": "Hidden fayldakı kənar dəyişiklik tam GPO snapshot rollback-inin drift qorumasından yayınır. Bərpa həmin dəyişikliyi əzə bilər.",
+      "recommendation": "Hidden/System daxil olmaqla bütün uyğun GPO fayllarını -Force ilə hash-ləmək; reparse və oxuma xətalarında fail closed saxlamaq.",
+      "acceptance": "Normal, Hidden və System policy fayllarının hər birində məzmun dəyişikliyi fingerprint-i dəyişməli və rollback-i bloklamalıdır.",
+      "resolution": "RESOLUTION.md#application-audit-resolution--3175"
+    },
+    {
+      "id": "A03",
+      "priority": "P1",
+      "status": "RESOLVED_LOCAL",
+      "title": "Backup readiness təhlükəli child workspace ACL-ni nəzərdən qaçırır",
+      "area": "PowerShell / backup trust",
+      "sources": [
+        {
+          "file": "backend/PowerShell/GpoWorkflow.Worker.ps1",
+          "line": 335
+        },
+        {
+          "file": "backend/PowerShell/GpoWorkflow.Worker.ps1",
+          "line": 363
+        }
+      ],
+      "proof": "Real private temp qovluğunda backup root yalnız owner üçün təhlükəsiz edildi, mövcud GpoWorkflow child-na Everyone Modify verildi. Environment-Status ready=true və backup-acl=PASS qaytardı; childBroadModify=true, workspaceAclRead=false idi. AD və real backup repository dəyişdirilmədi.",
+      "impact": "Mövcud child ACL inheritance-dan ayrılıbsa, backup və manifestlər geniş qrupa yazıla bilən halda readiness yaşıl qala bilər. Rollback etibarlı snapshot-a söykəndiyindən bu saxlanma bütövlüyü boşluğudur; real istismar bu auditdə edilməyib.",
+      "recommendation": "Root ilə yanaşı faktiki GpoWorkflow/run/backup/manifest yollarının təhlükəsiz ACL və reparse vəziyyətini yoxlamaq; qeyri-müəyyən və təhlükəli vəziyyətdə Apply/rollback-i bloklamaq. Mövcud legitim delegation-u kor-koranə silməmək.",
+      "acceptance": "Safe root + Everyone/Authenticated Users Modify child halı required ACL check-də fail olmalı; yalnız konkret delegated identity-yə verilmiş legitim hüquqlar işləməlidir.",
+      "resolution": "RESOLUTION.md#application-audit-resolution--3175"
+    },
+    {
+      "id": "A04",
+      "priority": "P1",
+      "status": "RESOLVED_LOCAL",
+      "title": "Reports səhifəsi və ixraclar mismatch-i verified göstərə bilir",
+      "area": "Frontend / reports / evidence classification",
+      "sources": [
+        {
+          "file": "frontend/source/enterprise-center.js",
+          "line": 15
+        },
+        {
+          "file": "frontend/source/enterprise-center.js",
+          "line": 18
+        },
+        {
+          "file": "frontend/source/enterprise-center.js",
+          "line": 20
+        }
+      ],
+      "proof": "Köhnə DOMAIN_VALUE_MATCHES_ON_SELECTED_DC qeydi üçün actual AD=30, requested=15 verildi. Control classifier effective=failed dedi; Reports EVIDENCE_VERIFIED qaytardı. Brauzerdə də 30 → 15 / observed 30 yaşıl göstərildi. Ayrı sınaqda failed refresh də report statusunu verified-dan çıxarmadı.",
+      "impact": "Reports sayğacları, JSON/CSV/HTML/PDF nəticələri operator ekranındakı xəbərdarlıqla ziddiyyət yarada və yanlış audit sübutu verə bilər.",
+      "recommendation": "Reports üçün ayrıca uğur məntiqi əvəzinə vahid assurance/classification istifadə etmək; DomainMismatch, refresh failures və endpoint states-i nəzərə almaq.",
+      "acceptance": "Eyni run Control, Reports, bütün ixrac formatları və sayğaclarda eyni nəticə verməlidir; 30/15 və failed refresh yaşıl olmamalıdır.",
+      "resolution": "RESOLUTION.md#application-audit-resolution--3175"
+    },
+    {
+      "id": "A05",
+      "priority": "P2",
+      "status": "RESOLVED_LOCAL",
+      "title": "Dəqiq tövsiyə planları custom sayılır və xəta etiketi gizlənir",
+      "area": "Frontend / catalog / dashboard / stepper",
+      "sources": [
+        {
+          "file": "frontend/source/ui-domain.js",
+          "line": 19
+        },
+        {
+          "file": "frontend/source/product.js",
+          "line": 36
+        },
+        {
+          "file": "frontend/source/control-view.js",
+          "line": 27
+        },
+        {
+          "file": "frontend/source/workspace.js",
+          "line": 203
+        }
+      ],
+      "proof": "Yeni normal plan itemValues=[[15]] saxlayır. Dəyər dəqiq verified olsa da custom=true və compliant=false olur. Product.controlStatus attention-dan əvvəl custom-u yoxladığından mismatch üçün də Custom value · benchmark not verified göstərir.",
+      "impact": "Tövsiyə ilə tətbiq olunan əksər yeni planlar Dashboard Verified results sayına və Verify tamamlanma işarəsinə düşmür; kataloq konkret Needs review siqnalını gizlədir.",
+      "recommendation": "Exact intent ilə benchmark-dan fərqli custom seçimi ayırmaq; real xəta/attention etiketini custom qeydindən əvvəl göstərmək.",
+      "acceptance": "Tövsiyə ilə verified plan custom kimi səhv etiketlənməməli; mismatch və refresh failure həmişə Needs review görünməlidir.",
+      "resolution": "RESOLUTION.md#application-audit-resolution--3175"
+    },
+    {
+      "id": "A06",
+      "priority": "P2",
+      "status": "RESOLVED_LOCAL",
+      "title": "Tarixçə 200 qeyddə kəsilir, UI bütün tarixçəni axtara bilmir",
+      "area": "Backend API / history / reports",
+      "sources": [
+        {
+          "file": "backend/Infrastructure/Store.cs",
+          "line": 140
+        },
+        {
+          "file": "backend/Infrastructure/Store.cs",
+          "line": 144
+        }
+      ],
+      "proof": "İn-memory bazaya 201 run yazıldı. Store.List 201 gördü, service.History yalnız 200 qaytardı. Endpoint-də cursor, total və əlavə səhifə parametri yoxdur.",
+      "impact": "Köhnə əməliyyatlar Operations, report filterləri və rollback seçimindən yox olur. 405 control-un hamısına bir əməliyyat edildikdə belə bütün sübutlar UI-dan əlçatan olmur. DB qeydləri silinmir.",
+      "recommendation": "Server-side pagination, axtarış/filter, total və birbaşa operation ID axtarışı əlavə etmək; report ixracının tam və ya səhifəlik olduğunu açıq göstərmək.",
+      "acceptance": "201/405/1000 qeydin hamısı səhifələmə və axtarışla tapılmalı, köhnə rollback qeydi açılmalıdır.",
+      "resolution": "RESOLUTION.md#application-audit-resolution--3175"
+    },
+    {
+      "id": "A07",
+      "priority": "P2",
+      "status": "RESOLVED_LOCAL",
+      "title": "Discovery nəticəsi heartbeat ilə toqquşanda sessiyada itir",
+      "area": "Backend / concurrency / inventory",
+      "sources": [
+        {
+          "file": "backend/Services/GpoWorkflowService.cs",
+          "line": 162
+        },
+        {
+          "file": "backend/Services/GpoWorkflowService.cs",
+          "line": 168
+        }
+      ],
+      "proof": "Discovery-nin saxladığı connection snapshot-dan sonra SessionStatus çağırıldı. Eyni TryUpdate əməliyyatı false qaytardı; yeni inventory 2 GPO olsa da sessiya 1 GPO saxladı. DiscoverAsync bu false nəticəni yoxlamır.",
+      "impact": "UI yeni GPO/OU-nu görə bilər, sonrakı Preview isə serverdə köhnə inventory səbəbilə seçimi rədd edə bilər. Görünən konsolun heartbeat-i bu yarışa şərait yaradır.",
+      "recommendation": "Yenilənmiş connection-u əsas götürən CAS retry/update tətbiq etmək; expiry və WriteTargets məlumatını itirmədən yalnız inventory-ni dəyişmək.",
+      "acceptance": "Discovery davam edərkən paralel SessionStatus/Inventory sorğuları yeni GPO və OU-ların saxlanmasına mane olmamalıdır.",
+      "resolution": "RESOLUTION.md#application-audit-resolution--3175"
+    },
+    {
+      "id": "A08",
+      "priority": "P2",
+      "status": "RESOLVED_LOCAL",
+      "title": "Operation evidence JSON refresh və coverage sübutlarını buraxır",
+      "area": "Backend / evidence export",
+      "sources": [
+        {
+          "file": "backend/Domain/GpoWorkflow.cs",
+          "line": 73
+        },
+        {
+          "file": "backend/Services/GpoWorkflowService.cs",
+          "line": 389
+        }
+      ],
+      "proof": "Run-da bir failed RefreshResult, EndpointCoverage və RefreshCoverage vardı. service.Evidence JSON-unda refreshResults, endpointCoverage və refreshCoverage sahələrinin heç biri olmadı. Before AD snapshot da ayrıca export müqaviləsində yoxdur.",
+      "impact": "Endirilən operation evidence-dən gpupdate nəticəsini və bütün hədəflərin yoxlanılıb-yoxlanmadığını müstəqil qiymətləndirmək olmur. Domain control-da GPO before ilə actual AD before fərqlənə bilər.",
+      "recommendation": "Evidence schema-sına per-host refresh nəticələri, hər iki coverage, pinned target konteksti və beforeDomainPolicy əlavə etmək; integrity hash-ə daxil etmək.",
+      "acceptance": "UI-da görünən refresh failure, host sayları və AD əvvəlki dəyər export-da da saxlanmalıdır; hash bu sahələrin dəyişikliyini tutmalıdır.",
+      "resolution": "RESOLUTION.md#application-audit-resolution--3175"
+    },
+    {
+      "id": "A09",
+      "priority": "P2",
+      "status": "RESOLVED_LOCAL",
+      "title": "Re-verify cari GPO policy-half disabled vəziyyətini yoxlamır",
+      "area": "PowerShell / verification / applicability",
+      "sources": [
+        {
+          "file": "backend/PowerShell/GpoWorkflow.Worker.ps1",
+          "line": 948
+        }
+      ],
+      "proof": "ComputerSettingsDisabled GPO fixture-i ilə Verify-Published çağırıldı. Status oxuma sayı 0 idi, published=true, linked=true, effective=VERIFIED_ON_SAMPLE qayıtdı. Endpoint registry dəyəri əvvəlki kimi saxlanmışdı.",
+      "impact": "Apply-dən sonra GPO-nun uyğun hissəsi söndürülsə də yoxlama bunu ayrıca bildirmir; Refresh preflight də bu helper-ə söykənir. Bu nəticə həmin GPO-nun tətbiq olunduğunun sübutu deyil.",
+      "recommendation": "Verify və Refresh preflight-də seçilmiş GPO statusunu/uyğun policy half-ı yenidən oxumaq və disabled halını explicit applicability failure kimi göstərmək.",
+      "acceptance": "Computer/User/AllSettingsDisabled keçidləri ayrıca diaqnostika yaratmalı; aktiv publication/applicability kimi qəbul edilməməlidir.",
+      "resolution": "RESOLUTION.md#application-audit-resolution--3175"
+    },
+    {
+      "id": "A10",
+      "priority": "P2",
+      "status": "RESOLVED_LOCAL",
+      "title": "GitHub Actions silinmiş test fayllarını çağırır",
+      "area": "CI / regression reliability",
+      "sources": [
+        {
+          "file": ".github/workflows/security-checks.yml",
+          "line": 75
+        },
+        {
+          "file": ".github/workflows/security-checks.yml",
+          "line": 87
+        },
+        {
+          "file": ".github/workflows/security-checks.yml",
+          "line": 104
+        }
+      ],
+      "proof": "Workflow-da 34 script istinadı yoxlandı. Test-Studio-UI.cjs, Test-RecipeWorkspace.cjs və Test-WorkflowUi.cjs repoda yoxdur. Yerli 69-check runner bu workflow ilə eyni giriş nöqtəsi deyil.",
+      "impact": "Bu CI job həmin sətirlərə çatanda MODULE_NOT_FOUND ilə dayanır. Yerli auditin keçməsi GitHub Actions-ın keçdiyini təsdiqləmir. Remote Actions run nəticəsi bu auditdə təsdiqlənməyib.",
+      "recommendation": "Retired UI testlərini workflow-dan çıxarmaq, cari suite ilə sinxronlaşdırmaq və mümkün qədər vahid audit entry point işlətmək.",
+      "acceptance": "CI-də istinad edilən bütün scriptlər mövcud olmalı; cari exact-value, domain mismatch, atomic text və live UI regresiyaları pipeline-a daxil edilməlidir.",
+      "resolution": "RESOLUTION.md#application-audit-resolution--3175"
+    },
+    {
+      "id": "A11",
+      "priority": "P2",
+      "status": "RESOLVED_LOCAL",
+      "title": "Domain account access report AD property yazı hüququnu yoxlamır",
+      "area": "Permissions / diagnostics",
+      "sources": [
+        {
+          "file": "backend/PowerShell/PolicyDiagnostics.ps1",
+          "line": 2
+        },
+        {
+          "file": "backend/PowerShell/PolicyDiagnostics.ps1",
+          "line": 25
+        }
+      ],
+      "proof": "Domain property write hüququ olmayan fixture-də GPO/link/file hüquqları ALLOWED edildi. Access-Report ready=true verdi, Domain-PolicyAccess çağırış sayı 0 oldu. Əsl Preview sonradan həmin ayrıca yoxlamanı aparır.",
+      "impact": "Access & evidence səhifəsində exact permissions ALLOWED görünsə də domain account Apply üçün zəruri AD atribut hüququ çatışmaya bilər. Sonrakı Preview bunu təhlükəsiz bloklayır.",
+      "recommendation": "Domain-sensitive mapping üçün dəqiq domain atribut yazı hüququnu access report-a ayrıca required sətir kimi əlavə etmək.",
+      "acceptance": "GPO edit/link icazəsi olan, AD lockout/password atributunu yaza bilməyən hesab üçün report ready=false və konkret çatışmayan hüquq göstərməlidir.",
+      "resolution": "RESOLUTION.md#application-audit-resolution--3175"
+    },
+    {
+      "id": "A12",
+      "priority": "P2",
+      "status": "RESOLVED_LOCAL",
+      "title": "Workflow HTML hesabatı link nəticəsini sabit Enabled yazır",
+      "area": "Backend / HTML report",
+      "sources": [
+        {
+          "file": "backend/Infrastructure/WorkspaceEndpoints.cs",
+          "line": 49
+        }
+      ],
+      "proof": "Real Report generatoruna ROLLED_BACK run və currentLink.enabled=false verildi. Link sətri yenə Absent / Enabled; preserve existing order, or append a new link çıxardı.",
+      "impact": "Approved / recorded result sütununda niyyət və faktiki nəticə qarışır. Rollback/failure/missing-link halında oxucu linkin enabled olduğunu düşünə bilər.",
+      "recommendation": "Link intent və observed currentLink-i ayrı sahələrdə göstərmək; ölçü yoxdursa unknown yazmaq, Enabled nəticəsini sabit mətnlə verməmək.",
+      "acceptance": "Created/enabled/disabled/absent/rolled-back hallarının hər biri düzgün link nəticəsini göstərməlidir.",
+      "resolution": "RESOLUTION.md#application-audit-resolution--3175"
+    },
+    {
+      "id": "A13",
+      "priority": "P2",
+      "status": "RESOLVED_LOCAL",
+      "title": "Domain scan sorğusu lokal account scan-ə çevrilir",
+      "area": "Backend / retained scan API",
+      "sources": [
+        {
+          "file": "backend/Services/WorkspaceWorkflows.cs",
+          "line": 190
+        }
+      ],
+      "proof": "ProcessScan-a accountScope=Domain, domain-root target və 1.2.1 verildi. O, Preview-a LocalComputers göndərdi. Həqiqi ValidateTarget nəticəsi LOCAL_ACCOUNT_OU_REQUIRED oldu, scan row NOT_CHECKED saxlandı.",
+      "impact": "Retained scan API domain account control-larını istənilən scope ilə yoxlamır. Cari UI-da scan səhifəsi yoxdur; bu backend/legacy API funksiyasının problemidir.",
+      "recommendation": "Sorğunun account scope niyyətini qorumaq və ya endpoint-i açıq computer-OU-only etmək; dəstəklənməyən domain sorğusunu əvvəlcədən rədd etmək.",
+      "acceptance": "Domain root scan 1.1/1.2 account control-larını AD domain kontekstində yoxlamalı; OU scan lokal hesab kontekstində qalmalıdır.",
+      "resolution": "RESOLUTION.md#application-audit-resolution--3175"
+    },
+    {
+      "id": "A14",
+      "priority": "P2",
+      "status": "RESOLVED_LOCAL",
+      "title": "GPO və OU modalında klaviatura fokusu arxa səhifəyə çıxır",
+      "area": "Frontend / accessibility / target selection",
+      "sources": [
+        {
+          "file": "frontend/source/workspace.js",
+          "line": 386
+        },
+        {
+          "file": "frontend/source/control-view.js",
+          "line": 47
+        },
+        {
+          "file": "frontend/source/gpo-scope-picker.js",
+          "line": 73
+        }
+      ],
+      "proof": "Real headless Chromium-da hər modalın son düyməsinə fokus verilib Tab basıldı. GPO və OU üçün fokusun dialoqdan kənara çıxması true oldu. JavaScript page error yox idi.",
+      "impact": "aria-modal pəncərə açıqkən klaviatura istifadəçisi arxa formaya və əməliyyat elementlərinə keçə bilir. Modalın öz Tab trap-i yoxdur; mövcud trap yalnız product-drawer və confirm-dialog üçündür.",
+      "recommendation": "Bütün modal növləri üçün ümumi focus trap, background inert və açan düyməyə focus return tətbiq etmək.",
+      "acceptance": "Tab/Shift+Tab modal daxilində dövr etməli; Escape bağlamalı; background input/action-lar fokuslana bilməməlidir.",
+      "resolution": "RESOLUTION.md#application-audit-resolution--3175"
+    },
+    {
+      "id": "A15",
+      "priority": "P2",
+      "status": "RESOLVED_LOCAL",
+      "title": "Accepted job-dan sonra reload xətası live polling-i dayandıra bilir",
+      "area": "Frontend / asynchronous operations",
+      "sources": [
+        {
+          "file": "frontend/source/operation-monitor.js",
+          "line": 17
+        },
+        {
+          "file": "frontend/source/operation-monitor.js",
+          "line": 24
+        }
+      ],
+      "proof": "Server apply job-unu QUEUED kimi qəbul etdi. Sonrakı reload üçün /workflows GET bir dəfə xəta verdi. Bağlantı bərpa ediləndən sonra #/control-da poll çağırıldı, amma yeni API çağırışı sayı 0 oldu: queued job singleOperation-da olsa da workflowJobs boş idi.",
+      "impact": "Accepted əməliyyat növbədə qaldıqda control səhifəsi yenilənməyə bilər. Manual Refresh və ya Operations-a keçid tələb olunur; job serverdə yenə mövcuddur.",
+      "recommendation": "Polling şərtinə aktiv singleOperation.job-u daxil etmək; acceptance-dan sonrakı reload xətasını submission failure-dan ayırmaq və təkrar read-only poll etmək.",
+      "acceptance": "Accepted → bir transient GET failure → recovery ssenarisində control səhifəsi istifadəçi müdaxiləsi olmadan terminal nəticəyə çatmalıdır.",
+      "resolution": "RESOLUTION.md#application-audit-resolution--3175"
+    },
+    {
+      "id": "A16",
+      "priority": "P3",
+      "status": "RESOLVED_LOCAL",
+      "title": "Metadata fallback domain policy riskini Low göstərir",
+      "area": "Frontend / risk display",
+      "sources": [
+        {
+          "file": "frontend/source/ui-domain.js",
+          "line": 46
+        }
+      ],
+      "proof": "automation=Automated və domainPolicySensitive=true olan, operationalImpact sahəsi olmayan mapping üçün impact() Low qaytardı. Normal connected settings API HIGH qaytarır; problem fallback/offline kontekstinə aiddir.",
+      "impact": "Offline/manual hazırlıq görünüşündə domain-wide əməliyyatın risk etiketi aşağı görünə bilər.",
+      "recommendation": "Fallback hesablamasında domainPolicySensitive və requiresRestart flag-lərini də nəzərə almaq.",
+      "acceptance": "Server annotation-u olmadıqda belə domain/restart-sensitive mapping High olmalıdır.",
+      "resolution": "RESOLUTION.md#application-audit-resolution--3175"
+    },
+    {
+      "id": "A17",
+      "priority": "P3",
+      "status": "RESOLVED_LOCAL",
+      "title": "Silinmiş axınlardan qalan və kölgələnən frontend kodu var",
+      "area": "Frontend / maintainability",
+      "sources": [
+        {
+          "file": "frontend/source/workspace.js",
+          "line": 221
+        },
+        {
+          "file": "frontend/source/workspace.js",
+          "line": 222
+        },
+        {
+          "file": "frontend/source/client.js",
+          "line": 11
+        },
+        {
+          "file": "frontend/source/operator-sign-in.js",
+          "line": 33
+        }
+      ],
+      "proof": "notifications() eyni scope-da iki dəfə elan edilib; sonuncu birincini əvəz edir. ephemeralCredential.set üçün application source-da çağırış yoxdur; cari sign-in onu clear edir, credential replay infrastrukturu isə qalıb.",
+      "impact": "Hazırkı normal sign-in axınında bu cache doldurulmur. Qalıq kod sessiya/restart davranışını anlamağı və dəyişməyi çətinləşdirir; bu ayrıca credential leak sübutu deyil.",
+      "recommendation": "Kölgələnən funksiyanı və artıq işləməyən replay/cache axınını təmizləmək; cari no-browser-password-retention davranışını qorumaq.",
+      "acceptance": "Bir notifications implementasiyası və sənədlə uyğun, istifadə olunan sessiya bərpa axını qalmalıdır.",
+      "resolution": "RESOLUTION.md#application-audit-resolution--3175"
+    },
+    {
+      "id": "A18",
+      "priority": "P3",
+      "status": "RESOLVED_LOCAL",
+      "title": "Security və retention sənədləri cari davranışla uyğun deyil",
+      "area": "Documentation / operational contract",
+      "sources": [
+        {
+          "file": "DATA-RETENTION.md",
+          "line": 5
+        },
+        {
+          "file": "USER-GUIDE.md",
+          "line": 5
+        },
+        {
+          "file": "SECURITY.md",
+          "line": 27
+        }
+      ],
+      "proof": "DATA-RETENTION Config daxilində operator roles saxlandığını yazır. Cari user guide və OperatorSecurity isə application role allowlist olmadığını deyir. SECURITY.md isə yeni pinned/paged yoxlamalar əvəzinə hələ maksimum beş endpoint sample təsvir edir.",
+      "impact": "Admin və auditor saxlanan məlumat və səlahiyyət modeli barədə ziddiyyətli məlumat alır.",
+      "recommendation": "Retention/security/user guide mətnlərini cari Windows identity + delegated AD execution modeli ilə sinxronlaşdırmaq.",
+      "acceptance": "Sənədlərdə mövcud olmayan role konfiqurasiyası göstərilməməlidir.",
+      "resolution": "RESOLUTION.md#application-audit-resolution--3175"
+    }
+  ],
+  "validationCandidates": [
+    {
+      "id": "C01",
+      "status": "NEEDS_LIVE_VALIDATION",
+      "title": "Escaped-DN suffix comparison",
+      "note": "Synthetic helper accepts crafted suffix; canonical AD inventory end-to-end bypass not established",
+      "sources": [
+        {
+          "file": "backend/Domain/GpoWorkflow.cs",
+          "line": 107
+        }
+      ],
+      "reference": "https://learn.microsoft.com/en-us/previous-versions/windows/desktop/ldap/distinguished-names"
+    }
+  ],
+  "resolvedVersion": "3.17.5",
+  "resolution": "RESOLUTION.md",
+  "validation": "../3.17.5/test-results.json",
+  "resolutionStatus": "RESOLVED_LOCAL",
+  "openCount": 0,
+  "resolvedLocalCount": 18
+}

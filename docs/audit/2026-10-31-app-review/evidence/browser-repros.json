@@ -1,0 +1,7 @@
+{
+  "gpoModalTabEscapes": true,
+  "scopeModalClass": "visual-scope-modal",
+  "scopeModalTabEscapes": true,
+  "reportText": "EVIDENCE CENTER\nReports & evidence\n\nEvidence from recorded GPO operations. Not a full domain compliance certification.\n\nDiagnostics →\nRECORDED RUNS\n1\nEVIDENCE VERIFIED\n1\nNEEDS REVIEW\n0\nUNVERIFIED\n0\nCONTROLS WITHOUT RECORDS\n404\nReport filters\n\nOnly operations visible to the signed-in operator are included.\n\nSince date\nGPO\nAll\nAudit fixture GPO\nOU / DN\nEvidence status\nAll\nVerified evidence\nNot fully verified\nNeeds review\nJSON\nCSV\nHTML\nPDF / Print\n\nFor PDF, choose Save as PDF in the browser print dialog.\n\nBefore / after and evidence\n\n1 operation(s) · Unassessed controls are not counted as compliant\n\nCIS\tGPO · OU\tBefore / after\tObserved\tStatus\tBackup\n1.2.1\n31 Oct 2026, 04:00\n\tAudit fixture GPO\nDC=example,DC=test\n\t30 → 15\t30\tEVIDENCE VERIFIED\nDOMAIN_VALUE_MATCHES_ON_SELECTED_DC\n\t\n—",
+  "javascriptErrors": []
+}

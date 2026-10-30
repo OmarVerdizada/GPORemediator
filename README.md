@@ -1,4 +1,6 @@
-# GPO Remediator 3.17.4
+# GPO Remediator 3.17.5
+
+3.17.5 resolves the full application audit: safe migration, complete GPO fingerprints, backup ACL validation, consistent evidence status, paged history, inventory concurrency, complete exports, policy-half checks, modal focus and a unified CI audit. See [release notes](docs/RELEASE-3.17.5.md).
 
 3.17.4 pins selected remediation values exactly across the catalog, separates required-inclusion checks from exact equality, exposes checked link priority, rejects incompatible lockout dependencies before writes, and corrects legacy AD mismatch claims. See [release notes](docs/RELEASE-3.17.4.md).
 

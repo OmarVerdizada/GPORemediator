@@ -165,8 +165,11 @@ public sealed class GpoWorkflowService(IConfiguration config,Store store,Operati
         RequireReal();
         var inventory=Authorize(await Run<GpoInventory>("gpoInventory",c,new{},ct));
         GpoScriptWorkspaces.SyncInventory(inventory);
-        connections.TryUpdate(token,c with{Inventory=inventory},c);
+        UpdateInventory(token,actor,inventory);
         return inventory;
+    }
+    internal void UpdateInventory(string token,string actor,GpoInventory inventory){
+        while(true){var current=Get(token,actor);if(connections.TryUpdate(token,current with{Inventory=inventory},current))return;}
     }
     public async Task<object> CheckTargetAccessAsync(string token,string actor,GpoSelection selection,CancellationToken ct)
     {
@@ -204,12 +207,19 @@ public sealed class GpoWorkflowService(IConfiguration config,Store store,Operati
             store.Audit("GPO_PREVIEW_ACCESS_BLOCKED",actor,controlId:selection.Setting,gpoId:selection.GpoId,details:new{selection.ScopeDn,c.Inventory.ExecutionUser,error.Code});
             throw;
         }
+        preview=preview with{CustomValues=ProductionGpoMappings.IsCustomSelection(selection)};
         var authorized=AuthorizePreviewTarget(token,actor,selection,preview,requireWriteAccess);
         var plan=new GpoWorkflowPlan(Guid.NewGuid().ToString("N"),actor,c.Inventory.ExecutionUser,Mode,Domain,Dc,selection,preview,PolicyValues.Now(),PolicyValues.Hash(mapping),ConfigHash,authorized);
         store.Put("gpo_plans",plan.Id,plan);store.Audit("GPO_PLAN_PREPARED",actor,details:plan);
         return plan;
     }
-    public GpoWorkflowRun[] History(string actor)=>store.GpoRunsForActor(actor);
+    private static GpoWorkflowRun HistoryContext(GpoWorkflowRun run)=>run.Plan.Preview.CustomValues is not null?run:run with{Plan=run.Plan with{Preview=run.Plan.Preview with{CustomValues=ProductionGpoMappings.IsCustomSelection(run.Plan.Selection)}}};
+    public GpoWorkflowRun[] History(string actor)=>store.GpoRunsForActor(actor).Select(HistoryContext).ToArray();
+    public GpoHistoryPage HistoryPage(string actor,int offset,int limit,long? snapshot=null){
+        if(offset<0||limit is <1 or >500||snapshot<0)throw new PolicyException("INVALID_REQUEST","Choose a non-negative history offset and a page size from 1 to 500.");
+        var boundary=snapshot??store.GpoRunSnapshot(actor);var items=store.GpoRunsForActor(actor,limit,offset,boundary).Select(HistoryContext).ToArray();var total=store.GpoRunCount(actor,boundary);
+        return new(items,total,offset+items.Length<total?offset+items.Length:null,boundary);
+    }
     private void AssertContext(GpoWorkflowPlan p,Connection c,string actor)
     {
         if(!string.Equals(p.Actor,actor,StringComparison.OrdinalIgnoreCase)||p.Mode!=Mode||p.Domain!=Domain||p.DomainController!=Dc||!string.Equals(p.ExecutionUser,c.Inventory.ExecutionUser,StringComparison.OrdinalIgnoreCase)||!string.Equals(p.ConfigHash,ConfigHash,StringComparison.Ordinal))throw new PolicyException("GPO_PLAN_CONTEXT","Reconnect with the same execution account and unchanged authorization configuration, then prepare a new plan.");
@@ -386,11 +396,12 @@ public sealed class GpoWorkflowService(IConfiguration config,Store store,Operati
         var run=store.Require<GpoWorkflowRun>("gpo_runs",id);
         if(!string.Equals(run.Plan.Actor,actor,StringComparison.OrdinalIgnoreCase)) throw new PolicyException("NOT_FOUND","Operation not found.");
         // Each export represents the latest recorded run; preserve earlier snapshots by hash.
-        var evidence=new GpoEvidence("1.1","GPO Remediator","CIS v4.0.0",run.Id,run.UpdatedAt,run.Plan.Actor,
+        var evidence=new GpoEvidence("1.2","GPO Remediator","CIS v4.0.0",run.Id,run.UpdatedAt,run.Plan.Actor,
             run.Plan.ExecutionUser,run.Plan.Domain,run.Plan.DomainController,ProductionGpoMappings.Require(run.Plan.Selection.Setting).ControlId,run.Plan.Selection.Setting,
             run.Plan.Selection.GpoId,run.Plan.Preview.Gpo.Name,run.Plan.Selection.ScopeDn,run.Plan.Preview.PreviousValue,
             ProductionGpoMappings.Effective(run.Plan.Selection).DesiredDisplay(run.Plan.Selection),run.Result.State,run.Result.BackupId,run.Result.BackupDirectory,run.Result.EffectiveStatus,
-            run.Result.Verification,run.Plan.Preview.Warnings,"",run.Approval?.ChangeReference,run.Approval?.ApprovedBy,ProductionGpoMappings.Require(run.Plan.Selection.Setting).Handler,ProductionGpoMappings.Effective(run.Plan.Selection).Source,run.Result.EndpointChecks,run.CorrelationId,run.Result.CurrentValue,run.Plan.Preview.PreviousValueSource,run.Result.CurrentValueSource,run.Result.DomainPolicy,run.Result.CurrentLink);
+            run.Result.Verification,run.Plan.Preview.Warnings,"",run.Approval?.ChangeReference,run.Approval?.ApprovedBy,ProductionGpoMappings.Require(run.Plan.Selection.Setting).Handler,ProductionGpoMappings.Effective(run.Plan.Selection).Source,run.Result.EndpointChecks,run.CorrelationId,run.Result.CurrentValue,run.Plan.Preview.PreviousValueSource,run.Result.CurrentValueSource,run.Result.DomainPolicy,run.Result.CurrentLink,
+            run.Result.RefreshResults,run.Result.EndpointCoverage,run.Result.RefreshCoverage,run.Plan.Preview.DomainPolicy,run.Plan.Preview.VerificationComputers??run.Plan.Preview.RefreshComputers);
         evidence=evidence with{IntegrityHash=GpoWorkflowRules.EvidenceHash(evidence)};
         store.Put("gpo_evidence",id+"-"+evidence.IntegrityHash,evidence,"IMMUTABLE");
         return evidence;

@@ -28,6 +28,7 @@ function Invoke-WebRequest {
   $failure | Add-Member -NotePropertyName Response -NotePropertyValue ([pscustomobject]@{StatusCode=$(if($script:scenario -eq 'busy'){423}else{403})})
   throw $failure
  }
+ if($script:scenario -eq 'unreachable'){throw 'Fixture network timeout'}
  $script:running=$false
  return [pscustomobject]@{Content='{"action":"stop","accepted":true}'}
 }
@@ -48,6 +49,8 @@ try{
   $message='';try{Invoke-RemediatorServiceAction -Action stop | Out-Null}catch{$message=$_.Exception.Message}
   Assert-Fixture ($message -match 'denied|blocked' -and $script:killCount -eq 0 -and !(Test-Path -LiteralPath (Join-Path $work 'stop.request.json'))) ($scenario+' stop is reported without force-kill or stop marker')
  }
+ $script:running=$true;$script:scenario='unreachable';$message='';try{Invoke-RemediatorServiceAction -Action stop|Out-Null}catch{$message=$_.Exception.Message}
+ Assert-Fixture ($message -match 'did not confirm a safe stop' -and $script:killCount -eq 0 -and !(Test-Path -LiteralPath (Join-Path $work 'stop.request.json'))) 'unresponsive backend is never force-killed by normal Stop'
  # Keep the production route aligned with the tested native-client security contract.
  $program=Get-Content -LiteralPath (Join-Path $repo 'backend\Program.cs') -Raw
  $start=$program.IndexOf('app.MapPost("/api/service/{action}"')

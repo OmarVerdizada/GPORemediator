@@ -40,6 +40,7 @@ public static class GpoAssurance
     public static string[] Diagnose(GpoWorkflowResult r)
     {
         var notes=new List<string>();
+        if(r.EffectiveStatus=="GPO_POLICY_DISABLED")notes.Add("The selected GPO computer/user policy half is disabled. Review GPO Status in GPMC and create a fresh plan before applying or refreshing this policy.");
         if(DomainMismatch(r))notes.Add("The recorded AD domain value differs from the exact requested value. Benchmark threshold compliance is not proof that the requested change was applied. Re-verify live state and create a fresh exact-value plan if needed.");
         if(!r.GpoPublished)notes.Add("Check selected domain/DC/GPO, mapping storage/type, write authority, CSE metadata and local AD/SYSVOL versions.");
         if(!r.LinkVerified)notes.Add("Check selected target OU/domain, direct link enablement and priority.");

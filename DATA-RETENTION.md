@@ -2,7 +2,7 @@
 
 Production state is stored outside the extracted package under `C:\ProgramData\GpoRemediator`:
 
-- `Config`: the saved domain/DC, operator roles and approved authorization boundary.
+- `Config`: the saved domain/DC, endpoint targeting and approved authorization boundary. Windows identity binds sessions and audit records; no application role allowlist is stored.
 - `State`: launcher/service state and bounded diagnostics.
 - `Data`: durable operation records, evidence, audit chain and data-protection keys.
 - `Backups`: the configured GPO backup repository.

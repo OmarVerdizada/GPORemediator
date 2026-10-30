@@ -89,7 +89,17 @@ function Get-NormalizedGpoContentFingerprint {
     $hashes=[Collections.Generic.List[string]]::new()
     $sha=[Security.Cryptography.SHA256]::Create()
     try {
-        foreach ($file in (Get-ChildItem -LiteralPath $folder -Recurse -File | Sort-Object FullName)) {
+        $entries=@(Get-ChildItem -LiteralPath $folder -Force -ErrorAction Stop)
+        $files=[Collections.Generic.List[object]]::new()
+        while($entries.Count){
+            $next=@()
+            foreach($entry in $entries){
+                if(($entry.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0){throw 'GPO_CONTENT_LINK|GPO content cannot redirect through a file or directory link.'}
+                if($entry.PSIsContainer){$next+=@(Get-ChildItem -LiteralPath $entry.FullName -Force -ErrorAction Stop)}else{$files.Add($entry)}
+            }
+            $entries=$next
+        }
+        foreach ($file in ($files | Sort-Object FullName)) {
             $relative=$file.FullName.Substring($folder.Length).ToLowerInvariant()
             if ($relative -eq '\gpt.ini') {
                 $normalized=Set-TemplateEntry ([IO.File]::ReadAllText($file.FullName)) 'General' 'Version' '0'

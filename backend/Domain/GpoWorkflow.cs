@@ -43,7 +43,8 @@ public record GpoPreview(GpoChoice Gpo, GpoScope Scope, string? PreviousValue, s
     GpoLink? ExistingLink, string[] RefreshComputers, string[] Warnings,
     GpoImpactDetails? Impact = null, GpoEnvironmentStatus? Preflight = null, string? DesiredValue = null, bool NoChange = false,
     [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] string[]? VerificationComputers = null,
-    GpoValueSource? PreviousValueSource = null, GpoDomainPolicy? DomainPolicy = null);
+    GpoValueSource? PreviousValueSource = null, GpoDomainPolicy? DomainPolicy = null,
+    [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] bool? CustomValues = null);
 
 public record GpoWorkflowPlan(string Id, string Actor, string ExecutionUser, string Mode, string Domain, string DomainController,
     GpoSelection Selection, GpoPreview Preview, string CreatedAt, string? MappingHash = null, string? ConfigHash = null, bool WriteAuthorized = false);
@@ -69,6 +70,7 @@ public record GpoWorkflowRun(string Id, GpoWorkflowPlan Plan, GpoWorkflowResult 
     string? CorrelationId = null, string? StartedAt = null, GpoStage[]? Stages = null, GpoLiveCheck[]? LiveChecks = null);
 public record GpoStage(string Phase, string StartedAt, string? FinishedAt = null);
 public record GpoRollbackAnchor(GpoWorkflowPlan Plan, string PostFingerprint);
+public record GpoHistoryPage(GpoWorkflowRun[] Items,int Total,int? NextOffset,long Snapshot);
 
 public record GpoEvidence(string SchemaVersion, string Product, string Benchmark, string OperationId, string GeneratedAt,
     string Actor, string ExecutionUser, string Domain, string DomainController, string ControlId, string Setting,
@@ -77,10 +79,24 @@ public record GpoEvidence(string SchemaVersion, string Product, string Benchmark
     string[] Warnings, string IntegrityHash, string? ChangeReference = null, string? ApprovedBy = null, string? Handler = null, string? MappingSource = null,
     GpoEndpointCheck[]? EndpointChecks = null, string? CorrelationId = null, string? CurrentValue = null,
     GpoValueSource? BeforeValueSource = null, GpoValueSource? CurrentValueSource = null, GpoDomainPolicy? DomainPolicy = null,
-    [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] GpoLink? CurrentLink = null);
+    [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] GpoLink? CurrentLink = null,
+    [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] GpoRefreshResult[]? RefreshResults = null,
+    [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] EndpointCoverage? EndpointCoverage = null,
+    [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] EndpointCoverage? RefreshCoverage = null,
+    [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] GpoDomainPolicy? BeforeDomainPolicy = null,
+    [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] string[]? VerificationComputers = null);
 
 public static class GpoWorkflowRules
 {
+    public static bool ScopeContains(string ancestor,string candidate){
+        static string[] Parts(string dn){
+            var parts=new List<string>();var part=new System.Text.StringBuilder();var escaped=false;
+            foreach(var ch in dn){if(ch==','&&!escaped){parts.Add(part.ToString().Trim());part.Clear();}else part.Append(ch);if(escaped)escaped=false;else if(ch=='\\')escaped=true;}
+            parts.Add(part.ToString().Trim());return parts.ToArray();
+        }
+        var parent=Parts(ancestor);var child=Parts(candidate);
+        return parent.All(x=>x.Length>0)&&child.Length>=parent.Length&&child.Skip(child.Length-parent.Length).SequenceEqual(parent,StringComparer.OrdinalIgnoreCase);
+    }
     public static void ValidateMappingVersion(string? plannedHash,string currentHash,string operation,string? previousState)
     {
         // Recovery restores and verifies the recorded snapshot, not the new mapping's desired value.
@@ -104,12 +120,11 @@ public static class GpoWorkflowRules
     public static bool IsWriteAuthorized(string[] gpos, string[] scopes, GpoSelection selection)
     {
         var gpoAllowed=Guid.TryParse(selection.GpoId,out var selected) && gpos.Any(x=>Guid.TryParse(x,out var allowed)&&allowed==selected);
-        var scopeAllowed=scopes.Any(x=>string.Equals(x,selection.ScopeDn,StringComparison.OrdinalIgnoreCase)||selection.ScopeDn.EndsWith(","+x,StringComparison.OrdinalIgnoreCase));
+        var scopeAllowed=scopes.Any(x=>ScopeContains(x,selection.ScopeDn));
         // User policy can specify a different computer OU for the gpupdate/verification session.
         // Do not allow that secondary OU to escape the server-owned production boundary.
         var endpointAllowed=string.IsNullOrWhiteSpace(selection.EndpointScopeDn) ||
-            scopes.Any(x=>string.Equals(x,selection.EndpointScopeDn,StringComparison.OrdinalIgnoreCase)||
-                          selection.EndpointScopeDn.EndsWith(","+x,StringComparison.OrdinalIgnoreCase));
+            scopes.Any(x=>ScopeContains(x,selection.EndpointScopeDn));
         return gpoAllowed&&scopeAllowed&&endpointAllowed;
     }
     public static void ValidateWriteSelection(string[] gpos, string[] scopes, GpoSelection selection)
