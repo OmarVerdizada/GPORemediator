@@ -1,6 +1,6 @@
 # Real worker dispatch + writer + manifests against private filesystem fixtures.
 # AD, GPMC, DNS and remote endpoints are mocked. No live domain is contacted.
-param([switch]$AllControls,[string]$ReportPath)
+param([switch]$AllControls,[switch]$ReviewedControlsOnly,[string]$ReportPath)
 $ErrorActionPreference='Stop';Set-StrictMode -Version Latest
 $repo=Split-Path $PSScriptRoot -Parent
 $temp=Join-Path ([IO.Path]::GetTempPath()) ('gpr-chain-'+[guid]::NewGuid().ToString('N'))
@@ -20,6 +20,7 @@ function Sysvol-Policies {return $script:folder}
 function Gpo-Folder {param($Id) return $script:folder}
 function Remote-GpoFolder {param($Server,$Id) return $script:folder}
 function Resolve-DnsName {param($Name,$Type,$ErrorAction) [pscustomobject]@{IPAddress='127.0.0.1'}}
+function Invoke-Command {throw 'Fixture attempted unmocked remoting; no endpoint connection is allowed'}
 function Get-ADDomain {param($Identity,$Server,$ErrorAction) return $domain}
 function Get-ADDomainController {param($Filter,$Server) [pscustomobject]@{HostName=$cfg.domainController}}
 function Get-ADReplicationPartnerMetadata {param($Target,$Scope,$ErrorAction) @()}
@@ -77,9 +78,16 @@ try{
  foreach($entry in @($catalog|Where-Object{$_.domainPolicySensitive -and $_.id -notin @('1.1.1','1.2.2')})){$cases+=,@([string]$entry.id,'Domain')}
  foreach($manual in @($catalog|Where-Object automation -ne 'Automated')){$cases+=,@([string]$manual.id,'LocalComputers')}
  if($AllControls){$cases=@();foreach($entry in $catalog){$cases+=,@([string]$entry.id,$(if($entry.scope -eq 'User'){'Users'}else{'LocalComputers'}));if($entry.domainPolicySensitive){$cases+=,@([string]$entry.id,'Domain')}}}
+ $reviewed=@()
+ if($ReviewedControlsOnly){
+  $reviewed=Get-Content -LiteralPath (Join-Path $repo 'work/audit/reviewed-values.json') -Raw|ConvertFrom-Json
+  Check (@($reviewed).Count -eq 11) 'C# reviewed mapping fixtures cover every reviewed control'
+  $cases=@();foreach($entry in $reviewed){$cases+=,@([string]$entry.mapping.id,'LocalComputers')}
+ }
  $report=@()
  foreach($case in $cases){
   $map=($catalog|Where-Object id -eq $case[0])|ConvertTo-Json -Depth 15|ConvertFrom-Json
+  if($ReviewedControlsOnly){$map=($reviewed|Where-Object{$_.mapping.id -eq $case[0]}).mapping}
   Check ($null -ne $map) ('mapping exists '+$case[0])
   if($map.automation -ne 'Automated'){$map.automation='Automated';if($map.handler -eq 'Manual'){$map.handler='SecurityTemplate'}}
   if($case[1] -eq 'LocalComputers' -and $map.domainPolicySensitive){$map.scope='Computer';$map.domainPolicySensitive=$false}
@@ -89,6 +97,7 @@ try{
   [IO.File]::WriteAllText((Join-Path $script:folder 'GPT.INI'),"[General]`r`nVersion=0`r`n")
   $script:version=0;$script:extensions='';$script:userExtensions='';$script:rawLinks='';$script:registry=@{}
   $s=@{gpoId=$gpoId;scopeDn=$(if($case[1] -eq 'Domain'){$domainDn}else{$target});setting=$map.id;value=$map.suggested;customValue=$(if($map.requiresInput){if($map.inputDefault){[string]$map.inputDefault}else{'Authorized use only'}}else{''});refresh='None';firstLink=($case[1] -eq 'Domain');accountScope=$case[1];endpointScopeDn='';verificationUser=''}
+  if($ReviewedControlsOnly){$approved=($reviewed|Where-Object{$_.mapping.id -eq $map.id});$s.itemValues=$approved.selection.itemValues;$s.reviewContext=$approved.selection.reviewContext}
   $script:domainState=@{PasswordHistoryCount=0;MinPasswordAge=[timespan]::Zero;MinPasswordLength=7;ComplexityEnabled=$false;ReversibleEncryptionEnabled=$true;LockoutDuration=[timespan]::FromMinutes(30);LockoutThreshold=0;LockoutObservationWindow=[timespan]::FromMinutes(30)};$script:domainWriteDenied=$false;$script:domainWriteNoOp=$false
   if($map.id -eq '1.2.2' -and $case[1] -eq 'Domain'){$null=Write-Mapping @{selection=$s} $map}
   $Operation='gpoPreview';$Data=@{selection=$s;mapping=$map};$script:workerStage='VALIDATING';$preview=& $dispatch
@@ -134,6 +143,37 @@ try{
    $saved=Get-Content -LiteralPath (Join-Path (Run-Directory $failedPlan) 'manifest.json') -Raw|ConvertFrom-Json
    Check ($noOp.state -eq 'REVIEW_REQUIRED' -and !$noOp.gpoPublished -and $saved.failure.code -eq 'DOMAIN_POLICY_WRITE_MISMATCH' -and $script:domainState.LockoutThreshold -eq 0) 'A silent no-op AD setter cannot become a successful Apply'
    $script:domainWriteNoOp=$false
+  }
+  if($map.id -eq '2.2.6'){
+   # A failed reviewed write followed by repeated Verify must retain its cause.
+   $failedPlan=@{id=[guid]::NewGuid().ToString('N');domain=$cfg.domain;domainController=$cfg.domainController;selection=$s}
+   $Operation='gpoPreview';$Data=@{selection=$s;mapping=$map};$failedPlan.preview=& $dispatch
+   $writerFn=(Get-Item Function:\Write-Mapping).ScriptBlock
+   $probeFn=(Get-Item Function:\Verify-EffectiveSamples).ScriptBlock
+   try{
+    function Write-Mapping {throw [UnauthorizedAccessException]::new('Access is denied for private fixture')}
+    function Verify-EffectiveSamples {param($Plan,$Map) @(@{hostname='ws.example.test';state='UNAVAILABLE';actualValue=$null;message='Fixture endpoint unavailable; no network probe.'})}
+    $Operation='gpoApply';$Data=@{plan=$failedPlan;mapping=$map;consent=@{confirmation='APPLY'}};$failed=& $dispatch
+    Check ($failed.state -eq 'REVIEW_REQUIRED') 'reviewed 2.2.6 write denial remains review-required'
+    Set-Item Function:\Write-Mapping $writerFn
+    $unchanged=Fingerprint $s.gpoId $s.scopeDn
+    foreach($attempt in 1..2){
+     $Operation='gpoVerify';$observed=& $dispatch
+     Check ($observed.state -eq 'REVIEW_REQUIRED' -and $observed.message -match 'Original failure \[GPO_NATIVE_ACCESS_DENIED\]' -and $observed.message -match 'WRITING') ('Verify retains original reviewed 2.2.6 failure '+$attempt)
+     Check ($observed.message -notmatch 'Private fixture') 'verification never exposes raw native errors'
+    }
+    Check ((Fingerprint $s.gpoId $s.scopeDn) -ceq $unchanged) 'repeated Verify never retries the reviewed write'
+    $Operation='gpoRefresh';$Data.refresh='Scope';$blocked=$false;try{$null=& $dispatch}catch{$blocked=$_.Exception.Message -match 'REFRESH_REVIEW_REQUIRED'}
+    Check ($blocked) 'refresh stays blocked until interrupted publication is repaired'
+    $repair=@{id=[guid]::NewGuid().ToString('N');domain=$cfg.domain;domainController=$cfg.domainController;selection=$s}
+    $Operation='gpoPreview';$Data=@{selection=$s;mapping=$map};$repair.preview=& $dispatch
+    $Operation='gpoApply';$Data=@{plan=$repair;mapping=$map;consent=@{confirmation='APPLY'}};$repaired=& $dispatch
+    Check ($repaired.state -eq 'PUBLISHED' -and $repaired.gpoPublished -and $repaired.linkVerified) 'fresh reviewed repair plan completes 2.2.6 publication and link'
+    $Operation='gpoRefresh';$Data.refresh='Scope';$refreshed=& $dispatch
+    Check ($refreshed.state -eq 'REFRESH_SCHEDULED') 'explicit gpupdate becomes available after reviewed repair publication'
+    $Operation='gpoRollback';$restored=& $dispatch
+    Check ($restored.state -eq 'ROLLED_BACK') 'reviewed repair retains snapshot rollback'
+   }finally{Set-Item Function:\Write-Mapping $writerFn;Set-Item Function:\Verify-EffectiveSamples $probeFn}
   }
   $report+=@{controlId=[string]$map.id;domain=([string]$map.id -split '\.')[0];scope=$case[1];state='PASS';steps=$(if($case[1] -eq 'Users'){@('preview','backup','write','link','source','rollback','verify')}else{@('preview','backup','write','link','source','refresh','rollback','verify')})}
  }

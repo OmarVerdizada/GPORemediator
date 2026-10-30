@@ -65,13 +65,18 @@ foreach(var mapping in ProductionGpoMappings.Settings){
   if(mapping.RequiresInput)Reject(()=>ProductionGpoMappings.Validate(selection with{CustomValue=""}),"GPO_CUSTOM_VALUE_REQUIRED");
 }
 Check(cases==8*2+386*4&&manual==11,"Catalog coverage incomplete");
+var reviewedCases=new List<object>();
 foreach(var mapping in ProductionGpoMappings.Settings.Where(x=>!x.Writable)){
     var s=new GpoSelection(gpo,"OU=Pilot,"+dn,mapping.Id,0,"LocalComputers",ItemValues:mapping.Items.Select(x=>x.Value??[]).ToArray(),ReviewContext:"Reviewed Windows version, roles, service accounts and approved exceptions.");
     ProductionGpoMappings.Validate(s);
     Check(ProductionGpoMappings.Effective(s).Writable,"Reviewed control did not produce an executable mapping: "+mapping.Id);
     Reject(()=>ProductionGpoMappings.Validate(s with{ItemValues=null}),"CONTROL_REVIEW_REQUIRED");
     Reject(()=>ProductionGpoMappings.Validate(s with{ReviewContext="short"}),"CONTROL_REVIEW_REQUIRED");
+    if(mapping.Id=="2.2.6")s=s with{ItemValues=[["S-1-5-19","S-1-5-20","S-1-5-32-544"]]};
+    reviewedCases.Add(new{selection=s,mapping=ProductionGpoMappings.Effective(s)});
 }
+Directory.CreateDirectory("work/audit");
+File.WriteAllText("work/audit/reviewed-values.json",System.Text.Json.JsonSerializer.Serialize(reviewedCases,new System.Text.Json.JsonSerializerOptions{PropertyNamingPolicy=System.Text.Json.JsonNamingPolicy.CamelCase}));
 Console.WriteLine("PASS 11 controls require explicit values/environment review");
 Console.WriteLine($"PASS {cases} control/refresh/priority combinations on a non-default GPO; {manual} controls block automatic writes");
 

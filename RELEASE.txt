@@ -1,8 +1,9 @@
-GPO Remediator 3.17.0 - streamlined GPO workspace
+GPO Remediator 3.17.1 - target guidance and reviewed-operation clarity
 
-See docs/RELEASE-3.17.0.md.
-Compact live dashboard and one searchable CIS hierarchy.
-Favorites, command palette, alternate catalog layouts and Impact graph removed.
-Workflow center UI and the dedicated Password policies feature removed.
-Approved GPO jobs, verification, access checks, audit and snapshot recovery remain server-owned.
-Existing backup files and recorded database rows are retained.
+See docs/RELEASE-3.17.1.md.
+User, computer and domain-account targeting is explained before OU selection.
+Reviewed-control justification has a full-width field, length guidance and trimmed validation.
+Fresh plan steps are separate from recorded operation steps.
+Interrupted-operation errors and safe next steps are visible on the result page.
+Unmeasured stored values display Not checked instead of implying Not configured.
+Role/environment-sensitive reviewed controls no longer receive a Low impact default.

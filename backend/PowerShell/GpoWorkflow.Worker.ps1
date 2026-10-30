@@ -1042,7 +1042,12 @@ switch($Operation){
         }
         if([string]$manifest.phase -in @('BACKUP_STARTED','BACKED_UP','FAILED_SAFE','WRITING','REVIEW_REQUIRED')){
             $v=Verify-Published $plan $map $true
-            return Result 'REVIEW_REQUIRED' 'This execution did not record a completed publication. Live values were inspected, but partial writes and the retained backup/manifest require administrator review.' $manifest $v @()
+            # Verification must not erase the failure that caused the interruption.
+            # Repeated checks read the original manifest, so this message stays stable.
+            $failure=Read-Field $manifest 'failure' $null
+            $original=if($failure){' Original failure ['+[string](Read-Field $failure 'code' 'UNKNOWN')+'] at '+[string](Read-Field $failure 'stage' 'UNKNOWN')+': '+[string](Read-Field $failure 'message' '')}else{' No original failure detail was retained; inspect the backup/manifest on the selected DC.'}
+            $message='Re-verify is read-only and does not retry Apply. This execution did not record a completed publication. Review the original failure and retained backup, then create and approve a fresh repair plan.'+$original
+            return Result 'REVIEW_REQUIRED' $message $manifest $v @()
         }
         $v=Verify-Published $plan $map $true
         $state=if($v.published -and $v.linked){'PUBLISHED'}else{'DRIFT_DETECTED'}

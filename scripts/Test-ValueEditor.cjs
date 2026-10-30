@@ -30,3 +30,13 @@ assert.equal(selection.itemValues,null);
 const quality=window.GpoUiDomain.classify({plan:{selection:{itemValues:[['0']]}},result:{gpoPublished:true,linkVerified:true,verification:{replicationConverged:true},effectiveStatus:'VERIFIED_ON_SAMPLE'}});
 assert.equal(quality.compliant,false);assert.equal(quality.custom,true);
 console.log('PASS 394 editable controls, C#/manual-script custom-value parity, capture/reset and custom values excluded from benchmark compliance');
+for(const mapping of mappings.filter(x=>x.automation!=='Automated')){
+ assert.equal(window.GpoUiDomain.impact(mapping).cls,'high','Reviewed controls must not default to low operational risk: '+mapping.id);
+ const rule={id:mapping.id,backendSetting:mapping.id},state={settings:mappings,selection:{setting:mapping.id,itemValues:window.GpoValueEditor.defaults(mapping),reviewContext:'Test'}};
+ const pending=window.GpoManualRemediation.generate(state,rule);
+ assert.equal(pending.writable,false,'An unfinished review must remain read-only: '+mapping.id);
+ state.selection.reviewContext='Reviewed OS support, server roles and principal exceptions.';
+ const ready=window.GpoManualRemediation.generate(state,rule);
+ assert.equal(ready.writable,true,'A completed review must preserve the explicit policy fields: '+mapping.id);
+}
+console.log('PASS 11 reviewed controls remain read-only while justification is unfinished and generate explicit approved values after review');

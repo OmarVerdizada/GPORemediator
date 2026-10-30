@@ -1,4 +1,6 @@
-# GPO Remediator 3.17.0
+# GPO Remediator 3.17.1
+
+3.17.1 explains user/computer/domain targeting before OU selection, improves reviewed-control forms, separates fresh plan steps from recorded results, and surfaces interrupted-operation errors with recovery guidance. See [release notes](docs/RELEASE-3.17.1.md).
 
 3.17.0 streamlines the workspace: one catalog hierarchy, a compact live dashboard, fewer appearance controls, and no Favorites, command palette, Impact graph, Workflow center page or Password policies feature. The server job runner still owns Apply, Verify, Refresh and rollback. See [release notes](docs/RELEASE-3.17.0.md).
 

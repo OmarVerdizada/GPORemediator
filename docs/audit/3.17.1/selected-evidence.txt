@@ -1,0 +1,24 @@
+target-ui-final.log
+PASS reviewed 2.2.6 form, visible user/computer scope, whitespace validation, preserved principal/review drafts, fresh repair steps, visible escaped failure, unknown-value semantics, light/dark and 320/390px layouts; no policy operations
+
+reviewed-chain.log
+PASS C# reviewed mapping fixtures cover every reviewed control
+PASS reviewed 2.2.6 write denial remains review-required
+PASS Verify retains original reviewed 2.2.6 failure 1
+PASS Verify retains original reviewed 2.2.6 failure 2
+PASS repeated Verify never retries the reviewed write
+PASS refresh stays blocked until interrupted publication is repaired
+PASS fresh reviewed repair plan completes 2.2.6 publication and link
+PASS explicit gpupdate becomes available after reviewed repair publication
+PASS real worker chain: preview, readiness, backup, write, link, publication, rollback and re-verification with mocked directory APIs only
+
+ux-final.log
+PASS streamlined UX contract: one control form, retained safety/verification, compact dashboard, retired entry points removed and source/dist synchronized.
+
+built-source-final.log
+PASS current backend/frontend source fingerprints and distributed runtime ZIP SHA-256
+
+syntax-final.log
+PASS Windows PowerShell 5.1 syntax: 49 source scripts/modules; none executed.
+
+All-control worker matrix: 413 PASS scenarios / 405 unique controls. Live AD validation: NOT RUN.

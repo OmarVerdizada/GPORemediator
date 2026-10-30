@@ -259,4 +259,19 @@ body.operator-custom-page .dashboard-connection .conn{display:flex;flex-directio
 
 .dashboard-summary{margin-bottom:8px}
 .dashboard-disclaimer{font-size:11px;color:var(--color-text-muted);margin:0 0 24px;line-height:1.6}
+/* Keep target intent and reviewed-control requirements beside the actual fields. */
+.policy-target-guidance{display:grid;gap:7px;margin:0 0 20px;padding:16px;border:1px solid var(--color-border-strong);border-left:3px solid var(--color-primary);border-radius:var(--radius-sm);background:var(--color-primary-soft);overflow-wrap:anywhere}
+.policy-target-guidance>strong{font-size:15px;color:var(--color-text)}
+.policy-target-guidance>span{font-size:12px;font-weight:650;color:var(--color-primary)}
+.policy-target-guidance>p,.policy-target-guidance>small{margin:0;font-size:12px;line-height:1.65;color:var(--color-text-muted)}
+.target-form .environment-review{display:flex;flex-direction:column;gap:9px;width:100%;min-width:0;margin:0 0 22px}
+.target-form .environment-review>small{display:block;margin:0;font-size:12px;line-height:1.6;color:var(--color-text-muted)}
+.target-form .environment-review>textarea{display:block;box-sizing:border-box;width:100%;max-width:100%;min-height:116px;resize:vertical;padding:12px;border:1px solid var(--color-border-strong);border-radius:var(--radius-sm);background:var(--color-surface);color:var(--color-text);line-height:1.6}
+.target-form .environment-review>textarea[aria-invalid=true]{border-color:var(--color-danger)}
+.target-form .environment-review>.ds-field-error{color:var(--color-danger)}
+.operation-failure-guidance{padding:14px 16px;margin:16px 0;border:1px solid var(--color-border);border-radius:var(--radius-sm);background:var(--color-surface-muted);overflow-wrap:anywhere}
+.operation-failure-guidance p{margin:7px 0;line-height:1.65}
+.operation-failure-guidance small{color:var(--color-text-muted)}
+.verification-explanation{white-space:pre-wrap;overflow-wrap:anywhere}
+.configured-value>.value-source{display:block;margin-top:8px}
 @media(max-width:700px){body.operator-custom-page #service-bar{display:flex;flex-wrap:nowrap;align-items:center;gap:8px;min-height:64px;height:auto;padding:10px 14px}body.operator-custom-page #service-bar .service-left{flex:1;min-width:0}body.operator-custom-page #service-bar .service-left strong{font-size:12px;white-space:nowrap}body.operator-custom-page #service-bar .service-right{display:flex;flex:0 0 auto;width:auto;margin:0;justify-content:flex-end;gap:6px}}

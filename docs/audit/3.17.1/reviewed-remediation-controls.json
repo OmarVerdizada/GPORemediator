@@ -1,0 +1,178 @@
+[
+  {
+    "scope": "LocalComputers",
+    "domain": "1",
+    "controlId": "1.2.3",
+    "steps": [
+      "preview",
+      "backup",
+      "write",
+      "link",
+      "source",
+      "refresh",
+      "rollback",
+      "verify"
+    ],
+    "state": "PASS"
+  },
+  {
+    "scope": "LocalComputers",
+    "domain": "2",
+    "controlId": "2.2.6",
+    "steps": [
+      "preview",
+      "backup",
+      "write",
+      "link",
+      "source",
+      "refresh",
+      "rollback",
+      "verify"
+    ],
+    "state": "PASS"
+  },
+  {
+    "scope": "LocalComputers",
+    "domain": "2",
+    "controlId": "2.2.16",
+    "steps": [
+      "preview",
+      "backup",
+      "write",
+      "link",
+      "source",
+      "refresh",
+      "rollback",
+      "verify"
+    ],
+    "state": "PASS"
+  },
+  {
+    "scope": "LocalComputers",
+    "domain": "2",
+    "controlId": "2.2.31",
+    "steps": [
+      "preview",
+      "backup",
+      "write",
+      "link",
+      "source",
+      "refresh",
+      "rollback",
+      "verify"
+    ],
+    "state": "PASS"
+  },
+  {
+    "scope": "LocalComputers",
+    "domain": "2",
+    "controlId": "2.2.33",
+    "steps": [
+      "preview",
+      "backup",
+      "write",
+      "link",
+      "source",
+      "refresh",
+      "rollback",
+      "verify"
+    ],
+    "state": "PASS"
+  },
+  {
+    "scope": "LocalComputers",
+    "domain": "2",
+    "controlId": "2.2.36",
+    "steps": [
+      "preview",
+      "backup",
+      "write",
+      "link",
+      "source",
+      "refresh",
+      "rollback",
+      "verify"
+    ],
+    "state": "PASS"
+  },
+  {
+    "scope": "LocalComputers",
+    "domain": "2",
+    "controlId": "2.2.39",
+    "steps": [
+      "preview",
+      "backup",
+      "write",
+      "link",
+      "source",
+      "refresh",
+      "rollback",
+      "verify"
+    ],
+    "state": "PASS"
+  },
+  {
+    "scope": "LocalComputers",
+    "domain": "2",
+    "controlId": "2.2.45",
+    "steps": [
+      "preview",
+      "backup",
+      "write",
+      "link",
+      "source",
+      "refresh",
+      "rollback",
+      "verify"
+    ],
+    "state": "PASS"
+  },
+  {
+    "scope": "LocalComputers",
+    "domain": "2",
+    "controlId": "2.3.11.6",
+    "steps": [
+      "preview",
+      "backup",
+      "write",
+      "link",
+      "source",
+      "refresh",
+      "rollback",
+      "verify"
+    ],
+    "state": "PASS"
+  },
+  {
+    "scope": "LocalComputers",
+    "domain": "18",
+    "controlId": "18.10.43.10.1",
+    "steps": [
+      "preview",
+      "backup",
+      "write",
+      "link",
+      "source",
+      "refresh",
+      "rollback",
+      "verify"
+    ],
+    "state": "PASS"
+  },
+  {
+    "scope": "LocalComputers",
+    "domain": "18",
+    "controlId": "18.10.43.10.2",
+    "steps": [
+      "preview",
+      "backup",
+      "write",
+      "link",
+      "source",
+      "refresh",
+      "rollback",
+      "verify"
+    ],
+    "state": "PASS"
+  }
+]

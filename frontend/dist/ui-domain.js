@@ -41,10 +41,11 @@
     return 1;
   }
   function impact(mapping) {
-    const level = mapping?.operationalImpact || 'LOW';
+    const reviewed=mapping&&mapping.automation!=='Automated';
+    const level = mapping?.operationalImpact || (reviewed?'HIGH':'LOW');
     const normalized = upper(level);
     return normalized === 'HIGH'
-      ? { name: 'High', cls: 'high', copy: mapping?.impactReason || 'Requires a constrained rollout and explicit dependency review.' }
+      ? { name: 'High', cls: 'high', copy: mapping?.impactReason || (reviewed?'Environment-specific OS, server-role or account exceptions require explicit review before execution.':'Requires a constrained rollout and explicit dependency review.') }
       : normalized === 'MEDIUM'
         ? { name: 'Medium', cls: 'medium', copy: mapping?.impactReason || 'Validate scope and application dependencies before broad rollout.' }
         : { name: 'Low', cls: 'low', copy: mapping?.impactReason || 'Preview and post-change verification are still required.' };

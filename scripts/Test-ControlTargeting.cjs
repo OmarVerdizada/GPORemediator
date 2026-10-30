@@ -31,3 +31,16 @@ assert(html.includes('Policy scope (OU / domain)'));
 assert(!/User OU|Computer apply scope|computer OU|user OU/.test(html));
 assert(html.includes('Optional session verification'));
 console.log('PASS mixed OU selection with default endpoints and optional session overrides');
+
+// Every control must explain its actual GPO processing scope before OU selection.
+for(const mapping of settings){
+ state.selectedRule={id:mapping.id,backendSetting:mapping.id,implementation:mapping.automation==='Automated'?'live':'manual'};
+ state.selection={setting:mapping.id,gpoId:id,scopeDn:ou,refresh:'None',reviewContext:mapping.automation==='Automated'?null:'Reviewed server roles and approved principal exceptions.'};
+ view.ensureSelection();html=view.targetForm(state.selectedRule);
+ const expected=mapping.scope==='User'?'User':'Computer';
+ assert(html.includes(`data-policy-target="${expected}"`),mapping.id);
+ assert(html.indexOf('data-policy-target=')<html.indexOf('data-scope-open="scopeDn"'),mapping.id+' hides scope guidance until preview');
+ assert(html.includes('An OU may contain both users and computers.'),mapping.id);
+ if(mapping.domainPolicySensitive){state.selection.scopeDn=domain;view.ensureSelection();assert(view.targetForm(state.selectedRule).includes('data-policy-target="Domain"'),mapping.id);}
+}
+console.log('PASS all 405 controls explain user/computer processing before target selection; all 8 domain account controls explain domain-root intent');
