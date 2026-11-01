@@ -208,6 +208,14 @@ using(var grantStore=new Store(":memory:")){
  grantService.ValidateSubmission(grantPlan.Id,"apply",new("APPLY",true,ChangeReference:"CHG-test"),"one",grantPlan.Actor);
  Reject(()=>grantService.ValidateSubmission(grantPlan.Id,"apply",new("APPLY",true,ChangeReference:"CHG-test"),"two",grantPlan.Actor),"GPO_WRITE_NOT_AUTHORIZED");
  Reject(()=>grantService.ValidateSubmission(grantPlan.Id,"apply",new("APPLY",true,ChangeReference:"CHG-test"),"one","EXAMPLE\\Other"),"GPO_LOGIN_REQUIRED");
+ grantStore.Put("gpo_runs",grantPlan.Id,new GpoWorkflowRun(grantPlan.Id,grantPlan,new("PUBLISHED","",null,null,null,true,true,[],"ENDPOINT_VERIFICATION_PENDING"),PolicyValues.Now()));
+ await grantService.AuthorizeRecordedTargetAsync(grantPlan.Id,"one",grantPlan.Actor,CancellationToken.None);
+ Reject(()=>grantService.AuthorizeRecordedTargetAsync(grantPlan.Id,"one","EXAMPLE\\Other",CancellationToken.None).GetAwaiter().GetResult(),"GPO_LOGIN_REQUIRED");
+ var dependent=grantPlan with{Id="dependency-plan",Preview=grantPreview with{Dependency=new("DOMAIN_LOCKOUT_DEPENDENCY","Review 1.2.4 first","1.2.4",15,"LockoutObservationWindow","30")}};
+ grantStore.Put("gpo_plans",dependent.Id,dependent);
+ Reject(()=>grantService.ValidateSubmission(dependent.Id,"apply",new("APPLY",true),"one",grantPlan.Actor),"DOMAIN_LOCKOUT_DEPENDENCY");
+ Check(PolicyValues.Hash(JsonDefaults.Deserialize<GpoPreview>(JsonDefaults.Serialize(grantPreview)))==PolicyValues.Hash(grantPreview),"Absent dependency changed legacy preview serialization");
+ Console.WriteLine("PASS lockout prerequisite blocks submission; recorded target authorization reuses current exact grant and rejects other actors");
  grantService.Disconnect("one");Reject(()=>grantService.AuthorizePreviewTarget("one",grantPlan.Actor,grantSelection,grantPreview,false),"GPO_LOGIN_REQUIRED");
  ConnectGrant("expired",DateTimeOffset.UtcNow.AddHours(-3));Reject(()=>grantService.AuthorizePreviewTarget("expired",grantPlan.Actor,grantSelection,grantPreview,false),"GPO_LOGIN_REQUIRED");
  Console.WriteLine("PASS session target authorization: second GPO without config changes/restart; preview/readiness, exact pair, actor, other-session, disconnect and absolute-expiry guards; no native execution");

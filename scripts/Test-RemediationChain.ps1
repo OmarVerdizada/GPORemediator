@@ -1,6 +1,6 @@
 ﻿# Real worker dispatch + writer + manifests against private filesystem fixtures.
 # AD, GPMC, DNS and remote endpoints are mocked. No live domain is contacted.
-param([switch]$AllControls,[switch]$ReviewedControlsOnly,[switch]$ExactPlans,[string]$ReportPath)
+param([switch]$AllControls,[switch]$ReviewedControlsOnly,[switch]$ExactPlans,[switch]$LockoutIncidentOnly,[string]$ReportPath)
 $ErrorActionPreference='Stop';Set-StrictMode -Version Latest
 $repo=Split-Path $PSScriptRoot -Parent
 $temp=Join-Path ([IO.Path]::GetTempPath()) ('gpr-chain-'+[guid]::NewGuid().ToString('N'))
@@ -75,8 +75,14 @@ function Invoke-GPUpdate {param($Computer,$Force,$RandomDelayInMinutes,$ErrorAct
 function Test-ExactLockoutIncident($Selection,$Mapping,$ExactFixtures){
  $script:domainState.LockoutDuration=[timespan]::FromMinutes(30);$script:domainState.LockoutObservationWindow=[timespan]::FromMinutes(30)
  $fingerprint=Fingerprint $Selection.gpoId $Selection.scopeDn;$beforeFiles=@(Get-ChildItem -LiteralPath $cfg.backupPath -Recurse -File).Count
- $blocked=$false;try{$null=Preview $Selection $Mapping}catch{$blocked=$_.Exception.Message -match 'DOMAIN_LOCKOUT_DEPENDENCY'}
- Check ($blocked -and (Fingerprint $Selection.gpoId $Selection.scopeDn) -ceq $fingerprint -and @(Get-ChildItem -LiteralPath $cfg.backupPath -Recurse -File).Count -eq $beforeFiles -and $script:domainState.LockoutThreshold -eq 0) '30/30/0 incident blocks incompatible duration 15 in preview before backup/write/link'
+ $dependencyPreview=Preview $Selection $Mapping
+ Check ($dependencyPreview.dependency.code -eq 'DOMAIN_LOCKOUT_DEPENDENCY' -and $dependencyPreview.dependency.setting -eq '1.2.4' -and $dependencyPreview.dependency.value -eq 15 -and (Fingerprint $Selection.gpoId $Selection.scopeDn) -ceq $fingerprint -and @(Get-ChildItem -LiteralPath $cfg.backupPath -Recurse -File).Count -eq $beforeFiles -and $script:domainState.LockoutThreshold -eq 0) '30/30/0 incident returns actionable 1.2.4 prerequisite without backup/write/link'
+ $incompatiblePlan=@{id=[guid]::NewGuid().ToString('N');domain=$cfg.domain;domainController=$cfg.domainController;selection=$Selection;preview=$dependencyPreview}
+ $Operation='gpoApply';$Data=@{plan=$incompatiblePlan;mapping=$Mapping;consent=@{confirmation='APPLY'}};$blocked=$false;try{$null=& $dispatch}catch{$blocked=$_.Exception.Message -match 'DOMAIN_LOCKOUT_DEPENDENCY'}
+ Check ($blocked -and (Fingerprint $Selection.gpoId $Selection.scopeDn) -ceq $fingerprint -and $script:domainState.LockoutDuration.TotalMinutes -eq 30 -and $script:domainState.LockoutObservationWindow.TotalMinutes -eq 30) 'Blocked dependency cannot write GPO or AD even through direct Apply'
+ $reverse=Domain-ChangeDependency 'LockoutObservationWindow' '45'
+ Check ($reverse.setting -eq '1.2.1' -and $reverse.value -eq 45) 'Window above duration proposes explicit duration review'
+ Check ($null -eq (Domain-ChangeDependency 'LockoutDuration' '0')) 'Unlimited duration has no finite-window dependency'
  $windowFixture=$ExactFixtures|Where-Object{$_.mapping.id -eq '1.2.4' -and $_.selection.accountScope -eq 'Domain'}
  $windowS=$Selection.Clone();$windowS.setting='1.2.4';$windowS.value=15;$windowS.itemValues=@(@('15'))
  $windowMap=$windowFixture.mapping
@@ -121,6 +127,7 @@ try{
   Check (@($exact).Count -eq 413) 'C# exact mapping fixtures cover all 405 controls and both account scopes'
   $cases=@();foreach($entry in $exact){$cases+=,@([string]$entry.mapping.id,[string]$entry.selection.accountScope)}
  }
+ if($LockoutIncidentOnly){if(!$ExactPlans){throw 'LockoutIncidentOnly requires ExactPlans'};$cases=@($cases|Where-Object{$_[0] -eq '1.2.1' -and $_[1] -eq 'Domain'})}
  foreach($case in $cases){
   $map=($catalog|Where-Object id -eq $case[0])|ConvertTo-Json -Depth 15|ConvertFrom-Json
   if($ReviewedControlsOnly){$map=($reviewed|Where-Object{$_.mapping.id -eq $case[0]}).mapping}
@@ -217,6 +224,7 @@ try{
   $report+=@{controlId=[string]$map.id;domain=([string]$map.id -split '\.')[0];scope=$case[1];state='PASS';steps=$(if($case[1] -eq 'Users'){@('preview','backup','write','link','source','rollback','verify')}else{@('preview','backup','write','link','source','refresh','rollback','verify')})}
  }
  if($ReportPath){$output=[IO.Path]::GetFullPath($ReportPath);$null=New-Item -ItemType Directory -Path (Split-Path $output -Parent) -Force;$report|ConvertTo-Json -Depth 6|Set-Content -LiteralPath $output -Encoding UTF8}
+ if($LockoutIncidentOnly){Write-Output 'PASS focused lockout chain: guided prerequisite, explicit AD 30 -> 15, exact verify, peer drift and snapshot rollback';return}
  # A denied preflight must not poison an otherwise valid publication manifest.
  $plan.id=[guid]::NewGuid().ToString('N');$Operation='gpoPreview';$Data=@{selection=$s;mapping=$map};$plan.preview=& $dispatch
  $Operation='gpoApply';$Data=@{plan=$plan;mapping=$map;consent=@{confirmation='APPLY'}};$result=& $dispatch

@@ -40,14 +40,14 @@
   function policy(path) {
     if (/\/gpo\/[^/]+\/(apply|rollback)$/.test(path)) return { timeout: 980000, label: 'Backup, policy change and verification', cancelable: false };
     if (/\/gpo\/[^/]+\/refresh$/.test(path)) return { timeout: 760000, label: 'Scheduling gpupdate and re-verifying policy', cancelable: false };
-    if (/\/gpo\/(target-access|access-report|preview|[^/]+\/(explain|verify|replan|rollback-preview))$/.test(path)) return { timeout: 620000, label: 'Reading policy and verifying scope', cancelable: true };
+    if (/\/gpo\/(target-access|access-report|preview|[^/]+\/(explain|verify|replan|authorize|rollback-preview))$/.test(path)) return { timeout: 620000, label: 'Reading policy and verifying scope', cancelable: true };
     if (/\/gpo\/(connect|discover|readiness)$/.test(path)) return { timeout: 110000, label: path.endsWith('/readiness') ? 'Checking AD readiness' : 'Connecting to AD and loading GPOs', cancelable: true };
     if (/\/setup\/write-mode$/.test(path)) return { timeout: 120000, label: 'Checking readiness and updating write mode', cancelable: false };
     return { timeout: 20000, label: 'Loading application data', cancelable: true };
   }
   async function request(path, { body, csrfToken, ...options } = {}) {
     const settings = { ...policy(path), ...options };
-    if (body !== undefined && !/^\/api\/(gpo\/(connect|discover|preview|target-access|access-report|[^/]+\/(explain|verify|replan|rollback-preview)))$/.test(path)) settings.cancelable = false;
+    if (body !== undefined && !/^\/api\/(gpo\/(connect|discover|preview|target-access|access-report|[^/]+\/(explain|verify|replan|authorize|rollback-preview)))$/.test(path)) settings.cancelable = false;
     const controller = new AbortController();
     const pending = { controller, path, ...settings, started: Date.now() };
     active.add(pending);

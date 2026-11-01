@@ -1,7 +1,7 @@
 /* Browser integration regression. Requires Playwright; never contacts AD. */
 const fs=require('node:fs'),path=require('node:path'),http=require('node:http'),assert=require('node:assert/strict');
 const {chromium}=require('playwright');
-async function inspectRecovery(page){if(!await page.locator('[data-rollback]').count()){await page.locator('[data-rollback-inspect]').first().click();await page.locator('[data-rollback]').first().waitFor();}}
+async function inspectRecovery(page){if(!await page.locator('[data-rollback]').count()){await page.locator('[data-rollback-inspect]').first().click();await page.locator('[data-rollback]').first().waitFor();}await page.locator('.busy-layer').waitFor({state:'detached'});}
 const root=path.resolve(__dirname,'../frontend/source'),screens=path.resolve(__dirname,'../work/screens');
 fs.mkdirSync(screens,{recursive:true});
 const gpos=[{id:'6ac1786c-016f-11d2-945f-00c04fb984f9',name:'Protected controller policy',protected:true,selectable:true},{id:'31b2f340-016d-11d2-945f-00c04fb984f9',name:'Protected domain policy',protected:true,selectable:true}];

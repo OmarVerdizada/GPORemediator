@@ -1,4 +1,6 @@
-# GPO Remediator 3.17.5
+# GPO Remediator 3.17.6
+
+3.17.6 turns incompatible lockout requests into an actionable prerequisite preview and re-checks target access in the active connection before refresh or rollback. Related settings retain separate explicit approval. See [release notes](docs/RELEASE-3.17.6.md).
 
 3.17.5 resolves the full application audit: safe migration, complete GPO fingerprints, backup ACL validation, consistent evidence status, paged history, inventory concurrency, complete exports, policy-half checks, modal focus and a unified CI audit. See [release notes](docs/RELEASE-3.17.5.md).
 

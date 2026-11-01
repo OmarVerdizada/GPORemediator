@@ -1,4 +1,4 @@
-# Runs on the pinned writable DC using the authenticated remoting identity.
+﻿# Runs on the pinned writable DC using the authenticated remoting identity.
 param([string]$Operation,$Configuration,$Data,[string]$SecurityModule,[Management.Automation.PSCredential]$EndpointCredential=$null)
 $ErrorActionPreference='Stop';$ProgressPreference='SilentlyContinue';$WarningPreference='SilentlyContinue';$InformationPreference='SilentlyContinue'
 Set-StrictMode -Version Latest
@@ -552,12 +552,19 @@ function Domain-PolicyRead([string]$Property,[string]$Desired){
     if($Property -like 'Lockout*' -and [int](Read-Field $policy 'LockoutThreshold' -1) -eq 0){$result.notes=@('Account lockout is disabled because LockoutThreshold is 0. Setting a duration does not enable account lockout. Threshold and observation window are separate settings and are not changed by this control.')}
     return $result
 }
-function Domain-ValidateChange([string]$Property,[string]$Desired){
-    if($Property -notin @('LockoutDuration','LockoutObservationWindow','LockoutThreshold')){return}
+function Domain-ChangeDependency([string]$Property,[string]$Desired){
+    if($Property -notin @('LockoutDuration','LockoutObservationWindow','LockoutThreshold')){return $null}
     $policy=Get-ADDefaultDomainPasswordPolicy -Identity $domainDn -Server $cfg.domainController -ErrorAction Stop
-    $threshold=[int]$policy.LockoutThreshold;$duration=[double]$policy.LockoutDuration.TotalMinutes;$window=[double]$policy.LockoutObservationWindow.TotalMinutes
-    switch($Property){'LockoutThreshold'{$threshold=[int]$Desired}'LockoutDuration'{$duration=[double]::Parse($Desired,[Globalization.CultureInfo]::InvariantCulture)}'LockoutObservationWindow'{$window=[double]::Parse($Desired,[Globalization.CultureInfo]::InvariantCulture)}}
-    if($duration -gt 0 -and $duration -lt $window){Fail 'DOMAIN_LOCKOUT_DEPENDENCY' ('Requested settings would have LockoutDuration '+$duration+' minutes below LockoutObservationWindow '+$window+' minutes. The AD cmdlet requires duration to be at least the reset-counter window. Review duration (1.2.1) and first set a compatible reset-counter window (1.2.4); no related setting is changed automatically.')}
+    $duration=[double]$policy.LockoutDuration.TotalMinutes;$window=[double]$policy.LockoutObservationWindow.TotalMinutes
+    switch($Property){'LockoutDuration'{$duration=[double]::Parse($Desired,[Globalization.CultureInfo]::InvariantCulture)}'LockoutObservationWindow'{$window=[double]::Parse($Desired,[Globalization.CultureInfo]::InvariantCulture)}}
+    if($duration -le 0 -or $duration -ge $window){return $null}
+    if($Property -eq 'LockoutObservationWindow'){$setting='1.2.1';$related='LockoutDuration';$value=[int]$window;$current=[int]$policy.LockoutDuration.TotalMinutes}
+    else{$setting='1.2.4';$related='LockoutObservationWindow';$value=[int][math]::Min($duration,15);$current=[int]$policy.LockoutObservationWindow.TotalMinutes}
+    return @{code='DOMAIN_LOCKOUT_DEPENDENCY';message=('Requested duration '+$duration+' minutes is below the reset-counter window '+$window+' minutes. First review and apply '+$setting+' ('+$related+': '+$current+' -> '+$value+' minutes), then return and regenerate this plan. No related value is changed automatically.');setting=$setting;value=$value;property=$related;currentValue=([string]$current)}
+}
+function Domain-ValidateChange([string]$Property,[string]$Desired){
+    $dependency=Domain-ChangeDependency $Property $Desired
+    if($dependency){Fail ([string]$dependency.code) ([string]$dependency.message)}
 }
 function Domain-PolicySnapshot($S,$Map){
     $property=Domain-PolicyProperty $Map;if(!$property){return $null}
@@ -609,12 +616,12 @@ function Preview($S,$Map,[bool]$RequireWriteAccess=$true){
     $contentMatches=Mapping-Matches $S.gpoId $Map $S;$linkMatches=$null -ne $existing -and $existing.enabled -and (!$S.firstLink -or $existing.order -eq 1);$desired=Mapping-Display $S.gpoId $Map $S $true
     $domainPolicy=Domain-PolicySnapshot $S $Map
     if($domainPolicy -and $RequireWriteAccess){Domain-PolicyAccess ([string]$domainPolicy.property)}
-    if($domainPolicy -and $RequireWriteAccess){Domain-ValidateChange ([string]$domainPolicy.property) ([string]$domainPolicy.desiredValue)}
+    $dependency=if($domainPolicy -and $RequireWriteAccess){Domain-ChangeDependency ([string]$domainPolicy.property) ([string]$domainPolicy.desiredValue)}else{$null}
     if($domainPolicy){$warnings+=('DOMAIN_ACCOUNT_WRITE: '+$domainPolicy.property+' on '+$domainPolicy.domainController+': '+$domainPolicy.value+' -> '+$domainPolicy.desiredValue+'. Apply backs up and updates this AD property as well as the GPO.')}
     if($domainPolicy -and (Read-Field $domainPolicy 'notes' $null)){$warnings+=@($domainPolicy.notes)}
     $domainMatches=(!$domainPolicy -or (Numeric-Complies $domainPolicy.value $domainPolicy.desiredValue $(if($RequireWriteAccess){'=='}else{[string]$Map.comparator})))
     $choice=Gpo-Choice $gpo;$previous=Mapping-Display $S.gpoId $Map $S $false
-    return @{gpo=$choice;scope=$scope;previousValue=$previous;previousValueSource=(Value-Source $choice $previous);desiredValue=$desired;noChange=($contentMatches -and $linkMatches -and $domainMatches);domainPolicy=$domainPolicy;fingerprint=(Fingerprint $S.gpoId $scope.dn);scopeLinks=$raw;existingLink=$existing;refreshComputers=$computers;verificationComputers=$verificationComputers;warnings=$warnings;impact=$impact;preflight=$preflight}
+    return @{gpo=$choice;scope=$scope;previousValue=$previous;previousValueSource=(Value-Source $choice $previous);desiredValue=$desired;noChange=($contentMatches -and $linkMatches -and $domainMatches);domainPolicy=$domainPolicy;dependency=$dependency;fingerprint=(Fingerprint $S.gpoId $scope.dn);scopeLinks=$raw;existingLink=$existing;refreshComputers=$computers;verificationComputers=$verificationComputers;warnings=$warnings;impact=$impact;preflight=$preflight}
 }
 function Atomic-Text([string]$Path,[string]$Text,[Text.Encoding]$Encoding){
     $null=[IO.Directory]::CreateDirectory([IO.Path]::GetDirectoryName($Path));$temp=$Path+'.'+[guid]::NewGuid().ToString('N')+'.tmp'
@@ -1077,7 +1084,7 @@ switch($Operation){
         try{
             if(Test-Path -LiteralPath (Join-Path $directory 'manifest.json')){Fail 'GPO_ALREADY_STARTED' 'A durable execution manifest already exists. Verify or recover; do not replay Apply.'}
             Emit-Stage 'PREFLIGHT'
-            $fresh=Preview $s $map;if(!$fresh.preflight.ready){Fail 'ENVIRONMENT_NOT_READY' 'Required environment preflight checks must pass before Apply.'}
+            $fresh=Preview $s $map;if($fresh.dependency){Fail ([string]$fresh.dependency.code) ([string]$fresh.dependency.message)};if(!$fresh.preflight.ready){Fail 'ENVIRONMENT_NOT_READY' 'Required environment preflight checks must pass before Apply.'}
             if($fresh.fingerprint -cne $plan.preview.fingerprint -or (@($fresh.refreshComputers)-join '|') -cne (@($plan.preview.refreshComputers)-join '|')){Fail 'GPO_CHANGED' 'GPO, links or refresh targets changed after preview. Prepare a new plan.'}
             $domainBefore=Read-Field $fresh 'domainPolicy' $null
             if($domainBefore){

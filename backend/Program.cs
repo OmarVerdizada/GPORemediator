@@ -290,6 +290,7 @@ app.MapPost("/api/gpo/{id}/rollback",async(string id,GpoConsent request,HttpCont
 app.MapPost("/api/gpo/{id}/verify",async(string id,HttpContext context,GpoWorkflowService service)=>await service.ExecuteAsync(id,"verify",new(""),GpoToken(context),Operator(context)));
 GpoEndpoints.MapRefresh(app,async(id,consent,context)=>await context.RequestServices.GetRequiredService<GpoWorkflowService>().ExecuteAsync(id,"refresh",consent,GpoToken(context),Operator(context)));
 app.MapPost("/api/gpo/{id}/replan",async(string id,HttpContext context,GpoWorkflowService service,CancellationToken ct)=>await service.ReplanAsync(id,GpoToken(context),Operator(context),ct));
+app.MapPost("/api/gpo/{id}/authorize",async(string id,HttpContext context,GpoWorkflowService service,CancellationToken ct)=>{await service.AuthorizeRecordedTargetAsync(id,GpoToken(context),Operator(context),ct);return Results.Json(new{authorized=true});});
 app.MapGet("/api/setup/discover",() =>
 {
     if(!OperatingSystem.IsWindows()) throw new PolicyException("WINDOWS_REQUIRED","Automatic setup discovery is available only on Windows. Enter the domain and writable DC manually.");

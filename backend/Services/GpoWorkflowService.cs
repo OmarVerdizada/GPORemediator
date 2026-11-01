@@ -153,6 +153,17 @@ public sealed class GpoWorkflowService(IConfiguration config,Store store,Operati
         store.Audit("GPO_REMEDIATION_REPLANNED",actor,details:new{sourceOperation=id,newPlan=fresh.Id});
         return fresh;
     }
+    public async Task AuthorizeRecordedTargetAsync(string id,string token,string actor,CancellationToken ct)
+    {
+        RequireReal();var connection=Get(token,actor);
+        var run=store.Require<GpoWorkflowRun>("gpo_runs",id);AssertContext(run.Plan,connection,actor);
+        if(!config.GetValue<bool>("Windows:EnableWrites"))throw new PolicyException("WRITES_DISABLED","Enable the production change gate first.");
+        if(TargetAuthorized(connection,run.Plan.Selection))return;
+        // A new connection must prove access again. A fresh preview checks native
+        // rights/readiness and grants only this exact target; it performs no write.
+        var preview=await PreviewAsync(token,actor,run.Plan.Selection,ct);
+        if(!preview.WriteAuthorized)throw new PolicyException("ENVIRONMENT_NOT_READY","The target could not be authorized. Resolve the fresh preview readiness checks before refresh or rollback.");
+    }
     public async Task<GpoEnvironmentStatus> ReadinessAsync(string token,string actor,CancellationToken ct)
     {
         RequireReal();
@@ -239,6 +250,7 @@ public sealed class GpoWorkflowService(IConfiguration config,Store store,Operati
             ValidateWriteAuthorization(connection,plan.Selection);
         }
         if(operation=="apply"){
+            if(plan.Preview.Dependency is {} dependency)throw new PolicyException(dependency.Code,dependency.Message);
             GpoWorkflowRules.ValidateConsent(plan,consent);ProductionGpoMappings.Validate(plan.Selection);
             if(DateTimeOffset.UtcNow-DateTimeOffset.Parse(plan.CreatedAt)>TimeSpan.FromMinutes(10))throw new PolicyException("GPO_PLAN_EXPIRED","Prepare a fresh plan.");
             if(store.Get<GpoWorkflowRun>("gpo_runs",id) is not null)throw new PolicyException("GPO_ALREADY_STARTED","This plan already has an execution; inspect it instead of replaying Apply.");

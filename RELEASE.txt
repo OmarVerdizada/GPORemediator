@@ -1,4 +1,4 @@
-GPO Remediator 3.17.5 - complete application audit fixes
+GPO Remediator 3.17.6 - guided lockout prerequisites and recorded-target authorization
 
-See docs/RELEASE-3.17.5.md and docs/audit/2026-10-31-app-review/RESOLUTION.md.
+See docs/RELEASE-3.17.6.md.
 Live AD validation is not available in this checkout.

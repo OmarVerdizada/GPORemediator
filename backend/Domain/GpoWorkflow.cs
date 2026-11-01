@@ -13,6 +13,7 @@ public record GpoScope(string Dn, string Name, string Kind);
 public record GpoValueSource(string GpoId, string GpoName);
 public record GpoDomainPolicy(string Property, string Value, string DesiredValue, string DomainController,
     [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] string[]? Notes = null);
+public record GpoPolicyDependency(string Code,string Message,string Setting,int Value,string Property,string CurrentValue);
 public record GpoInventory(string Domain, string DomainController, string ExecutionUser, GpoChoice[] Gpos, GpoScope[] Scopes);
 
 public record GpoSelection(string GpoId, string ScopeDn, string Setting, int Value,
@@ -44,7 +45,8 @@ public record GpoPreview(GpoChoice Gpo, GpoScope Scope, string? PreviousValue, s
     GpoImpactDetails? Impact = null, GpoEnvironmentStatus? Preflight = null, string? DesiredValue = null, bool NoChange = false,
     [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] string[]? VerificationComputers = null,
     GpoValueSource? PreviousValueSource = null, GpoDomainPolicy? DomainPolicy = null,
-    [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] bool? CustomValues = null);
+    [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] bool? CustomValues = null,
+    [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] GpoPolicyDependency? Dependency = null);
 
 public record GpoWorkflowPlan(string Id, string Actor, string ExecutionUser, string Mode, string Domain, string DomainController,
     GpoSelection Selection, GpoPreview Preview, string CreatedAt, string? MappingHash = null, string? ConfigHash = null, bool WriteAuthorized = false);

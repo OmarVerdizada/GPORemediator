@@ -1,7 +1,7 @@
 /* User-reported incident: GPO threshold 5, effective AD threshold 0. No live AD. */
 const fs=require('node:fs'),path=require('node:path'),http=require('node:http'),assert=require('node:assert/strict');
 const {chromium}=require('playwright');
-const root=path.resolve(__dirname,'../frontend/source'),shots=path.resolve(__dirname,'../work/screens/3.17.4');fs.mkdirSync(shots,{recursive:true});
+const root=path.resolve(__dirname,'../frontend/source'),shots=path.resolve(__dirname,'../work/screens/3.17.6');fs.mkdirSync(shots,{recursive:true});
 const dn='DC=example,DC=test',gpo={id:'31b2f340-016d-11d2-945f-00c04fb984f9',name:'Default Domain Policy',protected:true,selectable:true};
 const selection={setting:'1.2.2',gpoId:gpo.id,scopeDn:dn,accountScope:'Domain',refresh:'Pdc',firstLink:true,value:5};
 const domainPolicy={property:'LockoutThreshold',value:'0',desiredValue:'5',domainController:'dc01.example.test'};
@@ -9,7 +9,10 @@ const plan={id:'domain-incident',selection,executionUser:'EXAMPLE\\operator',dom
 const result={state:'PUBLISHED',message:'GPO saved.',gpoPublished:true,linkVerified:true,currentValue:'5',domainPolicy,effectiveStatus:'ENDPOINT_MISMATCH',refreshResults:[{computer:domainPolicy.domainController,state:'COMPLETED',message:'gpupdate exited successfully.'}],endpointChecks:[{hostname:domainPolicy.domainController,state:'MISMATCH',actualValue:'0',message:'AD LockoutThreshold = 0; requested 5.'}],verification:{checkedAt:'2026-10-28T04:47:15Z',replicationConverged:true},verificationStages:[{stage:'GPO_CONFIGURATION',status:'GPO_APPLIED',evidence:'Stored GPO value is 5.'},{stage:'ENDPOINT_CONFIGURATION',status:'ENDPOINT_MISMATCH',evidence:'Domain LockoutThreshold is 0.'}]};
 const history=[{id:plan.id,plan,result,updatedAt:'2026-10-28T04:47:15Z'}],requests=[];
 const mappings=JSON.parse(fs.readFileSync(path.resolve(__dirname,'../backend/data/gpo-production-mappings.json'),'utf8')).mappings;
-let requireSignIn=false;
+let requireSignIn=false,dependencyMode=false,windowValue=30;
+const durationSelection={...selection,setting:'1.2.1',value:15,itemValues:[['15']]};
+const dependency={code:'DOMAIN_LOCKOUT_DEPENDENCY',message:'Requested duration 15 minutes is below reset-counter window 30 minutes. Review 1.2.4 first.',setting:'1.2.4',value:15,property:'LockoutObservationWindow',currentValue:'30'};
+function lockoutPlan(s){return {...plan,id:'preview-'+s.setting,selection:s,preview:{...plan.preview,previousValue:'15',desiredValue:'15',dependency:s.setting==='1.2.1'&&windowValue>15?dependency:null,domainPolicy:{...domainPolicy,property:s.setting==='1.2.4'?'LockoutObservationWindow':'LockoutDuration',value:s.setting==='1.2.4'?String(windowValue):'30',desiredValue:'15'}}};}
 const inventory={domain:'example.test',domainController:domainPolicy.domainController,executionUser:plan.executionUser,gpos:[gpo],scopes:[plan.preview.scope]};
 const server=http.createServer(async(req,res)=>{try{
  const url=new URL(req.url,'http://localhost');let body='';for await(const chunk of req)body+=chunk;
@@ -23,7 +26,8 @@ const server=http.createServer(async(req,res)=>{try{
   else if(url.pathname==='/api/gpo/history')data=history;
   else if(url.pathname==='/api/gpo/readiness')data={ready:true,checks:[]};
   else if(url.pathname==='/api/gpo/target-access')data={authorized:true};
-  else if(url.pathname==='/api/gpo/'+plan.id+'/replan')data={...plan,id:'repair-plan'};
+  else if(url.pathname==='/api/gpo/'+plan.id+'/replan')data=dependencyMode?lockoutPlan(durationSelection):{...plan,id:'repair-plan'};
+  else if(url.pathname==='/api/gpo/preview')data=lockoutPlan(JSON.parse(body));
   else if(url.pathname==='/api/setup/config')data={exists:true,...inventory,approvedGpoIds:[gpo.id],authorizedOus:[dn],allowedHosts:[],endpointTargeting:'SelectedOu'};
   else if(['/api/workflows','/api/batches','/api/password-policies','/api/audit'].includes(url.pathname))data=[];
   res.setHeader('Content-Type','application/json');res.end(JSON.stringify(data));return;
@@ -65,6 +69,15 @@ const server=http.createServer(async(req,res)=>{try{
  assert.equal(await page.locator('.diff-before strong').textContent(),'0');assert.equal(await page.locator('.diff-after strong').textContent(),'5');assert.match(await page.locator('.domain-value-plan').textContent(),/AD \+ GPO/);assert.equal(requests.filter(x=>x.path.endsWith('/replan')).length,1);
  await page.evaluate(()=>window.scrollTo(0,0));await page.waitForTimeout(200);
  await page.screenshot({path:path.join(shots,'domain-repair-plan.png'),fullPage:true});assert.deepEqual(errors,[]);
+ // A failed duration repair now yields an actionable preview instead of a toast dead end.
+ dependencyMode=true;await page.locator('[data-tab=verification]').click();await page.locator('[data-replan]').click();await page.locator('[data-dependency-blocked]').waitFor();assert.equal(await page.locator('#gpo-apply').count(),0);assert.match(await page.locator('.policy-dependency').textContent(),/1.2.4/);
+ await page.evaluate(()=>window.scrollTo(0,0));await page.screenshot({path:path.join(shots,'lockout-prerequisite-desktop.png'),fullPage:true});
+ const beforeGuide=requests.length;await page.locator('[data-dependency-plan]').click();await page.locator('.domain-value-plan').waitFor();let related=requests.filter(x=>x.path==='/api/gpo/preview').at(-1).body;assert.equal(related.setting,'1.2.4');assert.equal(related.itemValues[0][0],'15');assert.equal(related.gpoId,gpo.id);assert.equal(related.scopeDn,dn);assert.equal(await page.locator('#approval-ok').isChecked(),false);
+ assert.equal(requests.slice(beforeGuide).filter(x=>/\/(apply|rollback|refresh)$/.test(x.path)).length,0,'Preparing prerequisite must not write or refresh');
+ await page.locator('[data-dependency-return]').click();await page.locator('[data-dependency-blocked]').waitFor();assert.equal(await page.locator('#gpo-apply').count(),0,'Returning before prerequisite completion must remain blocked');
+ await page.setViewportSize({width:390,height:844});await page.locator('[data-dependency-blocked]').scrollIntoViewIfNeeded();await page.waitForTimeout(400);await page.locator('[data-dependency-blocked]').screenshot({path:path.join(shots,'lockout-prerequisite-mobile.png')});assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));await page.setViewportSize({width:1440,height:1000});
+ await page.locator('[data-dependency-plan]').click();await page.locator('.domain-value-plan').waitFor();windowValue=15;await page.locator('[data-dependency-return]').click();await page.locator('.domain-value-plan').waitFor();const original=requests.filter(x=>x.path==='/api/gpo/preview').at(-1).body;assert.equal(original.setting,'1.2.1');assert.equal(original.itemValues[0][0],'15');assert.equal(await page.locator('[data-dependency-blocked]').count(),0);assert.equal(await page.locator('#approval-ok').isChecked(),false);assert.deepEqual(errors,[]);
+ console.log('PASS guided lockout repair: explicit 1.2.4 preview, preserved GPO/domain, no automatic writes, blocked early return, live original re-preview, mobile fit');
  requireSignIn=true;const login=await browser.newPage({viewport:{width:1440,height:1000}});await login.goto(base+'/#/dashboard');await login.locator('.operator-sign-in').waitFor();
  assert.equal(await login.locator('.operator-sign-in-emblem svg').count(),1,'Sign-in uses a different brand mark');
  assert.equal(await login.locator('.operator-sign-in button').evaluate(e=>getComputedStyle(e).backgroundImage),'none');

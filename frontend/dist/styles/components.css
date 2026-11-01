@@ -97,3 +97,11 @@ input:not([type=checkbox]),select,textarea{font-size:var(--text-14);border-radiu
 
 .value-source { display: block; margin-top: 6px; overflow-wrap: anywhere; font-size: 12px; font-weight: 400; }
 .value-source span { display: block; font-size: 11px; }
+
+/* Explicit lockout prerequisite review; never hides a related write in Apply. */
+.policy-dependency{padding:20px;border:1px solid var(--color-warning);border-radius:var(--radius-md);background:var(--color-warning-soft);overflow-wrap:anywhere}
+.policy-dependency h3{margin-top:0}.policy-dependency dl{display:grid;gap:12px;margin:16px 0}.policy-dependency dl div{display:grid;gap:4px}.policy-dependency dt{font-size:var(--text-12);color:var(--color-text-muted)}.policy-dependency dd{margin:0;font-weight:700}
+.policy-dependency-return{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;padding:16px;margin-bottom:16px;border:1px solid var(--color-border);border-radius:var(--radius-md);background:var(--color-surface)}
+
+.dependency-status{padding:8px 12px;border-radius:var(--radius-sm);background:var(--color-warning-soft);color:var(--color-warning);font-size:var(--text-12);font-weight:700;white-space:nowrap}
+[data-dependency-blocked] .plan-facts{grid-template-columns:repeat(2,minmax(0,1fr))}@media(max-width:600px){[data-dependency-blocked] .plan-facts{grid-template-columns:1fr}}
