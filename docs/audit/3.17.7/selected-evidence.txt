@@ -1,0 +1,789 @@
+WorkflowRegression
+PASS full read-only inventory with explicit write boundary enforcement
+PASS 413 exact remediation mappings across all 405 controls; benchmark scans and required inclusion preserved
+PASS 11 controls require explicit values/environment review
+PASS 1560 control/refresh/priority combinations on a non-default GPO; 11 controls block automatic writes
+PASS audit integrity: empty chain, valid chain and first tampered event
+PASS mapping upgrades: stale writes blocked; snapshot rollback and restored-snapshot verification remain available
+PASS legacy domain threshold success cannot hide exact-value mismatch
+PASS invalid OU/PDC refresh rejected at submission and execution without replacing recorded result or invoking native executor
+PASS real user refresh submission: top-level Scope reaches validation and stored consent; PDC and missing session endpoint OU rejected before enqueue; no native execution
+PASS fresh evidence snapshots, preserved prior exports, five independent stages, scheduled-not-completed and endpoint mismatch separation
+PASS lockout prerequisite blocks submission; recorded target authorization reuses current exact grant and rejects other actors
+PASS session target authorization: second GPO without config changes/restart; preview/readiness, exact pair, actor, other-session, disconnect and absolute-expiry guards; no native execution
+PASS optional-comparator legacy hash compatibility and version-only evidence migration boundary
+PASS custom value resolution/types/read-only boundary, canonical mapping isolation and legacy selection serialization; optional user samples
+PASS audit fixes: default/custom intent, escaped DN ancestry, all 405 history rows, actor isolation, complete hashed evidence and discovery after heartbeat
+
+Test-RemediationChain
+PASS mapping exists 1.1.1
+PASS unconfigured source 1.1.1
+PASS readiness 1.1.1 LocalComputers
+PASS backup/write/link/publication 1.1.1 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS configured source 1.1.1
+PASS matching stored GPO without target link is not NO_CHANGE 1.1.1
+PASS Apply does not schedule unrequested endpoint refresh
+PASS explicit refresh schedules exactly one target 1.1.1
+PASS snapshot rollback 1.1.1
+PASS rollback read-back 1.1.1
+PASS rollback clears configured value and source 1.1.1
+PASS mapping exists 1.1.1
+PASS unconfigured source 1.1.1
+PASS readiness 1.1.1 Domain
+PASS backup/write/link/publication 1.1.1 Domain: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS configured source 1.1.1
+PASS matching stored GPO without target link is not NO_CHANGE 1.1.1
+PASS Apply does not schedule unrequested endpoint refresh
+PASS explicit refresh schedules exactly one target 1.1.1
+PASS snapshot rollback 1.1.1
+PASS rollback read-back 1.1.1
+PASS rollback clears configured value and source 1.1.1
+PASS mapping exists 1.2.2
+PASS GPO 5 / AD 0 is a real change, never NO_CHANGE
+PASS readiness 1.2.2 Domain
+PASS backup/write/link/publication 1.2.2 Domain: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS configured source 1.2.2
+PASS matching stored GPO without target link is not NO_CHANGE 1.2.2
+PASS Apply does not schedule unrequested endpoint refresh
+PASS explicit refresh schedules exactly one target 1.2.2
+PASS Apply writes and reads back the effective AD threshold
+PASS User incident: GPO 5 / AD 0 is measured as mismatch with actual value 0
+PASS External AD policy change blocks rollback without overwriting it
+PASS snapshot rollback 1.2.2
+PASS rollback read-back 1.2.2
+PASS Rollback restores the recorded AD threshold separately from the GPO snapshot
+PASS Denied domain write never reports success and retains the pre-change AD snapshot
+PASS A silent no-op AD setter cannot become a successful Apply
+PASS mapping exists 2.3.1.1
+PASS unconfigured source 2.3.1.1
+PASS readiness 2.3.1.1 LocalComputers
+PASS backup/write/link/publication 2.3.1.1 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS configured source 2.3.1.1
+PASS matching stored GPO without target link is not NO_CHANGE 2.3.1.1
+PASS Apply does not schedule unrequested endpoint refresh
+PASS explicit refresh schedules exactly one target 2.3.1.1
+PASS snapshot rollback 2.3.1.1
+PASS rollback read-back 2.3.1.1
+PASS rollback clears configured value and source 2.3.1.1
+PASS mapping exists 18.4.4
+PASS unconfigured source 18.4.4
+PASS readiness 18.4.4 LocalComputers
+PASS backup/write/link/publication 18.4.4 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS configured source 18.4.4
+PASS matching stored GPO without target link is not NO_CHANGE 18.4.4
+PASS Apply does not schedule unrequested endpoint refresh
+PASS explicit refresh schedules exactly one target 18.4.4
+PASS snapshot rollback 18.4.4
+PASS rollback read-back 18.4.4
+PASS rollback clears configured value and source 18.4.4
+PASS mapping exists 17.1.1
+PASS unconfigured source 17.1.1
+PASS readiness 17.1.1 LocalComputers
+PASS backup/write/link/publication 17.1.1 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS configured source 17.1.1
+PASS matching stored GPO without target link is not NO_CHANGE 17.1.1
+PASS Apply does not schedule unrequested endpoint refresh
+PASS explicit refresh schedules exactly one target 17.1.1
+PASS snapshot rollback 17.1.1
+PASS rollback read-back 17.1.1
+PASS rollback clears configured value and source 17.1.1
+PASS mapping exists 19.5.1.1
+PASS unconfigured source 19.5.1.1
+PASS readiness 19.5.1.1 Users
+PASS backup/write/link/publication 19.5.1.1 Users: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS configured source 19.5.1.1
+PASS matching stored GPO without target link is not NO_CHANGE 19.5.1.1
+PASS Apply does not schedule unrequested endpoint refresh
+PASS snapshot rollback 19.5.1.1
+PASS rollback read-back 19.5.1.1
+PASS rollback clears configured value and source 19.5.1.1
+PASS mapping exists 1.1.3
+PASS unconfigured source 1.1.3
+PASS readiness 1.1.3 Domain
+PASS backup/write/link/publication 1.1.3 Domain: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS configured source 1.1.3
+PASS matching stored GPO without target link is not NO_CHANGE 1.1.3
+PASS Apply does not schedule unrequested endpoint refresh
+PASS explicit refresh schedules exactly one target 1.1.3
+PASS snapshot rollback 1.1.3
+PASS rollback read-back 1.1.3
+PASS rollback clears configured value and source 1.1.3
+PASS mapping exists 1.1.4
+PASS unconfigured source 1.1.4
+PASS readiness 1.1.4 Domain
+PASS backup/write/link/publication 1.1.4 Domain: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS configured source 1.1.4
+PASS matching stored GPO without target link is not NO_CHANGE 1.1.4
+PASS Apply does not schedule unrequested endpoint refresh
+PASS explicit refresh schedules exactly one target 1.1.4
+PASS snapshot rollback 1.1.4
+PASS rollback read-back 1.1.4
+PASS rollback clears configured value and source 1.1.4
+PASS mapping exists 1.1.5
+PASS unconfigured source 1.1.5
+PASS readiness 1.1.5 Domain
+PASS backup/write/link/publication 1.1.5 Domain: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS configured source 1.1.5
+PASS matching stored GPO without target link is not NO_CHANGE 1.1.5
+PASS Apply does not schedule unrequested endpoint refresh
+PASS explicit refresh schedules exactly one target 1.1.5
+PASS snapshot rollback 1.1.5
+PASS rollback read-back 1.1.5
+PASS rollback clears configured value and source 1.1.5
+PASS mapping exists 1.1.6
+PASS unconfigured source 1.1.6
+PASS readiness 1.1.6 Domain
+PASS backup/write/link/publication 1.1.6 Domain: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS configured source 1.1.6
+PASS matching stored GPO without target link is not NO_CHANGE 1.1.6
+PASS Apply does not schedule unrequested endpoint refresh
+PASS explicit refresh schedules exactly one target 1.1.6
+PASS snapshot rollback 1.1.6
+PASS rollback read-back 1.1.6
+PASS rollback clears configured value and source 1.1.6
+PASS mapping exists 1.2.1
+PASS unconfigured source 1.2.1
+PASS readiness 1.2.1 Domain
+PASS backup/write/link/publication 1.2.1 Domain: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS configured source 1.2.1
+PASS matching stored GPO without target link is not NO_CHANGE 1.2.1
+PASS Apply does not schedule unrequested endpoint refresh
+PASS explicit refresh schedules exactly one target 1.2.1
+PASS snapshot rollback 1.2.1
+PASS rollback read-back 1.2.1
+PASS rollback clears configured value and source 1.2.1
+PASS mapping exists 1.2.4
+PASS unconfigured source 1.2.4
+PASS readiness 1.2.4 Domain
+PASS backup/write/link/publication 1.2.4 Domain: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS configured source 1.2.4
+PASS matching stored GPO without target link is not NO_CHANGE 1.2.4
+PASS Apply does not schedule unrequested endpoint refresh
+PASS explicit refresh schedules exactly one target 1.2.4
+PASS snapshot rollback 1.2.4
+PASS rollback read-back 1.2.4
+PASS rollback clears configured value and source 1.2.4
+PASS mapping exists 1.2.3
+PASS unconfigured source 1.2.3
+PASS readiness 1.2.3 LocalComputers
+PASS backup/write/link/publication 1.2.3 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS configured source 1.2.3
+PASS matching stored GPO without target link is not NO_CHANGE 1.2.3
+PASS Apply does not schedule unrequested endpoint refresh
+PASS explicit refresh schedules exactly one target 1.2.3
+PASS snapshot rollback 1.2.3
+PASS rollback read-back 1.2.3
+PASS rollback clears configured value and source 1.2.3
+PASS mapping exists 2.2.6
+PASS unconfigured source 2.2.6
+PASS readiness 2.2.6 LocalComputers
+PASS backup/write/link/publication 2.2.6 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS configured source 2.2.6
+PASS matching stored GPO without target link is not NO_CHANGE 2.2.6
+PASS Apply does not schedule unrequested endpoint refresh
+PASS explicit refresh schedules exactly one target 2.2.6
+PASS snapshot rollback 2.2.6
+PASS rollback read-back 2.2.6
+PASS rollback clears configured value and source 2.2.6
+PASS reviewed 2.2.6 write denial remains review-required
+PASS Verify retains original reviewed 2.2.6 failure 1
+PASS verification never exposes raw native errors
+PASS Verify retains original reviewed 2.2.6 failure 2
+PASS verification never exposes raw native errors
+PASS repeated Verify never retries the reviewed write
+PASS refresh stays blocked until interrupted publication is repaired
+PASS fresh reviewed repair plan completes 2.2.6 publication and link
+PASS explicit gpupdate becomes available after reviewed repair publication
+PASS reviewed repair retains snapshot rollback
+PASS mapping exists 2.2.16
+PASS unconfigured source 2.2.16
+PASS readiness 2.2.16 LocalComputers
+PASS backup/write/link/publication 2.2.16 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS configured source 2.2.16
+PASS matching stored GPO without target link is not NO_CHANGE 2.2.16
+PASS Apply does not schedule unrequested endpoint refresh
+PASS explicit refresh schedules exactly one target 2.2.16
+PASS snapshot rollback 2.2.16
+PASS rollback read-back 2.2.16
+PASS rollback clears configured value and source 2.2.16
+PASS mapping exists 2.2.31
+PASS unconfigured source 2.2.31
+PASS readiness 2.2.31 LocalComputers
+PASS backup/write/link/publication 2.2.31 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS configured source 2.2.31
+PASS matching stored GPO without target link is not NO_CHANGE 2.2.31
+PASS Apply does not schedule unrequested endpoint refresh
+PASS explicit refresh schedules exactly one target 2.2.31
+PASS snapshot rollback 2.2.31
+PASS rollback read-back 2.2.31
+PASS rollback clears configured value and source 2.2.31
+PASS mapping exists 2.2.33
+PASS unconfigured source 2.2.33
+PASS readiness 2.2.33 LocalComputers
+PASS backup/write/link/publication 2.2.33 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS configured source 2.2.33
+PASS matching stored GPO without target link is not NO_CHANGE 2.2.33
+PASS Apply does not schedule unrequested endpoint refresh
+PASS explicit refresh schedules exactly one target 2.2.33
+PASS snapshot rollback 2.2.33
+PASS rollback read-back 2.2.33
+PASS rollback clears configured value and source 2.2.33
+PASS mapping exists 2.2.36
+PASS unconfigured source 2.2.36
+PASS readiness 2.2.36 LocalComputers
+PASS backup/write/link/publication 2.2.36 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS configured source 2.2.36
+PASS matching stored GPO without target link is not NO_CHANGE 2.2.36
+PASS Apply does not schedule unrequested endpoint refresh
+PASS explicit refresh schedules exactly one target 2.2.36
+PASS snapshot rollback 2.2.36
+PASS rollback read-back 2.2.36
+PASS rollback clears configured value and source 2.2.36
+PASS mapping exists 2.2.39
+PASS unconfigured source 2.2.39
+PASS readiness 2.2.39 LocalComputers
+PASS backup/write/link/publication 2.2.39 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS configured source 2.2.39
+PASS matching stored GPO without target link is not NO_CHANGE 2.2.39
+PASS Apply does not schedule unrequested endpoint refresh
+PASS explicit refresh schedules exactly one target 2.2.39
+PASS snapshot rollback 2.2.39
+PASS rollback read-back 2.2.39
+PASS rollback clears configured value and source 2.2.39
+PASS mapping exists 2.2.45
+PASS unconfigured source 2.2.45
+PASS readiness 2.2.45 LocalComputers
+PASS backup/write/link/publication 2.2.45 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS configured source 2.2.45
+PASS matching stored GPO without target link is not NO_CHANGE 2.2.45
+PASS Apply does not schedule unrequested endpoint refresh
+PASS explicit refresh schedules exactly one target 2.2.45
+PASS snapshot rollback 2.2.45
+PASS rollback read-back 2.2.45
+PASS rollback clears configured value and source 2.2.45
+PASS mapping exists 2.3.11.6
+PASS unconfigured source 2.3.11.6
+PASS readiness 2.3.11.6 LocalComputers
+PASS backup/write/link/publication 2.3.11.6 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS configured source 2.3.11.6
+PASS matching stored GPO without target link is not NO_CHANGE 2.3.11.6
+PASS Apply does not schedule unrequested endpoint refresh
+PASS explicit refresh schedules exactly one target 2.3.11.6
+PASS snapshot rollback 2.3.11.6
+PASS rollback read-back 2.3.11.6
+PASS rollback clears configured value and source 2.3.11.6
+PASS mapping exists 18.10.43.10.1
+PASS unconfigured source 18.10.43.10.1
+PASS readiness 18.10.43.10.1 LocalComputers
+PASS backup/write/link/publication 18.10.43.10.1 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS configured source 18.10.43.10.1
+PASS matching stored GPO without target link is not NO_CHANGE 18.10.43.10.1
+PASS Apply does not schedule unrequested endpoint refresh
+PASS explicit refresh schedules exactly one target 18.10.43.10.1
+PASS snapshot rollback 18.10.43.10.1
+PASS rollback read-back 18.10.43.10.1
+PASS rollback clears configured value and source 18.10.43.10.1
+PASS mapping exists 18.10.43.10.2
+PASS unconfigured source 18.10.43.10.2
+PASS readiness 18.10.43.10.2 LocalComputers
+PASS backup/write/link/publication 18.10.43.10.2 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS configured source 18.10.43.10.2
+PASS matching stored GPO without target link is not NO_CHANGE 18.10.43.10.2
+PASS Apply does not schedule unrequested endpoint refresh
+PASS explicit refresh schedules exactly one target 18.10.43.10.2
+PASS snapshot rollback 18.10.43.10.2
+PASS rollback read-back 18.10.43.10.2
+PASS rollback clears configured value and source 18.10.43.10.2
+PASS recovery fixture publication
+PASS pre-restore access denial preserves the recoverable manifest phase
+PASS denied restore does not mutate GPO or link
+PASS failure after import begins remains blocked and retains its stage
+PASS native rollback errors are sanitized
+PASS read-only recovery assessment exposes the retained block reason
+PASS review-required retry cannot invoke native restore
+PASS backup denial returns failed-safe stage and recovery guidance
+PASS real worker chain: preview, readiness, backup, write, link, publication, rollback and re-verification with mocked directory APIs only
+
+Test-ExactRemediationChain
+PASS backup/write/link/publication 1.1.1 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 1.1.1 Domain: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 1.1.3 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 1.1.3 Domain: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 1.1.4 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 1.1.4 Domain: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 1.1.5 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 1.1.5 Domain: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 1.1.6 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 1.1.6 Domain: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 1.2.1 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 1.2.1 Domain: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS 30/30/0 incident returns actionable 1.2.4 prerequisite without backup/write/link
+PASS Explicit 1.2.4 change updates only window, preserving duration and disabled threshold
+PASS Duration rollback restores actual AD snapshot 30
+PASS backup/write/link/publication 1.2.2 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 1.2.2 Domain: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 1.2.3 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 1.2.4 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 1.2.4 Domain: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS publication failure retains completed write checkpoint checkpoint
+PASS read-only Verify recovers publication without replay and retains failure checkpoint
+PASS recovered publication permits explicit gpupdate checkpoint
+PASS rollback restores the original GPO and reports actual AD 15 to 30 after publication failure checkpoint
+PASS publication failure retains completed write checkpoint legacy
+PASS Live publication can verify without anchoring unrelated GPO drift for rollback
+PASS Explicit refresh remains possible after current publication verification without restoring unrelated settings
+PASS Corrupt retained backup cannot authorize an automatic full restore
+PASS Legacy verification retains external AD mismatch and leaves rollback unanchored
+PASS read-only Verify recovers publication without replay and retains failure legacy
+PASS recovered publication permits explicit gpupdate legacy
+PASS rollback restores the original GPO and reports actual AD 15 to 30 after publication failure legacy
+PASS publication failure retains completed write checkpoint direct
+PASS rollback restores the original GPO and reports actual AD 15 to 30 after publication failure direct
+PASS publication failure retains completed write checkpoint legacy-direct
+PASS rollback restores the original GPO and reports actual AD 15 to 30 after publication failure legacy-direct
+PASS publication failure retains completed write checkpoint legacy-unchanged
+PASS Recovery exposes different pre-change GPO and AD values before optional gpupdate
+PASS rollback restores the original GPO and reports actual AD 15 to 30 after publication failure legacy-unchanged
+PASS backup/write/link/publication 2.2.1 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 2.2.3 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 2.2.4 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 2.2.6 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS refresh stays blocked until interrupted publication is repaired
+PASS fresh reviewed repair plan completes 2.2.6 publication and link
+PASS explicit gpupdate becomes available after reviewed repair publication
+PASS backup/write/link/publication 2.2.8 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 2.2.10 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 2.2.11 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 2.2.12 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 2.2.13 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 2.2.14 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 2.2.15 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 2.2.16 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 2.2.17 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 2.2.19 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 2.2.20 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 2.2.22 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 2.2.23 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 2.2.24 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 2.2.25 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 2.2.27 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 2.2.29 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 2.2.30 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 2.2.31 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 2.2.33 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 2.2.34 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 2.2.35 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 2.2.36 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 2.2.39 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 2.2.40 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 2.2.41 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 2.2.42 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 2.2.43 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 2.2.44 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 2.2.45 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 2.2.46 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 2.2.47 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 2.2.49 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 2.3.1.1 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 2.3.1.2 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 2.3.1.3 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 2.3.1.4 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 2.3.1.5 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 2.3.2.1 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 2.3.2.2 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 2.3.4.1 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 2.3.6.1 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 2.3.6.2 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 2.3.6.3 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 2.3.6.4 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 2.3.6.5 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 2.3.6.6 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 2.3.7.1 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 2.3.7.2 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 2.3.7.3 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 2.3.7.4 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 2.3.7.5 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 2.3.7.6 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 2.3.7.7 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 2.3.7.8 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 2.3.7.9 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 2.3.8.1 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 2.3.8.2 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 2.3.8.3 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 2.3.9.1 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 2.3.9.2 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 2.3.9.3 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 2.3.9.4 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 2.3.9.5 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 2.3.10.1 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 2.3.10.2 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 2.3.10.3 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 2.3.10.4 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 2.3.10.5 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 2.3.10.7 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 2.3.10.8 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 2.3.10.9 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 2.3.10.10 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 2.3.10.11 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 2.3.10.12 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 2.3.10.13 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 2.3.11.1 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 2.3.11.2 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 2.3.11.3 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 2.3.11.4 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 2.3.11.5 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 2.3.11.6 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 2.3.11.7 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 2.3.11.8 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 2.3.11.9 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 2.3.11.10 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 2.3.11.11 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 2.3.11.13 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 2.3.13.1 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 2.3.15.1 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 2.3.15.2 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 2.3.17.1 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 2.3.17.2 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 2.3.17.3 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 2.3.17.4 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 2.3.17.5 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 2.3.17.6 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 2.3.17.7 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 2.3.17.8 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 5.2 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 9.1.1 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 9.1.2 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 9.1.3 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 9.1.4 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 9.1.5 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 9.1.6 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 9.1.7 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 9.2.1 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 9.2.2 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 9.2.3 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 9.2.4 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 9.2.5 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 9.2.6 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 9.2.7 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 9.3.1 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 9.3.2 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 9.3.3 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 9.3.4 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 9.3.5 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 9.3.6 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 9.3.7 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 9.3.8 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 9.3.9 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 17.1.1 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 17.2.1 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 17.2.5 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 17.2.6 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 17.3.1 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 17.3.2 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 17.5.1 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 17.5.2 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 17.5.3 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 17.5.4 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 17.5.5 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 17.5.6 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 17.6.1 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 17.6.2 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 17.6.3 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 17.6.4 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 17.7.1 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 17.7.2 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 17.7.3 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 17.7.4 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 17.7.5 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 17.8.1 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 17.9.1 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 17.9.2 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 17.9.3 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 17.9.4 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 17.9.5 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.1.1.1 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.1.1.2 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.1.2.2 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.1.3 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.4.1 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.4.2 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.4.3 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.4.4 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.4.5 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.4.6 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.4.7 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.4.8 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.5.1 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.5.2 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.5.3 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.5.4 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.5.5 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.5.6 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.5.7 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.5.8 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.5.9 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.5.10 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.5.11 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.5.12 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.6.4.1 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.6.4.2 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.6.4.3 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.6.4.4 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.6.5.1 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.6.8.1 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.6.9.1 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.6.9.2 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.6.10.2 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.6.11.2 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.6.11.3 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.6.11.4 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.6.14.1 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.6.19.2.1 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.6.20.1 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.6.20.2 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.6.21.1 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.6.21.2 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.7.1 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.7.2 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.7.3 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.7.4 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.7.5 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.7.6 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.7.7 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.7.8 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.7.9 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.7.10 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.7.11 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.7.12 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.8.1.1 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.9.3.1 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.9.4.1 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.9.4.2 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.9.5.1 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.9.5.2 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.9.5.3 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.9.5.4 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.9.5.5 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.9.5.7 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.9.7.2 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.9.13.1 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.9.19.2 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.9.19.3 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.9.19.4 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.9.19.5 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.9.19.6 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.9.19.7 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.9.20.1.1 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.9.20.1.2 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.9.20.1.3 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.9.20.1.4 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.9.20.1.5 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.9.20.1.6 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.9.20.1.7 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.9.20.1.8 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.9.20.1.9 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.9.20.1.10 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.9.20.1.11 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.9.20.1.12 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.9.20.1.13 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.9.23.1 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.9.24.1 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.9.25.1 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.9.25.2 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.9.25.3 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.9.25.4 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.9.25.5 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.9.25.6 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.9.25.7 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.9.25.8 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.9.27.1 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.9.28.1 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.9.28.2 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.9.28.3 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.9.28.4 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.9.28.5 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.9.28.6 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.9.28.7 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.9.31.1 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.9.31.2 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.9.33.6.1 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.9.33.6.2 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.9.33.6.3 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.9.33.6.4 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.9.35.1 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.9.35.2 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.9.36.1 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.9.36.2 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.9.47.5.1 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.9.47.11.1 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.9.49.1 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.9.51.1.1 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.9.51.1.2 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.10.4.1 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.10.6.1 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.10.8.1 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.10.8.2 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.10.8.3 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.10.9.1.1 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.10.11.1 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.10.13.1 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.10.13.2 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.10.14.1 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.10.15.1 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.10.15.2 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.10.16.1 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.10.16.2 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.10.16.3 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.10.16.4 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.10.16.5 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.10.16.6 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.10.16.7 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.10.18.1 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.10.18.2 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.10.18.3 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.10.18.4 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.10.18.5 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.10.18.6 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.10.18.7 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.10.26.1.1 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.10.26.1.2 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.10.26.2.1 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.10.26.2.2 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.10.26.3.1 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.10.26.3.2 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.10.26.4.1 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.10.26.4.2 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.10.29.2 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.10.29.3 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.10.29.4 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.10.29.5 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.10.37.1 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.10.41.1 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.10.42.1 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.10.43.4.1 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.10.43.5.1 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.10.43.5.2 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.10.43.6.1.1 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.10.43.6.1.2 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.10.43.6.3.1 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.10.43.7.1 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.10.43.10.1 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.10.43.10.2 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.10.43.10.3 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.10.43.10.4 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.10.43.10.5 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.10.43.12.1 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.10.43.16 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.10.43.17 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.10.43.8.1 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.10.43.11.1.1.1 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.10.43.11.1.1.2 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.10.43.11.1.2.1 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.10.43.13.1 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.10.43.13.2 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.10.43.13.3 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.10.43.13.4 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.10.43.13.5 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.10.51.1 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.10.56.1 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.10.57.2.2 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.10.57.3.2.1 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.10.57.3.3.1 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.10.57.3.3.2 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.10.57.3.3.3 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.10.57.3.3.4 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.10.57.3.9.1 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.10.57.3.9.2 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.10.57.3.9.3 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.10.57.3.9.4 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.10.57.3.9.5 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.10.57.3.10.1 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.10.57.3.10.2 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.10.57.3.11.1 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.10.57.3.11.2 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.10.58.1 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.10.58.2 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.10.59.2 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.10.59.3 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.10.59.4 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.10.63.1 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.10.76.2.1 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.10.80.1 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.10.80.2 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.10.81.1 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.10.81.2 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.10.81.3 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.10.82.1 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.10.87.1 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.10.87.2 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.10.89.2.3 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.10.89.1.1 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.10.89.1.2 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.10.89.1.3 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.10.89.2.1 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.10.89.2.2 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.10.89.2.4 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.10.90.1 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.10.92.2.1 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.10.93.1.1 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.10.93.2.1 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.10.93.2.2 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.10.93.4.1 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.10.93.4.2 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 18.10.93.4.3 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 19.5.1.1 Users: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 19.6.6.1.1 Users: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 19.7.5.1 Users: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 19.7.5.2 Users: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 19.7.8.1 Users: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 19.7.8.2 Users: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 19.7.8.3 Users: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 19.7.8.4 Users: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 19.7.8.5 Users: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 19.7.26.1 Users: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 19.7.42.1 Users: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS backup/write/link/publication 19.7.44.2.1 Users: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS recovery fixture publication
+PASS denied restore does not mutate GPO or link
+PASS real worker chain: preview, readiness, backup, write, link, publication, rollback and re-verification with mocked directory APIs only
+
+Test-VerificationLifecycle
+PASS streamed checks do not contaminate the metadata return value
+PASS each controller emits checking and measured result before return
+PASS transport serializes product-owned information records as separate progress frames
+PASS verification page remains bounded
+PASS verification page remains bounded
+PASS verification page remains bounded
+PASS verification page remains bounded
+PASS verification page remains bounded
+PASS verification page remains bounded
+PASS verification page remains bounded
+PASS verification page remains bounded
+PASS verification page remains bounded
+PASS every pinned endpoint is checked exactly once across pages
+PASS equal versions and content converge
+PASS equal versions with different SYSVOL content cannot converge
+PASS equal policy files with different CSE metadata cannot converge
+PASS different user CSE metadata cannot converge
+PASS unreachable DC cannot prove convergence
+PASS truncated DC population cannot prove full convergence
+PASS exact supported DC bound is fully checked
+PASS signed and unsigned AD versions normalize without BitConverter overloads
+PASS locked GPT.INI returns explicit unavailable metadata without crashing or exposing paths
+PASS metadata recovers after the GPT.INI lock is released
+PASS invalid GPT version remains unverified with a precise diagnostic
+PASS post-readiness exit has its own diagnosis
+PASS post-readiness summary preserves observed chronology
+
+Test-DomainAccountUi
+PASS guided lockout repair: explicit 1.2.4 preview, preserved GPO/domain, no automatic writes, blocked early return, live original re-preview, mobile fit
+PASS publication recovery UI: certified Verify unlocks refresh; rollback displays actual AD 30 and restore target 30
+PASS GPO-only rollback UI: saved restore value and retained rollback context after a safe preflight failure
+PASS failed rollback UI: actual AD 15 versus restore target 30, explicit recovery review and no forward-value repair
+PASS domain account UI: actual AD 0 versus requested/GPO 5, visible mismatch, repair plan, single workflow bar, aligned sidebar, consistent sign-in and desktop/mobile fit; no live AD.
+
+Test-RecoveryUi
+Recovery UI: PASS (desktop/mobile, recovery refresh, user OU/endpoint OU/verification identity targeting, and user PDC exclusion).
+
+built-source-match
+PASS current backend/frontend source fingerprints and distributed runtime ZIP SHA-256

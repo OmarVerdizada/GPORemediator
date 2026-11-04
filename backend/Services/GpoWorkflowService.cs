@@ -401,7 +401,7 @@ public sealed class GpoWorkflowService(IConfiguration config,Store store,Operati
         AssertContext(run.Plan,c,actor);
         if(store.List<WorkflowJob>("workflow_jobs").Any(job=>job.Action=="apply"&&job.PlanIds.Length>1&&job.CompletedIds.Contains(id)))
             throw new PolicyException("BATCH_RECOVERY_REQUIRED","This is part of a recorded multi-control batch. Use its server recovery workflow instead of single-control rollback.");
-        return await Run<object>("gpoRollbackInspect",c,new{plan=run.Plan},ct);
+        return await Run<object>("gpoRollbackInspect",c,new{plan=run.Plan,mapping=ProductionGpoMappings.Effective(run.Plan.Selection)},ct);
     }
     public GpoEvidence Evidence(string id,string actor)
     {

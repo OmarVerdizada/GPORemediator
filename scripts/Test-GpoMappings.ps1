@@ -169,6 +169,7 @@ Assert-Test (!(Snapshot-ExtensionsMatch @{beforeExtensions='security'} 'fixture'
 Assert-Test (Snapshot-ExtensionsMatch @{beforeExtensions='security';beforeUserExtensions=''} 'fixture' @{accountScope='Users'}) 'Recorded empty user CSE baseline was rejected'
 Assert-Test (!(Snapshot-ExtensionsMatch @{beforeExtensions='security';beforeUserExtensions='user CSE'} 'fixture' @{accountScope='Users'})) 'Changed user CSE metadata passed rollback verification'
 function Scope-Links {param($Dn) return 'old links'}
+function Get-GPInheritance {param($Target,$Domain,$Server) return [pscustomobject]@{GpoLinks=@()}}
 function Verification-Metadata {param($S) return @{versionsMatch=$true}}
 function Mapping-Display {param($Id,$Map,$S,$Desired) return 'restored'}
 $script:refreshCalls=@()

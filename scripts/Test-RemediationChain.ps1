@@ -1,6 +1,6 @@
 ﻿# Real worker dispatch + writer + manifests against private filesystem fixtures.
 # AD, GPMC, DNS and remote endpoints are mocked. No live domain is contacted.
-param([switch]$AllControls,[switch]$ReviewedControlsOnly,[switch]$ExactPlans,[switch]$LockoutIncidentOnly,[string]$ReportPath)
+param([switch]$AllControls,[switch]$ReviewedControlsOnly,[switch]$ExactPlans,[switch]$LockoutIncidentOnly,[switch]$PublicationRecoveryOnly,[string]$ReportPath)
 $ErrorActionPreference='Stop';Set-StrictMode -Version Latest
 $repo=Split-Path $PSScriptRoot -Parent
 $temp=Join-Path ([IO.Path]::GetTempPath()) ('gpr-chain-'+[guid]::NewGuid().ToString('N'))
@@ -64,7 +64,8 @@ function Backup-GPO {param($Guid,$Path,$Domain,$Server,$Comment)
  $snapshot=Join-Path $Path 'snapshot';$null=New-Item -ItemType Directory -Path $snapshot
  Copy-Item -Path (Join-Path $script:folder '*') -Destination $snapshot -Recurse
  $script:snapshot=@{version=$script:version;extensions=$script:extensions;userExtensions=$script:userExtensions;registry=$script:registry.Clone()}
- [pscustomobject]@{Id=[guid]::NewGuid()}
+ $backupId=[guid]::NewGuid();$native=Join-Path (Join-Path $Path $backupId.ToString('B')) 'DomainSysvol/GPO';$null=New-Item -ItemType Directory -Path $native -Force;Copy-Item -Path (Join-Path $script:folder '*') -Destination $native -Recurse
+ [pscustomobject]@{Id=$backupId}
 }
 function Import-GPO {param($BackupId,$TargetGuid,$Path,$Domain,$Server)
  Get-ChildItem -LiteralPath $script:folder -Force|Remove-Item -Recurse -Force
@@ -72,6 +73,65 @@ function Import-GPO {param($BackupId,$TargetGuid,$Path,$Domain,$Server)
  $script:version=$script:snapshot.version;$script:extensions=$script:snapshot.extensions;$script:userExtensions=$script:snapshot.userExtensions;$script:registry=$script:snapshot.registry.Clone()
 }
 function Invoke-GPUpdate {param($Computer,$Force,$RandomDelayInMinutes,$ErrorAction,$Target) $script:refreshes++}
+function Test-PublicationRecovery($Selection,$Mapping){
+ $s=$Selection.Clone();$s.refresh='None'
+ $originalVerifier=(Get-Item Function:\Verify-Published).ScriptBlock
+ $script:publicationVerifier=$originalVerifier
+ try{
+  foreach($mode in @('checkpoint','legacy','direct','legacy-direct','legacy-unchanged')){
+   $script:domainState.LockoutDuration=[timespan]::FromMinutes(30);$script:domainState.LockoutObservationWindow=[timespan]::FromMinutes(30);$script:domainState.LockoutThreshold=0
+   New-GPLink -Guid ([guid]$s.gpoId) -Target $s.scopeDn -Domain $cfg.domain -Server $cfg.domainController -LinkEnabled Yes -Order 1|Out-Null
+   $path=Security-Path $s.gpoId;$null=[IO.Directory]::CreateDirectory([IO.Path]::GetDirectoryName($path))
+   $item=@(Mapping-Items $Mapping)[0]
+   $initial=if($mode -eq 'legacy-unchanged'){'15'}else{'30'}
+   Atomic-Text $path (Set-SecurityTemplateValue '' ([string]$item.section) ([string]$item.key) $initial) ([Text.Encoding]::Unicode)
+   $foreign=Join-Path $script:folder 'unrelated-policy.txt';[IO.File]::WriteAllText($foreign,'retain')
+   $plan=@{id=[guid]::NewGuid().ToString('N');domain=$cfg.domain;domainController=$cfg.domainController;selection=$s;preview=(Preview $s $Mapping)}
+   $script:failPublication=$true
+   function Verify-Published {param($Plan,$Map,[bool]$CheckEndpoints=$false) if($script:failPublication){$script:failPublication=$false;throw [Management.Automation.MethodInvocationException]::new('Fixture metadata invocation failure')};return & $script:publicationVerifier $Plan $Map $CheckEndpoints}
+   $Operation='gpoApply';$Data=@{plan=$plan;mapping=$Mapping;consent=@{confirmation='APPLY'}};$failed=& $dispatch
+   $directory=Run-Directory $plan;$manifestPath=Join-Path $directory 'manifest.json';$manifest=Get-Content -LiteralPath $manifestPath -Raw|ConvertFrom-Json
+   Check ($failed.state -eq 'REVIEW_REQUIRED' -and $script:domainState.LockoutObservationWindow.TotalMinutes -eq 15 -and $manifest.failure.stage -eq 'PUBLICATION_CHECK' -and $manifest.postFingerprint) ('publication failure retains completed write checkpoint '+$mode)
+   if($mode -like 'legacy*'){$manifest.postFingerprint=$null;Save-Manifest $manifest $directory}
+   if($mode -eq 'legacy'){
+    [IO.File]::WriteAllText($foreign,'external-change')
+    $Operation='gpoVerify';$pending=& $dispatch
+    Check ($pending.state -eq 'PUBLISHED' -and [IO.File]::ReadAllText($foreign) -eq 'external-change' -and !(Get-Content -LiteralPath $manifestPath -Raw|ConvertFrom-Json).postFingerprint) 'Live publication can verify without anchoring unrelated GPO drift for rollback'
+    $Operation='gpoRefresh';$Data.refresh='Pdc';$refreshDrift=& $dispatch;Check ($refreshDrift.state -in @('REFRESH_SCHEDULED','REFRESH_COMPLETED') -and [IO.File]::ReadAllText($foreign) -eq 'external-change') 'Explicit refresh remains possible after current publication verification without restoring unrelated settings'
+    $Operation='gpoVerify'
+    [IO.File]::WriteAllText($foreign,'retain')
+    $nativeForeign=Join-Path (Join-Path (Join-Path $directory (([guid]$manifest.backupId).ToString('B'))) 'DomainSysvol/GPO') 'unrelated-policy.txt'
+    [IO.File]::WriteAllText($nativeForeign,'corrupt-backup');$pending=& $dispatch
+    Check ($pending.state -eq 'PUBLISHED' -and [IO.File]::ReadAllText($foreign) -eq 'retain' -and !(Get-Content -LiteralPath $manifestPath -Raw|ConvertFrom-Json).postFingerprint) 'Corrupt retained backup cannot authorize an automatic full restore'
+    [IO.File]::WriteAllText($nativeForeign,'retain')
+    $script:domainState.LockoutObservationWindow=[timespan]::FromMinutes(20)
+    $pending=& $dispatch;Check ($pending.state -eq 'PUBLISHED' -and $pending.effectiveStatus -eq 'ENDPOINT_MISMATCH' -and !(Get-Content -LiteralPath $manifestPath -Raw|ConvertFrom-Json).postFingerprint) 'Legacy verification retains external AD mismatch and leaves rollback unanchored'
+    $script:domainState.LockoutObservationWindow=[timespan]::FromMinutes(15)
+   }
+   if($mode -in @('checkpoint','legacy')){
+    $before=Fingerprint $s.gpoId $s.scopeDn
+    $Operation='gpoVerify';$recovered=& $dispatch
+    $receipt=Get-Content -LiteralPath $manifestPath -Raw|ConvertFrom-Json
+    Check ($recovered.state -eq 'PUBLISHED' -and $recovered.gpoPublished -and $recovered.linkVerified -and (Fingerprint $s.gpoId $s.scopeDn) -ceq $before -and $receipt.failure.stage -eq 'PUBLICATION_CHECK' -and $receipt.publicationRecovery.method) ('read-only Verify recovers publication without replay and retains failure '+$mode)
+    $Operation='gpoRefresh';$Data.refresh='Pdc';$refreshed=& $dispatch
+    Check ($refreshed.state -in @('REFRESH_SCHEDULED','REFRESH_COMPLETED') -and $script:domainState.LockoutObservationWindow.TotalMinutes -eq 15) ('recovered publication permits explicit gpupdate '+$mode)
+   }
+   if($mode -eq 'legacy-unchanged'){$Operation='gpoRollbackInspect';$assessment=& $dispatch;Check ($assessment.canRestore -and $assessment.domainSnapshotDiverges) 'Recovery exposes different pre-change GPO and AD values before optional gpupdate'}
+   if($mode -eq 'checkpoint'){
+    $access=(Get-Item Function:\Assert-SelectionAccess).ScriptBlock
+    try{
+     function Assert-SelectionAccess {param($Selection,$Mapping) throw [UnauthorizedAccessException]::new('Fixture restore access denied')}
+     $Operation='gpoRollback';$denied=& $dispatch
+     Check ($denied.state -eq 'FAILED_SAFE' -and $denied.domainPolicy.value -eq '15' -and $denied.domainPolicy.desiredValue -eq '30') 'Denied rollback reports actual AD and restoration target without claiming an effect'
+    }finally{Set-Item Function:\Assert-SelectionAccess $access}
+    $Operation='gpoVerify';$notRestored=& $dispatch
+    Check ($notRestored.state -eq 'ROLLBACK_REVIEW_REQUIRED' -and $notRestored.domainPolicy.value -eq '15' -and $notRestored.domainPolicy.desiredValue -eq '30') 'Read-only Verify cannot hide a blocked rollback as successful Apply'
+   }
+   $Operation='gpoRollback';$restored=& $dispatch
+   Check ($restored.state -eq 'ROLLED_BACK' -and $script:domainState.LockoutObservationWindow.TotalMinutes -eq 30 -and (Get-ItemCurrent $s.gpoId $Mapping $item) -eq $initial -and $restored.domainPolicy.value -eq '30' -and $restored.domainPolicy.desiredValue -eq '30' -and [IO.File]::ReadAllText($foreign) -eq 'retain') ('rollback restores the original GPO and reports actual AD 15 to 30 after publication failure '+$mode)
+  }
+ }finally{Set-Item Function:\Verify-Published $originalVerifier}
+}
 function Test-ExactLockoutIncident($Selection,$Mapping,$ExactFixtures){
  $script:domainState.LockoutDuration=[timespan]::FromMinutes(30);$script:domainState.LockoutObservationWindow=[timespan]::FromMinutes(30)
  $fingerprint=Fingerprint $Selection.gpoId $Selection.scopeDn;$beforeFiles=@(Get-ChildItem -LiteralPath $cfg.backupPath -Recurse -File).Count
@@ -128,6 +188,7 @@ try{
   $cases=@();foreach($entry in $exact){$cases+=,@([string]$entry.mapping.id,[string]$entry.selection.accountScope)}
  }
  if($LockoutIncidentOnly){if(!$ExactPlans){throw 'LockoutIncidentOnly requires ExactPlans'};$cases=@($cases|Where-Object{$_[0] -eq '1.2.1' -and $_[1] -eq 'Domain'})}
+ if($PublicationRecoveryOnly){if(!$ExactPlans){throw 'PublicationRecoveryOnly requires ExactPlans'};$cases=@($cases|Where-Object{$_[0] -eq '1.2.4' -and $_[1] -eq 'Domain'})}
  foreach($case in $cases){
   $map=($catalog|Where-Object id -eq $case[0])|ConvertTo-Json -Depth 15|ConvertFrom-Json
   if($ReviewedControlsOnly){$map=($reviewed|Where-Object{$_.mapping.id -eq $case[0]}).mapping}
@@ -221,10 +282,11 @@ try{
    }finally{Set-Item Function:\Write-Mapping $writerFn;Set-Item Function:\Verify-EffectiveSamples $probeFn}
   }
   if($ExactPlans -and $map.id -eq '1.2.1' -and $case[1] -eq 'Domain'){Test-ExactLockoutIncident $s $map $exact}
+  if($ExactPlans -and $map.id -eq '1.2.4' -and $case[1] -eq 'Domain'){Test-PublicationRecovery $s $map}
   $report+=@{controlId=[string]$map.id;domain=([string]$map.id -split '\.')[0];scope=$case[1];state='PASS';steps=$(if($case[1] -eq 'Users'){@('preview','backup','write','link','source','rollback','verify')}else{@('preview','backup','write','link','source','refresh','rollback','verify')})}
  }
  if($ReportPath){$output=[IO.Path]::GetFullPath($ReportPath);$null=New-Item -ItemType Directory -Path (Split-Path $output -Parent) -Force;$report|ConvertTo-Json -Depth 6|Set-Content -LiteralPath $output -Encoding UTF8}
- if($LockoutIncidentOnly){Write-Output 'PASS focused lockout chain: guided prerequisite, explicit AD 30 -> 15, exact verify, peer drift and snapshot rollback';return}
+ if($LockoutIncidentOnly -or $PublicationRecoveryOnly){Write-Output 'PASS focused lockout chain: guided prerequisite, explicit AD 30 -> 15, exact verify, peer drift and snapshot rollback';return}
  # A denied preflight must not poison an otherwise valid publication manifest.
  $plan.id=[guid]::NewGuid().ToString('N');$Operation='gpoPreview';$Data=@{selection=$s;mapping=$map};$plan.preview=& $dispatch
  $Operation='gpoApply';$Data=@{plan=$plan;mapping=$map;consent=@{confirmation='APPLY'}};$result=& $dispatch

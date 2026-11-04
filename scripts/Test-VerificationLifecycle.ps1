@@ -48,6 +48,18 @@ try{
  Assert-Test (!(Verification-Metadata $selection).replicationConverged) 'truncated DC population cannot prove full convergence'
  $script:count=50
  Assert-Test ((Verification-Metadata $selection).replicationConverged) 'exact supported DC bound is fully checked'
+ Assert-Test ((Gpo-VersionNumber '-1').ToString() -eq '4294967295' -and (Gpo-VersionNumber '4294967295').ToString() -eq '4294967295') 'signed and unsigned AD versions normalize without BitConverter overloads'
+ $gptPath=Join-Path $temp 'local/GPT.INI'
+ $locked=[IO.File]::Open($gptPath,[IO.FileMode]::Open,[IO.FileAccess]::ReadWrite,[IO.FileShare]::None)
+ try{
+  $pending=Verification-Metadata $selection
+  Assert-Test (!$pending.versionsMatch -and !$pending.replicationConverged -and ($pending.replicationWarnings -join ' ') -match 'GPO_FILE_READ_FAILED' -and ($pending.replicationWarnings -join ' ') -notmatch [regex]::Escape($temp)) 'locked GPT.INI returns explicit unavailable metadata without crashing or exposing paths'
+ }finally{$locked.Dispose()}
+ Assert-Test ((Verification-Metadata $selection).replicationConverged) 'metadata recovers after the GPT.INI lock is released'
+ [IO.File]::WriteAllText($gptPath,"[General]`r`nVersion=invalid`r`n")
+ $invalid=Verification-Metadata $selection
+ Assert-Test (!$invalid.versionsMatch -and ($invalid.replicationWarnings -join ' ') -match 'GPO_GPT_VERSION_INVALID') 'invalid GPT version remains unverified with a precise diagnostic'
+ [IO.File]::WriteAllText($gptPath,"[General]`r`nVersion=1`r`n")
  # Parse launcher functions without starting a service or touching ProgramData.
  $launcher=[Management.Automation.Language.Parser]::ParseFile((Join-Path $repo 'GpoRemediator.ps1'),[ref]$tokens,[ref]$errors)
  foreach($fn in $launcher.FindAll({param($n)$n -is [Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -in @('Get-StartupFailureCategory','Get-SafeStartupIssue')},$false)){. ([scriptblock]::Create($fn.Extent.Text))}

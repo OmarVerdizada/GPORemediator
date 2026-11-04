@@ -1,4 +1,6 @@
-# GPO Remediator 3.17.6
+# GPO Remediator 3.17.7
+
+3.17.7 recovers interrupted publication checks, separates live refresh assurance from full rollback safety, and reports actual restored AD values. See [release notes](docs/RELEASE-3.17.7.md).
 
 3.17.6 turns incompatible lockout requests into an actionable prerequisite preview and re-checks target access in the active connection before refresh or rollback. Related settings retain separate explicit approval. See [release notes](docs/RELEASE-3.17.6.md).
 

@@ -83,6 +83,17 @@ function Get-NextComputerVersion {
     return [uint32](($Version -band 4294901760L) -bor $low)
 }
 
+function Read-GpoTextFile {
+    param([string]$Path)
+    for($attempt=0;;$attempt++){
+        try{return [IO.File]::ReadAllText($Path)}catch{
+            $cause=$_.Exception.GetBaseException();$win32=$cause.HResult -band 65535
+            if($cause -is [IO.IOException] -and $win32 -in @(2,3,32,33) -and $attempt -lt 3){Start-Sleep -Milliseconds 100;continue}
+            if($cause -is [UnauthorizedAccessException]){throw 'GPO_FILE_ACCESS_DENIED|Read access to a required GPO file was denied. Check SYSVOL permissions on the selected DC.'}
+            throw ('GPO_FILE_READ_FAILED|A required GPO file could not be read on the selected DC. Native error '+$win32+'. Check SYSVOL availability and file sharing/locks, then re-verify.')
+        }
+    }
+}
 function Get-NormalizedGpoContentFingerprint {
     param([string]$Directory)
     $folder=[IO.Path]::GetFullPath($Directory).TrimEnd('\')
@@ -102,7 +113,7 @@ function Get-NormalizedGpoContentFingerprint {
         foreach ($file in ($files | Sort-Object FullName)) {
             $relative=$file.FullName.Substring($folder.Length).ToLowerInvariant()
             if ($relative -eq '\gpt.ini') {
-                $normalized=Set-TemplateEntry ([IO.File]::ReadAllText($file.FullName)) 'General' 'Version' '0'
+                $normalized=Set-TemplateEntry (Read-GpoTextFile $file.FullName) 'General' 'Version' '0'
                 $hash=[BitConverter]::ToString($sha.ComputeHash([Text.Encoding]::UTF8.GetBytes($normalized))).Replace('-','')
             } else { $hash=(Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash }
             $hashes.Add($relative+':'+$hash)
@@ -111,4 +122,4 @@ function Get-NormalizedGpoContentFingerprint {
     } finally { $sha.Dispose() }
 }
 
-Export-ModuleMember -Function Get-TemplateEntry, Set-TemplateEntry, Set-SecurityTemplateValue, Add-SecurityExtension, Add-AuditExtension, Get-NextComputerVersion, Get-NormalizedGpoContentFingerprint
+Export-ModuleMember -Function Get-TemplateEntry, Set-TemplateEntry, Set-SecurityTemplateValue, Add-SecurityExtension, Add-AuditExtension, Get-NextComputerVersion, Read-GpoTextFile, Get-NormalizedGpoContentFingerprint
