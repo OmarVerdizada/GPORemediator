@@ -4,11 +4,12 @@ const {chromium}=require('playwright');
 async function inspectRecovery(page){if(!await page.locator('[data-rollback]').count()){await page.locator('[data-rollback-inspect]').first().click();await page.locator('[data-rollback]').first().waitFor();}await page.locator('.busy-layer').waitFor({state:'detached'});}
 const root=path.resolve(__dirname,'../frontend/source'),screens=path.resolve(__dirname,'../work/screens');
 fs.mkdirSync(screens,{recursive:true});
+const incidentScreens=path.join(screens,'3.17.8');fs.mkdirSync(incidentScreens,{recursive:true});
 const gpos=[{id:'6ac1786c-016f-11d2-945f-00c04fb984f9',name:'Protected controller policy',protected:true,selectable:true},{id:'31b2f340-016d-11d2-945f-00c04fb984f9',name:'Protected domain policy',protected:true,selectable:true}];
 gpos.push({id:'11111111-1111-1111-1111-111111111111',name:'GPO-Pilot-Computers',protected:false,selectable:true});
 const run={id:'recovery-test',startedAt:'2026-10-06T08:00:00Z',updatedAt:'2026-10-09T08:00:34Z',plan:{selection:{setting:'1.1.4',gpoId:gpos[0].id,scopeDn:'OU=Endpoints,DC=test,DC=local',accountScope:'LocalComputers'},preview:{gpo:gpos[0],scope:{dn:'OU=Endpoints,DC=test,DC=local'},previousValue:0,desiredValue:14},executionUser:'TEST\\operator'},result:{state:'PUBLISHED',backupId:'test-backup-id',gpoPublished:true,linkVerified:true}};
 const inventory={gpos,scopes:[{dn:'DC=test,DC=local',name:'test.local',kind:'Domain'},{dn:'OU=Users,DC=test,DC=local',name:'Users',kind:'OU'},{dn:'OU=Endpoints,DC=test,DC=local',name:'Endpoints',kind:'OU'}],domain:'test.local'};
-let writes=[],refreshRequests=[],rollbackState='ROLLED_BACK',refreshFailure=false,workflowJobs=[];
+let writes=[],refreshRequests=[],rollbackState='ROLLED_BACK',refreshFailure=false,workflowJobs=[],inspectionBlocked=false;
 const jobPosts=[],manualMappings=JSON.parse(fs.readFileSync(path.resolve(__dirname,'../backend/data/gpo-production-mappings.json'),'utf8')).mappings;
 const previewSelections=[];let previewDenied=null,accessDenied=null,accessDelay=0;const accessRequests=[];
 inventory.domainController='dc.test.local';inventory.executionUser='TEST\\operator';
@@ -32,9 +33,9 @@ const server=http.createServer(async(req,res)=>{
    if(previewDenied){res.statusCode=403;res.end(JSON.stringify({code:previewDenied,message:'Fixture permission denied'}));return;}
    data={id:'preview-fixture',selection:payload,executionUser:'TEST\\operator',writeAuthorized:true,preview:{gpo:gpos.find(x=>x.id===payload.gpoId),scope:{dn:payload.scopeDn,kind:payload.accountScope==='Domain'?'Domain':'OU',name:'Users'},previousValue:'0',desiredValue:'1',existingLink:null,refreshComputers:['ws.test.local'],warnings:['User OU policy applies to all eligible users.'],impact:{inheritance:'NORMAL',conflicts:[],existingLinkScopes:[],securityFiltering:[],affectedObjects:{targetKind:'User',scopeDn:payload.scopeDn,users:3,sampleUsers:['one','two','three'],computers:0,servers:0,workstations:0,disabled:0,sampleHosts:[],truncated:false}}}};
   }
-  else if(url.pathname.endsWith('/rollback-preview'))data={canRestore:!String(run.result.state).includes('REVIEW'),manifestPhase:run.result.state==='ROLLED_BACK'?'ROLLED_BACK':'PUBLISHED',reason:'READY',message:'Fixture full snapshot state checked',checkedAt:new Date().toISOString()};
+  else if(url.pathname.endsWith('/rollback-preview'))data={canRestore:!inspectionBlocked&&!String(run.result.state).includes('REVIEW'),manifestPhase:run.result.state==='ROLLED_BACK'?'ROLLED_BACK':'PUBLISHED',reason:inspectionBlocked?'ROLLBACK_CONFLICT':'READY',message:inspectionBlocked?'Fixture external drift blocks restore':'Fixture full snapshot state checked',checkedAt:new Date().toISOString()};
   else if(url.pathname==='/api/gpo/inventory')data=inventory;
-  else if(url.pathname==='/api/gpo/session')data={connected:true};
+  else if(url.pathname==='/api/gpo/session')data={connected:true,sessionId:'recovery-session-one',expiresAt:new Date(Date.now()+900000).toISOString()};
   else if(url.pathname==='/api/gpo/readiness')data={ready:true,checks:[]};
   else if(url.pathname==='/api/workflows')data=workflowJobs;
   else if(url.pathname==='/api/batches')data=[];
@@ -97,7 +98,17 @@ const server=http.createServer(async(req,res)=>{
   await inspectRecovery(page);await page.locator('.ds-recovery input').fill('WRONG');
   assert.equal(await page.locator('.ds-recovery input').evaluate(el=>el.checkValidity()),false);
   await inspectRecovery(page);await page.locator('.ds-recovery input').fill('ROLLBACK');
+  await page.locator('[data-rollback] select').selectOption('Scope');
+  await page.waitForResponse(r=>r.url().endsWith('/api/gpo/session'),{timeout:20000});
+  assert.equal(await page.locator('[data-rollback]').count(),1,'Heartbeat renewal must not discard a pending restore form');
   await page.screenshot({path:path.join(screens,'rollback-details.png')});
+  await page.locator('.ds-recovery button[type=submit]').click();await page.locator('.confirm-dialog').waitFor();assert.match(await page.locator('.confirm-dialog').textContent(),/Scope computers/);assert.equal(writes.length,0,'Heartbeat must preserve scope choice and still require final confirmation');await page.screenshot({path:path.join(incidentScreens,'rollback-scope-confirmation.png')});await page.locator('[data-confirm-cancel]').click();
+  await page.locator('.ds-table button.ds-danger').click();await inspectRecovery(page);await page.locator('.ds-recovery input').fill('ROLLBACK');
+  inspectionBlocked=true;const postsBeforeDrift=jobPosts.length;
+  await page.locator('.ds-recovery button[type=submit]').click();await page.locator('.busy-layer').waitFor({state:'detached'});
+  assert.equal(await page.locator('.confirm-dialog').count(),0,'Fresh drift must block restore confirmation');assert.equal(jobPosts.length,postsBeforeDrift,'Reassessment must not submit a write');assert.match(await page.locator('.rollback-assessment').textContent(),/ROLLBACK_CONFLICT/);
+  inspectionBlocked=false;await inspectRecovery(page);await page.locator('.ds-recovery input').fill('ROLLBACK');
+  console.log('PASS rollback heartbeat: renewed session preserves Scope confirmation; fresh external drift blocks submission without writes');
   await page.locator('.ds-recovery button[type=submit]').click();
   await page.locator('.confirm-dialog').waitFor();
   assert.ok((await page.locator('.confirm-dialog').textContent()).includes('test-backup-id'));
@@ -220,7 +231,7 @@ const server=http.createServer(async(req,res)=>{
   assert.equal(await page.locator('.ux-more-tabs').getAttribute('open'),null);
   await page.setViewportSize({width:1440,height:1000});
   await page.locator('[data-tab=verification]').click();
-  await page.locator('.verification-details summary').first().click();
+  if(!await page.locator('.verification-details').evaluate(el=>el.open))await page.locator('.verification-details summary').first().click();
   await page.locator('.endpoint-evidence').waitFor();
   await page.locator('.manual-check-details summary').click();
   await page.locator('.manual-check-command').waitFor();

@@ -41,7 +41,8 @@ $script:ini="[Privilege Rights]`nSeSystemtimePrivilege = *S-1-5-32-544"
 $checks=@(Verify-EffectiveSamples $plan $map)
 Assert-Test ($checks[0].state -eq 'MISMATCH' -and $checks[0].actualValue -match 'S-1-5-32-544') 'Real mismatch lost its actual evidence'
 $script:nativeExit=5
-Assert-Test ((@(Verify-EffectiveSamples $plan $map))[0].state -eq 'PENDING') 'Failed native export was treated as policy evidence'
+$deniedLsa=(@(Verify-EffectiveSamples $plan $map))[0]
+Assert-Test ($deniedLsa.state -eq 'UNAVAILABLE' -and $null -eq $deniedLsa.actualValue -and $deniedLsa.message -match 'native error 5' -and $deniedLsa.message -match 'Stage READ') 'Native LSA denial lost its error code or became a measured value'
 $script:nativeExit=0;$script:ini='[Privilege Rights]';$map.items[0].value=@()
 Assert-Test ((@(Verify-EffectiveSamples $plan $map))[0].state -eq 'VERIFIED') 'LSA no assigned accounts must match an explicitly empty assignment'
 $map.items[0].value=@('S-1-5-32-546');$map.comparator='includes';$script:ini="[Privilege Rights]`nSeSystemtimePrivilege = *S-1-5-32-546,*S-1-5-113"
@@ -85,6 +86,19 @@ Write-Output 'PASS endpoint evidence: merged policy, scope boundary, SID normali
 # must never certify the rest of a profile or a different profile.
 function Get-ADComputer {param($SearchBase,$SearchScope,$Filter,$Server,$Properties,$ResultSetSize,$ErrorAction) [pscustomobject]@{DNSHostName='ws.example.local'}}
 $script:firewallUnavailable=$false
+$script:firewallPolicyMode='Match';$script:firewallMapping=$null
+function Get-ItemPropertyValue {
+ param($LiteralPath,$Name,$ErrorAction)
+ if($script:firewallPolicyMode -eq 'Missing'){Write-Error 'Fixture missing policy' -ErrorId PropertyNotFound -ErrorAction Stop}
+ if($script:firewallPolicyMode -eq 'Denied'){throw [UnauthorizedAccessException]::new('Fixture denied')}
+ $entry=@($script:firewallMapping.items|Where-Object{$_.name -eq $Name})[0]
+ if($script:firewallPolicyMode -eq 'Different'){return 'different-path'}
+ return $entry.value[0]
+}
+function Get-Item {
+ param($LiteralPath,$ErrorAction)
+ $result=[pscustomobject]@{};$result|Add-Member ScriptMethod GetValueKind {param($name) if($script:firewallPolicyMode -eq 'WrongType'){return 'ExpandString'};return (@($script:firewallMapping.items|Where-Object{$_.name -eq $name})[0].type)};return $result
+}
 $script:firewallProfiles=@{
  Domain=[pscustomobject]@{Name='Domain';Enabled='True';DefaultInboundAction='Block';NotifyOnListen='False';LogFileName='%SystemRoot%\System32\logfiles\firewall\domainfw.log';LogMaxSizeKilobytes=16384;LogBlocked='False';LogAllowed='False'}
  Private=[pscustomobject]@{Name='Private';LogFileName='%SystemRoot%\System32\LogFiles\Firewall\pfirewall.log'}
@@ -98,6 +112,7 @@ function Get-NetFirewallProfile {
 $catalog=Get-Content (Join-Path $root 'backend/data/gpo-production-mappings.json') -Raw|ConvertFrom-Json
 function Test-FirewallControl([string]$Id,[string]$ExpectedState){
  $mapping=$catalog.mappings|Where-Object{$_.id -eq $Id}
+ $script:firewallMapping=$mapping
  foreach($item in $mapping.items){foreach($field in @('section','key','name','type','value','guid','state','mask')){if(!$item.PSObject.Properties[$field]){$item|Add-Member NoteProperty $field $null}}}
  $result=@(Verify-EffectiveSamples $plan $mapping)[0]
  Assert-Test ($result.state -eq $ExpectedState) ($Id+': expected '+$ExpectedState+', got '+($result|ConvertTo-Json -Compress))
@@ -116,6 +131,13 @@ $script:firewallProfiles.Domain.LogFileName='%SYSTEMROOT%\system32\LOGFILES\fire
 $null=Test-FirewallControl '9.1.4' 'VERIFIED'
 $script:firewallProfiles.Private.LogFileName='%SYSTEMROOT%\system32\logfiles\firewall\privatefw.log'
 $null=Test-FirewallControl '9.2.4' 'VERIFIED'
+$script:firewallPolicyMode='Missing';$missingPolicy=Test-FirewallControl '9.2.4' 'MISMATCH'
+Assert-Test ($missingPolicy.actualValue -match 'Policy Private.LogFilePath=<not configured>' -and $missingPolicy.actualValue -match 'Private.LogFileName=') 'ActiveStore match concealed a missing endpoint policy registry value'
+$script:firewallPolicyMode='Different';$null=Test-FirewallControl '9.2.4' 'MISMATCH'
+$script:firewallPolicyMode='WrongType';$null=Test-FirewallControl '9.2.4' 'MISMATCH'
+$script:firewallPolicyMode='Denied';$deniedPolicy=Test-FirewallControl '9.2.4' 'UNAVAILABLE'
+Assert-Test ($null -eq $deniedPolicy.actualValue -and $deniedPolicy.message -match 'FIREWALL_POLICY_READ_UNAVAILABLE') 'Registry read denial was treated as policy mismatch or successful evidence'
+$script:firewallPolicyMode='Match'
 $script:firewallProfiles.Domain.LogBlocked='True'
 $null=Test-FirewallControl '9.1.6' 'VERIFIED'
 $script:firewallProfiles.Domain.LogAllowed='NotConfigured'

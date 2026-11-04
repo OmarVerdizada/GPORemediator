@@ -14,6 +14,7 @@ public sealed class GpoWorkflowService(IConfiguration config,Store store,Operati
     private sealed record Connection(string Actor,string UserName,byte[] Password,GpoInventory Inventory,DateTimeOffset Expires,DateTimeOffset Created)
     {
         public ConcurrentDictionary<string,byte> WriteTargets {get;}=new(StringComparer.Ordinal);
+        public string InspectionSessionId {get;}=Guid.NewGuid().ToString("N");
     }
     private readonly SemaphoreSlim loginSlots=new(4,4);
     private readonly ConcurrentDictionary<string,Connection> connections=new();
@@ -141,7 +142,7 @@ public sealed class GpoWorkflowService(IConfiguration config,Store store,Operati
     public object SessionStatus(string token,string actor)
     {
         var c=Get(token,actor);
-        return new { connected=true, executionUser=c.Inventory.ExecutionUser, expiresAt=c.Expires.ToString("O"), idleTimeoutMinutes=(int)ConnectionIdleTimeout.TotalMinutes };
+        return new { connected=true, sessionId=c.InspectionSessionId, executionUser=c.Inventory.ExecutionUser, expiresAt=c.Expires.ToString("O"), idleTimeoutMinutes=(int)ConnectionIdleTimeout.TotalMinutes };
     }
     public async Task<GpoWorkflowPlan> ReplanAsync(string id,string token,string actor,CancellationToken ct)
     {

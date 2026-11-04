@@ -1,4 +1,6 @@
-# GPO Remediator 3.17.7
+# GPO Remediator 3.17.8
+
+3.17.8 keeps rollback inspection stable across session heartbeats, refreshes recovery checks before confirmation, and separates endpoint policy input, resultant values and unavailable probes. See [release notes](docs/RELEASE-3.17.8.md).
 
 3.17.7 recovers interrupted publication checks, separates live refresh assurance from full rollback safety, and reports actual restored AD values. See [release notes](docs/RELEASE-3.17.7.md).
 

@@ -1,4 +1,4 @@
-GPO Remediator 3.17.7 - publication recovery and verified rollback evidence
+GPO Remediator 3.17.8 - heartbeat-safe rollback and endpoint evidence
 
-See docs/RELEASE-3.17.7.md.
+See docs/RELEASE-3.17.8.md.
 Live AD validation is not available in this checkout.

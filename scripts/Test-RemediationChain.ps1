@@ -196,7 +196,7 @@ try{
   Check ($null -ne $map) ('mapping exists '+$case[0])
   if($map.automation -ne 'Automated'){$map.automation='Automated';if($map.handler -eq 'Manual'){$map.handler='SecurityTemplate'}}
   if($case[1] -eq 'LocalComputers' -and $map.domainPolicySensitive){$map.scope='Computer';$map.domainPolicySensitive=$false}
-  foreach($item in $map.items){foreach($field in @('section','key','name','guid','state','mask','value')){if(!$item.PSObject.Properties[$field]){$item|Add-Member -NotePropertyName $field -NotePropertyValue $null}}}
+  foreach($item in $map.items){foreach($field in @('section','key','name','type','guid','state','mask','value')){if(!$item.PSObject.Properties[$field]){$item|Add-Member -NotePropertyName $field -NotePropertyValue $(if($field -eq 'type'){'String'}else{$null})}}}
   if(Test-Path $script:folder){Remove-Item -LiteralPath $script:folder -Recurse -Force}
   $null=New-Item -ItemType Directory -Path $script:folder
   [IO.File]::WriteAllText((Join-Path $script:folder 'GPT.INI'),"[General]`r`nVersion=0`r`n")

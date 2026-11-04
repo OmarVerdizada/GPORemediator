@@ -37,6 +37,11 @@ for(const state of ['NO_CHANGE','BATCH_ROLLED_BACK','ROLLBACK_DRIFT_DETECTED','A
 assert.ok(!ui.recovery(s,incomplete).includes('<form'));
 assert.ok(!ui.recovery(s,{...recoverable,result:{...recoverable.result,state:'REVIEW_REQUIRED'}}).includes('<form'),'Unreviewed partial restore must not expose retry form');
 const assessed=s.rollbackChecks[recoverable.id];
+const renewed={connected:true,sessionId:'connection-one',expiresAt:'later'};
+s.rollbackChecks[recoverable.id]={...assessed,sessionId:'connection-one'};s.gpoSession=renewed;
+assert.ok(ui.rollbackCheck(s,recoverable),'A heartbeat clone of the same server session must preserve rollback inspection');
+s.gpoSession={...renewed,sessionId:'connection-two'};assert.equal(ui.rollbackCheck(s,recoverable),null,'A new connection must invalidate rollback inspection');
+s.gpoSession=assessed.session;
 for(const change of [{at:Date.now()-60001},{updatedAt:'new-record'},{state:'FAILED_SAFE'},{session:{}},{processId:99}]){
  s.rollbackChecks[recoverable.id]={...assessed,...change};
  assert.equal(ui.rollbackCheck(s,recoverable),null,'Changed or expired context must invalidate restore assessment');

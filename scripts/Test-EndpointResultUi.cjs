@@ -19,4 +19,8 @@ html=view.resultSummary({...run,result:{...run.result,state:'ROLLED_BACK'}});
 assert(!html.includes('Published — endpoint refresh failed'),'do not replace rollback outcome');
 html=view.resultSummary({...run,result:{...run.result,effectiveStatus:'ENDPOINT_MISMATCH'}});
 assert.match(html,/<h2>Policy is not effective<\/h2>/,'do not hide a measured mismatch');
+html=view.resultSummary({...run,result:{...run.result,refreshResults:[],effectiveStatus:'ENDPOINT_MISMATCH',endpointChecks:[{hostname:'dc.example.test',state:'MISMATCH',actualValue:'SeNetworkLogonRight=S-1-1-0',message:'Unexpected SID S-1-1-0'},{hostname:'ws.example.test',state:'UNAVAILABLE',actualValue:'',message:'LSA read unavailable'}]}});
+assert(!html.includes('Mixed values'),'Unavailable empty evidence must not become a second measured value');assert.match(html,/SeNetworkLogonRight=S-1-1-0/);assert.match(html,/ws.example.test/);
+html=view.resultSummary({...run,result:{...run.result,state:'ROLLED_BACK',refreshResults:[],effectiveStatus:'ROLLBACK_ENDPOINT_PENDING',endpointChecks:[{hostname:'dc.example.test',state:'OBSERVED',actualValue:'Audit=3',message:'Pre-change effective value was not captured.'}]}});
+assert.match(html,/GPO snapshot restored/);assert.match(html,/Audit=3/);assert.match(html,/Pre-change effective value was not captured/);assert(!html.includes('data-effective-outcome="VERIFIED"'));
 console.log('PASS endpoint result UI: failed refresh persists after re-verification, per-host escaped diagnostics, completed counts, guarded manual check and rollback/mismatch outcomes');

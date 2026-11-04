@@ -961,6 +961,15 @@ function Verify-EffectiveSamples($Plan,$Map){
               if(!$property){return @{supported=$false;match=$false;actual='';message='No active firewall property mapping exists for this registry field.'}}
               try{$profiles=@(Get-NetFirewallProfile -Name $profileName -PolicyStore ActiveStore -ErrorAction Stop);if($profiles.Count -ne 1){throw 'Ambiguous active profile'};$value=$profiles[0].PSObject.Properties[$property].Value;if($null -eq $value -or [string]$value -eq 'NotConfigured'){throw 'No effective value'}}catch{return @{supported=$false;match=$false;actual='';message='Active firewall profile evidence is unavailable. A registry value alone is insufficient.'}}
               $expected=[string]$item.expected
+              $rule=if($item.comparator){[string]$item.comparator}else{$Comparator}
+              $registryPath='Registry::HKEY_LOCAL_MACHINE\'+([string]$item.key).Substring(5);$configured=$null;$kind=$null
+              try{$configured=Get-ItemPropertyValue -LiteralPath $registryPath -Name ([string]$item.name) -ErrorAction Stop;$kind=(Get-Item -LiteralPath $registryPath -ErrorAction Stop).GetValueKind([string]$item.name)}catch{
+                if($_.FullyQualifiedErrorId -notmatch 'ItemNotFound|PathNotFound|PropertyNotFound'){return @{supported=$false;match=$false;state='UNAVAILABLE';actual=$null;message='FIREWALL_POLICY_READ_UNAVAILABLE. The endpoint policy registry could not be read. ActiveStore alone does not establish the requested policy input.'}}
+              }
+              $actual+=('Policy '+$profileName+'.'+[string]$item.name+'='+$(if($null -eq $configured){'<not configured>'}else{[string]$configured})+'; type='+$(if($null -eq $kind){'<unavailable>'}else{[string]$kind}))
+              if($null -eq $configured -or [string]$kind -ine [string]$item.type){$ok=$false}
+              elseif([string]$item.name -eq 'LogFilePath'){if([Environment]::ExpandEnvironmentVariables([string]$configured) -ine [Environment]::ExpandEnvironmentVariables($expected)){$ok=$false}}
+              elseif(!(Value-Matches ([string]$configured) $expected $rule)){$ok=$false}
               switch([string]$item.name){
                 'DefaultInboundAction' {$current=switch([string]$value){'Block'{'1'}'Allow'{'0'}default{'<unknown>'}}}
                 'DisableNotifications' {$current=switch([string]$value){'True'{'0'}'False'{'1'}default{'<unknown>'}}}
@@ -971,7 +980,7 @@ function Verify-EffectiveSamples($Plan,$Map){
               $actual+=($profileName+'.'+$property+'='+[string]$value)
               if([string]$item.name -eq 'LogFilePath'){if($current -ine $expected){$ok=$false}}elseif(!(Value-Matches $current $expected $(if($item.comparator){$item.comparator}else{$Comparator}))){$ok=$false}
             }
-            return @{supported=$true;match=$ok;actual=($actual -join '; ');message='Resultant firewall profile configuration was read from Get-NetFirewallProfile -PolicyStore ActiveStore. This does not prove packet-level enforcement or service health.'}
+            return @{supported=$true;match=$ok;actual=($actual -join '; ');message='Endpoint policy registry value/type and resultant Get-NetFirewallProfile -PolicyStore ActiveStore were compared separately with the request. Both must match. This does not prove packet-level enforcement, log-file creation or service health.'}
           }
           if($Handler -in @('Registry','RegistrySet')){
             foreach($item in @($ExpectedItems)){$key=[string]$item.key;if($key -notmatch '^HKLM\\'){return @{supported=$false;match=$false;actual='';message='Only computer-scope HKLM registry policies can be verified without a user session.'}};$path='Registry::HKEY_LOCAL_MACHINE\'+$key.Substring(5);try{$v=Get-ItemPropertyValue -LiteralPath $path -Name ([string]$item.name) -ErrorAction Stop;$kind=(Get-Item -LiteralPath $path -ErrorAction Stop).GetValueKind([string]$item.name);if([string]$kind -ine [string]$item.type){$ok=$false;$actual+=([string]$item.name+' type='+[string]$kind+' (expected '+[string]$item.type+')')}}catch{if($_.FullyQualifiedErrorId -match 'ItemNotFound|PathNotFound|PropertyNotFound'){$v=$null}else{return @{supported=$false;match=$false;actual='';message='Registry policy could not be read because access or transport failed.'}}};if(([string]$item.type).ToUpperInvariant() -eq 'MULTISTRING'){$cur=if($null -eq $v){$null}else{((@($v)|ForEach-Object{[string]$_}|Sort-Object)-join '|')}}else{$cur=if($null -eq $v){$null}else{[string]$v}};$actual+=([string]$item.name+'='+$(if($null -eq $cur){'<not configured>'}else{$cur}));if(!(Value-Matches $cur $item.expected $(if($item.comparator){$item.comparator}else{$Comparator}))){$ok=$false}}
@@ -979,16 +988,28 @@ function Verify-EffectiveSamples($Plan,$Map){
           }
           if($Handler -eq 'SecurityTemplate'){
             if(@($ExpectedItems).Count -gt 0 -and @($ExpectedItems|Where-Object{[string]$_.section -ne 'Privilege Rights' -or [string]$_.type -ne 'Principals'}).Count -eq 0){
+              if([string]$ExecutionContext.SessionState.LanguageMode -ne 'FullLanguage'){return @{supported=$false;match=$false;state='UNAVAILABLE';actual=$null;message=('LSA_LANGUAGE_MODE_BLOCKED. The endpoint session uses '+[string]$ExecutionContext.SessionState.LanguageMode+'. The read-only native LSA probe requires an authorized FullLanguage session. No INF export is substituted for live assignments.')}}
+              $lsaStage='COMPILE';$differences=@()
               try{
                 if(!('GpoRemediator.ReadOnly.UserRightsV1' -as [type])){Add-Type -TypeDefinition $UserRightNativeSource -ErrorAction Stop}
+                $lsaStage='READ'
                 foreach($item in @($ExpectedItems)){
                   $current=(@([GpoRemediator.ReadOnly.UserRightsV1]::Read([string]$item.key))|Sort-Object -Unique)-join ','
                   $actual+=([string]$item.key+'='+$current)
-                  if($Comparator -eq 'includes'){if(@(([string]$item.expected -split ',')|Where-Object{$_ -and $_ -notin @($current -split ',')}).Count){$ok=$false}}
-                  elseif(!(Value-Matches $current $item.expected $(if($item.comparator){$item.comparator}else{$Comparator}))){$ok=$false}
+                  $rule=if($item.comparator){[string]$item.comparator}else{$Comparator}
+                  $missing=@(([string]$item.expected -split ',')|Where-Object{$_ -and $_ -notin @($current -split ',')});$extra=@(($current -split ',')|Where-Object{$_ -and $_ -notin @([string]$item.expected -split ',')})
+                  $matches=if($rule -eq 'includes'){$missing.Count -eq 0}else{Value-Matches $current $item.expected $rule}
+                  if(!$matches){$ok=$false;$differences+=([string]$item.key+': missing ['+($missing -join ',')+']; unexpected ['+($extra -join ',')+'].')}
                 }
-                return @{supported=$true;match=$ok;actual=($actual -join '; ');message='Current user-right assignments were read directly from the local LSA policy with LsaEnumerateAccountsWithUserRight. This measures assigned account/group SIDs on this endpoint, not a security-template export, token privileges or winning GPO.'}
-              }catch{return @{supported=$false;match=$false;actual='';message='LSA_USER_RIGHTS_UNAVAILABLE. Current user-right assignments could not be read. Check endpoint LSA read access and PowerShell language mode. An exported INF alone is not substituted for live LSA evidence.'}}
+                $message='Current user-right assignments were read directly from the local LSA policy with LsaEnumerateAccountsWithUserRight.'
+                if(!$ok){$message+=' '+($differences -join ' ')+' Check target RSoP, higher-priority GPOs and client policy processing; the winning GPO is not established by this measurement.'}
+                else{$message+=' This measures assigned account/group SIDs on this endpoint, not a security-template export, token privileges or winning GPO.'}
+                return @{supported=$true;match=$ok;actual=($actual -join '; ');message=$message}
+              }catch{
+                $cause=$_.Exception.GetBaseException();$native=if($cause -is [ComponentModel.Win32Exception]){[string]$cause.NativeErrorCode}else{'unavailable'}
+                $detail=if($native -eq '5'){'The endpoint session was denied LSA read access. Use an authorized elevated endpoint session and re-verify.'}elseif($lsaStage -eq 'COMPILE'){'The endpoint could not compile the read-only native probe. Check application-control restrictions and the endpoint PowerShell/.NET installation.'}else{'The endpoint native LSA read failed. Run the supplied manual check in an authorized elevated local session.'}
+                return @{supported=$false;match=$false;state='UNAVAILABLE';actual=$null;message=('LSA_USER_RIGHTS_UNAVAILABLE. Stage '+$lsaStage+'; native error '+$native+'. '+$detail+' No effective assignment was established; an exported INF is not substituted for live LSA evidence.')}
+              }
             }
             $samKeys=@('EnableGuestAccount','EnableAdminAccount','NewGuestName','NewAdministratorName')
             if(@($ExpectedItems).Count -gt 0 -and @($ExpectedItems|Where-Object{[string]$_.section -ne 'System Access' -or [string]$_.key -notin $samKeys}).Count -eq 0){
@@ -1051,7 +1072,7 @@ function Verify-EffectiveSamples($Plan,$Map){
           }
           return @{supported=$false;match=$false;actual='';message='No endpoint verifier exists for this handler.'}
         }
-        if([bool]$probe.supported){$checks+=@{hostname=$hostName;state=$(if([bool]$probe.match){'VERIFIED'}else{'MISMATCH'});message=[string]$probe.message;actualValue=[string]$probe.actual}}else{$checks+=@{hostname=$hostName;state='PENDING';message=[string]$probe.message;actualValue=[string]$probe.actual}}
+        if([bool]$probe.supported){$checks+=@{hostname=$hostName;state=$(if([bool]$probe.match){'VERIFIED'}else{'MISMATCH'});message=[string]$probe.message;actualValue=[string]$probe.actual}}else{$checks+=@{hostname=$hostName;state=[string](Read-Field $probe 'state' 'PENDING');message=[string]$probe.message;actualValue=$(if([string]::IsNullOrWhiteSpace([string]$probe.actual)){$null}else{[string]$probe.actual})}}
       }catch{$checks+=@{hostname=$hostName;state='UNAVAILABLE';message=(Endpoint-FailureMessage $_);actualValue=$null}}
       $check=$checks[-1];Send-CheckProgress 'ENDPOINT' ([string]$check.state) $hostName ([string]$check.message) ([string]$check.actualValue)
     }
@@ -1093,13 +1114,20 @@ function Verify-Published($Plan,$Map,[bool]$CheckEndpoints=$false){
     elseif(!$metadata.replicationConverged -and $effective -notin @('ENDPOINT_MISMATCH','DOMAIN_POLICY_UNAVAILABLE')){$effective='REPLICATION_PENDING'}
     return @{published=[bool]$published;linked=[bool]$linked;link=$link;effective=$effective;verification=$metadata;endpointChecks=@($endpointChecks);endpointCoverage=$coverage;domainPolicy=$domainPolicy;currentValue=(Mapping-Display $s.gpoId $Map $s $false)}
 }
-function Verify-Rollback($Plan,$Map,$Manifest){
+function Verify-Rollback($Plan,$Map,$Manifest,[bool]$CheckEndpoints=$false){
     $s=$Plan.selection
     $matches=(Get-NormalizedGpoContentFingerprint (Gpo-Folder $s.gpoId)) -ceq [string]$Manifest.beforeContent
     $matches=$matches -and (Snapshot-ExtensionsMatch $Manifest $s.gpoId $s) -and ((Scope-Links $s.scopeDn) -ceq [string]$Plan.preview.scopeLinks) -and (Domain-RollbackMatches $Manifest $true)
     $domainPolicy=$null;$before=Read-Field $Manifest 'beforeDomainPolicy' $null
     if($before){$domainPolicy=Domain-PolicyRead ([string]$before.property) ([string]$before.value)}
-    return @{restored=[bool]$matches;published=$false;linked=$false;link=(Selected-Link $s.scopeDn $s.gpoId);effective='ROLLBACK_ENDPOINT_PENDING';verification=(Verification-Metadata $s);endpointChecks=@();domainPolicy=$domainPolicy;currentValue=(Mapping-Display $s.gpoId $Map $s $false)}
+    $observed=@()
+    if($CheckEndpoints -and !$before){
+        try{
+            $observed=@(Verify-EffectiveSamples $Plan $Map)
+            foreach($check in $observed){if([string]$check.state -in @('VERIFIED','MISMATCH')){$check.state='OBSERVED';$check.message='Observed after snapshot restore. The pre-change effective endpoint value was not captured, so this observation does not certify an endpoint undo. '+[string]$check.message}}
+        }catch{$observed=@(@{hostname='<endpoint-scope>';state='UNAVAILABLE';actualValue=$null;message=('Post-restore endpoint evidence could not be collected (category '+[string]$_.CategoryInfo.Category+'). Check current authorized endpoint discovery and read access. GPO snapshot restoration is measured separately.')})}
+    }
+    return @{restored=[bool]$matches;published=$false;linked=$false;link=(Selected-Link $s.scopeDn $s.gpoId);effective='ROLLBACK_ENDPOINT_PENDING';verification=(Verification-Metadata $s);endpointChecks=$observed;domainPolicy=$domainPolicy;currentValue=(Mapping-Display $s.gpoId $Map $s $false)}
 }
 function Failed-RollbackEvidence($Manifest){
     $evidence=@{published=$false;linked=$false;effective='ROLLBACK_ENDPOINT_PENDING';currentValue=$null}
@@ -1246,13 +1274,13 @@ switch($Operation){
         }
         $manifest=Get-Content -LiteralPath (Join-Path $directory 'manifest.json') -Raw|ConvertFrom-Json
         if([string]$manifest.phase -in @('PUBLISHED','VERIFY_MISMATCH') -and (Read-Field $manifest 'rollbackFailure' $null)){
-            $restoration=Verify-Rollback $plan $map $manifest
+            $restoration=Verify-Rollback $plan $map $manifest $true
             if($restoration.restored){$manifest.phase='ROLLED_BACK';Save-Manifest $manifest $directory;return Result 'ROLLED_BACK' 'The saved GPO, link and AD restoration target were verified live.' $manifest $restoration @()}
             $failure=$manifest.rollbackFailure
             return Result 'ROLLBACK_REVIEW_REQUIRED' ('The recorded rollback did not restore the saved snapshot. Read-only verification does not retry it. Resolve '+[string]$failure.code+' at '+[string]$failure.stage+' and review rollback availability before confirming another restore.') $manifest $restoration @()
         }
         if([string]$manifest.phase -in @('ROLLING_BACK','ROLLED_BACK','ROLLBACK_REVIEW_REQUIRED','ROLLBACK_DRIFT_DETECTED')){
-            $v=Verify-Rollback $plan $map $manifest;$rolledBack=[bool]$v.restored
+            $v=Verify-Rollback $plan $map $manifest $true;$rolledBack=[bool]$v.restored
             if($rolledBack){
                 $manifest.phase='ROLLED_BACK';Save-Manifest $manifest $directory
                 return Result 'ROLLED_BACK' 'Rollback was re-verified against the pre-change GPO content, extensions and link state. Endpoint policy convergence may still be pending.' $manifest $v @()

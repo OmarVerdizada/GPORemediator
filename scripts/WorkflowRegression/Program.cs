@@ -192,6 +192,9 @@ using(var grantStore=new Store(":memory:")){
  var grantSessions=typeof(GpoWorkflowService).GetField("connections",BindingFlags.Instance|BindingFlags.NonPublic)!.GetValue(grantService)!;
  void ConnectGrant(string token,DateTimeOffset created){var connection=Activator.CreateInstance(grantType,BindingFlags.Instance|BindingFlags.Public|BindingFlags.NonPublic,null,["EXAMPLE\\Operator",grantInv.ExecutionUser,Array.Empty<byte>(),grantInv,DateTimeOffset.UtcNow.AddMinutes(15),created],null)!;grantSessions.GetType().GetMethod("TryAdd")!.Invoke(grantSessions,[token,connection]);}
  ConnectGrant("one",DateTimeOffset.UtcNow);ConnectGrant("two",DateTimeOffset.UtcNow);
+ string InspectionId(string token)=>System.Text.Json.JsonSerializer.SerializeToElement(grantService.SessionStatus(token,"EXAMPLE\\Operator")).GetProperty("sessionId").GetString()!;
+ var inspectionOne=InspectionId("one");
+ Check(inspectionOne.Length==32&&InspectionId("one")==inspectionOne&&InspectionId("two")!=inspectionOne,"Rollback inspection session identity changed on renewal or leaked across connections");
  var grantSelection=ProductionGpoMappings.ForRemediation(localAccount with{GpoId=other,ScopeDn=secondScope,Refresh="None"});
  var grantPreview=new GpoPreview(grantInv.Gpos[1],grantInv.Scopes[1],null,"fp","",null,[],[],Preflight:new(grantInv.Domain,grantInv.DomainController,grantInv.ExecutionUser,true,[],PolicyValues.Now()));
  Check(!grantService.AuthorizePreviewTarget("one","EXAMPLE\\Operator",grantSelection,grantPreview,false),"Read-only scan granted write authorization");
