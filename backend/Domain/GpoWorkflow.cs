@@ -34,6 +34,7 @@ public record GpoImpactDetails(string Inheritance, bool BlockInheritance, GpoCon
     GpoAffectedObjects AffectedObjects, string[] ExistingLinkScopes, string[] SecurityFiltering, string? WmiFilter);
 public record GpoDcVersionStatus(string DomainController, string? AdVersion, string? GptVersion, bool Reachable, bool VersionsMatch, string Message);
 public record GpoEndpointCheck(string Hostname, string State, string Message, string? ActualValue = null);
+public record GpoRestoreCheck(string Area,string State,string? Expected,string? Actual,string Message);
 public record GpoLiveCheck(string Phase, string State, string Subject, string? ActualValue, string Message, string CheckedAt);
 public record GpoVerificationDetails(string AdVersion, string GptVersion, bool VersionsMatch,
     string[] DomainControllers, string[] ReplicationWarnings, string CheckedAt,
@@ -63,7 +64,8 @@ public record GpoWorkflowResult(string State, string Message, string? BackupId, 
     [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] EndpointCoverage? EndpointCoverage = null,
     [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] EndpointCoverage? RefreshCoverage = null,
     GpoValueSource? CurrentValueSource = null, GpoDomainPolicy? DomainPolicy = null,
-    [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] GpoLink? CurrentLink = null)
+    [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] GpoLink? CurrentLink = null,
+    [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] GpoRestoreCheck[]? RestoreChecks = null)
 {
     public GpoAssuranceStage[] VerificationStages => GpoAssurance.Stages(this);
     public string[] Diagnosis => GpoAssurance.Diagnose(this);
@@ -86,7 +88,8 @@ public record GpoEvidence(string SchemaVersion, string Product, string Benchmark
     [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] EndpointCoverage? EndpointCoverage = null,
     [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] EndpointCoverage? RefreshCoverage = null,
     [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] GpoDomainPolicy? BeforeDomainPolicy = null,
-    [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] string[]? VerificationComputers = null);
+    [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] string[]? VerificationComputers = null,
+    [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] GpoRestoreCheck[]? RestoreChecks = null);
 
 public static class GpoWorkflowRules
 {

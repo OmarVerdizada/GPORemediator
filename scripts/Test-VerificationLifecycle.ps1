@@ -74,11 +74,14 @@ try{
  function Mapping-Display {param($Id,$Map,$Selection,$Desired) $null}
  function Verification-Metadata {param($Selection) @{versionsMatch=$true}}
  function Verify-EffectiveSamples {param($Plan,$Map) @(@{hostname='one.example.test';state='VERIFIED';actualValue='Audit=3';message='Measured current audit.'},@{hostname='two.example.test';state='UNAVAILABLE';actualValue=$null;message='Read unavailable.'})}
- $restore=Verify-Rollback @{selection=@{gpoId=$selection.gpoId;scopeDn='OU=Endpoints,DC=example,DC=test'};preview=@{scopeLinks=''}} @{} @{beforeContent='saved-content'} $true
+ $restore=Verify-Rollback @{selection=@{gpoId=$selection.gpoId;scopeDn='OU=Endpoints,DC=example,DC=test'};preview=@{scopeLinks=''}} @{} @{beforeContent='saved-content';beforeExtensions='fixture-extension';beforeUserExtensions='fixture-user-extension'} $true
  Assert-Test ($restore.restored -and $restore.endpointChecks.Count -eq 2 -and $restore.endpointChecks[0].state -eq 'OBSERVED' -and $restore.endpointChecks[0].actualValue -eq 'Audit=3' -and $restore.endpointChecks[1].state -eq 'UNAVAILABLE' -and $restore.effective -eq 'ROLLBACK_ENDPOINT_PENDING') 'post-restore endpoint observations never certify an unknown pre-change endpoint value'
  function Verify-EffectiveSamples {param($Plan,$Map) throw [UnauthorizedAccessException]::new('Private scope probe fixture')}
- $restore=Verify-Rollback @{selection=@{gpoId=$selection.gpoId;scopeDn='OU=Endpoints,DC=example,DC=test'};preview=@{scopeLinks=''}} @{} @{beforeContent='saved-content'} $true
+ $restore=Verify-Rollback @{selection=@{gpoId=$selection.gpoId;scopeDn='OU=Endpoints,DC=example,DC=test'};preview=@{scopeLinks=''}} @{} @{beforeContent='saved-content';beforeExtensions='fixture-extension';beforeUserExtensions='fixture-user-extension'} $true
  Assert-Test ($restore.restored -and $restore.endpointChecks[0].state -eq 'UNAVAILABLE' -and $restore.endpointChecks[0].message -notmatch 'Private scope probe fixture') 'unavailable endpoint discovery preserves snapshot evidence without leaking exception text'
+ function Gpo-Ad {param($Id) @{gPCMachineExtensionNames='fixture-extension';gPCUserExtensionNames=''}}
+ $restore=Verify-Rollback @{selection=@{gpoId=$selection.gpoId;scopeDn='OU=Users,DC=example,DC=test';accountScope='Users'};preview=@{scopeLinks=''}} @{} @{beforeContent='saved-content';beforeExtensions='fixture-extension'}
+ Assert-Test (!$restore.restored -and @($restore.restoreChecks|Where-Object{$_.area -eq 'USER_EXTENSIONS' -and $_.state -eq 'UNAVAILABLE'}).Count -eq 1) 'empty current user metadata cannot replace a missing legacy user CSE baseline'
 }finally{
  $resolved=[IO.Path]::GetFullPath($temp);$allowed=[IO.Path]::GetFullPath((Join-Path $repo 'work'))+[IO.Path]::DirectorySeparatorChar
  if(!$resolved.StartsWith($allowed,[StringComparison]::OrdinalIgnoreCase)){throw 'Fixture cleanup escaped work directory'}

@@ -94,8 +94,52 @@ function Read-GpoTextFile {
         }
     }
 }
+function Get-RestoreTemplateText {
+    param([string]$Path)
+    # Import-GPO can reorder SID sets and remove empty lines. Unknown syntax
+    # stays byte-compared; do not reinterpret arbitrary INF data as equivalent.
+    try {
+        $bytes=[IO.File]::ReadAllBytes($Path)
+        # MS-GPSB requires UTF-16LE with BOM. Other encodings remain byte data.
+        if($bytes.Length -lt 2 -or $bytes.Length -gt 8388608 -or $bytes[0] -ne 255 -or $bytes[1] -ne 254){return $null}
+        $text=([Text.UnicodeEncoding]::new($false,$false,$true)).GetString($bytes,2,$bytes.Length-2)
+        if($text.Contains([char]0)){return $null}
+        $lines=[Collections.Generic.List[string]]::new();$rights=@{};$inside=$false;$section='';$metadata=@{};$target=$lines
+        $seen=[Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+        foreach($line in ($text -split '\r\n|\n|\r')){
+            if([string]::IsNullOrWhiteSpace($line)){continue}
+            if($line -match '^\s*\[([^\]]+)\]\s*$'){
+                $section=$Matches[1];if($section -cne $section.Trim() -or !$seen.Add($section)){return $null}
+                $inside=$section -ieq 'Privilege Rights'
+                if($inside){$target=$null}
+                elseif($section -iin @('Unicode','Version')){$key=$section.ToUpperInvariant();$metadata[$key]=[Collections.Generic.List[string]]::new();$target=$metadata[$key];$target.Add($line)}
+                else{$target=$lines;$target.Add($line)}
+                continue
+            }
+            if($line -match '^\s*;'){continue}
+            if(!$section -or $line -notmatch '=' -or $line.EndsWith('\') -or ([regex]::Matches($line,'"').Count % 2)){return $null}
+            if(!$inside){$target.Add($line);continue}
+            if($line -cmatch '[^\x00-\x7F]'){return $null}
+            if($line -notmatch '^\s*(Se[A-Za-z0-9]+)\s*=\s*(.*)$'){return $null}
+            $key=$Matches[1].ToUpperInvariant();$raw=$Matches[2];if($rights.ContainsKey($key)){return $null}
+            $sids=@()
+            if(![string]::IsNullOrWhiteSpace($raw)){
+                foreach($part in ($raw -split ',')){
+                    if($part.Trim() -notmatch '^\*?(S-\d-(?:\d+-){1,14}\d+)$'){return $null}
+                    $sids+=([Security.Principal.SecurityIdentifier]$Matches[1]).Value
+                }
+            }
+            $rights[$key]=(@($sids|Sort-Object -Unique) -join ',')
+        }
+        $result=[Collections.Generic.List[string]]::new()
+        foreach($key in @('UNICODE','VERSION')){if($metadata.ContainsKey($key)){foreach($row in $metadata[$key]){$result.Add($row)}}}
+        foreach($row in $lines){$result.Add($row)}
+        if($rights.Count){$result.Add('[Privilege Rights]');foreach($key in @($rights.Keys|Sort-Object)){$result.Add($key+'='+$rights[$key])}}
+        return ($result -join "`n")
+    }catch{return $null}
+}
 function Get-NormalizedGpoContentFingerprint {
-    param([string]$Directory)
+    param([string]$Directory,[switch]$RestoreComparison)
     $folder=[IO.Path]::GetFullPath($Directory).TrimEnd('\')
     $hashes=[Collections.Generic.List[string]]::new()
     $sha=[Security.Cryptography.SHA256]::Create()
@@ -115,6 +159,8 @@ function Get-NormalizedGpoContentFingerprint {
             if ($relative -eq '\gpt.ini') {
                 $normalized=Set-TemplateEntry (Read-GpoTextFile $file.FullName) 'General' 'Version' '0'
                 $hash=[BitConverter]::ToString($sha.ComputeHash([Text.Encoding]::UTF8.GetBytes($normalized))).Replace('-','')
+            } elseif($RestoreComparison -and $relative -eq '\machine\microsoft\windows nt\secedit\gpttmpl.inf' -and $null -ne ($restoreText=Get-RestoreTemplateText $file.FullName)) {
+                $hash='restore-sid-set-v1:'+([BitConverter]::ToString($sha.ComputeHash([Text.Encoding]::UTF8.GetBytes($restoreText))).Replace('-',''))
             } else { $hash=(Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash }
             $hashes.Add($relative+':'+$hash)
         }

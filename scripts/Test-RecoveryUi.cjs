@@ -5,6 +5,7 @@ async function inspectRecovery(page){if(!await page.locator('[data-rollback]').c
 const root=path.resolve(__dirname,'../frontend/source'),screens=path.resolve(__dirname,'../work/screens');
 fs.mkdirSync(screens,{recursive:true});
 const incidentScreens=path.join(screens,'3.17.8');fs.mkdirSync(incidentScreens,{recursive:true});
+const restoreScreens=path.join(screens,'3.17.9');fs.mkdirSync(restoreScreens,{recursive:true});
 const gpos=[{id:'6ac1786c-016f-11d2-945f-00c04fb984f9',name:'Protected controller policy',protected:true,selectable:true},{id:'31b2f340-016d-11d2-945f-00c04fb984f9',name:'Protected domain policy',protected:true,selectable:true}];
 gpos.push({id:'11111111-1111-1111-1111-111111111111',name:'GPO-Pilot-Computers',protected:false,selectable:true});
 const run={id:'recovery-test',startedAt:'2026-10-06T08:00:00Z',updatedAt:'2026-10-09T08:00:34Z',plan:{selection:{setting:'1.1.4',gpoId:gpos[0].id,scopeDn:'OU=Endpoints,DC=test,DC=local',accountScope:'LocalComputers'},preview:{gpo:gpos[0],scope:{dn:'OU=Endpoints,DC=test,DC=local'},previousValue:0,desiredValue:14},executionUser:'TEST\\operator'},result:{state:'PUBLISHED',backupId:'test-backup-id',gpoPublished:true,linkVerified:true}};
@@ -41,7 +42,7 @@ const server=http.createServer(async(req,res)=>{
   else if(url.pathname==='/api/batches')data=[];
   else if(url.pathname.startsWith('/api/workflows/')&&req.method==='POST'){
    const action=url.pathname.split('/').pop();let review=false;
-   if(action==='rollback'){writes.push('/api/gpo/recovery-test/rollback');run.result.state=rollbackState;run.result.message='Rollback recorded';review=rollbackState!=='ROLLED_BACK';}
+   if(action==='rollback'){writes.push('/api/gpo/recovery-test/rollback');run.result.state=rollbackState;run.result.message='Rollback recorded';review=rollbackState!=='ROLLED_BACK';run.result.gpoPublished=false;run.result.linkVerified=false;run.result.currentValue=review?'14':String(run.plan.preview.previousValue);run.result.restoreChecks=['CONTENT','MACHINE_EXTENSIONS','USER_EXTENSIONS','SCOPE_LINKS','DOMAIN_POLICY'].map(area=>({area,state:area==='DOMAIN_POLICY'?'NOT_APPLICABLE':review&&area==='CONTENT'?'MISMATCH':'MATCH',expected:'saved-state',actual:review&&area==='CONTENT'?'different':'saved-state',message:area==='CONTENT'?'Native backup authenticated; SID ordering is compared as a set.':'Recorded snapshot dimension checked.'}));}
    if((action==='refresh'||action==='rollback'&&rollbackState==='ROLLED_BACK')&&payload.refresh!=='None'){
     writes.push('/api/gpo/recovery-test/refresh');refreshRequests.push({refresh:payload.refresh});
     if(refreshFailure){review=true;run.result.message='gpupdate /force needs review';}
@@ -122,6 +123,7 @@ const server=http.createServer(async(req,res)=>{
   await page.waitForFunction(()=>['Rolled back','Rolled back'].some(x=>document.querySelector('.ds-table')?.textContent.includes(x)));
   assert.deepEqual(writes,['/api/gpo/recovery-test/rollback']);
   await page.locator('[data-ops-layout=cards]').click();
+  await page.locator('[data-inspect]').first().click();await page.locator('.product-drawer .restore-readback').scrollIntoViewIfNeeded();assert.match(await page.locator('.product-drawer .restore-readback').textContent(),/GPO content · Matches/);await page.locator('.product-drawer .restore-readback').screenshot({path:path.join(restoreScreens,'restore-content-checks.png')});await page.locator('button[data-product-close]').click();
   await inspectRecovery(page);assert.equal(await page.locator('[data-rollback]').count(),1,'Restored run offers a confirmed restore after reassessment');
   await inspectRecovery(page);await page.locator('[data-rollback] input').fill('ROLLBACK');
   await page.locator('[data-rollback] button[type=submit]').click();await page.locator('[data-confirm-run]').click();

@@ -1,4 +1,4 @@
-GPO Remediator 3.17.8 - heartbeat-safe rollback and endpoint evidence
+GPO Remediator 3.17.9 - native snapshot comparison and restore diagnostics
 
-See docs/RELEASE-3.17.8.md.
-Live AD validation is not available in this checkout.
+See docs/RELEASE-3.17.9.md.
+Live domain evidence identified SID-order/blank-line changes; the fix is validated with private fixtures.

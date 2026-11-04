@@ -37,6 +37,9 @@ for(const state of ['NO_CHANGE','BATCH_ROLLED_BACK','ROLLBACK_DRIFT_DETECTED','A
 assert.ok(!ui.recovery(s,incomplete).includes('<form'));
 assert.ok(!ui.recovery(s,{...recoverable,result:{...recoverable.result,state:'REVIEW_REQUIRED'}}).includes('<form'),'Unreviewed partial restore must not expose retry form');
 const assessed=s.rollbackChecks[recoverable.id];
+const rollbackRecord={id:'restore-detail',updatedAt:'2026-11-04T06:00:00Z',plan:{selection:{setting:'2.2.24',scopeDn:'DC=example,DC=test'},preview:{gpo:{id:'fixture',name:'Policy'},previousValue:null,desiredValue:'Guests'}},result:{state:'ROLLBACK_REVIEW_REQUIRED',backupId:'backup',currentValue:null,restoreChecks:[{area:'CONTENT',state:'MISMATCH',expected:'before',actual:'after',message:'Different file'},{area:'MACHINE_EXTENSIONS',state:'MATCH',expected:'cse',actual:'cse',message:'Same extensions'},{area:'USER_EXTENSIONS',state:'MATCH',expected:'',actual:'',message:'Same extensions'},{area:'SCOPE_LINKS',state:'MATCH',expected:'original',actual:'original',message:'Same links'}]}};
+const details=window.GpoProduct.inspector({...s,history:[rollbackRecord],inspectedOperation:rollbackRecord.id});
+assert.match(details,/RESTORE TARGET/);assert.match(details,/Not configured in GPO/);assert.match(details,/Recorded snapshot read-back/);assert.match(details,/Restored scope links/);assert(!details.includes('<small>EXPECTED</small>'),'Restore view must not present the original forward request as the restoration target');
 const renewed={connected:true,sessionId:'connection-one',expiresAt:'later'};
 s.rollbackChecks[recoverable.id]={...assessed,sessionId:'connection-one'};s.gpoSession=renewed;
 assert.ok(ui.rollbackCheck(s,recoverable),'A heartbeat clone of the same server session must preserve rollback inspection');

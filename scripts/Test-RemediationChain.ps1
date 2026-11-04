@@ -73,6 +73,56 @@ function Import-GPO {param($BackupId,$TargetGuid,$Path,$Domain,$Server)
  $script:version=$script:snapshot.version;$script:extensions=$script:snapshot.extensions;$script:userExtensions=$script:snapshot.userExtensions;$script:registry=$script:snapshot.registry.Clone()
 }
 function Invoke-GPUpdate {param($Computer,$Force,$RandomDelayInMinutes,$ErrorAction,$Target) $script:refreshes++}
+function Test-NativeRestoreFormatting($Selection,$Mapping){
+ $originalImport=(Get-Item Function:\Import-GPO).ScriptBlock
+ $script:formatImportBase=$originalImport
+ try{
+  function Import-GPO {param($BackupId,$TargetGuid,$Path,$Domain,$Server)
+   & $script:formatImportBase -BackupId $BackupId -TargetGuid $TargetGuid -Path $Path -Domain $Domain -Server $Server
+   $file=Join-Path $script:folder 'Machine/Microsoft/Windows NT/SecEdit/GptTmpl.inf';$rows=@()
+   foreach($line in ([IO.File]::ReadAllText($file) -split '\r?\n')){
+    if([string]::IsNullOrWhiteSpace($line)){continue}
+    if($line -match '^\s*(Se\w+)\s*=\s*(.*)$'){$key=$Matches[1];$values=[string[]]($Matches[2] -split ',');[array]::Reverse($values);$rows+=($key+' = '+($values -join ','))}else{$rows+=$line}
+   }
+   $blocks=@([regex]::Split(($rows -join "`r`n"),'(?m)(?=^\[)')|Where-Object{$_})
+   $ordered=@($blocks|Where-Object{$_ -notmatch '^\[(Version|Privilege Rights)\]'})+@($blocks|Where-Object{$_ -match '^\[Version\]'})+@($blocks|Where-Object{$_ -match '^\[Privilege Rights\]'})
+   [IO.File]::WriteAllText($file,($ordered -join "`r`n")+"`r`n",[Text.Encoding]::Unicode)
+  }
+  foreach($mode in @('new','legacy')){
+   $s=$Selection.Clone();$s.scopeDn=$domainDn;$s.firstLink=$true
+   $path=Join-Path $script:folder 'Machine/Microsoft/Windows NT/SecEdit/GptTmpl.inf';$null=New-Item -ItemType Directory -Path (Split-Path $path -Parent) -Force
+   $base="[Unicode]`r`nUnicode=yes`r`n`r`n[Privilege Rights]`r`nSeSystemTimePrivilege = *S-1-5-32-544,*S-1-5-19`r`n`r`nSeIncreaseQuotaPrivilege = *S-1-5-32-544,*S-1-5-19,*S-1-5-20`r`n`r`nSeCreateGlobalPrivilege = *S-1-5-32-544,*S-1-5-19,*S-1-5-20,*S-1-5-6`r`nSeNetworkLogonRight = *S-1-5-32-544,*S-1-5-11`r`n[Version]`r`nsignature=`"`$CHICAGO`$`"`r`nRevision=1`r`n"
+   [IO.File]::WriteAllText($path,$base,[Text.Encoding]::Unicode);[IO.File]::WriteAllText((Join-Path $script:folder 'opaque.dat'),'keep')
+   $script:extensions=Add-SecurityExtension '';$script:rawLinks='[LDAP://CN={'+$gpoId+'},CN=Policies,CN=System,'+$domainDn+';0]'
+   $plan=@{id=[guid]::NewGuid().ToString('N');domain=$cfg.domain;domainController=$cfg.domainController;selection=$s;preview=(Preview $s $Mapping)}
+   $Data=@{plan=$plan;mapping=$Mapping;consent=@{confirmation='APPLY'}};$Operation='gpoApply';$applied=& $dispatch
+   Check ($applied.state -eq 'PUBLISHED') ('native restore fixture publication '+$mode)
+   $directory=Run-Directory $plan;$manifestPath=Join-Path $directory 'manifest.json';$m=Get-Content -LiteralPath $manifestPath -Raw|ConvertFrom-Json
+   $backup=Join-Path (Join-Path $directory (([guid]$m.backupId).ToString('B'))) 'DomainSysvol/GPO'
+   Remove-Item -LiteralPath (Join-Path $backup 'GPT.INI') -Force
+   if($mode -eq 'legacy'){$m.PSObject.Properties.Remove('beforeRestoreContent');Save-Manifest $m $directory}
+   $Operation='gpoRollback';$restored=& $dispatch
+   Check ($restored.state -eq 'ROLLED_BACK' -and $null -eq $restored.currentValue -and @($restored.restoreChecks|Where-Object{$_.area -eq 'CONTENT' -and $_.state -eq 'MATCH'}).Count -eq 1) ('2.2.24 native SID ordering and empty-line changes verify complete restore '+$mode)
+   Check ((Get-NormalizedGpoContentFingerprint $script:folder) -cne [string]$m.beforeContent) ('semantic restore never rewrites the legacy drift fingerprint '+$mode)
+   $Operation='gpoVerify';$verified=& $dispatch;Check ($verified.state -eq 'ROLLED_BACK') ('read-only Verify retains authenticated formatted restore '+$mode)
+   $Operation='gpoRefresh';$Data.refresh='Scope';$refresh=& $dispatch;Check ($refresh.state -eq 'ROLLED_BACK' -and $refresh.refreshResults.Count -gt 0) ('Scope gpupdate is permitted after verified native restore '+$mode)
+   [IO.File]::WriteAllText((Join-Path $script:folder 'opaque.dat'),'external change');$Operation='gpoVerify';$changed=& $dispatch
+   Check ($changed.state -eq 'ROLLBACK_DRIFT_DETECTED' -and $changed.message -match 'CONTENT') ('real post-restore file change still reports content drift '+$mode)
+   $m=Get-Content -LiteralPath $manifestPath -Raw|ConvertFrom-Json;$m.phase='ROLLBACK_REVIEW_REQUIRED';$m.PSObject.Properties.Remove('rollbackFingerprint');Save-Manifest $m $directory
+   $unverified=& $dispatch;Check ($unverified.state -eq 'ROLLBACK_REVIEW_REQUIRED' -and $unverified.message -match 'No completed restore') ('unverified restore mismatch is not mislabeled later external drift '+$mode)
+   [IO.File]::WriteAllText((Join-Path $script:folder 'opaque.dat'),'keep')
+   if($mode -eq 'legacy'){
+    [IO.File]::WriteAllText((Join-Path $backup 'opaque.dat'),'corrupt')
+    $blocked=& $dispatch;Check ($blocked.state -eq 'ROLLBACK_REVIEW_REQUIRED' -and @($blocked.restoreChecks|Where-Object{$_.area -eq 'CONTENT' -and $_.state -eq 'UNAVAILABLE'}).Count -eq 1) 'corrupt legacy backup cannot authorize semantic restore equivalence'
+    [IO.File]::WriteAllText((Join-Path $backup 'opaque.dat'),'keep')
+   }
+   $Operation='gpoRollbackInspect';$ready=& $dispatch;Check ($ready.canRestore -and $ready.manifestPhase -eq 'ROLLED_BACK') ('rollback availability recovers authenticated formatted snapshot '+$mode)
+   $Operation='gpoVerify';$recovered=& $dispatch;Check ($recovered.state -eq 'ROLLED_BACK') ('legacy false-review operation recovers by read-only proof '+$mode)
+   $compareFn=(Get-Item Function:\Compare-RestoreContent).ScriptBlock
+   try{function Compare-RestoreContent {param($Plan,$Manifest) throw [UnauthorizedAccessException]::new('Private read failure')};$unavailable=& $dispatch;Check ($unavailable.state -eq 'ROLLBACK_REVIEW_REQUIRED' -and $unavailable.message -notmatch 'Private read failure') ('unavailable restore evidence does not assert external drift '+$mode)}finally{Set-Item Function:\Compare-RestoreContent $compareFn}
+  }
+ }finally{Set-Item Function:\Import-GPO $originalImport}
+}
 function Test-PublicationRecovery($Selection,$Mapping){
  $s=$Selection.Clone();$s.refresh='None'
  $originalVerifier=(Get-Item Function:\Verify-Published).ScriptBlock
@@ -171,7 +221,7 @@ function Test-ExactLockoutIncident($Selection,$Mapping,$ExactFixtures){
 }
 $catalog=(Get-Content (Join-Path $repo 'backend/data/gpo-production-mappings.json') -Raw|ConvertFrom-Json).mappings
 try{
- $cases=@(@('1.1.1','LocalComputers'),@('1.1.1','Domain'),@('1.2.2','Domain'),@('2.3.1.1','LocalComputers'),@('18.4.4','LocalComputers'),@('17.1.1','LocalComputers'),@('19.5.1.1','Users'))
+ $cases=@(@('1.1.1','LocalComputers'),@('1.1.1','Domain'),@('1.2.2','Domain'),@('2.2.24','LocalComputers'),@('2.3.1.1','LocalComputers'),@('18.4.4','LocalComputers'),@('17.1.1','LocalComputers'),@('19.5.1.1','Users'))
  foreach($entry in @($catalog|Where-Object{$_.domainPolicySensitive -and $_.id -notin @('1.1.1','1.2.2')})){$cases+=,@([string]$entry.id,'Domain')}
  foreach($manual in @($catalog|Where-Object automation -ne 'Automated')){$cases+=,@([string]$manual.id,'LocalComputers')}
  if($AllControls){$cases=@();foreach($entry in $catalog){$cases+=,@([string]$entry.id,$(if($entry.scope -eq 'User'){'Users'}else{'LocalComputers'}));if($entry.domainPolicySensitive){$cases+=,@([string]$entry.id,'Domain')}}}
@@ -283,6 +333,7 @@ try{
   }
   if($ExactPlans -and $map.id -eq '1.2.1' -and $case[1] -eq 'Domain'){Test-ExactLockoutIncident $s $map $exact}
   if($ExactPlans -and $map.id -eq '1.2.4' -and $case[1] -eq 'Domain'){Test-PublicationRecovery $s $map}
+  if(!$ExactPlans -and $map.id -eq '2.2.24'){Test-NativeRestoreFormatting $s $map}
   $report+=@{controlId=[string]$map.id;domain=([string]$map.id -split '\.')[0];scope=$case[1];state='PASS';steps=$(if($case[1] -eq 'Users'){@('preview','backup','write','link','source','rollback','verify')}else{@('preview','backup','write','link','source','refresh','rollback','verify')})}
  }
  if($ReportPath){$output=[IO.Path]::GetFullPath($ReportPath);$null=New-Item -ItemType Directory -Path (Split-Path $output -Parent) -Force;$report|ConvertTo-Json -Depth 6|Set-Content -LiteralPath $output -Encoding UTF8}

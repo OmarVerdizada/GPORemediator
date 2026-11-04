@@ -265,6 +265,14 @@ using(var auditFixStore=new Store(":memory:")){
     var bundle=fixService.Evidence("audit-0",evidencePlan.Actor);
     Check(bundle.SchemaVersion=="1.2"&&bundle.RefreshResults![0].State=="FAILED"&&bundle.EndpointCoverage?.Total==1&&bundle.RefreshCoverage?.Total==1&&bundle.BeforeDomainPolicy?.Value=="30","Evidence omitted refresh, coverage or before AD context");
     Check(GpoWorkflowRules.EvidenceHash(bundle with{RefreshCoverage=new(2,1,false)})!=bundle.IntegrityHash,"Coverage was outside the evidence integrity hash");
+    var restoreRun=auditFixStore.Require<GpoWorkflowRun>("gpo_runs","audit-0");
+    var restoreChecks=new[]{new GpoRestoreCheck("CONTENT","MATCH","semantic-before","semantic-before","Authenticated native backup; SID-set order ignored."),new GpoRestoreCheck("SCOPE_LINKS","MISMATCH","original","changed","Original link list differs.")};
+    auditFixStore.Put("gpo_runs","audit-0",restoreRun with{Result=restoreRun.Result with{State="ROLLBACK_REVIEW_REQUIRED",RestoreChecks=restoreChecks}});
+    var restoreBundle=fixService.Evidence("audit-0",evidencePlan.Actor);
+    Check(restoreBundle.RestoreChecks?.Length==2&&restoreBundle.RestoreChecks[1].State=="MISMATCH","Restore diagnostics were lost from exported evidence");
+    Check(GpoWorkflowRules.EvidenceHash(restoreBundle with{RestoreChecks=[restoreChecks[0]]})!=restoreBundle.IntegrityHash,"Restore diagnostics were outside the evidence integrity hash");
+    Check(!JsonDefaults.Serialize(evidenceResult).Contains("restoreChecks"),"Absent restore diagnostics changed legacy result serialization");
+    Console.WriteLine("PASS restore diagnostics survive evidence export, participate in integrity hashing and preserve legacy null serialization");
     var ct=typeof(GpoWorkflowService).GetNestedType("Connection",BindingFlags.NonPublic)!;
     var c=Activator.CreateInstance(ct,BindingFlags.Instance|BindingFlags.Public|BindingFlags.NonPublic,null,[evidencePlan.Actor,evidencePlan.ExecutionUser,Array.Empty<byte>(),inventory,DateTimeOffset.UtcNow.AddMinutes(15),DateTimeOffset.UtcNow],null)!;
     var dictionary=typeof(GpoWorkflowService).GetField("connections",BindingFlags.Instance|BindingFlags.NonPublic)!.GetValue(fixService)!;dictionary.GetType().GetMethod("TryAdd")!.Invoke(dictionary,["audit-fix",c]);

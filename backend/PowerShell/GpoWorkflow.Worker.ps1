@@ -1114,12 +1114,44 @@ function Verify-Published($Plan,$Map,[bool]$CheckEndpoints=$false){
     elseif(!$metadata.replicationConverged -and $effective -notin @('ENDPOINT_MISMATCH','DOMAIN_POLICY_UNAVAILABLE')){$effective='REPLICATION_PENDING'}
     return @{published=[bool]$published;linked=[bool]$linked;link=$link;effective=$effective;verification=$metadata;endpointChecks=@($endpointChecks);endpointCoverage=$coverage;domainPolicy=$domainPolicy;currentValue=(Mapping-Display $s.gpoId $Map $s $false)}
 }
+function Compare-RestoreContent($Plan,$Manifest){
+    $source=Gpo-Folder $Plan.selection.gpoId;$raw=Get-NormalizedGpoContentFingerprint $source
+    if($raw -ceq [string]$Manifest.beforeContent){return @{matches=$true;expected=$raw;actual=$raw;message='The complete saved content fingerprint matches.'}}
+    $actual=Get-NormalizedGpoContentFingerprint $source -RestoreComparison
+    $expected=[string](Read-Field $Manifest 'beforeRestoreContent' '')
+    if($expected){return @{matches=($actual -ceq $expected);expected=$expected;actual=$actual;message='Restore comparison preserves all files and values; only security-template SID-set order, metadata/privilege block placement and empty/comment lines are canonicalized. Pre-restore drift checks still use the original fingerprint.'}}
+    # Older records have only a byte fingerprint. Authenticate the entire
+    # retained backup against it before using any semantic comparison.
+    $directory=Run-Directory $Plan
+    $backup=Join-Path (Join-Path $directory (([guid]$Manifest.backupId).ToString('B'))) 'DomainSysvol\GPO'
+    if(!(Test-Path -LiteralPath $backup -PathType Container)){return @{matches=$false;state='UNAVAILABLE';expected=[string]$Manifest.beforeContent;actual=$raw;message='No retained backup tree exists to prove legacy restore equivalence.'}}
+    $probe=Join-Path $directory ('RecoveryProbe-'+[guid]::NewGuid().ToString('N'))
+    try{
+        Copy-RecoveryPolicyTree $backup $probe
+        if(!(Test-Path -LiteralPath (Join-Path $probe 'GPT.INI')) -and (Test-Path -LiteralPath (Join-Path $source 'GPT.INI'))){[IO.File]::Copy((Join-Path $source 'GPT.INI'),(Join-Path $probe 'GPT.INI'))}
+        if((Get-NormalizedGpoContentFingerprint $probe) -cne [string]$Manifest.beforeContent){return @{matches=$false;state='UNAVAILABLE';expected=[string]$Manifest.beforeContent;actual=$raw;message='The retained legacy backup could not be authenticated against the complete before-content fingerprint. Restore remains unverified.'}}
+        $expected=Get-NormalizedGpoContentFingerprint $probe -RestoreComparison
+        $same=($actual -ceq $expected) -and ((Get-NormalizedGpoContentFingerprint $source) -ceq $raw)
+        return @{matches=$same;expected=$expected;actual=$actual;message='The complete native backup was hash-authenticated against the original before-state. SID-set order, metadata/privilege block placement and empty/comment lines are compared semantically; all other file data remains protected.'}
+    }finally{
+        $parent=[IO.Path]::GetFullPath($directory).TrimEnd('\')+'\';$full=[IO.Path]::GetFullPath($probe)
+        if(!$full.StartsWith($parent,[StringComparison]::OrdinalIgnoreCase) -or (Split-Path $full -Leaf) -notmatch '^RecoveryProbe-[a-f0-9]{32}$'){throw 'Unsafe recovery probe cleanup path'}
+        if(Test-Path -LiteralPath $full){Remove-Item -LiteralPath $full -Recurse -Force -ErrorAction Stop}
+    }
+}
 function Verify-Rollback($Plan,$Map,$Manifest,[bool]$CheckEndpoints=$false){
     $s=$Plan.selection
-    $matches=(Get-NormalizedGpoContentFingerprint (Gpo-Folder $s.gpoId)) -ceq [string]$Manifest.beforeContent
-    $matches=$matches -and (Snapshot-ExtensionsMatch $Manifest $s.gpoId $s) -and ((Scope-Links $s.scopeDn) -ceq [string]$Plan.preview.scopeLinks) -and (Domain-RollbackMatches $Manifest $true)
-    $domainPolicy=$null;$before=Read-Field $Manifest 'beforeDomainPolicy' $null
-    if($before){$domainPolicy=Domain-PolicyRead ([string]$before.property) ([string]$before.value)}
+    $restoreChecks=@();$domainPolicy=$null;$before=Read-Field $Manifest 'beforeDomainPolicy' $null
+    try{$content=Compare-RestoreContent $Plan $Manifest;$restoreChecks+=@{area='CONTENT';state=$(if($content.matches){'MATCH'}else{Read-Field $content 'state' 'MISMATCH'});expected=$content.expected;actual=$content.actual;message=$content.message}}catch{$restoreChecks+=@{area='CONTENT';state='UNAVAILABLE';expected=[string]$Manifest.beforeContent;actual=$null;message='The saved/live content could not be read safely. Check backup and SYSVOL read access.'}}
+    foreach($entry in @(@{area='MACHINE_EXTENSIONS';field='gPCMachineExtensionNames';before='beforeExtensions'},@{area='USER_EXTENSIONS';field='gPCUserExtensionNames';before='beforeUserExtensions'})){
+        $expected=Read-Field $Manifest $entry.before $null
+        if($null -eq $expected -and $entry.area -eq 'USER_EXTENSIONS' -and [string](Read-Field $s 'accountScope' '') -ne 'Users'){$restoreChecks+=@{area=$entry.area;state='NOT_APPLICABLE';expected=$null;actual=$null;message='This legacy computer-policy record did not capture user extension metadata.'};continue}
+        if($null -eq $expected){$restoreChecks+=@{area=$entry.area;state='UNAVAILABLE';expected=$null;actual=$null;message='The required pre-change extension baseline was not captured. Empty current metadata is not proof of the original state.'};continue}
+        try{$ad=Gpo-Ad $s.gpoId;$actual=[string](Read-Field $ad $entry.field '');$restoreChecks+=@{area=$entry.area;state=$(if($actual -ceq [string]$expected){'MATCH'}else{'MISMATCH'});expected=[string]$expected;actual=$actual;message='Compared the recorded extension sequence with the selected DC.'}}catch{$restoreChecks+=@{area=$entry.area;state='UNAVAILABLE';expected=[string]$expected;actual=$null;message='Could not read current AD extension metadata.'}}
+    }
+    try{$actual=Scope-Links $s.scopeDn;$restoreChecks+=@{area='SCOPE_LINKS';state=$(if($actual -ceq [string]$Plan.preview.scopeLinks){'MATCH'}else{'MISMATCH'});expected=[string]$Plan.preview.scopeLinks;actual=$actual;message='Compared the entire selected scope link list, including order and options.'}}catch{$restoreChecks+=@{area='SCOPE_LINKS';state='UNAVAILABLE';expected=[string]$Plan.preview.scopeLinks;actual=$null;message='Could not read the selected scope link list.'}}
+    if($before){try{$domainPolicy=Domain-PolicyRead ([string]$before.property) ([string]$before.value);$restoreChecks+=@{area='DOMAIN_POLICY';state=$(if([string]$domainPolicy.value -ceq [string]$before.value){'MATCH'}else{'MISMATCH'});expected=[string]$before.value;actual=[string]$domainPolicy.value;message='Compared the saved AD domain policy value independently of the GPO.'}}catch{$restoreChecks+=@{area='DOMAIN_POLICY';state='UNAVAILABLE';expected=[string]$before.value;actual=$null;message='Could not read the saved AD domain policy property.'}}}else{$restoreChecks+=@{area='DOMAIN_POLICY';state='NOT_APPLICABLE';expected=$null;actual=$null;message='No direct AD domain-policy change is part of this record.'}}
+    $matches=@($restoreChecks|Where-Object{$_.state -notin @('MATCH','NOT_APPLICABLE')}).Count -eq 0
     $observed=@()
     if($CheckEndpoints -and !$before){
         try{
@@ -1127,7 +1159,7 @@ function Verify-Rollback($Plan,$Map,$Manifest,[bool]$CheckEndpoints=$false){
             foreach($check in $observed){if([string]$check.state -in @('VERIFIED','MISMATCH')){$check.state='OBSERVED';$check.message='Observed after snapshot restore. The pre-change effective endpoint value was not captured, so this observation does not certify an endpoint undo. '+[string]$check.message}}
         }catch{$observed=@(@{hostname='<endpoint-scope>';state='UNAVAILABLE';actualValue=$null;message=('Post-restore endpoint evidence could not be collected (category '+[string]$_.CategoryInfo.Category+'). Check current authorized endpoint discovery and read access. GPO snapshot restoration is measured separately.')})}
     }
-    return @{restored=[bool]$matches;published=$false;linked=$false;link=(Selected-Link $s.scopeDn $s.gpoId);effective='ROLLBACK_ENDPOINT_PENDING';verification=(Verification-Metadata $s);endpointChecks=$observed;domainPolicy=$domainPolicy;currentValue=(Mapping-Display $s.gpoId $Map $s $false)}
+    return @{restored=[bool]$matches;published=$false;linked=$false;link=(Selected-Link $s.scopeDn $s.gpoId);effective='ROLLBACK_ENDPOINT_PENDING';verification=(Verification-Metadata $s);endpointChecks=$observed;domainPolicy=$domainPolicy;restoreChecks=$restoreChecks;currentValue=(Mapping-Display $s.gpoId $Map $s $false)}
 }
 function Failed-RollbackEvidence($Manifest){
     $evidence=@{published=$false;linked=$false;effective='ROLLBACK_ENDPOINT_PENDING';currentValue=$null}
@@ -1178,7 +1210,7 @@ function Result([string]$State,[string]$Message,$Manifest,$V,$Refresh){
     $current=Read-Field $V 'currentValue' $null
     $planData=Get-Variable Data -ValueOnly -ErrorAction SilentlyContinue
     $sourceGpo=Read-Field (Read-Field (Read-Field $planData 'plan' $null) 'preview' $null) 'gpo' $null
-    return @{state=$State;message=$Message;backupId=$backupId;backupDirectory=$backupDirectory;postFingerprint=$postFingerprint;gpoPublished=[bool](Read-Field $V 'published' $false);linkVerified=[bool](Read-Field $V 'linked' $false);refreshResults=@($Refresh);effectiveStatus=[string](Read-Field $V 'effective' 'UNKNOWN');verification=$verification;endpointChecks=$endpointChecks;currentValue=$current;currentValueSource=(Value-Source $sourceGpo $current);domainPolicy=(Read-Field $V 'domainPolicy' $null);currentLink=(Read-Field $V 'link' $null);endpointCoverage=Read-Field $V 'endpointCoverage' $null}
+    return @{state=$State;message=$Message;backupId=$backupId;backupDirectory=$backupDirectory;postFingerprint=$postFingerprint;gpoPublished=[bool](Read-Field $V 'published' $false);linkVerified=[bool](Read-Field $V 'linked' $false);refreshResults=@($Refresh);effectiveStatus=[string](Read-Field $V 'effective' 'UNKNOWN');verification=$verification;endpointChecks=$endpointChecks;currentValue=$current;currentValueSource=(Value-Source $sourceGpo $current);domainPolicy=(Read-Field $V 'domainPolicy' $null);currentLink=(Read-Field $V 'link' $null);restoreChecks=(Read-Field $V 'restoreChecks' $null);endpointCoverage=Read-Field $V 'endpointCoverage' $null}
 }
 
 function Operation-Failure($Record,[string]$Stage){
@@ -1227,7 +1259,7 @@ switch($Operation){
             }
             if([bool]$fresh.noChange){$v=Verify-Published $plan $map $true;$state=if($v.published -and $v.linked){'NO_CHANGE'}else{'VERIFY_MISMATCH'};return Result $state 'No policy write was required. Live content, link and AD/SYSVOL versions were checked; inspect the verification result before claiming publication.' $null $v @()}
             $beforeAd=Gpo-Ad $s.gpoId
-            $manifest=[ordered]@{plan=$plan;mappingId=[string]$map.id;mappingSource=[string]$map.source;approval=$Data.consent;backupId=$null;directory=$directory;preFingerprint=$fresh.fingerprint;postFingerprint=$null;phase='BACKUP_STARTED';beforeContent=(Get-NormalizedGpoContentFingerprint (Gpo-Folder $s.gpoId));beforeExtensions=[string]$beforeAd.gPCMachineExtensionNames;beforeUserExtensions=[string]$beforeAd.gPCUserExtensionNames;beforeDomainPolicy=$domainBefore;afterDomainPolicy=$null};Save-Manifest $manifest $directory
+            $manifest=[ordered]@{plan=$plan;mappingId=[string]$map.id;mappingSource=[string]$map.source;approval=$Data.consent;backupId=$null;directory=$directory;preFingerprint=$fresh.fingerprint;postFingerprint=$null;phase='BACKUP_STARTED';beforeContent=(Get-NormalizedGpoContentFingerprint (Gpo-Folder $s.gpoId));beforeRestoreContent=(Get-NormalizedGpoContentFingerprint (Gpo-Folder $s.gpoId) -RestoreComparison);beforeExtensions=[string]$beforeAd.gPCMachineExtensionNames;beforeUserExtensions=[string]$beforeAd.gPCUserExtensionNames;beforeDomainPolicy=$domainBefore;afterDomainPolicy=$null};Save-Manifest $manifest $directory
             Emit-Stage 'BACKUP'
             $backup=Backup-GPO -Guid ([guid]$s.gpoId) -Path $directory -Domain $cfg.domain -Server $cfg.domainController -Comment ('GpoRemediator '+$plan.id)
             $manifest.backupId=$backup.Id.ToString();$manifest.phase='BACKED_UP';Save-Manifest $manifest $directory
@@ -1275,18 +1307,22 @@ switch($Operation){
         $manifest=Get-Content -LiteralPath (Join-Path $directory 'manifest.json') -Raw|ConvertFrom-Json
         if([string]$manifest.phase -in @('PUBLISHED','VERIFY_MISMATCH') -and (Read-Field $manifest 'rollbackFailure' $null)){
             $restoration=Verify-Rollback $plan $map $manifest $true
-            if($restoration.restored){$manifest.phase='ROLLED_BACK';Save-Manifest $manifest $directory;return Result 'ROLLED_BACK' 'The saved GPO, link and AD restoration target were verified live.' $manifest $restoration @()}
+            if($restoration.restored){$manifest.phase='ROLLED_BACK';$manifest|Add-Member -NotePropertyName rollbackFingerprint -NotePropertyValue (Fingerprint $plan.selection.gpoId $plan.selection.scopeDn) -Force;Save-Manifest $manifest $directory;return Result 'ROLLED_BACK' 'The saved GPO, link and AD restoration target were verified live.' $manifest $restoration @()}
             $failure=$manifest.rollbackFailure
             return Result 'ROLLBACK_REVIEW_REQUIRED' ('The recorded rollback did not restore the saved snapshot. Read-only verification does not retry it. Resolve '+[string]$failure.code+' at '+[string]$failure.stage+' and review rollback availability before confirming another restore.') $manifest $restoration @()
         }
         if([string]$manifest.phase -in @('ROLLING_BACK','ROLLED_BACK','ROLLBACK_REVIEW_REQUIRED','ROLLBACK_DRIFT_DETECTED')){
             $v=Verify-Rollback $plan $map $manifest $true;$rolledBack=[bool]$v.restored
             if($rolledBack){
-                $manifest.phase='ROLLED_BACK';Save-Manifest $manifest $directory
+                $manifest.phase='ROLLED_BACK';$manifest|Add-Member -NotePropertyName rollbackFingerprint -NotePropertyValue (Fingerprint $plan.selection.gpoId $plan.selection.scopeDn) -Force;Save-Manifest $manifest $directory
                 return Result 'ROLLED_BACK' 'Rollback was re-verified against the pre-change GPO content, extensions and link state. Endpoint policy convergence may still be pending.' $manifest $v @()
             }
-            $manifest.phase='ROLLBACK_DRIFT_DETECTED';Save-Manifest $manifest $directory
-            return Result 'ROLLBACK_DRIFT_DETECTED' 'The GPO or selected link changed after rollback. The rollback record is preserved, but the current state no longer matches the pre-change snapshot.' $manifest $v @()
+            $hadVerifiedRestore=[string]$manifest.phase -eq 'ROLLED_BACK' -or ([string]$manifest.phase -eq 'ROLLBACK_DRIFT_DETECTED' -and [bool](Read-Field $manifest 'rollbackFingerprint' $null))
+            $verifiedRestore=$hadVerifiedRestore -and @($v.restoreChecks|Where-Object{$_.state -eq 'MISMATCH'}).Count -gt 0
+            $state=if($verifiedRestore){'ROLLBACK_DRIFT_DETECTED'}else{'ROLLBACK_REVIEW_REQUIRED'}
+            if(!$hadVerifiedRestore -or $verifiedRestore){$manifest.phase=$state};Save-Manifest $manifest $directory
+            $areas=@($v.restoreChecks|Where-Object{$_.state -notin @('MATCH','NOT_APPLICABLE')}|ForEach-Object{$_.area}) -join ', '
+            return Result $state ('Restore read-back is not confirmed for: '+$areas+'. '+$(if($verifiedRestore){'A previously verified restore no longer matches.'}elseif($hadVerifiedRestore){'The previously verified snapshot could not be rechecked. Missing evidence is not proof of an external change.'}else{'No completed restore was established; this is not evidence of a later external change.'})) $manifest $v @()
         }
         if([string]$manifest.phase -in @('BACKUP_STARTED','BACKED_UP','FAILED_SAFE','WRITING','PUBLICATION_PENDING','REVIEW_REQUIRED')){
             $v=Verify-Published $plan $map $true
@@ -1357,9 +1393,16 @@ switch($Operation){
         if(!(Test-Path -LiteralPath $manifestPath)){return @{canRestore=$false;driftDetected=$false;reason='NO_BACKUP';message='No completed backup manifest exists for this operation.'}}
         $m=Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
         if([string]$m.phase -in @('PUBLICATION_PENDING','REVIEW_REQUIRED') -and (Read-Field $Data 'mapping' $null)){$observed=Verify-Published $plan $Data.mapping $false;$null=Reconcile-Publication $plan $Data.mapping $m $directory $observed}
+        $restoreReadback=$null
+        if([string]$m.phase -in @('ROLLING_BACK','ROLLED_BACK','ROLLBACK_REVIEW_REQUIRED','ROLLBACK_DRIFT_DETECTED') -and (Read-Field $Data 'mapping' $null)){
+            $restoreReadback=Verify-Rollback $plan $Data.mapping $m
+            if($restoreReadback.restored){$m.phase='ROLLED_BACK';$m|Add-Member -NotePropertyName rollbackFingerprint -NotePropertyValue (Fingerprint $s.gpoId $s.scopeDn) -Force;Save-Manifest $m $directory}
+            elseif([string]$m.phase -eq 'ROLLBACK_DRIFT_DETECTED' -and !(Read-Field $m 'rollbackFingerprint' $null)){$m.phase='ROLLBACK_REVIEW_REQUIRED';Save-Manifest $m $directory}
+        }
         $phase=[string]$m.phase
         $failure=Read-Field $m 'rollbackFailure' (Read-Field $m 'failure' $null)
-        $assessment=@{canRestore=$false;driftDetected=$false;manifestPhase=$phase;backupId=(Read-Field $m 'backupId' $null);hasPostFingerprint=[bool](Read-Field $m 'postFingerprint' $null);checkedAt=[DateTimeOffset]::UtcNow.ToString('O');failure=$null}
+        $assessment=@{canRestore=$false;driftDetected=$false;manifestPhase=$phase;backupId=(Read-Field $m 'backupId' $null);hasPostFingerprint=[bool](Read-Field $m 'postFingerprint' $null);checkedAt=[DateTimeOffset]::UtcNow.ToString('O');failure=$null;restoreChecks=(Read-Field $restoreReadback 'restoreChecks' $null)}
+        if($phase -eq 'ROLLED_BACK' -and @($assessment.restoreChecks|Where-Object{$_.state -eq 'UNAVAILABLE'}).Count){$assessment.reason='RESTORE_EVIDENCE_UNAVAILABLE';$assessment.message='Required snapshot evidence could not be established. Inspect the individual restore checks before another restore.';return $assessment}
         if($failure){$assessment.failure=@{code=[string](Read-Field $failure 'code' '');stage=[string](Read-Field $failure 'stage' '');message=[string](Read-Field $failure 'message' '')}}
         if((Read-Field $m 'backupId' $null) -and !(Read-Field $m 'postFingerprint' $null)){$assessment.reason='UNANCHORED_POST_STATE';$assessment.message='The retained backup exists, but a complete matching post-write state could not be proven. Check later GPO/AD changes and backup integrity before full restore. Live publication verification and explicit refresh do not authorize overwriting unrelated changes.';return $assessment}
         if(!(Read-Field $m 'backupId' $null) -or !(Read-Field $m 'postFingerprint' $null)){$assessment.reason='INCOMPLETE_BACKUP';$assessment.message='A completed backup and post-write fingerprint are required. Run read-only Verify and inspect the retained manifest; do not retry restore blindly.';return $assessment}
@@ -1369,7 +1412,7 @@ switch($Operation){
         $drift=(!$expected -or $current -cne [string]$expected)
         $gpo=Get-GPO -Guid ([guid]$s.gpoId) -Domain $cfg.domain -Server $cfg.domainController
         $direct=Selected-Link $s.scopeDn $s.gpoId
-        return @{canRestore=(-not $drift);driftDetected=[bool]$drift;restoreMethod='Import-GPO';restorePermissionVerified=$false;manifestPhase=$phase;hasPostFingerprint=$assessment.hasPostFingerprint;failure=$assessment.failure;reason=$(if($drift){'ROLLBACK_CONFLICT'}else{'READY'});message=$(if($drift){'The live GPO, its link or the recorded AD domain setting changed since Apply; rollback must not overwrite the external change.'}else{'Live fingerprint matches the saved post-apply state. Recovery imports the saved settings into the same GPO and preserves its ACL. Edit settings, backup read access and required link authority are checked again before import.'});gpoName=[string]$gpo.DisplayName;gpoId=[string]$s.gpoId;scopeDn=[string]$s.scopeDn;backupId=[string]$m.backupId;controlId=[string]$m.mappingId;domainSnapshotDiverges=([bool](Read-Field $m 'beforeDomainPolicy' $null) -and [string]$plan.preview.previousValue -match '^\d+$' -and !(Numeric-Complies ([string]$m.beforeDomainPolicy.value) ([string]$plan.preview.previousValue) '=='));beforeValue=[string]$plan.preview.previousValue;afterValue=[string]$plan.preview.desiredValue;beforeDomainPolicy=(Read-Field $m 'beforeDomainPolicy' $null);afterDomainPolicy=(Read-Field $m 'afterDomainPolicy' $null);beforeLink=$plan.preview.existingLink;currentLink=$direct;otherLinkedScopes=@($plan.preview.impact.existingLinkScopes);fullGpoRestore=$true;checkedAt=$assessment.checkedAt}
+        return @{canRestore=(-not $drift);driftDetected=[bool]$drift;restoreMethod='Import-GPO';restorePermissionVerified=$false;manifestPhase=$phase;hasPostFingerprint=$assessment.hasPostFingerprint;failure=$assessment.failure;reason=$(if($drift){'ROLLBACK_CONFLICT'}else{'READY'});message=$(if($drift){'The live GPO, its link or the recorded AD domain setting changed since Apply; rollback must not overwrite the external change.'}else{'Live fingerprint matches the saved post-apply state. Recovery imports the saved settings into the same GPO and preserves its ACL. Edit settings, backup read access and required link authority are checked again before import.'});gpoName=[string]$gpo.DisplayName;gpoId=[string]$s.gpoId;scopeDn=[string]$s.scopeDn;backupId=[string]$m.backupId;controlId=[string]$m.mappingId;domainSnapshotDiverges=([bool](Read-Field $m 'beforeDomainPolicy' $null) -and [string]$plan.preview.previousValue -match '^\d+$' -and !(Numeric-Complies ([string]$m.beforeDomainPolicy.value) ([string]$plan.preview.previousValue) '=='));beforeValue=[string]$plan.preview.previousValue;afterValue=[string]$plan.preview.desiredValue;beforeDomainPolicy=(Read-Field $m 'beforeDomainPolicy' $null);afterDomainPolicy=(Read-Field $m 'afterDomainPolicy' $null);beforeLink=$plan.preview.existingLink;currentLink=$direct;otherLinkedScopes=@($plan.preview.impact.existingLinkScopes);fullGpoRestore=$true;checkedAt=$assessment.checkedAt;restoreChecks=$assessment.restoreChecks}
     }
     'gpoRollback'{
         $plan=$Data.plan;$map=$Data.mapping;$s=$plan.selection;$directory=Run-Directory $plan;if(!(Test-Path -LiteralPath (Join-Path $directory 'manifest.json'))){Fail 'ROLLBACK_NOT_AVAILABLE' 'No backup exists because this operation did not change the GPO.'};$manifest=Get-Content -LiteralPath (Join-Path $directory 'manifest.json') -Raw|ConvertFrom-Json;if(!$manifest.backupId){Fail 'ROLLBACK_BACKUP_INCOMPLETE' 'The operation manifest exists but no completed Backup-GPO ID was recorded. Verify current policy and inspect the operation directory; automatic rollback is unavailable.'};$lock=$null
@@ -1415,7 +1458,7 @@ switch($Operation){
             $manifest.phase=if($matches){'ROLLED_BACK'}else{'ROLLBACK_REVIEW_REQUIRED'}
             if($matches){$manifest | Add-Member -NotePropertyName rollbackFingerprint -NotePropertyValue (Fingerprint $s.gpoId $s.scopeDn) -Force}
             Save-Manifest $manifest $directory
-            $message=if($matches){'GPO snapshot and selected link restored. Endpoint refresh/replication still need to converge.'}else{'Restore read-back did not match the saved snapshot, extensions or link. Independent review is required before another restore.'}
+            $message=if($matches){'GPO snapshot and selected link restored. Endpoint refresh/replication still need to converge.'}else{'Restore read-back is not confirmed for: '+(@($v.restoreChecks|Where-Object{$_.state -notin @('MATCH','NOT_APPLICABLE')}|ForEach-Object{$_.area}) -join ', ')+'. Inspect the separate restore checks before another restore.'}
             return Result $manifest.phase $message $manifest $v @()
         }catch{
             if($_.Exception.Message -like 'ROLLBACK_CONFLICT*'){throw}

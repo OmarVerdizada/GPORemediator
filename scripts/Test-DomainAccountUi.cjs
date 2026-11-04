@@ -1,7 +1,7 @@
 /* User-reported incident: GPO threshold 5, effective AD threshold 0. No live AD. */
 const fs=require('node:fs'),path=require('node:path'),http=require('node:http'),assert=require('node:assert/strict');
 const {chromium}=require('playwright');
-const root=path.resolve(__dirname,'../frontend/source'),shots=path.resolve(__dirname,'../work/screens/3.17.8');fs.mkdirSync(shots,{recursive:true});
+const root=path.resolve(__dirname,'../frontend/source'),shots=path.resolve(__dirname,'../work/screens/3.17.9');fs.mkdirSync(shots,{recursive:true});
 const dn='DC=example,DC=test',gpo={id:'31b2f340-016d-11d2-945f-00c04fb984f9',name:'Default Domain Policy',protected:true,selectable:true};
 const selection={setting:'1.2.2',gpoId:gpo.id,scopeDn:dn,accountScope:'Domain',refresh:'Pdc',firstLink:true,value:5};
 const domainPolicy={property:'LockoutThreshold',value:'0',desiredValue:'5',domainController:'dc01.example.test'};
