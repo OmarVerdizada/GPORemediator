@@ -12,9 +12,10 @@ function Check($ok,$name){if(!$ok){throw $name};Write-Output ('PASS '+$name)}
 function Run-Directory($Plan){$temp}
 function Refresh-Targets {param($Strategy,$ScopeDn,$EndpointScopeDn,$PolicyScope) $script:targets|Where-Object{$_ -ne $script:missing}}
 function Verify-Published {param($Plan,$Map,$CheckEndpoints) @{published=$true;linked=$true;effective='ENDPOINT_VERIFICATION_PENDING'}}
-function Endpoint-CredentialOptions {@{Credential='fixture-credential-not-a-secret'}}
+$script:delegated=$true
+function Endpoint-CredentialOptions {if($script:delegated){@{Credential='fixture-credential-not-a-secret'}}else{@{}}}
 $script:rollbackSchedules=@()
-function Invoke-GPUpdate {param($Computer,$Force,$RandomDelayInMinutes,$ErrorAction,$Target) $script:rollbackSchedules+=@{computer=$Computer;target=$Target;force=$Force}}
+function Invoke-GPUpdate {param($Computer,[switch]$Force,$RandomDelayInMinutes,$ErrorAction,$Target) $script:rollbackSchedules+=@{computer=$Computer;target=$Target;force=$Force}}
 function Invoke-Command {
  param($ComputerName,$Authentication,$Credential,$ThrottleLimit,$ScriptBlock,$ErrorAction)
  Check ($Credential -eq 'fixture-credential-not-a-secret' -and $Authentication -eq 'Kerberos') 'computer refresh uses explicit delegated credential across the second hop'|Out-Null
@@ -45,16 +46,25 @@ try{
  function Verify-Rollback {param($Plan,$Map,$Manifest) @{restored=$true;published=$false;linked=$false;effective='ROLLBACK_ENDPOINT_PENDING'}}
  @{phase='ROLLED_BACK'}|ConvertTo-Json|Set-Content -LiteralPath (Join-Path $temp 'manifest.json') -Encoding UTF8
  $rollbackTargets=@();for($offset=0;$offset -lt 201;$offset+=64){$Data.refreshOffset=$offset;$result=& $dispatch;Check ($result.state -eq 'ROLLED_BACK') 'rollback refresh preserves restored GPO status';$rollbackTargets+=@($result.refreshResults)}
- Check ($rollbackTargets.Count -eq 201 -and @($rollbackTargets|Where-Object state -ne 'SCHEDULED').Count -eq 0) 'rollback schedules both policy halves across all pinned pages'
- Check ($script:rollbackSchedules.Count -eq 201 -and @($script:rollbackSchedules|Where-Object{$_.target -or !$_.force}).Count -eq 0) 'delegated rollback refresh schedules computer and signed-in user policies with force'
- Check ($script:remoteCalls -eq $callsBefore) 'rollback must not refresh only the remoting operator computer context'
+ Check ($rollbackTargets.Count -eq 201 -and @($rollbackTargets|Where-Object{$_.state -ne 'SCHEDULED' -or $_.computerState -ne 'COMPLETED' -or $_.userState -ne 'SCHEDULED'}).Count -eq 0) 'rollback records completed computer refresh separately from scheduled user refresh across all pinned pages'
+ Check ($script:rollbackSchedules.Count -eq 201 -and @($script:rollbackSchedules|Where-Object{$_.target -ne 'User' -or !$_.force}).Count -eq 0) 'rollback schedules signed-in user processing in its own context with force'
+ Check ($script:remoteCalls -eq $callsBefore+4) 'rollback completes computer processing using delegated Kerberos in bounded pages'
+ function Invoke-GPUpdate {param($Computer,[switch]$Force,$RandomDelayInMinutes,$ErrorAction,$Target) if($Computer -eq $script:targets[1]){throw [UnauthorizedAccessException]::new('Private scheduling error')};$script:rollbackSchedules+=@{computer=$Computer;target=$Target;force=$Force}}
+ $Data.refreshOffset=0;$result=& $dispatch;$failed=@($result.refreshResults|Where-Object state -eq 'FAILED')
+ Check ($result.state -eq 'ROLLED_BACK' -and $failed.Count -eq 1 -and $failed[0].computerState -eq 'COMPLETED' -and $failed[0].userState -eq 'FAILED') 'user scheduling failure preserves successful rollback and measured computer refresh'
+ Check ($failed[0].message -match 'Signed-in user refresh could not be scheduled' -and $failed[0].message -notmatch 'Private') 'rollback scheduling diagnostics identify the failed half without exposing exception text'
+ $script:delegated=$false;$script:rollbackSchedules=@()
+ function Invoke-GPUpdate {param($Computer,[switch]$Force,$RandomDelayInMinutes,$ErrorAction,$Target) $script:rollbackSchedules+=@{computer=$Computer;target=$Target;force=$Force}}
+ $callsBefore=$script:remoteCalls;$result=& $dispatch
+ Check ($script:remoteCalls -eq $callsBefore -and @($script:rollbackSchedules|Where-Object{$_.target}).Count -eq 0 -and @($result.refreshResults|Where-Object state -ne 'SCHEDULED').Count -eq 0) 'without delegated credentials rollback retains both-half task scheduling without inventing completion'
+ $script:delegated=$true
 
 
  # User refresh must schedule logged-on user processing, never run computer
  # policy under the remoting operator and never claim scheduling is completion.
  @{phase='PUBLISHED'}|ConvertTo-Json|Set-Content -LiteralPath (Join-Path $temp 'manifest.json') -Encoding UTF8
  $script:targets=@('userhost1.example.test','userhost2.example.test');$script:userSchedules=@();$script:userScheduleDenied=$false
- function Invoke-GPUpdate {param($Computer,$Force,$RandomDelayInMinutes,$ErrorAction,$Target)
+ function Invoke-GPUpdate {param($Computer,[switch]$Force,$RandomDelayInMinutes,$ErrorAction,$Target)
   $script:userSchedules+=@{computer=$Computer;target=$Target;force=$Force}
   if($script:userScheduleDenied){throw [UnauthorizedAccessException]::new('Fixture RPC scheduling denied')}
  }

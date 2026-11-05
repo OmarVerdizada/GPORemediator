@@ -46,7 +46,7 @@ const server=http.createServer(async(req,res)=>{try{
  const base='http://127.0.0.1:'+server.address().port;
  await page.goto(base+'/#/benchmark');await page.locator('#catalog-search').fill('1.2.2');await page.locator('[data-rule="1.2.2"]').first().click();await page.locator('[data-tab=verification]').click();
  await page.locator('[data-effective-outcome=MISMATCH]').waitFor();
- assert.match(await page.locator('.result-summary-head h2').textContent(),/not effective/);
+ assert.match(await page.locator('.result-summary-head h2').textContent(),/endpoint mismatch/);
  assert.equal(await page.locator('.effective-value strong').textContent(),'0');
  assert.match(await page.locator('.measured-values').textContent(),/Requested\s*5/);
  assert.equal(await page.locator('.configured-value>strong').textContent(),'5');
@@ -67,7 +67,7 @@ const server=http.createServer(async(req,res)=>{try{
  await page.locator('.service-right [data-refresh]').click();await page.locator('[data-effective-outcome=MISMATCH]').waitFor();assert.equal(await page.locator('.effective-value strong').textContent(),'30');assert.match(await page.locator('.verification-explanation').textContent(),/exact requested value/);assert.match(await page.locator('.domain-policy-notes').textContent(),/Threshold is 0/);assert.match(await page.locator('.recorded-result-context').textContent(),/Enabled · priority 1/);
  await page.screenshot({path:path.join(shots,'legacy-duration-mismatch.png'),fullPage:true});
  result.verificationStages[1].status='INSUFFICIENT_EVIDENCE';result.domainPolicy=null;result.effectiveStatus='DOMAIN_POLICY_UNAVAILABLE';result.endpointChecks=[{hostname:domainPolicy.domainController,state:'UNAVAILABLE',actualValue:null,message:'Domain policy could not be read.'}];
- await page.locator('.service-right [data-refresh]').click();await page.locator('[data-effective-outcome=PENDING]').waitFor();assert.equal(await page.locator('.effective-value strong').textContent(),'AD value unavailable');assert.match(await page.locator('.result-summary-head h2').textContent(),/not verified/);
+ await page.locator('.service-right [data-refresh]').click();await page.locator('[data-effective-outcome=PENDING]').waitFor();assert.equal(await page.locator('.effective-value strong').textContent(),'AD value unavailable');assert.match(await page.locator('.result-summary-head h2').textContent(),/GPO applied successfully/);assert(!await page.locator('[data-effective-outcome=VERIFIED]').count(),'Unavailable AD reads must not establish endpoint verification');
  result.verificationStages[1].status='ENDPOINT_MISMATCH';result.domainPolicy=domainPolicy;result.effectiveStatus='ENDPOINT_MISMATCH';result.endpointChecks=[{hostname:domainPolicy.domainController,state:'MISMATCH',actualValue:'0',message:'AD LockoutThreshold = 0; requested 5.'}];
  await page.locator('.service-right [data-refresh]').click();await page.locator('[data-effective-outcome=MISMATCH]').waitFor();await page.locator('[data-replan]').click();await page.locator('.domain-value-plan').waitFor();
  assert.equal(await page.locator('.diff-before strong').textContent(),'0');assert.equal(await page.locator('.diff-after strong').textContent(),'5');assert.match(await page.locator('.domain-value-plan').textContent(),/AD \+ GPO/);assert.equal(requests.filter(x=>x.path.endsWith('/replan')).length,1);

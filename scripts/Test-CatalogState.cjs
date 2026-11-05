@@ -20,7 +20,7 @@ state.query='1.2.2';state.expandedTop.clear();state.expandedSub.clear();
 assert.equal((view.benchmarkView().match(/data-rule=/g)||[]).length,1,'Searching opens matching nested sections');
 state.catalogSearchCollapsed.add('1');assert.equal((view.benchmarkView().match(/data-rule=/g)||[]).length,0,'Search results remain collapsible');state.catalogSearchCollapsed.clear();
 const rule=catalog.rules.find(r=>r.id==='1.2.2'),run=result=>({updatedAt:'2026-10-29T06:00:00Z',plan:{selection:{setting:'1.2.2'}},result});
-for(const [result,label] of [[{state:'PUBLISHED',gpoPublished:true},'Verification pending'],[{state:'ROLLED_BACK'},'Rolled back'],[{state:'VERIFYING'},'In progress'],[{state:'PUBLISHED',effectiveStatus:'ENDPOINT_MISMATCH'},'Needs review'],[{state:'PUBLISHED',gpoPublished:true,linkVerified:true,effectiveStatus:'VERIFIED_ON_SAMPLE',verification:{replicationConverged:true}},'Sample configuration verified']]){
+for(const [result,label] of [[{state:'PUBLISHED',gpoPublished:true},'Verification pending'],[{state:'ROLLED_BACK'},'Rolled back'],[{state:'VERIFYING'},'In progress'],[{state:'PUBLISHED',effectiveStatus:'ENDPOINT_MISMATCH'},'Needs review'],[{state:'PUBLISHED',gpoPublished:true,linkVerified:true,effectiveStatus:'VERIFIED_ON_SAMPLE',verification:{replicationConverged:true},endpointChecks:[{hostname:'dc.example.test',state:'VERIFIED',actualValue:'5'}]},'Sample configuration verified']]){
  state.history=[run(result)];assert.equal(window.GpoProduct.controlStatus(state,rule).label,label);
 }
 const html=view.renderRuleRow({...rule,title:'<script>unsafe</script>'});assert(html.includes('&lt;script&gt;')&&!html.includes('<script>'));

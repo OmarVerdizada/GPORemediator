@@ -56,7 +56,9 @@ public record GpoRefreshRequest(string Refresh);
 public record BackupAccessRequest(string Identity,string Confirmation);
 public record GpoExplainRequest(string Hostname);
 public record GpoConsent(string Confirmation, bool AcknowledgeImpact = false, bool AcknowledgeProtected = false, string? ChangeReference = null, string? ApprovedBy = null, string? Refresh = null);
-public record GpoRefreshResult(string Computer, string State, string Message);
+public record GpoRefreshResult(string Computer, string State, string Message,
+    [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] string? ComputerState = null,
+    [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] string? UserState = null);
 public record EndpointCoverage(int Total,int Checked,bool Complete);
 public record GpoWorkflowResult(string State, string Message, string? BackupId, string? BackupDirectory, string? PostFingerprint,
     bool GpoPublished, bool LinkVerified, GpoRefreshResult[] RefreshResults, string EffectiveStatus,

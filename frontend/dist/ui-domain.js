@@ -5,10 +5,24 @@
   const effectiveVerified = value => /^(VERIFIED_ON_SAMPLE|VERIFIED_ON_ALL_TARGETS|DOMAIN_VALUE_MATCHES_ON_SELECTED_DC)$/.test(upper(value));
   function domainMismatch(result){const d=result?.domainPolicy;if(!d||upper(result.state).startsWith('ROLLED_BACK'))return false;const a=String(d.value??'').trim(),b=String(d.desiredValue??'').trim();return !a||!b||!Number.isFinite(Number(a))||!Number.isFinite(Number(b))||Number(a)!==Number(b);}
   function coverageVerified(result){
+    if(upper(result.effectiveStatus)==='DOMAIN_VALUE_MATCHES_ON_SELECTED_DC')return true;
+    if(!Array.isArray(result.endpointChecks)||!result.endpointChecks.length||result.endpointChecks.some(x=>x.state!=='VERIFIED'))return false;
     if(upper(result.effectiveStatus)!=='VERIFIED_ON_ALL_TARGETS')return true;
     const c=result.endpointCoverage,checks=result.endpointChecks;
     return !!(c?.complete===true&&Number.isSafeInteger(c.total)&&c.total>0&&c.checked===c.total&&Array.isArray(checks)&&checks.length===c.total&&
       new Set(checks.map(x=>String(x.hostname||'').toLowerCase())).size===c.total&&checks.every(x=>x.hostname&&x.state==='VERIFIED'));
+  }
+  function outcome(run){
+    const r=run?.result||{},checks=r.endpointChecks||[],q=classify(run);
+    const restored=r.state==='ROLLED_BACK',busy=/^(APPLYING|VERIFYING|REFRESHING|ROLLBACKING|ROLLING_BACK)$/.test(r.state||'');
+    const applied=!busy&&r.gpoPublished===true&&r.linkVerified===true&&/^(PUBLISHED|NO_CHANGE|REFRESH_COMPLETED|REFRESH_SCHEDULED|REFRESH_PARTIAL|PUBLISHED_REFRESH_FAILED)$/.test(r.state||'');
+    const mismatch=!restored&&(domainMismatch(r)||r.effectiveStatus==='ENDPOINT_MISMATCH'||r.effectiveStatus==='DOMAIN_VALUE_PENDING_OR_OVERRIDDEN'||checks.some(x=>x.state==='MISMATCH'));
+    const verified=q.publication==='published'&&r.linkVerified===true&&q.replication==='converged'&&q.effective==='verified'&&!q.attention;
+    const count=state=>checks.filter(x=>x.state===state).length,total=r.endpointCoverage?.total??checks.length;
+    const endpoints={total,verified:count('VERIFIED'),mismatch:count('MISMATCH'),unavailable:count('UNAVAILABLE')+count('OUTSIDE_SCOPE'),observed:count('OBSERVED'),remaining:Math.max(0,total-checks.length)};
+    const refresh=r.refreshResults||[],refreshFailed=refresh.filter(x=>x.state==='FAILED').length;
+    return {restored,applied,busy,mismatch,verified,endpoints,refreshFailed,refreshTotal:refresh.length,success:!busy&&!mismatch&&(restored||applied),
+      title:restored?'Rollback completed successfully':busy?'Checking policy':mismatch?(applied?'GPO applied · endpoint mismatch':'Policy is not effective'):applied?(verified?'Applied and verified':'GPO applied successfully'):q.attention?'Operation needs review':'Application not verified'};
   }
   function classify(run) {
     const result = run?.result || {};
@@ -56,5 +70,5 @@
     if(/^(ROLLED_BACK|BATCH_ROLLED_BACK|APPLYING|VERIFYING|REFRESHING|ROLLBACKING|ROLLING_BACK)$/.test(r.state||''))return r.state;
     return domainMismatch(r)||r.effectiveStatus==='ENDPOINT_MISMATCH'||r.effectiveStatus==='DOMAIN_VALUE_PENDING_OR_OVERRIDDEN'||(r.endpointChecks||[]).some(x=>x.state==='MISMATCH')?'ENDPOINT_MISMATCH':r.state;
   }
-  window.GpoUiDomain = Object.freeze({ classify, workflowStep, impact, bad, effectiveVerified, coverageVerified, isUserPolicy, refreshChoices, resultState, domainMismatch });
+  window.GpoUiDomain = Object.freeze({ classify, outcome, workflowStep, impact, bad, effectiveVerified, coverageVerified, isUserPolicy, refreshChoices, resultState, domainMismatch });
 })();

@@ -1,4 +1,3 @@
-GPO Remediator 3.17.9 - native snapshot comparison and restore diagnostics
+GPO Remediator 3.17.10 - clear operation outcomes and independent rollback refresh
 
-See docs/RELEASE-3.17.9.md.
-Live domain evidence identified SID-order/blank-line changes; the fix is validated with private fixtures.
+See docs/RELEASE-3.17.10.md.

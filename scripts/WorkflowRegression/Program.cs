@@ -126,6 +126,11 @@ Console.WriteLine("PASS mapping upgrades: stale writes blocked; snapshot rollbac
 
 var evidencePlan=new GpoWorkflowPlan("evidence-fixture","EXAMPLE\\Operator","EXAMPLE\\Executor","WINDOWS","example.local","dc.example.local",selected with{Setting="1.1.4"},new(new(gpo,"Test GPO",false,true),new(dn,"Domain","Domain"),"1","fingerprint","",null,[],[],DesiredValue:"14"),PolicyValues.Now());
 var evidenceResult=new GpoWorkflowResult("PUBLISHED","Published",null,null,null,true,true,[new("ws.example.local","SCHEDULED","scheduled")],"VERIFIED_ON_SAMPLE",new("1","1",true,[],[],PolicyValues.Now(),true),[new("ws.example.local","VERIFIED","sample only","14")],"14");
+var halfRefresh=new GpoRefreshResult("ws.example.local","FAILED","Computer completed; user scheduling failed","COMPLETED","FAILED");
+var halfJson=System.Text.Json.JsonSerializer.Serialize(halfRefresh);
+Check(halfJson.Contains("ComputerState")&&halfJson.Contains("UserState"),"Per-half refresh evidence must survive serialization");
+var oldRefreshJson=System.Text.Json.JsonSerializer.Serialize(new GpoRefreshResult("ws.example.local","SCHEDULED","legacy"));
+Check(!oldRefreshJson.Contains("ComputerState")&&!oldRefreshJson.Contains("UserState"),"Absent refresh dimensions must preserve legacy evidence serialization");
 var legacyDomain=evidenceResult with{EffectiveStatus="DOMAIN_VALUE_MATCHES_ON_SELECTED_DC",DomainPolicy=new("LockoutDuration","30","15","dc.example.local")};
 Check(!GpoAssurance.EffectiveVerified(legacyDomain)&&GpoAssurance.Stages(legacyDomain).Any(x=>x.Stage=="ENDPOINT_CONFIGURATION"&&x.Status=="ENDPOINT_MISMATCH"),"Legacy AD 30/requested 15 falsely verified");
 Check(GpoAssurance.EffectiveVerified(legacyDomain with{DomainPolicy=legacyDomain.DomainPolicy with{Value="15"}}),"Exact AD match did not verify");

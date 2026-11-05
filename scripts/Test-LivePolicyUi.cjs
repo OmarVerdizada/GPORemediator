@@ -66,13 +66,13 @@ const server=http.createServer(async(req,res)=>{try{
  pollFailed=false;history[0].liveChecks[2]={phase:'ENDPOINT',state:'UNAVAILABLE',subject:'ws.example.test',message:'WinRM connection unavailable.'};
  await page.locator('[data-check-state=UNAVAILABLE]').waitFor();
  jobs[0].state='CHECKS_INCOMPLETE';jobs[0].message='Endpoint check unavailable; review WinRM connectivity.';result.state='PUBLISHED';result.linkVerified=true;result.effectiveStatus='ENDPOINT_VERIFICATION_PENDING';result.endpointChecks=[{hostname:'ws.example.test',state:'UNAVAILABLE',actualValue:null,message:'WinRM connection unavailable.'}];
- await page.locator('[data-effective-outcome=PENDING]').waitFor();assert.equal(await page.locator('.effective-value strong').textContent(),'Endpoint unavailable');assert.match(await page.locator('.verification-explanation').textContent(),/WinRM connection unavailable/);
+ await page.locator('[data-effective-outcome=PENDING]').waitFor();assert.equal(await page.locator('.effective-value strong').textContent(),'Endpoint unavailable');assert.match(await page.locator('.endpoint-summary').textContent(),/0 of 1 verified · 1 unavailable/);if(!await page.locator('.verification-details').evaluate(el=>el.open))await page.locator('.verification-details>summary').click();assert.match(await page.locator('.endpoint-evidence').textContent(),/WinRM connection unavailable/);
  assert.equal(requests.filter(x=>x.path==='/api/workflows/verify').length,1,'Polling resubmitted an operation');
  assert.equal(requests.filter(x=>/\/(apply|refresh|rollback)$/.test(x.path)).length,0,'Read-only verification caused a mutation');
  result.refreshResults=[{computer:'ws.example.test',state:'FAILED',message:'ENDPOINT_SESSION_BROKEN. Windows 1726: remote session broke.'}];
  result.endpointChecks=[{hostname:'ws.example.test',state:'UNAVAILABLE',actualValue:null,message:'ENDPOINT_JOB_FAILED. No usable endpoint result. Error ID: JobFailure.'}];
- await page.locator('.service-right [data-refresh]').click();await page.getByRole('heading',{name:'Endpoint refresh failed',exact:true}).waitFor();
- assert.match(await page.locator('.verification-explanation').textContent(),/1726[\s\S]*JobFailure/,'Refresh cause was hidden by the less-specific value-check error');
+ await page.locator('.service-right [data-refresh]').click();await page.getByRole('heading',{name:'GPO applied successfully',exact:true}).waitFor();
+ await page.waitForFunction(()=>document.querySelector('.endpoint-summary')?.textContent.includes('1 failed'));if(!await page.locator('.verification-details').evaluate(el=>el.open))await page.locator('.verification-details>summary').click();assert.match(await page.locator('.endpoint-refresh-details').textContent(),/1726/);assert.match(await page.locator('.endpoint-evidence').textContent(),/JobFailure/,'Value-check and refresh causes must remain independently accessible');
  assert.match(await page.locator('.recorded-result-context').textContent(),/Inspected endpoints[\s\S]*ws.example.test/);
  const storedBox=await page.locator('.configured-value>strong').boundingBox(),sourceBox=await page.locator('.configured-value>.value-source').boundingBox();assert(sourceBox.y>=storedBox.y+storedBox.height,'GPO source overlaps the stored value');
  await page.screenshot({path:path.join(shots,'endpoint-session-failure.png'),fullPage:true});

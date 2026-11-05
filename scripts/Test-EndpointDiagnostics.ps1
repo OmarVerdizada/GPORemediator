@@ -6,6 +6,8 @@ $ast=[Management.Automation.Language.Parser]::ParseFile((Join-Path $root 'backen
 if($errors.Count){throw ($errors|Out-String)}
 foreach($fn in $ast.FindAll({param($n)$n -is [Management.Automation.Language.FunctionDefinitionAst]},$false)){. ([scriptblock]::Create($fn.Extent.Text))}
 function Check($Condition,$Message){if(!$Condition){throw $Message};Write-Output ('PASS '+$Message)}
+try{throw 'Private operator credential-like text'}catch{$privateMessage=Endpoint-FailureMessage $_}
+Check ($privateMessage -notmatch 'Private|operator|credential-like') 'throw-generated error IDs do not leak private exception text'
 $EndpointCredential=[Management.Automation.PSCredential]::new('EXAMPLE\fixture',(ConvertTo-SecureString 'not-a-real-password' -AsPlainText -Force))
 $cfg=@{emitProgress=$false}
 function Invoke-Command {
@@ -54,3 +56,8 @@ $plan=@{selection=@{scopeDn='OU=Pilot,DC=example,DC=test'};preview=@{impact=$nul
 $map=@{handler='SecurityTemplate';scope='Computer';domainPolicySensitive=$false;requiresInput=$false;allowValueOverride=$false;comparator='>=';items=@(@{section='System Access';key='MinimumPasswordLength';name=$null;type='Integer';guid=$null;value=@('14')})}
 $check=@(Verify-EffectiveSamples $plan $map)[0]
 Check ($check.state -eq 'UNAVAILABLE' -and $null -eq $check.actualValue -and $check.message -match 'ENDPOINT_ACCESS_DENIED') 'failed effective probe retains its access cause without fabricating a measured value'
+function Invoke-Command {param($ComputerName,$Authentication,$Credential,$ArgumentList,$ScriptBlock,$ErrorAction) & $ScriptBlock @ArgumentList}
+function Add-Type {param($TypeDefinition,$ErrorAction) throw [InvalidOperationException]::new('CS0123 Private compile detail and temporary path')}
+$map=@{handler='SecurityTemplate';scope='Computer';domainPolicySensitive=$false;requiresInput=$false;allowValueOverride=$false;comparator='==';items=@(@{section='Privilege Rights';key='SeDenyInteractiveLogonRight';name=$null;type='Principals';guid=$null;value=@('S-1-5-32-546')})}
+$check=@(Verify-EffectiveSamples $plan $map)[0]
+Check ($check.state -eq 'UNAVAILABLE' -and $null -eq $check.actualValue -and $check.message -match 'Stage COMPILE' -and $check.message -match 'CS0123' -and $check.message -notmatch 'Private|temporary path') 'LSA compilation failure retains safe compiler code and unavailable value without leaking raw diagnostics'

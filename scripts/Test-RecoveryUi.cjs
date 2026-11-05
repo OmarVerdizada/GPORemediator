@@ -120,10 +120,10 @@ const server=http.createServer(async(req,res)=>{
   await inspectRecovery(page);await page.locator('.ds-recovery input').fill('ROLLBACK');
   await page.locator('.ds-recovery button[type=submit]').click();
   await page.locator('[data-confirm-run]').click();
-  await page.waitForFunction(()=>['Rolled back','Rolled back'].some(x=>document.querySelector('.ds-table')?.textContent.includes(x)));
+  await page.waitForFunction(()=>document.querySelector('.ds-table')?.textContent.includes('Rollback successful'));
   assert.deepEqual(writes,['/api/gpo/recovery-test/rollback']);
   await page.locator('[data-ops-layout=cards]').click();
-  await page.locator('[data-inspect]').first().click();await page.locator('.product-drawer .restore-readback').scrollIntoViewIfNeeded();assert.match(await page.locator('.product-drawer .restore-readback').textContent(),/GPO content · Matches/);await page.locator('.product-drawer .restore-readback').screenshot({path:path.join(restoreScreens,'restore-content-checks.png')});await page.locator('button[data-product-close]').click();
+  await page.locator('[data-inspect]').first().click();await page.locator('.product-drawer .restore-readback').scrollIntoViewIfNeeded();assert.match(await page.locator('.product-drawer .restore-readback').textContent(),/GPO content · Matches/);await page.locator('.product-drawer .restore-readback').evaluate(el=>el.open=true);await page.locator('.product-drawer .restore-readback').screenshot({path:path.join(restoreScreens,'restore-content-checks.png')});await page.locator('button[data-product-close]').click();
   await inspectRecovery(page);assert.equal(await page.locator('[data-rollback]').count(),1,'Restored run offers a confirmed restore after reassessment');
   await inspectRecovery(page);await page.locator('[data-rollback] input').fill('ROLLBACK');
   await page.locator('[data-rollback] button[type=submit]').click();await page.locator('[data-confirm-run]').click();
@@ -239,9 +239,9 @@ const server=http.createServer(async(req,res)=>{
   await page.locator('.manual-check-command').waitFor();
   assert.ok((await page.locator('.manual-check-command').textContent()).includes('secedit.exe /export /mergedpolicy'));
   assert.equal(await page.locator('.manual-check-head [data-copy-value]').count(),1);
-  assert.equal(await page.locator('.assurance-stage-list>.assurance-stage').count(),5);
+  assert.equal(await page.locator('.assurance-stage-list>.assurance-stage').count(),3);await page.locator('.source-refresh-details>summary').click();assert.equal(await page.locator('.assurance-stage').count(),5);
   assert.notEqual(await page.locator('.assurance-stage.good').first().evaluate(el=>getComputedStyle(el).borderLeftColor),await page.locator('.assurance-stage.info').first().evaluate(el=>getComputedStyle(el).borderLeftColor));
-  assert.equal(await page.locator('.assurance-group-heading').count(),2);
+  assert.equal(await page.locator('.assurance-group-heading').count(),1);
   assert.equal(await page.locator('.assurance-grid').count(),0,'Duplicate legacy status boxes must not contradict server evidence');
   assert.equal(await page.locator('.assurance-stage code').first().isVisible(),false,'Technical status codes should stay in collapsed evidence details');
   assert.ok((await page.locator('.assurance-stage-list').textContent()).includes('INSUFFICIENT_EVIDENCE'));
@@ -390,6 +390,24 @@ const server=http.createServer(async(req,res)=>{
    await page.locator('#gpo-selection>.primary-action').click();await page.waitForFunction(()=>!!document.querySelector('.plan-card'));
    assert.equal(previewSelections.at(-1).setting,m.id);assert.equal(previewSelections.at(-1).reviewContext,'OK');assert.equal(previewSelections.at(-1).itemValues.length,m.items.length);
   }
+  // A successful GPO publication must remain clear when one pinned endpoint
+  // cannot be measured; this must never become whole-scope verification.
+  const outcomes=path.join(screens,'3.17.10');fs.mkdirSync(outcomes,{recursive:true});const writesBeforeOutcomes=writes.length;
+  run.plan.selection={...run.plan.selection,setting:'2.2.25'};run.plan.preview={...run.plan.preview,previousValue:null,desiredValue:'S-1-5-32-546'};
+  run.result={state:'PUBLISHED',gpoPublished:true,linkVerified:true,currentValue:'S-1-5-32-546',backupId:'fixture-backup',effectiveStatus:'ENDPOINT_VERIFICATION_PENDING',verification:{replicationConverged:true},endpointCoverage:{total:2,checked:2,complete:true},refreshResults:[{computer:'dc.test.local',state:'COMPLETED'},{computer:'ws.test.local',state:'COMPLETED'}],endpointChecks:[{hostname:'dc.test.local',state:'VERIFIED',actualValue:'SeDenyInteractiveLogonRight=S-1-5-32-546',message:'Live LSA policy matched.'},{hostname:'ws.test.local',state:'UNAVAILABLE',actualValue:null,message:'LSA_USER_RIGHTS_UNAVAILABLE. Stage COMPILE; error ID CompilerException/InvalidData.'}]};
+  await page.goto(`http://127.0.0.1:${server.address().port}/#/benchmark`);await page.reload();await page.fill('#catalog-search','2.2.25');await page.locator('[data-rule="2.2.25"]').first().click();
+  // Preserve the real renderer's target isolation; select this record's GPO/OU.
+  await page.locator('[data-tab=remediation]').click();await page.locator('[data-gpo-toggle]').click();await page.locator(`[data-gpo="${run.plan.selection.gpoId}"]`).click();await page.locator('[data-scope-open="scopeDn"]').click();await page.locator('[data-scope-choose="OU=Endpoints,DC=test,DC=local"]').click();await page.locator('[data-tab=verification]').click();
+  await page.getByRole('heading',{name:'GPO applied successfully',exact:true}).waitFor();assert.match(await page.locator('.endpoint-summary').textContent(),/1 of 2 verified · 1 unavailable/);assert.equal(await page.locator('.verification-details').evaluate(el=>el.open),false);assert.equal(await page.locator('.result-summary').getAttribute('data-effective-outcome'),'PENDING');
+  for(const theme of ['light','dark']){
+   await page.evaluate(theme=>document.documentElement.dataset.grTheme=theme,theme);
+   for(const width of [1440,390]){await page.setViewportSize({width,height:1000});assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));if(width===390){const cards=await page.locator('.measured-values>div').evaluateAll(nodes=>nodes.map(el=>{const r=el.getBoundingClientRect();return {y:r.y,width:r.width,height:r.height}}));assert(cards.every(x=>x.width>=240&&x.height<220),'Mobile measured values must stay readable');assert(cards[1].y>cards[0].y&&cards[2].y>cards[1].y,'Mobile values must follow a vertical reading order');}await page.locator('.result-summary').screenshot({path:path.join(outcomes,`applied-partial-${theme}-${width}.png`)});}
+  }
+  await page.setViewportSize({width:1440,height:1000});
+  run.result={...run.result,state:'ROLLED_BACK',gpoPublished:false,linkVerified:false,currentValue:null,effectiveStatus:'ROLLBACK_ENDPOINT_PENDING',endpointChecks:run.result.endpointChecks.map(x=>({...x,state:x.state==='VERIFIED'?'OBSERVED':x.state})),restoreChecks:['CONTENT','MACHINE_EXTENSIONS','USER_EXTENSIONS','SCOPE_LINKS'].map(area=>({area,state:'MATCH',expected:'saved',actual:'saved',message:'Recorded snapshot matches.'})),refreshResults:[{computer:'dc.test.local',state:'SCHEDULED',computerState:'COMPLETED',userState:'SCHEDULED',message:'Computer completed; signed-in user scheduled.'},{computer:'ws.test.local',state:'FAILED',computerState:'COMPLETED',userState:'FAILED',message:'Computer completed; signed-in user RPC scheduling failed.'}]};
+  await page.goto(`http://127.0.0.1:${server.address().port}/#/operations`);await page.reload();await page.locator('[data-inspect]').first().click();await page.getByRole('heading',{name:'Rollback completed successfully',exact:true}).waitFor();assert.match(await page.locator('.product-result').textContent(),/Computer refresh: 2 completed/);assert.match(await page.locator('.product-result').textContent(),/Signed-in user refresh: 0 completed · 1 scheduled · 1 failed/);assert.equal(await page.locator('.product-drawer .restore-readback').evaluate(el=>el.open),false);await page.locator('.product-result').screenshot({path:path.join(outcomes,'rollback-partial-refresh.png')});
+  assert.equal(writes.length,writesBeforeOutcomes,'Reading operation outcomes must not replay Apply or rollback');
+  console.log('PASS successful publication with one unavailable endpoint: clear counts, collapsed diagnostics, honest scope, light/dark/mobile; rollback success survives failed user refresh without replaying writes');
   assert.deepEqual(errors,[]);
   console.log('Recovery UI: PASS (desktop/mobile, recovery refresh, user OU/endpoint OU/verification identity targeting, and user PDC exclusion).');
  }finally{await browser.close();server.close();}

@@ -1,6 +1,6 @@
-# GPO Remediator 3.17.9
+# GPO Remediator 3.17.10
 
-3.17.9 verifies native restore formatting without treating SID order as a policy change, authenticates legacy backup content, and exports individual restore checks. See [release notes](docs/RELEASE-3.17.9.md).
+3.17.10 separates successful GPO publication and snapshot restoration from per-host endpoint verification and refresh. Rollback completes computer refresh with delegated WinRM and reports signed-in user scheduling separately. See [release notes](docs/RELEASE-3.17.10.md).
 
 3.17.8 keeps rollback inspection stable across session heartbeats, refreshes recovery checks before confirmation, and separates endpoint policy input, resultant values and unavailable probes. See [release notes](docs/RELEASE-3.17.8.md).
 

@@ -850,7 +850,11 @@ function Endpoint-FailureMessage($Record){
     }else{
         $reason='ENDPOINT_PROBE_FAILED. The remote command failed. Check endpoint permissions and the native security-policy tools; no effective value was established.'
     }
-    return ($reason+' Error ID: '+$(if($id){$id}else{'unavailable'})+'.')
+    # A throw statement can use its entire private message as the error ID.
+    # Emit only recognized identifiers; sanitizing punctuation is insufficient.
+    $safeIds=@($id -split ','|Where-Object{$_ -match '^(?:[0-9]{1,12}|AccessDenied|PSSessionOpenFailed|PSSessionStateBroken|CannotConnect|NetworkPathNotFound|JobFailure|WinRMOperationTimeout|AuthenticationFailed|KerberosAuthenticationFailed|ERROR_DISK_FULL|ERROR_HANDLE_DISK_FULL)$'})
+    $safeId=if($safeIds.Count){$safeIds -join ','}else{$Record.Exception.GetType().Name+'/'+$category}
+    return ($reason+' Error ID: '+$safeId+'.')
 }
 function Refresh-ComputerPolicy([string[]]$Computer){
     $credential=Endpoint-CredentialOptions
@@ -1007,8 +1011,10 @@ function Verify-EffectiveSamples($Plan,$Map){
                 return @{supported=$true;match=$ok;actual=($actual -join '; ');message=$message}
               }catch{
                 $cause=$_.Exception.GetBaseException();$native=if($cause -is [ComponentModel.Win32Exception]){[string]$cause.NativeErrorCode}else{'unavailable'}
+                $errorId=$cause.GetType().Name+'/'+[string]$_.CategoryInfo.Category
+                $compilerCodes=@([regex]::Matches([string]$_.Exception.Message,'\bCS[0-9]{4}\b')|ForEach-Object{$_.Value}|Sort-Object -Unique) -join ','
                 $detail=if($native -eq '5'){'The endpoint session was denied LSA read access. Use an authorized elevated endpoint session and re-verify.'}elseif($lsaStage -eq 'COMPILE'){'The endpoint could not compile the read-only native probe. Check application-control restrictions and the endpoint PowerShell/.NET installation.'}else{'The endpoint native LSA read failed. Run the supplied manual check in an authorized elevated local session.'}
-                return @{supported=$false;match=$false;state='UNAVAILABLE';actual=$null;message=('LSA_USER_RIGHTS_UNAVAILABLE. Stage '+$lsaStage+'; native error '+$native+'. '+$detail+' No effective assignment was established; an exported INF is not substituted for live LSA evidence.')}
+                return @{supported=$false;match=$false;state='UNAVAILABLE';actual=$null;message=('LSA_USER_RIGHTS_UNAVAILABLE. Stage '+$lsaStage+'; native error '+$native+'; error ID '+$errorId+$(if($compilerCodes){'; compiler '+$compilerCodes}else{''})+'. '+$detail+' No effective assignment was established; an exported INF is not substituted for live LSA evidence.')}
               }
             }
             $samKeys=@('EnableGuestAccount','EnableAdminAccount','NewGuestName','NewAdministratorName')
@@ -1362,15 +1368,24 @@ switch($Operation){
         Emit-Stage 'GPUPDATE'
         $refresh=@();$target=if($rollback){'Both'}elseif([string]$map.scope -eq 'User'){'User'}else{'Computer'}
         $refreshCoverage=$null
-        # Full-GPO restore can affect both halves. Remote gpupdate.exe in an
-        # administrative WinRM session cannot refresh the signed-in user's policy.
-        # Invoke-GPUpdate without Target schedules both halves in their proper contexts.
-        if(!$rollback -and $target -eq 'Computer' -and (Endpoint-CredentialOptions).Count){
+        # Complete computer processing using delegated WinRM even after restore.
+        # A signed-in user's policy requires a separate task in the user context;
+        # neither its scheduling nor its failure changes computer completion.
+        if(($rollback -or $target -eq 'Computer') -and (Endpoint-CredentialOptions).Count){
             $offset=[int](Read-Field $Data 'refreshOffset' 0);if($offset -lt 0){Fail 'INVALID_REQUEST' 'Invalid refresh offset.'}
             $total=$computers.Count;$computers=@($computers|Select-Object -Skip $offset -First 64)
             $runTargets=@($computers|Where-Object{$_ -in $liveComputers})
             $done=@();if($runTargets.Count){$done=@(Refresh-ComputerPolicy $runTargets)}
-            foreach($computer in $computers){$entry=@($done|Where-Object{[string]$_.PSComputerName -ieq $computer}|Select-Object -Last 1);if($entry.Count){$refresh+=@{computer=$computer;state=[string]$entry[0].state;message=[string]$entry[0].message}}else{$refresh+=@{computer=$computer;state='FAILED';message='No completion result. Check endpoint WinRM/Kerberos and execution permissions.'}}}
+            foreach($computer in $computers){
+                if($computer -notin $liveComputers){$refresh+=@{computer=$computer;state='FAILED';message='The pinned endpoint is no longer in the enabled authorized scope. No refresh was attempted.'};continue}
+                $entry=@($done|Where-Object{[string]$_.PSComputerName -ieq $computer}|Select-Object -Last 1)
+                $computerState=if($entry.Count){[string]$entry[0].state}else{'FAILED'}
+                $message=if($entry.Count){[string]$entry[0].message}else{'No completion result. Check endpoint WinRM/Kerberos and execution permissions.'}
+                if(!$rollback){$refresh+=@{computer=$computer;state=$computerState;message=$message};continue}
+                $userState='SCHEDULED';$userMessage='Signed-in user policy refresh scheduled; completion is not yet confirmed.'
+                try{Invoke-GPUpdate -Computer $computer -Target User -Force -RandomDelayInMinutes 0 -ErrorAction Stop|Out-Null}catch{$userState='FAILED';$userMessage='Signed-in user refresh could not be scheduled. Check RPC/task-scheduler permissions and firewall. '+(Endpoint-FailureMessage $_)}
+                $refresh+=@{computer=$computer;state=$(if($computerState -eq 'FAILED' -or $userState -eq 'FAILED'){'FAILED'}else{'SCHEDULED'});computerState=$computerState;userState=$userState;message=('Computer: '+$message+' User: '+$userMessage)}
+            }
             $refreshCoverage=@{total=$total;checked=[math]::Min($offset+64,$total);complete=($offset+64 -ge $total)}
         }else{
             $offset=[int](Read-Field $Data 'refreshOffset' 0);if($offset -lt 0){Fail 'INVALID_REQUEST' 'Invalid refresh offset.'}

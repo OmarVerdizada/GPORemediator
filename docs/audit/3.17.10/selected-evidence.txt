@@ -1,0 +1,83 @@
+WorkflowRegression
+PASS full read-only inventory with explicit write boundary enforcement
+PASS 413 exact remediation mappings across all 405 controls; benchmark scans and required inclusion preserved
+PASS 11 controls require explicit values/environment review
+PASS 1560 control/refresh/priority combinations on a non-default GPO; 11 controls block automatic writes
+PASS audit integrity: empty chain, valid chain and first tampered event
+PASS mapping upgrades: stale writes blocked; snapshot rollback and restored-snapshot verification remain available
+PASS legacy domain threshold success cannot hide exact-value mismatch
+PASS invalid OU/PDC refresh rejected at submission and execution without replacing recorded result or invoking native executor
+PASS real user refresh submission: top-level Scope reaches validation and stored consent; PDC and missing session endpoint OU rejected before enqueue; no native execution
+PASS fresh evidence snapshots, preserved prior exports, five independent stages, scheduled-not-completed and endpoint mismatch separation
+PASS lockout prerequisite blocks submission; recorded target authorization reuses current exact grant and rejects other actors
+PASS session target authorization: second GPO without config changes/restart; preview/readiness, exact pair, actor, other-session, disconnect and absolute-expiry guards; no native execution
+PASS optional-comparator legacy hash compatibility and version-only evidence migration boundary
+PASS custom value resolution/types/read-only boundary, canonical mapping isolation and legacy selection serialization; optional user samples
+PASS restore diagnostics survive evidence export, participate in integrity hashing and preserve legacy null serialization
+PASS audit fixes: default/custom intent, escaped DN ancestry, all 405 history rows, actor isolation, complete hashed evidence and discovery after heartbeat
+
+Test-EndpointBatching
+PASS process completion is separate from task scheduling
+PASS refresh coverage advances across bounded pages
+PASS process completion is separate from task scheduling
+PASS refresh coverage advances across bounded pages
+PASS process completion is separate from task scheduling
+PASS refresh coverage advances across bounded pages
+PASS process completion is separate from task scheduling
+PASS refresh coverage advances across bounded pages
+PASS all 201 pinned targets refreshed once in four bounded requests
+PASS a removed endpoint is retained as a failure rather than silently shrinking coverage
+PASS invalid PDC refresh is rejected before any endpoint command
+PASS rollback refresh preserves restored GPO status
+PASS rollback refresh preserves restored GPO status
+PASS rollback refresh preserves restored GPO status
+PASS rollback refresh preserves restored GPO status
+PASS rollback records completed computer refresh separately from scheduled user refresh across all pinned pages
+PASS rollback schedules signed-in user processing in its own context with force
+PASS rollback completes computer processing using delegated Kerberos in bounded pages
+PASS user scheduling failure preserves successful rollback and measured computer refresh
+PASS rollback scheduling diagnostics identify the failed half without exposing exception text
+PASS without delegated credentials rollback retains both-half task scheduling without inventing completion
+PASS user refresh schedules Target User on each pinned session endpoint
+PASS user task scheduling never becomes computer refresh or completed user processing
+PASS removed user session endpoints are not scheduled and remain visible as failures
+PASS user RPC scheduling failures remain per-host failures
+
+Test-EndpointDiagnostics
+PASS throw-generated error IDs do not leak private exception text
+PASS mixed refresh retains every requested host
+PASS one denied host does not discard successful refresh
+PASS transport failure maps to the denied host with actionable access guidance
+PASS failure evidence excludes raw exceptions and credentials
+PASS refresh streams each host opening and completion as refresh evidence, not endpoint values
+PASS distinct diagnostic: ENDPOINT_DISK_FULL
+PASS distinct diagnostic: ENDPOINT_DISK_FULL
+PASS distinct diagnostic: ENDPOINT_AUTHENTICATION_FAILED
+PASS distinct diagnostic: ENDPOINT_CONNECTION_FAILED
+PASS distinct diagnostic: ENDPOINT_PROBE_FAILED
+PASS distinct diagnostic: ENDPOINT_SESSION_BROKEN
+PASS distinct diagnostic: ENDPOINT_JOB_FAILED
+PASS wrapped JobFailure retains Windows 1726 without exposing native text
+PASS failed effective probe retains its access cause without fabricating a measured value
+PASS LSA compilation failure retains safe compiler code and unavailable value without leaking raw diagnostics
+
+Test-EndpointResultUi
+PASS endpoint result UI: failed refresh persists after re-verification, per-host escaped diagnostics, completed counts, guarded manual check and rollback/mismatch outcomes
+PASS honest success outcomes: mixed endpoint availability, stale verified flag rejected, all-target success, unlinked plan blocked, successful rollback with failed user refresh
+
+Test-RecoveryUi
+PASS rollback heartbeat: renewed session preserves Scope confirmation; fresh external drift blocks submission without writes
+PASS successful publication with one unavailable endpoint: clear counts, collapsed diagnostics, honest scope, light/dark/mobile; rollback success survives failed user refresh without replaying writes
+Recovery UI: PASS (desktop/mobile, recovery refresh, user OU/endpoint OU/verification identity targeting, and user PDC exclusion).
+
+Test-RemediationEvidence
+PASS remediation result rendering: scheduled vs completed, endpoint mismatch headline, actual values and escaping
+
+Test-ResultContext
+PASS result context: recorded target/time, target isolation, offline snapshots/actions, reconnect, operation-scoped refresh choices and published review step
+
+Test-LivePolicyUi
+PASS live checking: queued, streamed stage/host updates, interrupted polling, unavailable result, missing-link plan, collapsed rail, mobile and exactly one read-only submission; fixture only.
+
+built-source-match
+PASS current backend/frontend source fingerprints and distributed runtime ZIP SHA-256
