@@ -270,16 +270,28 @@ public sealed class GpoWorkflowService(IConfiguration config,Store store,Operati
         var c=Get(token,actor);
         var plan=store.Require<GpoWorkflowPlan>("gpo_plans",id);AssertContext(plan,c,actor);
         var mapping=ProductionGpoMappings.Effective(plan.Selection);
+        var batchRefreshPlan=operation=="refresh"?rollbackAnchor?.RefreshPlan:null;
+        if(operation is "verify" or "refresh" && store.Get<GpoWorkflowRun>("gpo_runs",id)?.Result.State=="BATCH_ROLLED_BACK")
+            throw new PolicyException("BATCH_RECOVERY_REQUIRED","This control was restored through a batch snapshot. Re-verify the first restored operation from the batch result; its receipt covers the complete GPO and saved AD properties.");
+        if(batchRefreshPlan is not null){
+            var job=workflowId is null?null:store.Get<WorkflowJob>("workflow_jobs",workflowId);
+            var source=job?.SourceWorkflowId is {} sourceId?store.Get<WorkflowJob>("workflow_jobs",sourceId):null;
+            if(job?.Action!="rollback"||job.Actor!=actor||job.CompletedIds.FirstOrDefault()!=id||source is null||!source.CompletedIds.Contains(batchRefreshPlan.Id)||
+                batchRefreshPlan.Selection.GpoId!=plan.Selection.GpoId||batchRefreshPlan.Selection.ScopeDn!=plan.Selection.ScopeDn)
+                throw new PolicyException("BATCH_RECOVERY_REQUIRED","Refresh must use a member of the server-recorded restored batch.");
+            AssertContext(batchRefreshPlan,c,actor);
+        }
+        var refreshMapping=batchRefreshPlan is null?mapping:ProductionGpoMappings.Effective(batchRefreshPlan.Selection);
         if(operation is not ("apply" or "rollback" or "verify" or "refresh"))
             throw new PolicyException("OPERATION_DENIED","Unknown GPO operation.");
         if(operation=="refresh" && consent.Refresh is not ("Pdc" or "Scope"))
             throw new PolicyException("GPO_OPTIONS_INVALID","Choose PDC or scope computers for policy refresh.");
         // Reject an incompatible refresh before claiming the GPO or replacing
         // its recorded result with an in-progress/review state.
-        if(operation=="refresh")ProductionGpoMappings.ValidateRefresh(mapping,consent.Refresh);
-        if(operation=="refresh" && mapping.Scope=="User" && consent.Refresh=="Pdc")
+        if(operation=="refresh")ProductionGpoMappings.ValidateRefresh(refreshMapping,consent.Refresh);
+        if(operation=="refresh" && refreshMapping.Scope=="User" && consent.Refresh=="Pdc")
             throw new PolicyException("USER_REFRESH_TARGET_INVALID","User policy refresh requires the endpoint OU recorded in the plan; the PDC is not a user-session target.");
-        if(operation=="refresh" && mapping.Scope=="User" && consent.Refresh=="Scope" && string.IsNullOrWhiteSpace(plan.Selection.EndpointScopeDn))
+        if(operation=="refresh" && refreshMapping.Scope=="User" && consent.Refresh=="Scope" && string.IsNullOrWhiteSpace((batchRefreshPlan??plan).Selection.EndpointScopeDn))
             throw new PolicyException("ENDPOINT_SCOPE_REQUIRED","This user-policy plan does not contain an endpoint OU. Prepare a fresh plan with a user-session endpoint OU.");
         if(operation!="verify")
         {
@@ -337,7 +349,9 @@ public sealed class GpoWorkflowService(IConfiguration config,Store store,Operati
                     store.Put("gpo_runs",id,run,run.Result.State);
                 }
                 Progress(operation.ToUpperInvariant()+"_STARTED");
-                result=await Run<GpoWorkflowResult>("gpo"+char.ToUpperInvariant(operation[0])+operation[1..],c,new{plan,mapping,previous=previous?.Result,refresh=operation=="refresh"?consent.Refresh:null,consent=operation=="apply"?consent:previous?.Approval,rollbackAnchor},CancellationToken.None,Progress,CheckProgress);
+                var nativeAnchor=rollbackAnchor is null?null:new{rollbackAnchor.Plan,rollbackAnchor.PostFingerprint,
+                    BatchPlans=rollbackAnchor.BatchPlans?.Select(p=>new{p.Id,p.Domain,p.DomainController,Selection=new{p.Selection.GpoId,p.Selection.ScopeDn,p.Selection.Setting}}).ToArray()};
+                result=await Run<GpoWorkflowResult>("gpo"+char.ToUpperInvariant(operation[0])+operation[1..],c,new{plan,mapping,previous=previous?.Result,refresh=operation=="refresh"?consent.Refresh:null,consent=operation=="apply"?consent:previous?.Approval,rollbackAnchor=nativeAnchor,batchRefreshPlan,batchRefreshMapping=batchRefreshPlan is null?null:refreshMapping},CancellationToken.None,Progress,CheckProgress);
                 if(operation=="verify" && result.EndpointCoverage is not null)
                 {
                     var checks=(result.EndpointChecks??[]).ToList();
@@ -366,7 +380,7 @@ public sealed class GpoWorkflowService(IConfiguration config,Store store,Operati
                         var offset=coverage.Checked;result=result with{RefreshResults=refreshResults.ToArray()};
                         run=run with{Result=result with{State="REFRESHING"},UpdatedAt=PolicyValues.Now()};store.Put("gpo_runs",id,run,"REFRESHING");
                         Progress("REFRESH_PAGE");
-                        result=await Run<GpoWorkflowResult>("gpoRefresh",c,new{plan,mapping,previous=previous?.Result,refresh=consent.Refresh,refreshOffset=offset},CancellationToken.None,Progress,CheckProgress);
+                        result=await Run<GpoWorkflowResult>("gpoRefresh",c,new{plan,mapping,previous=previous?.Result,refresh=consent.Refresh,refreshOffset=offset,batchRefreshPlan,batchRefreshMapping=batchRefreshPlan is null?null:refreshMapping},CancellationToken.None,Progress,CheckProgress);
                         refreshResults.AddRange(result.RefreshResults);
                         if(result.RefreshCoverage is null || result.RefreshCoverage.Checked<=offset)throw new PolicyException("ENDPOINT_REFRESH_STALLED","Refresh did not advance. Partial evidence was retained.");
                     }

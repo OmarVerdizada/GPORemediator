@@ -587,11 +587,52 @@ function Domain-PolicyWrite([string]$Property,[string]$Value){
     return $actual
 }
 function Domain-RollbackMatches($Manifest,[bool]$Restored=$false){
+    $batch=@(Read-Field $Manifest 'beforeBatchDomainPolicies' @())
+    if($batch.Count){foreach($entry in $batch){$expected=if($Restored){[string]$entry.value}else{[string]$entry.afterValue};if([string](Domain-PolicyRead ([string]$entry.property) $expected).value -cne $expected){return $false}};return $true}
     $before=Read-Field $Manifest 'beforeDomainPolicy' $null;if(!$before){return $true}
     $expected=if($Restored){$before}else{Read-Field $Manifest 'afterDomainPolicy' $null}
     if(!$expected){return $false}
     $actual=Domain-PolicyRead ([string]$expected.property) ([string]$expected.value)
     return [string]$actual.value -ceq [string]$expected.value
+}
+function Domain-BatchSnapshots($Anchor,$Plan){
+    $members=@(Read-Field $Anchor 'batchPlans' @());if($members.Count -le 1){return @()};if($members.Count -gt 20){Fail 'ROLLBACK_CONFLICT' 'The batch recovery source is too large.'}
+    $entries=@{};$seen=@{}
+    foreach($member in $members){
+        if($seen.ContainsKey([string]$member.id) -or [string]$member.selection.gpoId -ine [string]$Plan.selection.gpoId -or [string]$member.selection.scopeDn -ine [string]$Plan.selection.scopeDn){Fail 'ROLLBACK_CONFLICT' 'A batch recovery member has a different context.'};$seen[[string]$member.id]=$true
+        $saved=Get-Content -LiteralPath (Join-Path (Run-Directory $member) 'manifest.json') -Raw|ConvertFrom-Json
+        if([string]$saved.mappingId -cne [string]$member.selection.setting -or [string]$saved.phase -ne 'PUBLISHED'){Fail 'ROLLBACK_CONFLICT' 'A batch member has no verified publication manifest.'}
+        $before=Read-Field $saved 'beforeDomainPolicy' $null;if(!$before){continue};$after=Read-Field $saved 'afterDomainPolicy' $null
+        $property=Domain-PolicyProperty @{id=[string]$saved.mappingId;domainPolicySensitive=$true}
+        if(!$after -or [string]$before.property -cne $property -or [string]$after.property -cne $property -or $entries.ContainsKey($property)){Fail 'ROLLBACK_CONFLICT' 'Domain batch snapshots are ambiguous or incomplete.'}
+        $current=Domain-PolicyRead $property ([string]$after.value)
+        if([string]$current.value -cne [string]$after.value){Fail 'ROLLBACK_CONFLICT' ('AD '+$property+' changed after this batch. Restore was not started.')}
+        $entries[$property]=@{property=$property;value=[string]$before.value;afterValue=[string]$after.value}
+    }
+    return @($entries.Values|Sort-Object property)
+}
+function Domain-BatchOptions($Entries){
+    $options=@{Identity=$domainDn;Server=$cfg.domainController;ErrorAction='Stop'}
+    $policy=Get-ADDefaultDomainPasswordPolicy -Identity $domainDn -Server $cfg.domainController -ErrorAction Stop
+    $duration=[double]$policy.LockoutDuration.TotalMinutes;$window=[double]$policy.LockoutObservationWindow.TotalMinutes
+    foreach($entry in @($Entries)){
+        $property=[string]$entry.property
+        if($property -notin @('PasswordHistoryCount','MinPasswordAge','MinPasswordLength','ComplexityEnabled','ReversibleEncryptionEnabled','LockoutDuration','LockoutThreshold','LockoutObservationWindow') -or $options.ContainsKey($property)){Fail 'ROLLBACK_CONFLICT' 'Unknown or repeated domain batch property.'}
+        Domain-PolicyAccess $property
+        $number=[double]::Parse([string]$entry.value,[Globalization.CultureInfo]::InvariantCulture)
+        if([double]::IsNaN($number) -or [double]::IsInfinity($number) -or $number -lt 0 -or $number -ne [math]::Truncate($number)){Fail 'ROLLBACK_CONFLICT' 'Invalid domain snapshot value.'}
+        $options[$property]=switch($property){'MinPasswordAge'{[timespan]::FromDays($number)}{$_ -in @('LockoutDuration','LockoutObservationWindow')}{[timespan]::FromMinutes($number)}{$_ -in @('ComplexityEnabled','ReversibleEncryptionEnabled')}{if($number -gt 1){Fail 'ROLLBACK_CONFLICT' 'Invalid boolean snapshot value.'};[bool][int]$number}default{[int]$number}}
+        if($property -eq 'LockoutDuration'){$duration=$number};if($property -eq 'LockoutObservationWindow'){$window=$number}
+    }
+    if($duration -gt 0 -and $duration -lt $window){Fail 'DOMAIN_LOCKOUT_DEPENDENCY' 'The saved batch would leave duration below the reset-counter window. No restore was started.'}
+    return $options
+}
+function Domain-BatchRestore($Entries){
+    $options=Domain-BatchOptions $Entries
+    # Related values are sent in one AD cmdlet call, never by guessing a value
+    # for an unselected property or exposing a transient invalid pair.
+    Set-ADDefaultDomainPasswordPolicy @options
+    foreach($entry in @($Entries)){if([string](Domain-PolicyRead ([string]$entry.property) ([string]$entry.value)).value -cne [string]$entry.value){Fail 'DOMAIN_POLICY_WRITE_MISMATCH' ('AD '+[string]$entry.property+' did not match its saved batch snapshot.')}}
 }
 function Preview($S,$Map,[bool]$RequireWriteAccess=$true){
     Validate-Selection $S $Map;$access=if($RequireWriteAccess){Assert-SelectionAccess $S $Map}else{@{checks=@()}};$gpo=Get-GPO -Guid ([guid]$S.gpoId) -Domain $cfg.domain -Server $cfg.domainController;$scope=Scope $S.scopeDn;$raw=Scope-Links $scope.dn;$existing=Selected-Link $scope.dn $S.gpoId;$computers=@()
@@ -1156,7 +1197,10 @@ function Verify-Rollback($Plan,$Map,$Manifest,[bool]$CheckEndpoints=$false){
         try{$ad=Gpo-Ad $s.gpoId;$actual=[string](Read-Field $ad $entry.field '');$restoreChecks+=@{area=$entry.area;state=$(if($actual -ceq [string]$expected){'MATCH'}else{'MISMATCH'});expected=[string]$expected;actual=$actual;message='Compared the recorded extension sequence with the selected DC.'}}catch{$restoreChecks+=@{area=$entry.area;state='UNAVAILABLE';expected=[string]$expected;actual=$null;message='Could not read current AD extension metadata.'}}
     }
     try{$actual=Scope-Links $s.scopeDn;$restoreChecks+=@{area='SCOPE_LINKS';state=$(if($actual -ceq [string]$Plan.preview.scopeLinks){'MATCH'}else{'MISMATCH'});expected=[string]$Plan.preview.scopeLinks;actual=$actual;message='Compared the entire selected scope link list, including order and options.'}}catch{$restoreChecks+=@{area='SCOPE_LINKS';state='UNAVAILABLE';expected=[string]$Plan.preview.scopeLinks;actual=$null;message='Could not read the selected scope link list.'}}
-    if($before){try{$domainPolicy=Domain-PolicyRead ([string]$before.property) ([string]$before.value);$restoreChecks+=@{area='DOMAIN_POLICY';state=$(if([string]$domainPolicy.value -ceq [string]$before.value){'MATCH'}else{'MISMATCH'});expected=[string]$before.value;actual=[string]$domainPolicy.value;message='Compared the saved AD domain policy value independently of the GPO.'}}catch{$restoreChecks+=@{area='DOMAIN_POLICY';state='UNAVAILABLE';expected=[string]$before.value;actual=$null;message='Could not read the saved AD domain policy property.'}}}else{$restoreChecks+=@{area='DOMAIN_POLICY';state='NOT_APPLICABLE';expected=$null;actual=$null;message='No direct AD domain-policy change is part of this record.'}}
+    $domainSnapshots=@(Read-Field $Manifest 'beforeBatchDomainPolicies' @());if(!$domainSnapshots.Count -and $before){$domainSnapshots=@($before)}
+    if($domainSnapshots.Count){foreach($entry in $domainSnapshots){
+        try{$actual=Domain-PolicyRead ([string]$entry.property) ([string]$entry.value);if($before -and [string]$entry.property -eq [string]$before.property){$domainPolicy=$actual};$restoreChecks+=@{area='DOMAIN_POLICY';state=$(if([string]$actual.value -ceq [string]$entry.value){'MATCH'}else{'MISMATCH'});expected=[string]$entry.value;actual=[string]$actual.value;message=('Compared saved AD '+[string]$entry.property+' independently of the GPO.')}}catch{$restoreChecks+=@{area='DOMAIN_POLICY';state='UNAVAILABLE';expected=[string]$entry.value;actual=$null;message=('Could not read saved AD '+[string]$entry.property+'.')}}
+    }}else{$restoreChecks+=@{area='DOMAIN_POLICY';state='NOT_APPLICABLE';expected=$null;actual=$null;message='No direct AD domain-policy change is part of this record.'}}
     $matches=@($restoreChecks|Where-Object{$_.state -notin @('MATCH','NOT_APPLICABLE')}).Count -eq 0
     $observed=@()
     if($CheckEndpoints -and !$before){
@@ -1350,6 +1394,8 @@ switch($Operation){
         Emit-Stage 'REFRESH_PREFLIGHT'
         $plan=$Data.plan;$map=$Data.mapping;$directory=Run-Directory $plan;$manifest=$null;if(Test-Path -LiteralPath (Join-Path $directory 'manifest.json')){$manifest=Get-Content -LiteralPath (Join-Path $directory 'manifest.json') -Raw|ConvertFrom-Json}
         $rollback=$manifest -and [string]$manifest.phase -eq 'ROLLED_BACK'
+        $refreshPlan=Read-Field $Data 'batchRefreshPlan' $null;$refreshMap=Read-Field $Data 'batchRefreshMapping' $null
+        if($refreshPlan){if(!$rollback -or !$refreshMap -or [string]$refreshPlan.selection.gpoId -ine [string]$plan.selection.gpoId -or [string]$refreshPlan.selection.scopeDn -ine [string]$plan.selection.scopeDn){Fail 'BATCH_RECOVERY_REQUIRED' 'Batch refresh context does not match the restored GPO/scope.'}}else{$refreshPlan=$plan;$refreshMap=$map}
         if($manifest -and [string]$manifest.phase -notin @('PUBLISHED','VERIFY_MISMATCH','ROLLED_BACK') -and !(Publication-Review $manifest)){Fail 'REFRESH_REVIEW_REQUIRED' 'Verify the interrupted execution before refresh.'}
         if(!$manifest -and [string](Read-Field $Data.previous 'state' '') -ne 'NO_CHANGE'){Fail 'REFRESH_REVIEW_REQUIRED' 'No completed execution is available for refresh.'}
         $before=if($rollback){Verify-Rollback $plan $map $manifest}else{Verify-Published $plan $map $false}
@@ -1357,12 +1403,12 @@ switch($Operation){
         elseif(!$before.published -or !$before.linked){Fail 'DRIFT_DETECTED' 'Live GPO content or link changed. Refresh is blocked.'}
         $strategy=[string](Read-Field $Data 'refresh' '')
         if(!$strategy){$strategy=[string]$plan.selection.refresh}
-        $domainPolicy=[bool](Read-Field $map 'domainPolicySensitive' ([string]$map.scope -eq 'Domain'))
+        $domainPolicy=[bool](Read-Field $refreshMap 'domainPolicySensitive' ([string]$refreshMap.scope -eq 'Domain'))
         if($strategy -eq 'Pdc' -and !$domainPolicy){Fail 'PDC_REFRESH_SCOPE_INVALID' 'PDC refresh is only valid for domain account policy. Use the recorded endpoint scope.'}
         if($strategy -eq 'Scope' -and $domainPolicy){Fail 'DOMAIN_REFRESH_SCOPE_INVALID' 'Domain account policy requires PDC refresh or the normal cycle.'}
-         $endpointScope=[string](Read-Field $plan.selection 'endpointScopeDn' '')
-         $computers=@(Refresh-Targets $strategy $plan.selection.scopeDn $endpointScope ([string]$map.scope))
-        $liveComputers=@($computers);$pinned=Read-Field $plan.preview 'verificationComputers' $null
+         $endpointScope=[string](Read-Field $refreshPlan.selection 'endpointScopeDn' '')
+         $computers=@(Refresh-Targets $strategy $refreshPlan.selection.scopeDn $endpointScope ([string]$refreshMap.scope))
+        $liveComputers=@($computers);$pinned=Read-Field $refreshPlan.preview 'verificationComputers' $null
         if($strategy -eq 'Scope' -and $null -ne $pinned){$computers=@($pinned)}
         if(!$computers.Count){return Result $(if($rollback){'ROLLED_BACK'}else{'REFRESH_NOT_CONFIGURED'}) 'No authorized refresh hosts are available. Choose the endpoint OU and automatic OU targeting, or configure explicit hosts in Settings.' $manifest $before @()}
         Emit-Stage 'GPUPDATE'
@@ -1452,18 +1498,25 @@ switch($Operation){
                 $expectedFingerprint=[string]$anchorManifest.postFingerprint
             }
             if((Fingerprint $s.gpoId $s.scopeDn) -cne $expectedFingerprint){Fail 'ROLLBACK_CONFLICT' 'The GPO or links changed after Apply. Automatic full-GPO restore is blocked.'}
+            if($anchor -and [string]$manifest.phase -ne 'ROLLED_BACK' -and !(Read-Field $manifest 'beforeBatchDomainPolicies' $null)){
+                $batchPolicies=@(Domain-BatchSnapshots $anchor $plan)
+                if($batchPolicies.Count){$manifest|Add-Member -NotePropertyName beforeBatchDomainPolicies -NotePropertyValue $batchPolicies -Force}
+            }
             Emit-Stage 'RESTORE_ACCESS_CHECK'
             $null=Assert-SelectionAccess $s $map
             $domainBefore=Read-Field $manifest 'beforeDomainPolicy' $null
-            if($domainBefore){Domain-PolicyAccess ([string]$domainBefore.property)}
-            if($domainBefore){Domain-ValidateChange ([string]$domainBefore.property) ([string]$domainBefore.value)}
+            $batchPolicies=@(Read-Field $manifest 'beforeBatchDomainPolicies' @())
+            if($batchPolicies.Count){$null=Domain-BatchOptions $batchPolicies}else{
+                if($domainBefore){Domain-PolicyAccess ([string]$domainBefore.property)}
+                if($domainBefore){Domain-ValidateChange ([string]$domainBefore.property) ([string]$domainBefore.value)}
+            }
             Emit-Stage 'RESTORING_GPO'
             $manifest | Add-Member -NotePropertyName rollbackAttempts -NotePropertyValue ([int](Read-Field $manifest 'rollbackAttempts' 0)+1) -Force
             $manifest.phase='ROLLING_BACK';Save-Manifest $manifest $directory
             $restoreStarted=$true
             Import-GPO -BackupId ([guid]$manifest.backupId) -TargetGuid ([guid]$s.gpoId) -Path $directory -Domain $cfg.domain -Server $cfg.domainController|Out-Null
             $domainBefore=Read-Field $manifest 'beforeDomainPolicy' $null
-            if($domainBefore){Emit-Stage 'RESTORING_DOMAIN_POLICY';$null=Domain-PolicyWrite ([string]$domainBefore.property) ([string]$domainBefore.value)}
+            if($batchPolicies.Count){Emit-Stage 'RESTORING_DOMAIN_POLICY';Domain-BatchRestore $batchPolicies}elseif($domainBefore){Emit-Stage 'RESTORING_DOMAIN_POLICY';$null=Domain-PolicyWrite ([string]$domainBefore.property) ([string]$domainBefore.value)}
             Emit-Stage 'RESTORING_LINK'
             $before=$plan.preview.existingLink
             if($null -eq $before){Remove-GPLink -Guid ([guid]$s.gpoId) -Target $s.scopeDn -Domain $cfg.domain -Server $cfg.domainController -Confirm:$false|Out-Null}

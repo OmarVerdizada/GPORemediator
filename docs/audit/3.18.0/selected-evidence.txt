@@ -1,0 +1,389 @@
+WorkspaceRegression
+PASS framed PowerShell responses tolerate module stdout, preserve failures, reject duplicate results and expose safe policy/parse/exit/stage diagnostics without stderr contents
+PASS domain scan preserves account scope and first-link intent without native writes
+PASS user/computer batch preview, separate automatic refresh contexts, bounded single-plan Auto rejection and read-only batch re-verification
+PASS domain account batch dependency order, exact approved values, single PDC refresh and invalid/incomplete dependency rejection
+PASS workspace: production async HTTP/identity isolation/idempotency, server refresh chain, serialized batch/rebase/first-snapshot rollback, scheduled checks, read-only scan, pilot boundaries, report escaping, streaming limits and restart recovery.
+
+Test-BatchDomainPolicy
+PASS batch recovery reads both authoritative AD before snapshots without writing
+PASS pre-restore drift guard checks every changed AD property
+PASS related account values restore together in one AD command
+PASS batch restore never guesses or writes unselected account settings
+PASS restored snapshot checks all saved AD values independently of the GPO
+PASS external AD drift blocks recovery before any write
+PASS unknown properties and invalid saved pairs do not perform a partial restore
+PASS snapshot read-back includes an independent row for every AD restoration target
+PASS a mismatch in a later AD property cannot be hidden by the first restored property
+PASS real rollback dispatcher uses final batch anchor, first GPO snapshot and one combined AD restoration
+PASS batch AD baselines persist for independent re-verification after reconnect
+PASS explicit repeated batch recovery retains its verified snapshot baseline
+PASS external AD change after restore blocks a repeated full-GPO import
+
+Test-BulkApplyUi
+PASS real bulk UI: mixed user/computer selection, 5000-OU search and selected-value retention, read-only preview before approval, concrete links/values, Auto refresh, per-control results, light/dark/mobile, durable resume without replay and full-batch rollback
+
+Test-EndpointBatching
+PASS process completion is separate from task scheduling
+PASS refresh coverage advances across bounded pages
+PASS process completion is separate from task scheduling
+PASS refresh coverage advances across bounded pages
+PASS process completion is separate from task scheduling
+PASS refresh coverage advances across bounded pages
+PASS process completion is separate from task scheduling
+PASS refresh coverage advances across bounded pages
+PASS all 201 pinned targets refreshed once in four bounded requests
+PASS a removed endpoint is retained as a failure rather than silently shrinking coverage
+PASS invalid PDC refresh is rejected before any endpoint command
+PASS rollback refresh preserves restored GPO status
+PASS rollback refresh preserves restored GPO status
+PASS rollback refresh preserves restored GPO status
+PASS rollback refresh preserves restored GPO status
+PASS rollback records completed computer refresh separately from scheduled user refresh across all pinned pages
+PASS rollback schedules signed-in user processing in its own context with force
+PASS rollback completes computer processing using delegated Kerberos in bounded pages
+PASS user scheduling failure preserves successful rollback and measured computer refresh
+PASS rollback scheduling diagnostics identify the failed half without exposing exception text
+PASS without delegated credentials rollback retains both-half task scheduling without inventing completion
+PASS batch rollback refresh uses member pinned hosts without replacing the restored first snapshot
+PASS foreign batch refresh context is rejected before endpoint remoting
+PASS user refresh schedules Target User on each pinned session endpoint
+PASS user task scheduling never becomes computer refresh or completed user processing
+PASS removed user session endpoints are not scheduled and remain visible as failures
+PASS user RPC scheduling failures remain per-host failures
+
+Test-RemediationChain
+PASS mapping exists 1.1.1
+PASS unconfigured source 1.1.1
+PASS readiness 1.1.1 LocalComputers
+PASS backup/write/link/publication 1.1.1 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS configured source 1.1.1
+PASS matching stored GPO without target link is not NO_CHANGE 1.1.1
+PASS Apply does not schedule unrequested endpoint refresh
+PASS explicit refresh schedules exactly one target 1.1.1
+PASS snapshot rollback 1.1.1
+PASS rollback read-back 1.1.1
+PASS rollback clears configured value and source 1.1.1
+PASS mapping exists 1.1.1
+PASS unconfigured source 1.1.1
+PASS readiness 1.1.1 Domain
+PASS backup/write/link/publication 1.1.1 Domain: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS configured source 1.1.1
+PASS matching stored GPO without target link is not NO_CHANGE 1.1.1
+PASS Apply does not schedule unrequested endpoint refresh
+PASS explicit refresh schedules exactly one target 1.1.1
+PASS snapshot rollback 1.1.1
+PASS rollback read-back 1.1.1
+PASS rollback clears configured value and source 1.1.1
+PASS mapping exists 1.2.2
+PASS GPO 5 / AD 0 is a real change, never NO_CHANGE
+PASS readiness 1.2.2 Domain
+PASS backup/write/link/publication 1.2.2 Domain: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS configured source 1.2.2
+PASS matching stored GPO without target link is not NO_CHANGE 1.2.2
+PASS Apply does not schedule unrequested endpoint refresh
+PASS explicit refresh schedules exactly one target 1.2.2
+PASS Apply writes and reads back the effective AD threshold
+PASS User incident: GPO 5 / AD 0 is measured as mismatch with actual value 0
+PASS External AD policy change blocks rollback without overwriting it
+PASS snapshot rollback 1.2.2
+PASS rollback read-back 1.2.2
+PASS Rollback restores the recorded AD threshold separately from the GPO snapshot
+PASS Denied domain write never reports success and retains the pre-change AD snapshot
+PASS A silent no-op AD setter cannot become a successful Apply
+PASS mapping exists 2.2.24
+PASS unconfigured source 2.2.24
+PASS readiness 2.2.24 LocalComputers
+PASS backup/write/link/publication 2.2.24 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS configured source 2.2.24
+PASS matching stored GPO without target link is not NO_CHANGE 2.2.24
+PASS Apply does not schedule unrequested endpoint refresh
+PASS explicit refresh schedules exactly one target 2.2.24
+PASS snapshot rollback 2.2.24
+PASS rollback read-back 2.2.24
+PASS rollback clears configured value and source 2.2.24
+PASS native restore fixture publication new
+PASS 2.2.24 native SID ordering and empty-line changes verify complete restore new
+PASS semantic restore never rewrites the legacy drift fingerprint new
+PASS read-only Verify retains authenticated formatted restore new
+PASS Scope gpupdate is permitted after verified native restore new
+PASS real post-restore file change still reports content drift new
+PASS unverified restore mismatch is not mislabeled later external drift new
+PASS rollback availability recovers authenticated formatted snapshot new
+PASS legacy false-review operation recovers by read-only proof new
+PASS unavailable restore evidence does not assert external drift new
+PASS native restore fixture publication legacy
+PASS 2.2.24 native SID ordering and empty-line changes verify complete restore legacy
+PASS semantic restore never rewrites the legacy drift fingerprint legacy
+PASS read-only Verify retains authenticated formatted restore legacy
+PASS Scope gpupdate is permitted after verified native restore legacy
+PASS real post-restore file change still reports content drift legacy
+PASS unverified restore mismatch is not mislabeled later external drift legacy
+PASS corrupt legacy backup cannot authorize semantic restore equivalence
+PASS rollback availability recovers authenticated formatted snapshot legacy
+PASS legacy false-review operation recovers by read-only proof legacy
+PASS unavailable restore evidence does not assert external drift legacy
+PASS mapping exists 2.3.1.1
+PASS unconfigured source 2.3.1.1
+PASS readiness 2.3.1.1 LocalComputers
+PASS backup/write/link/publication 2.3.1.1 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS configured source 2.3.1.1
+PASS matching stored GPO without target link is not NO_CHANGE 2.3.1.1
+PASS Apply does not schedule unrequested endpoint refresh
+PASS explicit refresh schedules exactly one target 2.3.1.1
+PASS snapshot rollback 2.3.1.1
+PASS rollback read-back 2.3.1.1
+PASS rollback clears configured value and source 2.3.1.1
+PASS mapping exists 18.4.4
+PASS unconfigured source 18.4.4
+PASS readiness 18.4.4 LocalComputers
+PASS backup/write/link/publication 18.4.4 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS configured source 18.4.4
+PASS matching stored GPO without target link is not NO_CHANGE 18.4.4
+PASS Apply does not schedule unrequested endpoint refresh
+PASS explicit refresh schedules exactly one target 18.4.4
+PASS snapshot rollback 18.4.4
+PASS rollback read-back 18.4.4
+PASS rollback clears configured value and source 18.4.4
+PASS mapping exists 17.1.1
+PASS unconfigured source 17.1.1
+PASS readiness 17.1.1 LocalComputers
+PASS backup/write/link/publication 17.1.1 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS configured source 17.1.1
+PASS matching stored GPO without target link is not NO_CHANGE 17.1.1
+PASS Apply does not schedule unrequested endpoint refresh
+PASS explicit refresh schedules exactly one target 17.1.1
+PASS snapshot rollback 17.1.1
+PASS rollback read-back 17.1.1
+PASS rollback clears configured value and source 17.1.1
+PASS mapping exists 19.5.1.1
+PASS unconfigured source 19.5.1.1
+PASS readiness 19.5.1.1 Users
+PASS backup/write/link/publication 19.5.1.1 Users: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS configured source 19.5.1.1
+PASS matching stored GPO without target link is not NO_CHANGE 19.5.1.1
+PASS Apply does not schedule unrequested endpoint refresh
+PASS snapshot rollback 19.5.1.1
+PASS rollback read-back 19.5.1.1
+PASS rollback clears configured value and source 19.5.1.1
+PASS mapping exists 1.1.3
+PASS unconfigured source 1.1.3
+PASS readiness 1.1.3 Domain
+PASS backup/write/link/publication 1.1.3 Domain: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS configured source 1.1.3
+PASS matching stored GPO without target link is not NO_CHANGE 1.1.3
+PASS Apply does not schedule unrequested endpoint refresh
+PASS explicit refresh schedules exactly one target 1.1.3
+PASS snapshot rollback 1.1.3
+PASS rollback read-back 1.1.3
+PASS rollback clears configured value and source 1.1.3
+PASS mapping exists 1.1.4
+PASS unconfigured source 1.1.4
+PASS readiness 1.1.4 Domain
+PASS backup/write/link/publication 1.1.4 Domain: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS configured source 1.1.4
+PASS matching stored GPO without target link is not NO_CHANGE 1.1.4
+PASS Apply does not schedule unrequested endpoint refresh
+PASS explicit refresh schedules exactly one target 1.1.4
+PASS snapshot rollback 1.1.4
+PASS rollback read-back 1.1.4
+PASS rollback clears configured value and source 1.1.4
+PASS mapping exists 1.1.5
+PASS unconfigured source 1.1.5
+PASS readiness 1.1.5 Domain
+PASS backup/write/link/publication 1.1.5 Domain: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS configured source 1.1.5
+PASS matching stored GPO without target link is not NO_CHANGE 1.1.5
+PASS Apply does not schedule unrequested endpoint refresh
+PASS explicit refresh schedules exactly one target 1.1.5
+PASS snapshot rollback 1.1.5
+PASS rollback read-back 1.1.5
+PASS rollback clears configured value and source 1.1.5
+PASS mapping exists 1.1.6
+PASS unconfigured source 1.1.6
+PASS readiness 1.1.6 Domain
+PASS backup/write/link/publication 1.1.6 Domain: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS configured source 1.1.6
+PASS matching stored GPO without target link is not NO_CHANGE 1.1.6
+PASS Apply does not schedule unrequested endpoint refresh
+PASS explicit refresh schedules exactly one target 1.1.6
+PASS snapshot rollback 1.1.6
+PASS rollback read-back 1.1.6
+PASS rollback clears configured value and source 1.1.6
+PASS mapping exists 1.2.1
+PASS unconfigured source 1.2.1
+PASS readiness 1.2.1 Domain
+PASS backup/write/link/publication 1.2.1 Domain: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS configured source 1.2.1
+PASS matching stored GPO without target link is not NO_CHANGE 1.2.1
+PASS Apply does not schedule unrequested endpoint refresh
+PASS explicit refresh schedules exactly one target 1.2.1
+PASS snapshot rollback 1.2.1
+PASS rollback read-back 1.2.1
+PASS rollback clears configured value and source 1.2.1
+PASS mapping exists 1.2.4
+PASS unconfigured source 1.2.4
+PASS readiness 1.2.4 Domain
+PASS backup/write/link/publication 1.2.4 Domain: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS configured source 1.2.4
+PASS matching stored GPO without target link is not NO_CHANGE 1.2.4
+PASS Apply does not schedule unrequested endpoint refresh
+PASS explicit refresh schedules exactly one target 1.2.4
+PASS snapshot rollback 1.2.4
+PASS rollback read-back 1.2.4
+PASS rollback clears configured value and source 1.2.4
+PASS mapping exists 1.2.3
+PASS unconfigured source 1.2.3
+PASS readiness 1.2.3 LocalComputers
+PASS backup/write/link/publication 1.2.3 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS configured source 1.2.3
+PASS matching stored GPO without target link is not NO_CHANGE 1.2.3
+PASS Apply does not schedule unrequested endpoint refresh
+PASS explicit refresh schedules exactly one target 1.2.3
+PASS snapshot rollback 1.2.3
+PASS rollback read-back 1.2.3
+PASS rollback clears configured value and source 1.2.3
+PASS mapping exists 2.2.6
+PASS unconfigured source 2.2.6
+PASS readiness 2.2.6 LocalComputers
+PASS backup/write/link/publication 2.2.6 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS configured source 2.2.6
+PASS matching stored GPO without target link is not NO_CHANGE 2.2.6
+PASS Apply does not schedule unrequested endpoint refresh
+PASS explicit refresh schedules exactly one target 2.2.6
+PASS snapshot rollback 2.2.6
+PASS rollback read-back 2.2.6
+PASS rollback clears configured value and source 2.2.6
+PASS reviewed 2.2.6 write denial remains review-required
+PASS Verify retains original reviewed 2.2.6 failure 1
+PASS verification never exposes raw native errors
+PASS Verify retains original reviewed 2.2.6 failure 2
+PASS verification never exposes raw native errors
+PASS repeated Verify never retries the reviewed write
+PASS refresh stays blocked until interrupted publication is repaired
+PASS fresh reviewed repair plan completes 2.2.6 publication and link
+PASS explicit gpupdate becomes available after reviewed repair publication
+PASS reviewed repair retains snapshot rollback
+PASS mapping exists 2.2.16
+PASS unconfigured source 2.2.16
+PASS readiness 2.2.16 LocalComputers
+PASS backup/write/link/publication 2.2.16 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS configured source 2.2.16
+PASS matching stored GPO without target link is not NO_CHANGE 2.2.16
+PASS Apply does not schedule unrequested endpoint refresh
+PASS explicit refresh schedules exactly one target 2.2.16
+PASS snapshot rollback 2.2.16
+PASS rollback read-back 2.2.16
+PASS rollback clears configured value and source 2.2.16
+PASS mapping exists 2.2.31
+PASS unconfigured source 2.2.31
+PASS readiness 2.2.31 LocalComputers
+PASS backup/write/link/publication 2.2.31 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS configured source 2.2.31
+PASS matching stored GPO without target link is not NO_CHANGE 2.2.31
+PASS Apply does not schedule unrequested endpoint refresh
+PASS explicit refresh schedules exactly one target 2.2.31
+PASS snapshot rollback 2.2.31
+PASS rollback read-back 2.2.31
+PASS rollback clears configured value and source 2.2.31
+PASS mapping exists 2.2.33
+PASS unconfigured source 2.2.33
+PASS readiness 2.2.33 LocalComputers
+PASS backup/write/link/publication 2.2.33 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS configured source 2.2.33
+PASS matching stored GPO without target link is not NO_CHANGE 2.2.33
+PASS Apply does not schedule unrequested endpoint refresh
+PASS explicit refresh schedules exactly one target 2.2.33
+PASS snapshot rollback 2.2.33
+PASS rollback read-back 2.2.33
+PASS rollback clears configured value and source 2.2.33
+PASS mapping exists 2.2.36
+PASS unconfigured source 2.2.36
+PASS readiness 2.2.36 LocalComputers
+PASS backup/write/link/publication 2.2.36 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS configured source 2.2.36
+PASS matching stored GPO without target link is not NO_CHANGE 2.2.36
+PASS Apply does not schedule unrequested endpoint refresh
+PASS explicit refresh schedules exactly one target 2.2.36
+PASS snapshot rollback 2.2.36
+PASS rollback read-back 2.2.36
+PASS rollback clears configured value and source 2.2.36
+PASS mapping exists 2.2.39
+PASS unconfigured source 2.2.39
+PASS readiness 2.2.39 LocalComputers
+PASS backup/write/link/publication 2.2.39 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS configured source 2.2.39
+PASS matching stored GPO without target link is not NO_CHANGE 2.2.39
+PASS Apply does not schedule unrequested endpoint refresh
+PASS explicit refresh schedules exactly one target 2.2.39
+PASS snapshot rollback 2.2.39
+PASS rollback read-back 2.2.39
+PASS rollback clears configured value and source 2.2.39
+PASS mapping exists 2.2.45
+PASS unconfigured source 2.2.45
+PASS readiness 2.2.45 LocalComputers
+PASS backup/write/link/publication 2.2.45 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS configured source 2.2.45
+PASS matching stored GPO without target link is not NO_CHANGE 2.2.45
+PASS Apply does not schedule unrequested endpoint refresh
+PASS explicit refresh schedules exactly one target 2.2.45
+PASS snapshot rollback 2.2.45
+PASS rollback read-back 2.2.45
+PASS rollback clears configured value and source 2.2.45
+PASS mapping exists 2.3.11.6
+PASS unconfigured source 2.3.11.6
+PASS readiness 2.3.11.6 LocalComputers
+PASS backup/write/link/publication 2.3.11.6 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS configured source 2.3.11.6
+PASS matching stored GPO without target link is not NO_CHANGE 2.3.11.6
+PASS Apply does not schedule unrequested endpoint refresh
+PASS explicit refresh schedules exactly one target 2.3.11.6
+PASS snapshot rollback 2.3.11.6
+PASS rollback read-back 2.3.11.6
+PASS rollback clears configured value and source 2.3.11.6
+PASS mapping exists 18.10.43.10.1
+PASS unconfigured source 18.10.43.10.1
+PASS readiness 18.10.43.10.1 LocalComputers
+PASS backup/write/link/publication 18.10.43.10.1 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS configured source 18.10.43.10.1
+PASS matching stored GPO without target link is not NO_CHANGE 18.10.43.10.1
+PASS Apply does not schedule unrequested endpoint refresh
+PASS explicit refresh schedules exactly one target 18.10.43.10.1
+PASS snapshot rollback 18.10.43.10.1
+PASS rollback read-back 18.10.43.10.1
+PASS rollback clears configured value and source 18.10.43.10.1
+PASS mapping exists 18.10.43.10.2
+PASS unconfigured source 18.10.43.10.2
+PASS readiness 18.10.43.10.2 LocalComputers
+PASS backup/write/link/publication 18.10.43.10.2 LocalComputers: GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.
+PASS configured source 18.10.43.10.2
+PASS matching stored GPO without target link is not NO_CHANGE 18.10.43.10.2
+PASS Apply does not schedule unrequested endpoint refresh
+PASS explicit refresh schedules exactly one target 18.10.43.10.2
+PASS snapshot rollback 18.10.43.10.2
+PASS rollback read-back 18.10.43.10.2
+PASS rollback clears configured value and source 18.10.43.10.2
+PASS recovery fixture publication
+PASS pre-restore access denial preserves the recoverable manifest phase
+PASS denied restore does not mutate GPO or link
+PASS failure after import begins remains blocked and retains its stage
+PASS native rollback errors are sanitized
+PASS read-only recovery assessment exposes the retained block reason
+PASS review-required retry cannot invoke native restore
+PASS backup denial returns failed-safe stage and recovery guidance
+PASS real worker chain: preview, readiness, backup, write, link, publication, rollback and re-verification with mocked directory APIs only
+
+Test-EndpointResultUi
+PASS endpoint result UI: failed refresh persists after re-verification, per-host escaped diagnostics, completed counts, guarded manual check and rollback/mismatch outcomes
+PASS honest success outcomes: mixed endpoint availability, stale verified flag rejected, all-target success, unlinked plan blocked, successful rollback with failed user refresh
+
+Test-RecoveryUi
+PASS rollback heartbeat: renewed session preserves Scope confirmation; fresh external drift blocks submission without writes
+PASS successful publication with one unavailable endpoint: clear counts, collapsed diagnostics, honest scope, light/dark/mobile; rollback success survives failed user refresh without replaying writes
+Recovery UI: PASS (desktop/mobile, recovery refresh, user OU/endpoint OU/verification identity targeting, and user PDC exclusion).
+
+Test-UX-Contract
+PASS streamlined UX contract: one control form, retained safety/verification, compact dashboard, retired entry points removed and source/dist synchronized.
+
+built-source-match
+PASS current backend/frontend source fingerprints and distributed runtime ZIP SHA-256

@@ -75,7 +75,8 @@ public record GpoWorkflowResult(string State, string Message, string? BackupId, 
 public record GpoWorkflowRun(string Id, GpoWorkflowPlan Plan, GpoWorkflowResult Result, string UpdatedAt, GpoConsent? Approval = null,
     string? CorrelationId = null, string? StartedAt = null, GpoStage[]? Stages = null, GpoLiveCheck[]? LiveChecks = null);
 public record GpoStage(string Phase, string StartedAt, string? FinishedAt = null);
-public record GpoRollbackAnchor(GpoWorkflowPlan Plan, string PostFingerprint);
+public record GpoRollbackAnchor(GpoWorkflowPlan Plan, string PostFingerprint,
+    GpoWorkflowPlan[]? BatchPlans = null, GpoWorkflowPlan? RefreshPlan = null);
 public record GpoHistoryPage(GpoWorkflowRun[] Items,int Total,int? NextOffset,long Snapshot);
 
 public record GpoEvidence(string SchemaVersion, string Product, string Benchmark, string OperationId, string GeneratedAt,

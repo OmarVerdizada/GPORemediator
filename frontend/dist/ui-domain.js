@@ -3,7 +3,7 @@
   const upper = value => String(value || '').toUpperCase();
   const bad = value => /FAIL|MISMATCH|REVIEW|PARTIAL|DRIFT|ERROR|OVERRIDDEN/.test(upper(value));
   const effectiveVerified = value => /^(VERIFIED_ON_SAMPLE|VERIFIED_ON_ALL_TARGETS|DOMAIN_VALUE_MATCHES_ON_SELECTED_DC)$/.test(upper(value));
-  function domainMismatch(result){const d=result?.domainPolicy;if(!d||upper(result.state).startsWith('ROLLED_BACK'))return false;const a=String(d.value??'').trim(),b=String(d.desiredValue??'').trim();return !a||!b||!Number.isFinite(Number(a))||!Number.isFinite(Number(b))||Number(a)!==Number(b);}
+  function domainMismatch(result){const d=result?.domainPolicy;if(!d||/^(?:BATCH_)?ROLLED_BACK$/.test(upper(result.state)))return false;const a=String(d.value??'').trim(),b=String(d.desiredValue??'').trim();return !a||!b||!Number.isFinite(Number(a))||!Number.isFinite(Number(b))||Number(a)!==Number(b);}
   function coverageVerified(result){
     if(upper(result.effectiveStatus)==='DOMAIN_VALUE_MATCHES_ON_SELECTED_DC')return true;
     if(!Array.isArray(result.endpointChecks)||!result.endpointChecks.length||result.endpointChecks.some(x=>x.state!=='VERIFIED'))return false;
@@ -14,7 +14,7 @@
   }
   function outcome(run){
     const r=run?.result||{},checks=r.endpointChecks||[],q=classify(run);
-    const restored=r.state==='ROLLED_BACK',busy=/^(APPLYING|VERIFYING|REFRESHING|ROLLBACKING|ROLLING_BACK)$/.test(r.state||'');
+    const restored=['ROLLED_BACK','BATCH_ROLLED_BACK'].includes(r.state),busy=/^(APPLYING|VERIFYING|REFRESHING|ROLLBACKING|ROLLING_BACK)$/.test(r.state||'');
     const applied=!busy&&r.gpoPublished===true&&r.linkVerified===true&&/^(PUBLISHED|NO_CHANGE|REFRESH_COMPLETED|REFRESH_SCHEDULED|REFRESH_PARTIAL|PUBLISHED_REFRESH_FAILED)$/.test(r.state||'');
     const mismatch=!restored&&(domainMismatch(r)||r.effectiveStatus==='ENDPOINT_MISMATCH'||r.effectiveStatus==='DOMAIN_VALUE_PENDING_OR_OVERRIDDEN'||checks.some(x=>x.state==='MISMATCH'));
     const verified=q.publication==='published'&&r.linkVerified===true&&q.replication==='converged'&&q.effective==='verified'&&!q.attention;
@@ -22,7 +22,7 @@
     const endpoints={total,verified:count('VERIFIED'),mismatch:count('MISMATCH'),unavailable:count('UNAVAILABLE')+count('OUTSIDE_SCOPE'),observed:count('OBSERVED'),remaining:Math.max(0,total-checks.length)};
     const refresh=r.refreshResults||[],refreshFailed=refresh.filter(x=>x.state==='FAILED').length;
     return {restored,applied,busy,mismatch,verified,endpoints,refreshFailed,refreshTotal:refresh.length,success:!busy&&!mismatch&&(restored||applied),
-      title:restored?'Rollback completed successfully':busy?'Checking policy':mismatch?(applied?'GPO applied · endpoint mismatch':'Policy is not effective'):applied?(verified?'Applied and verified':'GPO applied successfully'):q.attention?'Operation needs review':'Application not verified'};
+      title:restored?(r.state==='BATCH_ROLLED_BACK'?'Restored with batch snapshot':'Rollback completed successfully'):busy?'Checking policy':mismatch?(applied?'GPO applied · endpoint mismatch':'Policy is not effective'):applied?(verified?'Applied and verified':'GPO applied successfully'):q.attention?'Operation needs review':'Application not verified'};
   }
   function classify(run) {
     const result = run?.result || {};
@@ -31,7 +31,7 @@
     const effective = domainMismatch(result)?'failed':effectiveVerified(result.effectiveStatus)&&coverageVerified(result) ? 'verified' : bad(result.effectiveStatus) ? 'failed' : 'pending';
     const attention = bad(result.state) || publication === 'failed' || effective === 'failed' || (result.refreshResults||[]).some(x=>upper(x.state)==='FAILED');
     const custom=run?.plan?.preview?.customValues??!!run?.plan?.selection?.itemValues;
-    const compliant = !upper(result.state).startsWith('ROLLED_BACK') && !custom && !attention && publication === 'published' && result.linkVerified === true && replication === 'converged' && effective === 'verified';
+    const compliant = !/^(?:BATCH_)?ROLLED_BACK$/.test(upper(result.state)) && !custom && !attention && publication === 'published' && result.linkVerified === true && replication === 'converged' && effective === 'verified';
     return { publication, replication, effective, attention, compliant, custom };
   }
   function isUserPolicy(run,settings=[]) {

@@ -1,6 +1,6 @@
-# GPO Remediator 3.17.10
+# GPO Remediator 3.18.0
 
-3.17.10 separates successful GPO publication and snapshot restoration from per-host endpoint verification and refresh. Rollback completes computer refresh with delegated WinRM and reports signed-in user scheduling separately. See [release notes](docs/RELEASE-3.17.10.md).
+3.18.0 adds optional bulk Apply from Benchmark: select up to 20 controls, preview every value and target link, then approve one durable batch. User, Computer and domain account controls retain separate targeting and verification. Existing single-control actions remain available. See [release notes](docs/RELEASE-3.18.0.md).
 
 3.17.8 keeps rollback inspection stable across session heartbeats, refreshes recovery checks before confirmation, and separates endpoint policy input, resultant values and unavailable probes. See [release notes](docs/RELEASE-3.17.8.md).
 

@@ -48,7 +48,7 @@
   function catalogTools(s,count){const filtered=!!s.query||s.level!=='ALL'||s.automation!=='ALL'||s.savedView!=='ALL';return `<div class="product-catalog-tools"><span><strong>${count}</strong> matching controls ${filtered?'<button data-product-action="clear-filters">Clear filters ×</button>':''}</span><button data-product-action="export-catalog">Export CSV</button></div>`;}
   function inspector(s) {
     const h=s.history.find(x=>x.id===s.inspectedOperation); if(!h)return '';
-    const p=h.plan||{},r=h.result||{},quality=window.GpoUiDomain.classify(h),outcome=window.GpoUiDomain.outcome(h),restore=!!r.restoreChecks?.length||/^ROLL/.test(r.state||'');
+    const p=h.plan||{},r=h.result||{},quality=window.GpoUiDomain.classify(h),outcome=window.GpoUiDomain.outcome(h),restore=!!r.restoreChecks?.length||/^(?:ROLL|BATCH_ROLLED_BACK)/.test(r.state||'');
     const matches=areas=>areas.every(area=>r.restoreChecks?.some(x=>x.area===area&&['MATCH','NOT_APPLICABLE'].includes(x.state)));
     const checks=[
       [restore?'GPO snapshot':'GPO publication',restore?matches(['CONTENT','MACHINE_EXTENSIONS','USER_EXTENSIONS']):r.gpoPublished===true,restore?'Saved content and extension metadata match':'Value recorded in the GPO'],

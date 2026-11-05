@@ -63,7 +63,8 @@ public sealed class WorkspaceWorkflows(Store store,IWorkflowOperations service,O
     }
     public WorkflowJob Start(string action,WorkflowRequest request,string token,string actor){
         if(action is not ("apply" or "rollback" or "verify" or "refresh"))throw new PolicyException("INVALID_REQUEST","Unknown workflow action.");
-        if(request.Refresh is not ("None" or "Pdc" or "Scope")||action=="refresh"&&request.Refresh=="None")throw new PolicyException("INVALID_REQUEST","Choose None, Pdc or Scope; explicit refresh requires a target.");
+        var automatic=request.Refresh=="Auto"&&(action=="apply"&&request.BatchId is not null||action=="rollback"&&request.SourceWorkflowId is not null);
+        if(!automatic&&request.Refresh is not ("None" or "Pdc" or "Scope")||action=="refresh"&&request.Refresh=="None")throw new PolicyException("INVALID_REQUEST","Choose None, Pdc or Scope; Auto is reserved for a reviewed batch.");
         var schedule=request.VerificationDelays??[];WorkspaceRules.ValidateSchedule(schedule);
         var id=JobId(request.RequestId,actor);var hash=PolicyValues.Hash(new{action,request});
         lock(sync){var existing=store.Get<WorkflowJob>("workflow_jobs",id);if(existing is not null){if(existing.Actor!=actor||existing.RequestHash!=hash)throw new PolicyException("IDEMPOTENCY_CONFLICT","Request ID was already used.");return existing;}}
@@ -78,10 +79,15 @@ public sealed class WorkspaceWorkflows(Store store,IWorkflowOperations service,O
         }
         if(ids.Length is <1 or >20||ids.Distinct().Count()!=ids.Length)throw new PolicyException("INVALID_REQUEST","Select 1–20 distinct plans.");
         if(request.SourceWorkflowId is not null&&action!="rollback")throw new PolicyException("INVALID_REQUEST","A recovery source is only valid for rollback.");
-        if(ids.Length>1&&action!="apply")throw new PolicyException("INVALID_REQUEST","Use the batch recovery source for full-GPO rollback.");
+        if(ids.Length>1&&action is not ("apply" or "verify"))throw new PolicyException("INVALID_REQUEST","Use the batch recovery source for full-GPO rollback.");
         // The workflow refresh field is authoritative at both submission and execution.
         var executionConsent=request.Consent with{Refresh=request.Refresh};
-        var plans=ids.Select(op=>service.ValidateSubmission(op,action,executionConsent,token,actor)).ToArray();
+        var plans=ids.Select(op=>service.ValidateSubmission(op,action,executionConsent with{Refresh=BatchWorkflowRules.Refresh(Plan(op,actor),request.Refresh)},token,actor)).ToArray();
+        if(action=="apply"&&request.Refresh!="None")foreach(var plan in plans){
+            var strategy=BatchWorkflowRules.Refresh(plan,request.Refresh);var mapping=ProductionGpoMappings.Effective(plan.Selection);
+            ProductionGpoMappings.ValidateRefresh(mapping,strategy);
+            if(mapping.Scope=="User"&&strategy=="Scope"&&string.IsNullOrWhiteSpace(plan.Selection.EndpointScopeDn))throw new PolicyException("ENDPOINT_SCOPE_REQUIRED","Select a computer OU for user-session refresh before approving this batch.");
+        }
         if(plans.Any(p=>p.Selection.GpoId!=plans[0].Selection.GpoId||p.Selection.ScopeDn!=plans[0].Selection.ScopeDn))throw new PolicyException("INVALID_REQUEST","One workflow must use one GPO/scope.");
         if(action=="apply"&&ids.Length>1&&request.BatchId is null)throw new PolicyException("BATCH_REQUIRED","Apply the reviewed batch preview.");
         if(request.BatchId is not null){
@@ -113,10 +119,11 @@ public sealed class WorkspaceWorkflows(Store store,IWorkflowOperations service,O
             if(job.Action=="scan"){await ProcessScan(work,job,ct);return;}
             string? expected=null;
             GpoRollbackAnchor? anchor=null;
-            if(job.SourceWorkflowId is not null){
+            if(job.SourceWorkflowId is not null&&job.Action=="rollback"){
                 var source=Get(job.SourceWorkflowId,job.Actor);
                 var last=source.CompletedIds.Select(op=>store.Require<GpoWorkflowRun>("gpo_runs",op)).Last(run=>!string.IsNullOrEmpty(run.Result.BackupId));
-                anchor=new(last.Plan,last.Result.PostFingerprint??throw new PolicyException("ROLLBACK_VERSION_UNKNOWN","The last batch write has no completed fingerprint."));
+                anchor=new(last.Plan,last.Result.PostFingerprint??throw new PolicyException("ROLLBACK_VERSION_UNKNOWN","The last batch write has no completed fingerprint."),
+                    source.CompletedIds.Select(op=>store.Require<GpoWorkflowRun>("gpo_runs",op)).Where(run=>!string.IsNullOrEmpty(run.Result.BackupId)).Select(run=>run.Plan).ToArray());
             }
             foreach(var originalId in job.PlanIds){
                 ct.ThrowIfCancellationRequested();var plan=Plan(originalId,job.Actor);
@@ -128,7 +135,7 @@ public sealed class WorkspaceWorkflows(Store store,IWorkflowOperations service,O
                 }
                 if(job.BatchId is not null){var batch=store.Require<BatchPlan>("batch_plans",job.BatchId);if(batch.Pilot)WorkspaceRules.ValidatePilot(plan,batch.PilotLimit);}
                 job=Update(job.Id,j=>j with{CurrentOperationId=plan.Id});
-                var result=await service.ExecuteAsync(plan.Id,job.Action,job.Consent with{Refresh=job.Refresh},work.Token,job.Actor,job.Id,anchor);
+                var result=await service.ExecuteAsync(plan.Id,job.Action,job.Consent with{Refresh=BatchWorkflowRules.Refresh(plan,job.Refresh)},work.Token,job.Actor,job.Id,anchor);
                 job=Update(job.Id,j=>j with{CompletedIds=[..j.CompletedIds,plan.Id],Message=result.Result.Message});
                 if(job.Action=="apply"&&!WorkspaceRules.Published(result)||job.Action=="rollback"&&result.Result.State!="ROLLED_BACK"||job.Action=="verify"&&result.Result.State is "REVIEW_REQUIRED" or "DRIFT_DETECTED" or "ROLLBACK_DRIFT_DETECTED")
                     throw new PolicyException("WORKFLOW_RESULT_REVIEW","A step requires review. Remaining writes and refresh were stopped.");
@@ -140,15 +147,29 @@ public sealed class WorkspaceWorkflows(Store store,IWorkflowOperations service,O
                 var source=Get(job.SourceWorkflowId,job.Actor);
                 foreach(var op in source.CompletedIds.Where(id=>id!=job.CompletedIds[0])){
                     var run=store.Require<GpoWorkflowRun>("gpo_runs",op);
-                    store.Put("gpo_runs",op,run with{UpdatedAt=PolicyValues.Now(),Result=run.Result with{State="BATCH_ROLLED_BACK",Message="Restored through the batch's first full-GPO snapshot. Inspect recovery workflow "+job.Id,EffectiveStatus="ROLLBACK_ENDPOINT_PENDING"}},"BATCH_ROLLED_BACK");
+                    store.Put("gpo_runs",op,run with{UpdatedAt=PolicyValues.Now(),Result=run.Result with{State="BATCH_ROLLED_BACK",Message="Restored through the batch's first full-GPO snapshot. Inspect recovery workflow "+job.Id,EffectiveStatus="ROLLBACK_ENDPOINT_PENDING",
+                        GpoPublished=false,LinkVerified=false,CurrentValue=null,CurrentValueSource=null,CurrentLink=null,DomainPolicy=null,Verification=null,EndpointChecks=[],RefreshResults=[],RestoreChecks=null}},"BATCH_ROLLED_BACK");
                 }
             }
             // Refresh follows only the explicit approval and a verified successful mutation.
             if(job.Refresh!="None"&&job.Action is "apply" or "rollback"){
-                var refreshId=job.Action=="rollback"?job.CompletedIds[0]:job.CompletedIds[^1];
-                var refreshed=await service.ExecuteAsync(refreshId,"refresh",new("",Refresh:job.Refresh),work.Token,job.Actor,job.Id);
-                if(refreshed.Result.RefreshResults.Length==0||refreshed.Result.RefreshResults.Any(x=>x.State=="FAILED")||refreshed.Result.State is "DRIFT_DETECTED" or "ROLLBACK_DRIFT_DETECTED" or "REVIEW_REQUIRED")
-                    throw new PolicyException("REFRESH_REVIEW_REQUIRED","The policy operation was retained, but refresh needs review. Inspect each target result.");
+                var candidates=job.Action=="rollback"&&anchor?.BatchPlans is {} saved?saved:job.CompletedIds.Select(op=>Plan(op,job.Actor)).ToArray();
+                var groups=job.Refresh=="Auto"||candidates.Length>1?BatchWorkflowRules.RefreshGroups(candidates,job.Refresh):[candidates[^1]];
+                var combined=new List<GpoRefreshResult>();
+                foreach(var target in groups){
+                    var refreshId=job.Action=="rollback"?job.CompletedIds[0]:target.Id;
+                    var refreshAnchor=job.Action=="rollback"&&(job.Refresh=="Auto"||groups.Length>1)?anchor! with{RefreshPlan=target}:null;
+                    var refreshed=await service.ExecuteAsync(refreshId,"refresh",new("",Refresh:BatchWorkflowRules.Refresh(target,job.Refresh)),work.Token,job.Actor,job.Id,refreshAnchor);
+                    combined.AddRange(refreshed.Result.RefreshResults);
+                    if(job.Action=="rollback"&&groups.Length>1){
+                        static string State(IEnumerable<string> states)=>states.Contains("FAILED")?"FAILED":states.All(s=>s=="COMPLETED")?"COMPLETED":"SCHEDULED";
+                        static string? Half(IEnumerable<string?> states){var known=states.OfType<string>().ToArray();return known.Length==0?null:State(known);}
+                        var merged=combined.GroupBy(r=>r.Computer,StringComparer.OrdinalIgnoreCase).Select(g=>new GpoRefreshResult(g.Key,State(g.Select(r=>r.State)),string.Join(" | ",g.Select(r=>r.Message)),Half(g.Select(r=>r.ComputerState)),Half(g.Select(r=>r.UserState)))).ToArray();
+                        store.Put("gpo_runs",refreshId,refreshed with{Result=refreshed.Result with{RefreshResults=merged,RefreshCoverage=new(merged.Length,merged.Length,target.Id==groups[^1].Id)}},refreshed.Result.State);
+                    }
+                    if(refreshed.Result.RefreshResults.Length==0||refreshed.Result.RefreshResults.Any(x=>x.State=="FAILED")||refreshed.Result.State is "DRIFT_DETECTED" or "ROLLBACK_DRIFT_DETECTED" or "REVIEW_REQUIRED")
+                        throw new PolicyException("REFRESH_REVIEW_REQUIRED","The policy operation was retained, but refresh needs review. Inspect each target result.");
+                }
             }
             var effectivePending=false;
             if(job.Action is "apply" or "refresh" or "verify"){
@@ -174,13 +195,15 @@ public sealed class WorkspaceWorkflows(Store store,IWorkflowOperations service,O
     private async Task ProcessPreview(Work work,WorkflowJob job,CancellationToken ct){
         var plans=new List<GpoWorkflowPlan>();
         foreach(var selection in job.Selections??[]){
-            if(ProductionGpoMappings.Effective(selection).Scope!="Computer") throw new PolicyException("NONCOMPUTER_BATCH_UNSUPPORTED","User and Domain account policies require an individual scope-aware workflow, not a computer OU batch.");
              var plan=await service.PreviewAsync(work.Token,job.Actor,selection,ct);
             if(job.Pilot)WorkspaceRules.ValidatePilot(plan,job.PilotLimit);
             if(plans.Count>0&&plans[0].Preview.Fingerprint!=plan.Preview.Fingerprint)throw new PolicyException("BATCH_DRIFT","The GPO changed during preview; generate a new batch.");
             plans.Add(plan);job=Update(job.Id,j=>j with{CompletedIds=plans.Select(x=>x.Id).ToArray(),Message=$"Read-only preview: {plans.Count}/{job.Selections!.Length}"});
         }
-        var batch=new BatchPlan(job.BatchId!,job.Actor,PolicyValues.Now(),plans.Select(x=>x.Id).ToArray(),job.Pilot,job.PilotLimit,job.PilotSourceId);store.Put("batch_plans",batch.Id,batch,"READY");
+        var ordered=BatchWorkflowRules.Order(plans.ToArray());
+        foreach(var plan in ordered){store.Put("gpo_plans",plan.Id,plan);}
+        Update(job.Id,j=>j with{CompletedIds=ordered.Select(plan=>plan.Id).ToArray()});
+        var batch=new BatchPlan(job.BatchId!,job.Actor,PolicyValues.Now(),ordered.Select(x=>x.Id).ToArray(),job.Pilot,job.PilotLimit,job.PilotSourceId);store.Put("batch_plans",batch.Id,batch,"READY");
         Finish(job.Id,"COMPLETED","Batch preview ready. Review every value, link and scope before separately approving Apply.");
     }
     private async Task ProcessScan(Work work,WorkflowJob job,CancellationToken ct){

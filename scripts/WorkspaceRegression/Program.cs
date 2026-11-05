@@ -147,6 +147,8 @@ var recovery=jobs.Start("rollback",new(Guid.NewGuid().ToString(),[],new("ROLLBAC
 recovery=await Done(jobs,recovery.Id);Check(recovery.State=="COMPLETED",recovery.Message);
 Check(fake.LastAnchor is not null&&fake.LastRestore==bulk.CompletedIds[0],"Batch rollback did not use first snapshot plus final publication anchor");
 Check(store.Require<GpoWorkflowRun>("gpo_runs",bulk.CompletedIds[1]).Result.State=="BATCH_ROLLED_BACK","Batch restore left later controls marked as applied");
+var restoredChild=store.Require<GpoWorkflowRun>("gpo_runs",bulk.CompletedIds[1]).Result;
+Check(!restoredChild.GpoPublished&&!restoredChild.LinkVerified&&restoredChild.EndpointChecks?.Length==0&&restoredChild.CurrentValue is null,"Restored batch member retained stale forward publication or endpoint claims");
 var repeatRecovery=jobs.Start("rollback",new(Guid.NewGuid().ToString(),[],new("ROLLBACK"),SourceWorkflowId:bulk.Id),"secret-session","TEST\\Admin");
 repeatRecovery=await Done(jobs,repeatRecovery.Id);Check(repeatRecovery.State=="COMPLETED","Completed batch could not be restored again: "+repeatRecovery.Message);
 Check(repeatRecovery.Id!=recovery.Id&&fake.LastRestore==bulk.CompletedIds[0],"Repeat batch recovery did not retain the first snapshot");
@@ -169,6 +171,32 @@ Check(fake.PreviewAccessRequirements.Count>0&&fake.PreviewAccessRequirements.All
 fake.PreviewSelections.Clear();var domainScan=jobs.Scan(new(Guid.NewGuid().ToString(),selection with{ScopeDn="DC=test,DC=local",AccountScope="Domain"},["1.2.1"]),"secret-session","TEST\\Admin");domainScan=await Done(jobs,domainScan.Id);
 Check(domainScan.State=="COMPLETED"&&fake.PreviewSelections.Single().AccountScope=="Domain"&&fake.PreviewSelections.Single().FirstLink&&fake.Actions.Count==0,"Domain scan lost scope intent or performed a write");
 Console.WriteLine("PASS domain scan preserves account scope and first-link intent without native writes");
+// The opt-in batch UI uses the same durable queue for every policy half.
+fake.Actions.Clear();fake.FailNext=false;fake.DriftAfterApply=false;
+var userMapping=ProductionGpoMappings.Settings.First(x=>x.Scope=="User"&&x.Automation=="Automated");
+var mixedPreview=jobs.Preview(Guid.NewGuid().ToString(),new([selection with{Setting="2.3.1.2",AccountScope="LocalComputers"},selection with{Setting=userMapping.Id,AccountScope="Users",EndpointScopeDn="OU=Endpoints,DC=test,DC=local",VerificationUser="TEST\\user"}]),"secret-session","TEST\\Admin");
+mixedPreview=await Done(jobs,mixedPreview.Id);Check(mixedPreview.State=="COMPLETED","User/computer batch preview: "+mixedPreview.Message);
+var mixedBatch=jobs.Batches("TEST\\Admin").Single(x=>x.Id==mixedPreview.BatchId);
+var mixedApply=jobs.Start("apply",new(Guid.NewGuid().ToString(),mixedBatch.PlanIds,consent,"Auto",BatchId:mixedBatch.Id),"secret-session","TEST\\Admin");
+mixedApply=await Done(jobs,mixedApply.Id);Check(mixedApply.State=="COMPLETED"&&fake.Actions.Count(x=>x=="refresh:Scope")==2,"User and computer refresh contexts must be processed separately");
+fake.Actions.Clear();var mixedVerify=jobs.Start("verify",new(Guid.NewGuid().ToString(),mixedApply.CompletedIds,new("")),"secret-session","TEST\\Admin");mixedVerify=await Done(jobs,mixedVerify.Id);
+Check(mixedVerify.State=="COMPLETED"&&fake.Actions.Count==2&&fake.Actions.All(x=>x.StartsWith("verify:")),"Read-only multi-control verification must not write or refresh");
+Reject(()=>jobs.Start("apply",new(Guid.NewGuid().ToString(),[mixedBatch.PlanIds[0]],consent,"Auto"),"secret-session","TEST\\Admin"),"INVALID_REQUEST");
+Console.WriteLine("PASS user/computer batch preview, separate automatic refresh contexts, bounded single-plan Auto rejection and read-only batch re-verification");
+fake.Actions.Clear();fake.ConfigurePreview=(s,v)=>s.Setting is "1.2.1" or "1.2.4"?v with{DesiredValue=s.Value.ToString(),DomainPolicy=new(s.Setting=="1.2.1"?"LockoutDuration":"LockoutObservationWindow","30",s.Value.ToString(),"dc.test.local"),Dependency=s.Setting=="1.2.1"&&!fake.Actions.Contains("apply:1.2.4")?new("DOMAIN_LOCKOUT_DEPENDENCY","Window must change first","1.2.4",15,"LockoutObservationWindow","30"):null}:v;
+var domainTarget=selection with{ScopeDn="DC=test,DC=local",AccountScope="Domain",Value=15};
+var accountPreview=jobs.Preview(Guid.NewGuid().ToString(),new([domainTarget with{Setting="1.2.1"},domainTarget with{Setting="1.2.4"}]),"secret-session","TEST\\Admin");accountPreview=await Done(jobs,accountPreview.Id);
+Check(accountPreview.State=="COMPLETED","Related account batch: "+accountPreview.Message);var accountBatch=jobs.Batches("TEST\\Admin").Single(x=>x.Id==accountPreview.BatchId);
+Check(store.Require<GpoWorkflowPlan>("gpo_plans",accountBatch.PlanIds[0]).Selection.Setting=="1.2.4","Related control was not ordered before the dependent control");
+var accountApply=jobs.Start("apply",new(Guid.NewGuid().ToString(),accountBatch.PlanIds,consent,"Auto",BatchId:accountBatch.Id),"secret-session","TEST\\Admin");accountApply=await Done(jobs,accountApply.Id);
+Check(accountApply.State=="COMPLETED"&&fake.Actions.Where(x=>x.StartsWith("apply:")).SequenceEqual(["apply:1.2.4","apply:1.2.1"])&&fake.Actions.Count(x=>x=="refresh:Pdc")==1,"Account batch did not use approved dependency order and PDC refresh");
+fake.ConfigurePreview=null;
+var dependencyPlan=store.Require<GpoWorkflowPlan>("gpo_plans",accountBatch.PlanIds[1]);var invalidWindow=store.Require<GpoWorkflowPlan>("gpo_plans",accountBatch.PlanIds[0]);
+Reject(()=>BatchWorkflowRules.Order([dependencyPlan with{Preview=dependencyPlan.Preview with{Dependency=new("DOMAIN_LOCKOUT_DEPENDENCY","Window missing","1.2.4",15,"LockoutObservationWindow","30")}}]),"DOMAIN_LOCKOUT_DEPENDENCY");
+Reject(()=>BatchWorkflowRules.Order([dependencyPlan,invalidWindow with{Preview=invalidWindow.Preview with{DomainPolicy=invalidWindow.Preview.DomainPolicy! with{DesiredValue="60"}}}]),"DOMAIN_LOCKOUT_DEPENDENCY");
+var threshold=dependencyPlan with{Selection=dependencyPlan.Selection with{Setting="1.2.2"},Preview=dependencyPlan.Preview with{Dependency=null,DomainPolicy=new("LockoutThreshold","0","5","dc.test.local")}};
+Check(BatchWorkflowRules.Order([threshold,dependencyPlan,invalidWindow])[^1].Selection.Setting=="1.2.2","Account lockout was enabled before the explicitly selected duration/window prerequisites");
+Console.WriteLine("PASS domain account batch dependency order, exact approved values, single PDC refresh and invalid/incomplete dependency rejection");
 using(var req=new HttpRequestMessage(HttpMethod.Get,"/api/workflows/"+jobId+"/report")){req.Headers.Add("Test-Identity","TEST\\Admin");using var response=await http.SendAsync(req);var html=await response.Content.ReadAsStringAsync();Check(response.IsSuccessStatusCode&&html.Contains("&lt;unsafe&gt;")&&!html.Contains("<unsafe>"),"Report escaping failed");}
 var reportSource=store.Require<WorkflowJob>("workflow_jobs",jobId).CompletedIds[0];var reportRun=store.Require<GpoWorkflowRun>("gpo_runs",reportSource);
 store.Put("gpo_runs",reportSource,reportRun with{Result=reportRun.Result with{CurrentLink=new(reportRun.Plan.Selection.ScopeDn,2,false,false)}});
@@ -188,12 +216,14 @@ sealed class FakeOperations(Store store,OperationGate gate):IWorkflowOperations
 {
  public readonly List<bool> PreviewAccessRequirements=[];
  public readonly List<GpoSelection> PreviewSelections=[];
+ public Func<GpoSelection,GpoPreview,GpoPreview>? ConfigurePreview;
  public readonly List<string> Actions=[];public TaskCompletionSource? Block;public bool FailNext;public bool DriftAfterApply;public bool RefreshFails;public bool EndpointMismatch;public bool EndpointUnavailable;public GpoRollbackAnchor? LastAnchor;public string? LastRestore;private string fingerprint="initial";
  public void ValidateConnection(string token,string actor){if(token!="secret-session")throw new PolicyException("GPO_LOGIN_REQUIRED","Reconnect.");}
  public Task<GpoWorkflowPlan> PreviewAsync(string token,string actor,GpoSelection selection,CancellationToken ct,bool requireWriteAccess=true){
   PreviewAccessRequirements.Add(requireWriteAccess);
   PreviewSelections.Add(selection);
   ValidateConnection(token,actor);var preview=new GpoPreview(new(selection.GpoId,"<unsafe>",false,true),new(selection.ScopeDn,"Pilot","OU"),"0",fingerprint,"links",null,[],[],new("",false,[],new(2,0,2,0,["ws.test.local"],false),[],[],null),DesiredValue:"1");
+  if(ConfigurePreview is not null)preview=ConfigurePreview(selection,preview);
   var plan=new GpoWorkflowPlan(Guid.NewGuid().ToString("N"),actor,"TEST\\Executor","WINDOWS","test.local","dc.test.local",selection,preview,PolicyValues.Now());store.Put("gpo_plans",plan.Id,plan);return Task.FromResult(plan);
  }
  public GpoWorkflowPlan ValidateSubmission(string id,string operation,GpoConsent consent,string token,string actor){ValidateConnection(token,actor);var plan=store.Require<GpoWorkflowPlan>("gpo_plans",id);if(plan.Actor!=actor)throw new PolicyException("NOT_FOUND","Plan");return plan;}

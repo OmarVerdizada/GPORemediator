@@ -20,3 +20,7 @@ Run git pull --ff-only, then restart using GpoRemediator.cmd. The launcher repla
 - If a write loses connectivity, inspect Operations before retrying. Stopping a read-only wait does not cancel server work.
 
 Password/lockout controls support local accounts in a computer OU and domain accounts at the domain root with link order 1. An OU GPO does not change AD domain-user passwords; use fine-grained password policy for selected users/global security groups. No particular GPO name or GUID is mandatory. See PRODUCTION-OPERATIONS.md. Pending evidence is not a successful verification result.
+
+## Optional bulk Apply
+
+Use **Benchmark → Bulk apply** to select up to 20 controls for one GPO and OU/domain. Preview every value and link, then approve the complete batch. Results and recovery remain accessible under **Operations → Bulk operations**. The existing single-control workflow remains available. See [the bulk guide](docs/BULK-APPLY.md) for mixed User/Computer targeting, section groups and rollback boundaries.

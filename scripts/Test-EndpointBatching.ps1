@@ -58,8 +58,21 @@ try{
  $callsBefore=$script:remoteCalls;$result=& $dispatch
  Check ($script:remoteCalls -eq $callsBefore -and @($script:rollbackSchedules|Where-Object{$_.target}).Count -eq 0 -and @($result.refreshResults|Where-Object state -ne 'SCHEDULED').Count -eq 0) 'without delegated credentials rollback retains both-half task scheduling without inventing completion'
  $script:delegated=$true
-
-
+ # Batch rollback keeps the first snapshot authoritative while refreshing each
+ # member's own pinned context, including a computer half after an AD control.
+ $plan.selection.gpoId='11111111-1111-1111-1111-111111111111'
+ $plan.selection.scopeDn='DC=example,DC=test';$plan.preview.verificationComputers=@()
+ $script:targets=@('batch1.example.test','batch2.example.test')
+ $projection=@{selection=@{gpoId=$plan.selection.gpoId;scopeDn=$plan.selection.scopeDn};preview=@{verificationComputers=$script:targets}}
+ $Data=@{plan=$plan;mapping=@{scope='Computer';domainPolicySensitive=$true};previous=@{state='ROLLED_BACK'};refresh='Scope';batchRefreshPlan=$projection;batchRefreshMapping=@{scope='Computer';domainPolicySensitive=$false}}
+ $result=& $dispatch
+ Check ($result.state -eq 'ROLLED_BACK' -and $result.refreshResults.Count -eq 2 -and (@($result.refreshResults.computer|Sort-Object) -join ',') -eq (@($script:targets|Sort-Object) -join ',')) 'batch rollback refresh uses member pinned hosts without replacing the restored first snapshot'
+ $projection.selection.gpoId='22222222-2222-2222-2222-222222222222';$callsBefore=$script:remoteCalls
+ try{$null=& $dispatch;throw 'foreign batch context accepted'}catch{if($_.Exception.Message -notlike 'BATCH_RECOVERY_REQUIRED*'){throw}}
+ Check ($script:remoteCalls -eq $callsBefore) 'foreign batch refresh context is rejected before endpoint remoting'
+ $projection.selection.gpoId=$plan.selection.gpoId
+ @{phase='PUBLISHED'}|ConvertTo-Json|Set-Content -LiteralPath (Join-Path $temp 'manifest.json') -Encoding UTF8
+ try{$null=& $dispatch;throw 'forward projection accepted'}catch{if($_.Exception.Message -notlike 'BATCH_RECOVERY_REQUIRED*'){throw}}
  # User refresh must schedule logged-on user processing, never run computer
  # policy under the remoting operator and never claim scheduling is completion.
  @{phase='PUBLISHED'}|ConvertTo-Json|Set-Content -LiteralPath (Join-Path $temp 'manifest.json') -Encoding UTF8
