@@ -27,7 +27,7 @@ assert.ok(!html.includes('class="verify-timeline"'),'Current assurance stages sh
 assert.ok(!html.includes('class="assurance-grid"'),'Current evidence must replace the duplicate legacy status boxes');
 delete run.result.verificationStages;html=view.controlView();
 assert.ok(html.includes('class="verify-timeline"'),'Legacy records must retain their available verification facts');
-assert.ok(html.includes('<h2>GPO applied · endpoint mismatch</h2>'));
+assert.ok(html.includes('<h2>GPO saved · endpoint mismatch</h2>'));
 assert.ok(html.includes('SeSystemtimePrivilege=S-1-5-32-544 &lt;unsafe&gt;'));
 assert.ok(!html.includes('<unsafe>'));
 assert.ok(!html.includes('data-replan='),'Matching GPO should not suggest rewriting it for endpoint-only mismatch');

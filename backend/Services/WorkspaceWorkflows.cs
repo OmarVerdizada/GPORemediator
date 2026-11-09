@@ -172,15 +172,17 @@ public sealed class WorkspaceWorkflows(Store store,IWorkflowOperations service,O
                 }
             }
             var effectivePending=false;
+            var endpointMismatches=new List<string>();
             if(job.Action is "apply" or "refresh" or "verify"){
                 foreach(var id in job.CompletedIds){
                     var measured=job.Action=="verify"?store.Require<GpoWorkflowRun>("gpo_runs",id):
                         await service.ExecuteAsync(id,"verify",new(""),work.Token,job.Actor,job.Id);
                     if(measured.Result.State=="ROLLED_BACK")continue;
-                    CheckEndpointMismatch(measured,job.VerificationDelays.Length>0);
+                    if(HasEndpointMismatch(measured))endpointMismatches.Add(measured.Plan.Selection.Setting);
                     effectivePending|=!GpoAssurance.EffectiveVerified(measured.Result);
                 }
             }
+            if(job.VerificationDelays.Length==0)RequireMatchingEndpoints(endpointMismatches);
             if(job.VerificationDelays.Length>0){
                 job=Update(job.Id,j=>j with{State="VERIFY_SCHEDULED",NextCheckAt=DateTimeOffset.UtcNow.AddSeconds(j.VerificationDelays[0]).ToString("O"),Message="Publication/restore completed. Read-only follow-up verification is scheduled."});
                 var scheduleTask=VerifyLater(work,job,ct);schedules[job.Id]=scheduleTask;
@@ -230,6 +232,7 @@ public sealed class WorkspaceWorkflows(Store store,IWorkflowOperations service,O
             var skipped=false;var effectivePending=false;
             foreach(var seconds in job.VerificationDelays){
                 effectivePending=false;
+                var endpointMismatches=new List<string>();
                 var due=start.AddSeconds(seconds);Update(job.Id,j=>j with{NextCheckAt=due.ToString("O")});
                 var delay=due-clock.GetUtcNow();if(delay>TimeSpan.Zero)await Task.Delay(delay,clock,ct);
                 foreach(var id in job.CompletedIds){
@@ -241,19 +244,25 @@ public sealed class WorkspaceWorkflows(Store store,IWorkflowOperations service,O
                         skipped=true;Update(job.Id,j=>j with{Message="A read-only check was skipped while the GPO/service was busy. The remaining scheduled checks are retained."});continue;
                     }
                     if(run.Result.State is "REVIEW_REQUIRED" or "DRIFT_DETECTED" or "ROLLBACK_DRIFT_DETECTED")throw new PolicyException("FOLLOWUP_DRIFT","Follow-up detected drift or an ambiguous result; inspect recovery.");
-                    if(run.Result.State!="ROLLED_BACK"){CheckEndpointMismatch(run,seconds<job.VerificationDelays[^1]);effectivePending|=!GpoAssurance.EffectiveVerified(run.Result);}
+                    if(run.Result.State=="ROLLED_BACK")continue;
+                    if(HasEndpointMismatch(run))endpointMismatches.Add(run.Plan.Selection.Setting);
+                    effectivePending|=!GpoAssurance.EffectiveVerified(run.Result);
                 }
+                if(seconds==job.VerificationDelays[^1])RequireMatchingEndpoints(endpointMismatches);
                 Update(job.Id,j=>j with{Message="Read-only follow-up completed at "+PolicyValues.Now()});
             }
             Finish(job.Id,skipped||effectivePending?"CHECKS_INCOMPLETE":"COMPLETED",skipped?"One or more scheduled checks were skipped while busy. Submit read-only Verify after the current GPO operation finishes.":effectivePending?"Scheduled checks ended without verified endpoint application. Inspect the pending endpoint/replication evidence.":"Scheduled checks completed with verified effective values.");
         }catch(OperationCanceledException)when(ct.IsCancellationRequested){Finish(job.Id,"WAITING_CONNECTION","Follow-up interrupted by service shutdown. Reconnect and submit read-only verification.");}
         catch(Exception error){FailJob(job.Id,error);}
     }
-    private static void CheckEndpointMismatch(GpoWorkflowRun run,bool allowConvergence=false){
+    private static bool HasEndpointMismatch(GpoWorkflowRun run){
         if(run.Result.State is "REVIEW_REQUIRED" or "DRIFT_DETECTED" or "ROLLBACK_DRIFT_DETECTED")
             throw new PolicyException("WORKFLOW_RESULT_REVIEW","Verification found GPO drift or an uncertain outcome. Inspect the recorded evidence before retrying.");
-        if(!allowConvergence && (run.Result.EffectiveStatus=="ENDPOINT_MISMATCH" || (run.Result.EndpointChecks??[]).Any(x=>x.State=="MISMATCH")))
-            throw new PolicyException("ENDPOINT_POLICY_MISMATCH","The GPO was recorded, but the effective endpoint value did not change to the requested value. Inspect endpoint evidence, winning GPO, audit override and refresh processing before claiming success.");
+        return run.Result.EffectiveStatus=="ENDPOINT_MISMATCH" || (run.Result.EndpointChecks??[]).Any(x=>x.State=="MISMATCH");
+    }
+    private static void RequireMatchingEndpoints(List<string> controls){
+        if(controls.Count>0)
+            throw new PolicyException("ENDPOINT_POLICY_MISMATCH",$"Endpoint values differ from the request for controls {string.Join(", ",controls)}. Open each control's verification details for measured values and processing evidence.");
     }
     private void Finish(string id,string state,string message){var job=Update(id,j=>j with{State=state,Message=message,NextCheckAt=null,CurrentOperationId=null,FinishedAt=PolicyValues.Now()});store.Audit("WORKFLOW_"+state,job.Actor,jobId:id,details:new{job.Action,job.CompletedIds,job.Message});}
     private void FailJob(string id,Exception error){logger.LogWarning("Workflow {WorkflowId} failed with {Type}",id,error.GetType().Name);Finish(id,error is PolicyException {Code:"GPO_LOGIN_REQUIRED"}?"WAITING_CONNECTION":"NEEDS_REVIEW",error is PolicyException policy?policy.Code+": "+policy.Message:"Workflow interrupted. Inspect recorded results before retrying any write.");}

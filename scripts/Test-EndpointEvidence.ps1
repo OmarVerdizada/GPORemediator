@@ -77,7 +77,9 @@ $script:nativeExit=0
 function auditpol.exe {$global:LASTEXITCODE=0;$file=([string]$args[1]).Substring('/file:'.Length);[IO.File]::WriteAllLines($file,[string[]]@('Machine Name,Policy Target,Subcategory,Subcategory GUID,Inclusion Setting,Exclusion Setting,Setting Value','WS,System,Other,{11111111-1111-1111-1111-111111111111},Success,,1'))}
 Assert-Test ((@(Verify-EffectiveSamples $plan $map))[0].state -eq 'PENDING') 'Unrelated audit GUID was accepted as target evidence'
 function Get-ADComputer {param($SearchBase,$SearchScope,$Filter,$Server,$Properties,$ResultSetSize,$ErrorAction) @()}
-Assert-Test ((@(Verify-EffectiveSamples $plan $map))[0].state -eq 'PENDING') 'Endpoint outside current scope was verified from stale preview membership'
+$script:hosts=@()
+$outside=@(Verify-EffectiveSamples $plan $map)
+Assert-Test ($outside.Count -eq 1 -and $outside[0].state -eq 'OUTSIDE_SCOPE' -and $outside[0].hostname -eq 'ws.example.local' -and !$script:hosts.Count) 'A removed endpoint must retain its identity without being probed'
 # A native command scheduled by refresh must not trigger an immediate endpoint sample.
 $refresh=($ast.FindAll({param($n)$n -is [Management.Automation.Language.SwitchStatementAst] -and $n.Condition.Extent.Text -eq '$Operation'},$true)|Select-Object -Last 1).Clauses|Where-Object{$_.Item1.Extent.Text -eq "'gpoRefresh'"}|ForEach-Object{$_.Item2}
 Assert-Test ($refresh.Extent.Text -notmatch 'Verify-Published \$plan \$map \$true') 'Scheduled refresh immediately verified stale endpoint state'

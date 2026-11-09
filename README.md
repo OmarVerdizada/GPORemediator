@@ -1,6 +1,6 @@
-# GPO Remediator 3.18.0
+# GPO Remediator 3.18.1
 
-3.18.0 adds optional bulk Apply from Benchmark: select up to 20 controls, preview every value and target link, then approve one durable batch. User, Computer and domain account controls retain separate targeting and verification. Existing single-control actions remain available. See [release notes](docs/RELEASE-3.18.0.md).
+3.18.1 adds Defender and Spooler endpoint read-back and keeps bulk verification running across endpoint mismatches. See [release notes](docs/RELEASE-3.18.1.md).
 
 3.17.8 keeps rollback inspection stable across session heartbeats, refreshes recovery checks before confirmation, and separates endpoint policy input, resultant values and unavailable probes. See [release notes](docs/RELEASE-3.17.8.md).
 

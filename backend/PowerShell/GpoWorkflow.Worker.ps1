@@ -949,7 +949,7 @@ function Verify-EffectiveSamples($Plan,$Map){
       if([string]::IsNullOrWhiteSpace($identity) -or !$hosts.Count){return @(@{hostname='<user-session>';state='PENDING';message='The GPO targets the entire selected user OU. A verification user is optional and only enables a sampled HKCU check on authorized session endpoints; no per-user Apply is required.';actualValue=$null})}
       try{$user=Verification-User $identity;if(!$user.Enabled -or !([string]$user.DistinguishedName).EndsWith(','+[string]$s.scopeDn,[StringComparison]::OrdinalIgnoreCase)){throw 'User is outside the current enabled target scope'};$sid=[string]$user.SID.Value}catch{return @(@{hostname='<user-session>';state='UNAVAILABLE';message='The verification user could not be resolved.';actualValue=$null})}
       $currentHosts=@(Refresh-Targets 'Scope' $s.scopeDn ([string](Read-Field $s 'endpointScopeDn' '')) 'User');foreach($removed in @($hosts|Where-Object{$_ -notin $currentHosts})){$checks+=@{hostname=$removed;state='OUTSIDE_SCOPE';message='The pinned endpoint is no longer in the enabled authorized scope.';actualValue=$null}};$hosts=@($hosts|Where-Object{$_ -in $currentHosts})
-      if(!$hosts.Count){return @(@{hostname='<user-session>';state='PENDING';message='No preview endpoint remains in the current authorized endpoint scope.';actualValue=$null})}
+      if(!$hosts.Count){return @($checks)}
       $expected=@(Endpoint-Expected $Map $s)
       foreach($hostName in $hosts){
         Send-CheckProgress 'ENDPOINT' 'CHECKING' $hostName 'Reading effective policy on the endpoint.'
@@ -961,7 +961,7 @@ function Verify-EffectiveSamples($Plan,$Map){
             foreach($item in @($ExpectedItems)){
               $key=[string]$item.key;if($key -notmatch '^HKCU\\'){return @{supported=$false;match=$false;actual='';message='The user-policy verifier only accepts HKCU registry mappings.'}}
               $path='Registry::HKEY_USERS\'+$UserSid+'\'+$key.Substring(5)
-              try{$value=Get-ItemPropertyValue -LiteralPath $path -Name ([string]$item.name) -ErrorAction Stop;$kind=(Get-Item -LiteralPath $path -ErrorAction Stop).GetValueKind([string]$item.name)}catch{if($_.FullyQualifiedErrorId -match 'ItemNotFound|PathNotFound|PropertyNotFound'){$value=$null;$kind=$null}else{return @{supported=$false;match=$false;actual='';message='The user registry policy could not be read because access or transport failed.'}}}
+              try{$value=Get-ItemPropertyValue -LiteralPath $path -Name ([string]$item.name) -ErrorAction Stop;$kind=(Get-Item -LiteralPath $path -ErrorAction Stop).GetValueKind([string]$item.name)}catch{if($_.FullyQualifiedErrorId -match 'ItemNotFound|PathNotFound|PropertyNotFound' -or $_.FullyQualifiedErrorId -eq 'Argument,Microsoft.PowerShell.Commands.GetItemPropertyValueCommand'){$value=$null;$kind=$null}else{return @{supported=$false;match=$false;actual='';message='The user registry policy could not be read because access or transport failed.'}}}
               if(([string]$item.type).ToUpperInvariant() -eq 'MULTISTRING'){$current=if($null -eq $value){$null}else{((@($value)|ForEach-Object{[string]$_}|Sort-Object)-join '|')}}else{$current=if($null -eq $value){$null}else{[string]$value}}
               $actual+=([string]$item.name+'='+$(if($null -eq $current){'<not configured>'}else{$current}));if($null -eq $current -or [string]$current -cne [string]$item.expected -or ($kind -and [string]$kind -ine [string]$item.type)){$ok=$false}
             }
@@ -977,7 +977,7 @@ function Verify-EffectiveSamples($Plan,$Map){
     $hosts=@();if($Plan.preview.impact -and $Plan.preview.impact.affectedObjects){$hosts+=@($Plan.preview.impact.affectedObjects.sampleHosts)};$hosts=@(Filter-EndpointHosts @(Verification-Page $Plan $hosts)|Sort-Object -Unique)
     if(!$hosts.Count){return @(@{hostname='<scope>';state='PENDING';message='No concrete endpoint is available for effective-policy verification in the selected scope.';actualValue=$null})}
     try{$liveHosts=@(Get-ADComputer -SearchBase $s.scopeDn -SearchScope Subtree -Filter {Enabled -eq $true} -Server $cfg.domainController -Properties DNSHostName -ResultSetSize 5001 -ErrorAction Stop|ForEach-Object{[string]$_.DNSHostName});foreach($removed in @($hosts|Where-Object{$_ -notin $liveHosts})){$checks+=@{hostname=$removed;state='OUTSIDE_SCOPE';message='The pinned endpoint is no longer in the enabled target scope.';actualValue=$null}};$hosts=@($hosts|Where-Object{$_ -in $liveHosts})}catch{return @(@{hostname='<scope>';state='UNAVAILABLE';message='Current endpoint scope membership could not be established.';actualValue=$null})}
-    if(!$hosts.Count){return @(@{hostname='<scope>';state='PENDING';message='Preview sample endpoints no longer belong to the enabled target scope.';actualValue=$null})}
+    if(!$hosts.Count){return @($checks)}
     $expected=@(Endpoint-Expected $Map $s);$handler=[string]$Map.handler
     foreach($hostName in $hosts){
         Send-CheckProgress 'ENDPOINT' 'CHECKING' $hostName 'Reading effective policy on the endpoint.'
@@ -996,6 +996,67 @@ function Verify-EffectiveSamples($Plan,$Map){
             }
             return [string]$Current -ceq [string]$Expected
           }
+          function Read-AdditionalEndpointValues($Items) {
+            $first=@($Items)[0]
+            if($first.key -ieq 'HKLM\SYSTEM\CurrentControlSet\Services\Spooler' -and $first.name -eq 'Start' -and $first.expected -eq '4'){
+              $service=@(Get-CimInstance -ClassName Win32_Service -Filter "Name='Spooler'" -ErrorAction Stop)
+              if($service.Count -ne 1 -or !$service[0].StartMode -or !$service[0].State){throw 'Spooler state unavailable'}
+              return @{
+                match=($service[0].StartMode -eq 'Disabled' -and $service[0].State -eq 'Stopped')
+                actual=('Spooler.StartMode='+$service[0].StartMode+'; Spooler.State='+$service[0].State)
+                message='The disabled Spooler setting requires a disabled startup mode and a stopped service.'
+              }
+            }
+            if($first.key -notlike 'HKLM\SOFTWARE\Policies\Microsoft\Windows Defender*'){return $null}
+            if($first.key -like '*\ASR\Rules'){
+              $preferences=Get-MpPreference -ErrorAction Stop
+              $idProperty=$preferences.PSObject.Properties['AttackSurfaceReductionRules_Ids']
+              $actionProperty=$preferences.PSObject.Properties['AttackSurfaceReductionRules_Actions']
+              if(!$idProperty -or !$actionProperty){throw 'Defender ASR fields unavailable'}
+              $ids=@($idProperty.Value|Where-Object{$_});$actions=@($actionProperty.Value|Where-Object{$null -ne $_})
+              if($ids.Count -ne $actions.Count){throw 'Defender ASR result is incomplete'}
+              $byId=@{}
+              for($index=0;$index -lt $ids.Count;$index++){
+                $id=([guid]$ids[$index]).ToString('D')
+                if($byId.ContainsKey($id)){throw 'Duplicate Defender ASR rule'}
+                $byId[$id]=[int]$actions[$index]
+              }
+              $values=@();$match=$true
+              foreach($item in $Items){
+                $id=([guid]$item.name).ToString('D')
+                $value=$byId[$id]
+                if(!(Value-Matches $value $item.expected '==')){$match=$false}
+                $values+=('Defender.ASR.'+$id+'='+$(if($null -eq $value){'<missing>'}else{$value}))
+              }
+              return @{match=$match;actual=($values -join '; ');message='Compared Defender-reported ASR actions for every selected rule.'}
+            }
+            $statusFields=@{
+              DisableIOAVProtection='IoavProtectionEnabled'
+              DisableRealtimeMonitoring='RealTimeProtectionEnabled'
+              DisableBehaviorMonitoring='BehaviorMonitorEnabled'
+              DisableAntiSpyware='AntivirusEnabled'
+            }
+            if($statusFields.ContainsKey([string]$first.name)){
+              $property=$statusFields[[string]$first.name]
+              $status=Get-MpComputerStatus -ErrorAction Stop
+              $field=$status.PSObject.Properties[$property]
+              if(!$field -or $field.Value -isnot [bool]){throw 'Defender status unavailable'}
+              $matches=(1-[int]$field.Value) -eq [int]$first.expected
+              return @{match=$matches;actual=('Defender.'+$property+'='+$field.Value);message='Compared the corresponding Defender protection status.'}
+            }
+            if($first.name -in @('EnableNetworkProtection','PUAProtection','DisableScriptScanning')){
+              $preferences=Get-MpPreference -ErrorAction Stop
+              $field=$preferences.PSObject.Properties[[string]$first.name]
+              if(!$field -or $null -eq $field.Value){throw 'Defender preference unavailable'}
+              $value=[int]$field.Value
+              return @{
+                match=(Value-Matches $value $first.expected '==')
+                actual=('Defender.'+$first.name+'='+$value)
+                message='Compared the Defender-reported preference.'
+              }
+            }
+            return $null
+          }
           $actual=@();$ok=$true
           # The policy registry is configuration input. Firewall evidence must
           # additionally query the resultant active store (GPO + local merges).
@@ -1009,7 +1070,7 @@ function Verify-EffectiveSamples($Plan,$Map){
               $rule=if($item.comparator){[string]$item.comparator}else{$Comparator}
               $registryPath='Registry::HKEY_LOCAL_MACHINE\'+([string]$item.key).Substring(5);$configured=$null;$kind=$null
               try{$configured=Get-ItemPropertyValue -LiteralPath $registryPath -Name ([string]$item.name) -ErrorAction Stop;$kind=(Get-Item -LiteralPath $registryPath -ErrorAction Stop).GetValueKind([string]$item.name)}catch{
-                if($_.FullyQualifiedErrorId -notmatch 'ItemNotFound|PathNotFound|PropertyNotFound'){return @{supported=$false;match=$false;state='UNAVAILABLE';actual=$null;message='FIREWALL_POLICY_READ_UNAVAILABLE. The endpoint policy registry could not be read. ActiveStore alone does not establish the requested policy input.'}}
+                if($_.FullyQualifiedErrorId -notmatch 'ItemNotFound|PathNotFound|PropertyNotFound' -and !($_.FullyQualifiedErrorId -eq 'Argument,Microsoft.PowerShell.Commands.GetItemPropertyValueCommand')){return @{supported=$false;match=$false;state='UNAVAILABLE';actual=$null;message='FIREWALL_POLICY_READ_UNAVAILABLE. The endpoint policy registry could not be read. ActiveStore alone does not establish the requested policy input.'}}
               }
               $actual+=('Policy '+$profileName+'.'+[string]$item.name+'='+$(if($null -eq $configured){'<not configured>'}else{[string]$configured})+'; type='+$(if($null -eq $kind){'<unavailable>'}else{[string]$kind}))
               if($null -eq $configured -or [string]$kind -ine [string]$item.type){$ok=$false}
@@ -1028,8 +1089,16 @@ function Verify-EffectiveSamples($Plan,$Map){
             return @{supported=$true;match=$ok;actual=($actual -join '; ');message='Endpoint policy registry value/type and resultant Get-NetFirewallProfile -PolicyStore ActiveStore were compared separately with the request. Both must match. This does not prove packet-level enforcement, log-file creation or service health.'}
           }
           if($Handler -in @('Registry','RegistrySet')){
-            foreach($item in @($ExpectedItems)){$key=[string]$item.key;if($key -notmatch '^HKLM\\'){return @{supported=$false;match=$false;actual='';message='Only computer-scope HKLM registry policies can be verified without a user session.'}};$path='Registry::HKEY_LOCAL_MACHINE\'+$key.Substring(5);try{$v=Get-ItemPropertyValue -LiteralPath $path -Name ([string]$item.name) -ErrorAction Stop;$kind=(Get-Item -LiteralPath $path -ErrorAction Stop).GetValueKind([string]$item.name);if([string]$kind -ine [string]$item.type){$ok=$false;$actual+=([string]$item.name+' type='+[string]$kind+' (expected '+[string]$item.type+')')}}catch{if($_.FullyQualifiedErrorId -match 'ItemNotFound|PathNotFound|PropertyNotFound'){$v=$null}else{return @{supported=$false;match=$false;actual='';message='Registry policy could not be read because access or transport failed.'}}};if(([string]$item.type).ToUpperInvariant() -eq 'MULTISTRING'){$cur=if($null -eq $v){$null}else{((@($v)|ForEach-Object{[string]$_}|Sort-Object)-join '|')}}else{$cur=if($null -eq $v){$null}else{[string]$v}};$actual+=([string]$item.name+'='+$(if($null -eq $cur){'<not configured>'}else{$cur}));if(!(Value-Matches $cur $item.expected $(if($item.comparator){$item.comparator}else{$Comparator}))){$ok=$false}}
-            return @{supported=$true;match=$ok;actual=($actual -join '; ');message='Endpoint policy registry values were read directly. This evidence does not prove runtime enforcement; restart, logon, service and tamper-protection requirements still apply.'}
+            foreach($item in @($ExpectedItems)){$key=[string]$item.key;if($key -notmatch '^HKLM\\'){return @{supported=$false;match=$false;actual='';message='Only computer-scope HKLM registry policies can be verified without a user session.'}};$path='Registry::HKEY_LOCAL_MACHINE\'+$key.Substring(5);try{$v=Get-ItemPropertyValue -LiteralPath $path -Name ([string]$item.name) -ErrorAction Stop;$kind=(Get-Item -LiteralPath $path -ErrorAction Stop).GetValueKind([string]$item.name);if([string]$kind -ine [string]$item.type){$ok=$false;$actual+=([string]$item.name+' type='+[string]$kind+' (expected '+[string]$item.type+')')}}catch{if($_.FullyQualifiedErrorId -match 'ItemNotFound|PathNotFound|PropertyNotFound' -or $_.FullyQualifiedErrorId -eq 'Argument,Microsoft.PowerShell.Commands.GetItemPropertyValueCommand'){$v=$null}else{return @{supported=$false;match=$false;actual='';message='Registry policy could not be read because access or transport failed.'}}};if(([string]$item.type).ToUpperInvariant() -eq 'MULTISTRING'){$cur=if($null -eq $v){$null}else{((@($v)|ForEach-Object{[string]$_}|Sort-Object)-join '|')}}else{$cur=if($null -eq $v){$null}else{[string]$v}};$actual+=([string]$item.name+'='+$(if($null -eq $cur){'<not configured>'}else{$cur}));if(!(Value-Matches $cur $item.expected $(if($item.comparator){$item.comparator}else{$Comparator}))){$ok=$false}}
+            if(!$ok){return @{supported=$true;match=$false;actual=($actual -join '; ');message='Endpoint registry value or type differs from the request.'}}
+            try{$additional=Read-AdditionalEndpointValues $ExpectedItems}catch{
+              return @{supported=$false;match=$false;state='UNAVAILABLE';actual=($actual -join '; ');message='The endpoint registry matches, but the required Defender or service read-back is unavailable. Check provider availability and read permissions.'}
+            }
+            if($additional){
+              $actual+=$additional.actual
+              return @{supported=$true;match=$additional.match;actual=($actual -join '; ');message=$additional.message}
+            }
+            return @{supported=$true;match=$true;actual=($actual -join '; ');message='Endpoint policy registry values were read directly. This evidence does not prove runtime enforcement; restart, logon, service and tamper-protection requirements still apply.'}
           }
           if($Handler -eq 'SecurityTemplate'){
             if(@($ExpectedItems).Count -gt 0 -and @($ExpectedItems|Where-Object{[string]$_.section -ne 'Privilege Rights' -or [string]$_.type -ne 'Principals'}).Count -eq 0){

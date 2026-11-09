@@ -14,9 +14,11 @@ public static class GpoAssurance
         if(!r.GpoPublished || !r.LinkVerified || r.Verification?.ReplicationConverged!=true||DomainMismatch(r))return false;
         if(r.EffectiveStatus=="DOMAIN_VALUE_MATCHES_ON_SELECTED_DC")return true;
         var checks=r.EndpointChecks??[];
-        if(checks.Length==0 || checks.Any(x=>x.State!="VERIFIED"))return false;
-        return r.EffectiveStatus=="VERIFIED_ON_SAMPLE" || r.EffectiveStatus=="VERIFIED_ON_ALL_TARGETS" &&
+        if(checks.Length==0 || checks.Any(x=>x.State!="VERIFIED" || string.IsNullOrWhiteSpace(x.Hostname)))return false;
+        if(r.EffectiveStatus=="VERIFIED_ON_SAMPLE" && r.EndpointCoverage is null)return true;
+        return r.EffectiveStatus is "VERIFIED_ON_SAMPLE" or "VERIFIED_ON_ALL_TARGETS" &&
             r.EndpointCoverage is {Complete:true} coverage && coverage.Total>0 && coverage.Checked==coverage.Total &&
+            checks.Length==coverage.Total &&
             checks.Select(x=>x.Hostname).Distinct(StringComparer.OrdinalIgnoreCase).Count()==coverage.Total;
     }
 

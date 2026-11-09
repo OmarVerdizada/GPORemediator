@@ -51,4 +51,4 @@ for sec in sorted(bysection,key=int):
  c=bysection[sec];summary.append(f"| {sec} | {c['Computer']} | {c['User']} | {c['Domain']} | {sum(c.values())} |")
 summary+=['','## Exception-sensitive guided controls','',', '.join(sorted(roles,key=lambda v:[int(i) for i in v.split('.')])),'','## Every control','', 'Full per-control details are in `work/policy-scope-audit.csv` (405 individual entries).','']
 (out/'policy-scope-summary.md').write_text('\n'.join(summary),encoding='utf-8')
-print(f'PASS: {len(result)} static mappings (394 AUTO + 11 GUIDED), 19 CIS top sections; generated {out/"policy-scope-audit.csv"}')
+print(f'PASS: {len(result)} static mappings ({auto} AUTO + {len(result)-auto} GUIDED), {len(bysection)} populated CIS top sections; generated {out/"policy-scope-audit.csv"}')

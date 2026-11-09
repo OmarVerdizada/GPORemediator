@@ -1,3 +1,3 @@
-GPO Remediator 3.18.0 - optional reviewed bulk Apply
+GPO Remediator 3.18.1 - stronger endpoint verification
 
-See docs/RELEASE-3.18.0.md.
+See docs/RELEASE-3.18.1.md.

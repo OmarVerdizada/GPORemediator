@@ -117,7 +117,9 @@
   function operationStatus(s,h){
     const o=window.GpoUiDomain.outcome(h);
     if(s.serviceOffline||s.serviceTransition)return status(s,window.GpoUiDomain.resultState(h));
-    return o.success?{tone:'success',label:o.restored?'Rollback successful':'GPO applied successfully',html:`<span class="operation-outcome-badge"><span class="ds-badge ds-success">${icon('check')}${o.restored?'Rollback successful':'GPO applied successfully'}</span>${o.refreshFailed?`<small>Refresh: ${o.refreshFailed} failed</small>`:o.endpoints.unavailable?`<small>Endpoint value: ${o.endpoints.unavailable} unavailable</small>`:''}</span>`}:status(s,window.GpoUiDomain.resultState(h));
+    if(!o.success)return status(s,window.GpoUiDomain.resultState(h));
+    const label=o.restored?'Rollback successful':'Endpoint values verified';
+    return {tone:'success',label,html:`<span class="operation-outcome-badge"><span class="ds-badge ds-success">${icon('check')}${label}</span>${o.refreshFailed?`<small>Refresh: ${o.refreshFailed} failed</small>`:''}</span>`};
   }
   function endpointSummary(s,h){
     const r=h.result||{},o=window.GpoUiDomain.outcome(h),e=o.endpoints,offline=s.serviceOffline||s.serviceTransition;

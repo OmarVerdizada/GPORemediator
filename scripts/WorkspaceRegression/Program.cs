@@ -182,6 +182,12 @@ mixedApply=await Done(jobs,mixedApply.Id);Check(mixedApply.State=="COMPLETED"&&f
 fake.Actions.Clear();var mixedVerify=jobs.Start("verify",new(Guid.NewGuid().ToString(),mixedApply.CompletedIds,new("")),"secret-session","TEST\\Admin");mixedVerify=await Done(jobs,mixedVerify.Id);
 Check(mixedVerify.State=="COMPLETED"&&fake.Actions.Count==2&&fake.Actions.All(x=>x.StartsWith("verify:")),"Read-only multi-control verification must not write or refresh");
 Reject(()=>jobs.Start("apply",new(Guid.NewGuid().ToString(),[mixedBatch.PlanIds[0]],consent,"Auto"),"secret-session","TEST\\Admin"),"INVALID_REQUEST");
+fake.Actions.Clear();fake.EndpointMismatch=true;
+var mismatchBatch=jobs.Start("verify",new(Guid.NewGuid().ToString(),mixedApply.CompletedIds,new("")),"secret-session","TEST\\Admin");
+mismatchBatch=await Done(jobs,mismatchBatch.Id);
+Check(mismatchBatch.State=="NEEDS_REVIEW"&&mismatchBatch.Message.Contains("2.3.1.2")&&mismatchBatch.Message.Contains(userMapping.Id)&&
+    fake.Actions.Count==2&&fake.Actions.All(x=>x.StartsWith("verify:")),"A mismatch stopped read-only verification of the other batch controls");
+fake.EndpointMismatch=false;
 Console.WriteLine("PASS user/computer batch preview, separate automatic refresh contexts, bounded single-plan Auto rejection and read-only batch re-verification");
 fake.Actions.Clear();fake.ConfigurePreview=(s,v)=>s.Setting is "1.2.1" or "1.2.4"?v with{DesiredValue=s.Value.ToString(),DomainPolicy=new(s.Setting=="1.2.1"?"LockoutDuration":"LockoutObservationWindow","30",s.Value.ToString(),"dc.test.local"),Dependency=s.Setting=="1.2.1"&&!fake.Actions.Contains("apply:1.2.4")?new("DOMAIN_LOCKOUT_DEPENDENCY","Window must change first","1.2.4",15,"LockoutObservationWindow","30"):null}:v;
 var domainTarget=selection with{ScopeDn="DC=test,DC=local",AccountScope="Domain",Value=15};

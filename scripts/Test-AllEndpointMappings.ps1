@@ -22,7 +22,18 @@ function Invoke-Command {param($ComputerName,$Authentication,$ArgumentList,$Scri
  return ,([string[]]@(([string]$item.expected -split ',')|Where-Object{$_}))
 }
 function Test-Path {param($LiteralPath) if($LiteralPath -like 'Registry::*'){return $true};Microsoft.PowerShell.Management\Test-Path -LiteralPath $LiteralPath}
-function Get-ItemPropertyValue {param($LiteralPath,$Name,$ErrorAction) if($Name -eq 'SCENoApplyLegacyAuditPolicy' -and $script:map.handler -eq 'AdvancedAudit'){return 1};$entry=@($script:expected|Where-Object{$_.name -ceq $Name})[0];$value=$entry.expected;if($script:wrong){return '__mismatch__'};if($entry.type -eq 'MultiString'){return ,([string[]]@($value -split '\|'))};return $value}
+function Get-ItemPropertyValue {
+ param($LiteralPath,$Name,$ErrorAction)
+ if($script:registryValueMissing){
+  return Microsoft.PowerShell.Management\Get-ItemPropertyValue -LiteralPath 'Registry::HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft' -Name '__GpRemediatorMissingFixture' -ErrorAction Stop
+ }
+ if($Name -eq 'SCENoApplyLegacyAuditPolicy' -and $script:map.handler -eq 'AdvancedAudit'){return 1}
+ $entry=@($script:expected|Where-Object{$_.name -ceq $Name})[0]
+ $value=$entry.expected
+ if($script:wrong){return '__mismatch__'}
+ if($entry.type -eq 'MultiString'){return ,([string[]]@($value -split '\|'))}
+ return $value
+}
 function Get-Item {param($LiteralPath,$ErrorAction) $result=[pscustomobject]@{};$result|Add-Member ScriptMethod GetValueKind {param($name) return (@($script:expected|Where-Object{$_.name -ceq $name})[0].type)};return $result}
 function secedit.exe {
  $file=$args[[array]::IndexOf($args,'/cfg')+1];$text=''
@@ -54,6 +65,34 @@ function Get-NetFirewallProfile {
  if($script:wrong){$value='__mismatch__'}
  [pscustomobject]@{($properties[$item.name])=$value}
 }
+$runtimeControls=@('5.2','18.10.43.6.1.2','18.10.43.6.3.1','18.10.43.10.2','18.10.43.10.3','18.10.43.10.4','18.10.43.10.5','18.10.43.16','18.10.43.17')
+function Get-CimInstance {
+ param($ClassName,$Filter,$ErrorAction)
+ if($ClassName -ne 'Win32_Service' -or $Filter -ne "Name='Spooler'"){throw 'Unexpected CIM query'}
+ if($script:runtimeState -eq 'unavailable'){throw 'Provider unavailable'}
+ [pscustomobject]@{StartMode='Disabled';State=$(if($script:runtimeState -eq 'mismatch'){'Running'}else{'Stopped'})}
+}
+function Get-MpComputerStatus {
+ param($ErrorAction)
+ if($script:runtimeState -eq 'unavailable'){throw 'Provider unavailable'}
+ $enabled=[int]$script:expected[0].expected -eq 0
+ if($script:runtimeState -eq 'mismatch'){$enabled=!$enabled}
+ [pscustomobject]@{IoavProtectionEnabled=$enabled;RealTimeProtectionEnabled=$enabled;BehaviorMonitorEnabled=$enabled;AntivirusEnabled=$enabled}
+}
+function Get-MpPreference {
+ param($ErrorAction)
+ if($script:runtimeState -eq 'unavailable'){throw 'Provider unavailable'}
+ $first=$script:expected[0]
+ if($first.key -like '*\ASR\Rules'){
+  $items=@($script:expected|Sort-Object name -Descending)
+  $actions=@($items|ForEach-Object{[int]$_.expected})
+  if($script:runtimeState -eq 'mismatch'){$actions[0]=2}
+  return [pscustomobject]@{AttackSurfaceReductionRules_Ids=@($items.name);AttackSurfaceReductionRules_Actions=$actions}
+ }
+ $value=[int]$first.expected
+ if($script:runtimeState -eq 'mismatch'){$value=1-$value}
+ [pscustomobject]@{($first.name)=$value}
+}
 function Verification-Metadata {param($S) @{versionsMatch=$true;replicationConverged=$true}}
 function Get-GPO {param($Guid,$Domain,$Server,$ErrorAction) @{GpoStatus='AllSettingsEnabled'}}
 function Mapping-Matches {param($Id,$Map,$S) $true}
@@ -72,6 +111,8 @@ foreach($map in $catalog.mappings){
  $script:selection=@{gpoId='11111111-1111-1111-1111-111111111111';scopeDn=$(if($map.scope -eq 'User'){'OU=Users,DC=example,DC=test'}else{'OU=Endpoints,DC=example,DC=test'});endpointScopeDn='OU=Endpoints,DC=example,DC=test';verificationUser='EXAMPLE\Pilot';firstLink=$false;value=$(if($map.allowValueOverride){$map.suggested}else{0});customValue=$(if($map.requiresInput){'Policy test value'}else{''})}
  $plan=@{selection=$script:selection;preview=@{refreshComputers=@('ws.example.test');impact=@{affectedObjects=@{sampleHosts=@('ws.example.test')}}}}
  $script:expected=@(Endpoint-Expected $map $script:selection)
+ $script:runtimeState='match'
+ $script:registryValueMissing=$false
  try{
   foreach($wrong in @($false,$true)){
    $script:wrong=$wrong
@@ -80,6 +121,26 @@ foreach($map in $catalog.mappings){
    if($passed -eq $wrong){throw ("Expected mismatch=$wrong; result="+($result|ConvertTo-Json -Depth 10 -Compress))}
   }
   $cases=2
+  if($map.id -in @('18.1.1.1','19.7.5.2','9.2.4')){
+   $script:wrong=$false
+   $script:registryValueMissing=$true
+   $result=@(Verify-EffectiveSamples $plan $map)
+   if($result.Count -ne 1 -or $result[0].state -ne 'MISMATCH' -or $result[0].actualValue -notlike '*<not configured>*'){
+    throw ('Missing native registry value was not reported as a mismatch for '+$map.id)
+   }
+   $script:registryValueMissing=$false
+   $cases++
+  }
+  if($map.id -in $runtimeControls){
+   $script:wrong=$false
+   foreach($state in @('mismatch','unavailable')){
+    $script:runtimeState=$state
+    $result=@(Verify-EffectiveSamples $plan $map)
+    if($result.Count -ne 1 -or $result[0].state -ine $state){throw ('Matching registry hid '+$state+' native evidence for '+$map.id)}
+    $cases++
+   }
+   $script:runtimeState='match'
+  }
   if($ExactPlans -and !$map.domainPolicySensitive){
    foreach($item in $script:expected|Where-Object{$_.type -in @('DWORD','Integer') -and $_.comparator -eq '=='}){
     $script:wrong=$false;$original=$item.expected;$item.expected=[string]$(if($map.id -like '9.*' -and $item.name -ne 'LogFileSize'){if($original -eq '1'){0}else{1}}else{[uint64]$original+1})
