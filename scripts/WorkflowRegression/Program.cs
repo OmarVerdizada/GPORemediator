@@ -134,6 +134,10 @@ Check(!oldRefreshJson.Contains("ComputerState")&&!oldRefreshJson.Contains("UserS
 var legacyDomain=evidenceResult with{EffectiveStatus="DOMAIN_VALUE_MATCHES_ON_SELECTED_DC",DomainPolicy=new("LockoutDuration","30","15","dc.example.local")};
 Check(!GpoAssurance.EffectiveVerified(legacyDomain)&&GpoAssurance.Stages(legacyDomain).Any(x=>x.Stage=="ENDPOINT_CONFIGURATION"&&x.Status=="ENDPOINT_MISMATCH"),"Legacy AD 30/requested 15 falsely verified");
 Check(GpoAssurance.EffectiveVerified(legacyDomain with{DomainPolicy=legacyDomain.DomainPolicy with{Value="15"}}),"Exact AD match did not verify");
+Check(!GpoAssurance.EffectiveVerified(legacyDomain with{DomainPolicy=null}),"A domain status flag without the observed value certified verification");
+var duplicateEvidence=evidenceResult with{EndpointCoverage=new(2,2,true),EndpointChecks=[evidenceResult.EndpointChecks![0],evidenceResult.EndpointChecks![0]]};
+Check(!GpoAssurance.EffectiveVerified(duplicateEvidence)&&duplicateEvidence.VerificationStages.Single(x=>x.Stage=="ENDPOINT_CONFIGURATION").Status=="INSUFFICIENT_EVIDENCE",
+    "Repeated readings from one host certified a two-host scope in the evidence report");
 Console.WriteLine("PASS legacy domain threshold success cannot hide exact-value mismatch");
 // Real submission/execution preflight, private in-memory session, and an invalid
 // ciphertext guard: a regression cannot reach the native executor or live AD.

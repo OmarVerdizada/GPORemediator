@@ -5,7 +5,8 @@
   const effectiveVerified = value => /^(VERIFIED_ON_SAMPLE|VERIFIED_ON_ALL_TARGETS|DOMAIN_VALUE_MATCHES_ON_SELECTED_DC)$/.test(upper(value));
   function domainMismatch(result){const d=result?.domainPolicy;if(!d||/^(?:BATCH_)?ROLLED_BACK$/.test(upper(result.state)))return false;const a=String(d.value??'').trim(),b=String(d.desiredValue??'').trim();return !a||!b||!Number.isFinite(Number(a))||!Number.isFinite(Number(b))||Number(a)!==Number(b);}
   function coverageVerified(result){
-    if(upper(result.effectiveStatus)==='DOMAIN_VALUE_MATCHES_ON_SELECTED_DC')return true;
+    if(upper(result.effectiveStatus)==='DOMAIN_VALUE_MATCHES_ON_SELECTED_DC')
+      return !!result.domainPolicy?.domainController?.trim()&&!(result.endpointChecks||[]).some(x=>x.state==='MISMATCH');
     if(!Array.isArray(result.endpointChecks)||!result.endpointChecks.length||result.endpointChecks.some(x=>x.state!=='VERIFIED'||!String(x.hostname||'').trim()))return false;
     if(upper(result.effectiveStatus)==='VERIFIED_ON_SAMPLE'&&!result.endpointCoverage)return true;
     const c=result.endpointCoverage,checks=result.endpointChecks;

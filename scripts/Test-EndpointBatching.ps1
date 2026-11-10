@@ -65,8 +65,14 @@ try{
  $script:targets=@('batch1.example.test','batch2.example.test')
  $projection=@{selection=@{gpoId=$plan.selection.gpoId;scopeDn=$plan.selection.scopeDn};preview=@{verificationComputers=$script:targets}}
  $Data=@{plan=$plan;mapping=@{scope='Computer';domainPolicySensitive=$true};previous=@{state='ROLLED_BACK'};refresh='Scope';batchRefreshPlan=$projection;batchRefreshMapping=@{scope='Computer';domainPolicySensitive=$false}}
+ $script:rollbackSchedules=@()
  $result=& $dispatch
  Check ($result.state -eq 'ROLLED_BACK' -and $result.refreshResults.Count -eq 2 -and (@($result.refreshResults.computer|Sort-Object) -join ',') -eq (@($script:targets|Sort-Object) -join ',')) 'batch rollback refresh uses member pinned hosts without replacing the restored first snapshot'
+ Check ($script:rollbackSchedules.Count -eq 0 -and @($result.refreshResults|Where-Object computerState -ne 'COMPLETED').Count -eq 0) 'projected computer refresh never schedules the user policy half'
+ $Data.batchRefreshMapping.scope='User';$callsBefore=$script:remoteCalls
+ $result=& $dispatch
+ Check ($result.state -eq 'ROLLED_BACK' -and $script:remoteCalls -eq $callsBefore -and $script:rollbackSchedules.Count -eq 2 -and @($script:rollbackSchedules|Where-Object target -ne 'User').Count -eq 0) 'projected user refresh never runs computer policy'
+ Check (@($result.refreshResults|Where-Object userState -ne 'SCHEDULED').Count -eq 0) 'projected user results preserve scheduling evidence'
  $projection.selection.gpoId='22222222-2222-2222-2222-222222222222';$callsBefore=$script:remoteCalls
  try{$null=& $dispatch;throw 'foreign batch context accepted'}catch{if($_.Exception.Message -notlike 'BATCH_RECOVERY_REQUIRED*'){throw}}
  Check ($script:remoteCalls -eq $callsBefore) 'foreign batch refresh context is rejected before endpoint remoting'

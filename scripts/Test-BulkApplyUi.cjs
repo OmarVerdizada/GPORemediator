@@ -4,7 +4,7 @@ const root=path.resolve(__dirname,'../frontend/source'),shots=path.resolve(__dir
 const mappings=JSON.parse(fs.readFileSync(path.resolve(root,'../../backend/data/gpo-production-mappings.json'),'utf8')).mappings;
 const gpo={id:'11111111-1111-1111-1111-111111111111',name:'Bulk test policy',protected:false,selectable:true},scope='OU=Mixed,DC=test,DC=local',endpoint='OU=Sessions,DC=test,DC=local';
 const scopes=[{dn:'DC=test,DC=local',name:'test.local',kind:'Domain'},{dn:scope,name:'Mixed users and computers',kind:'OU'},{dn:endpoint,name:'Session computers',kind:'OU'},...Array.from({length:5000},(_,i)=>({dn:`OU=Unit${i},DC=test,DC=local`,name:`Unit${i}`,kind:'OU'}))];
-const requests=[],jobs=[],batches=new Map();let runs=[],previewDone=false,applyDone=false,applyFailed=false,number=0;
+const requests=[],jobs=[],batches=new Map();let runs=[],previewDone=false,applyDone=false,applyFailed=false,pollUnavailable=false,number=0;
 function makePlan(s){const m=mappings.find(m=>m.id===s.setting),value=s.itemValues?.[0]?.join(',')??(m.allowValueOverride?String(s.value):m.requiresInput?s.customValue:m.handler==='AdvancedAudit'?String(m.items[0].mask):(m.items[0].value||[]).join(','));return {id:'plan-'+(++number),selection:s,writeAuthorized:true,executionUser:'TEST\\operator',preview:{gpo,scope:{dn:s.scopeDn,name:'Mixed',kind:'OU'},previousValue:null,desiredValue:value,existingLink:null,warnings:['Changing this GPO affects all of its links.'],verificationComputers:['ws.test.local']}};}
 function update(job){
  if(job.action==='preview'&&previewDone){job.state='COMPLETED';job.message='Batch preview ready.';job.completedIds=batches.get(job.batchId).plans.map(p=>p.id);}
@@ -35,7 +35,10 @@ const server=http.createServer(async(req,res)=>{try{let body='';for await(const 
   if(action==='rollback'){const source=jobs.find(j=>j.id===payload.sourceWorkflowId);assert(source);assert.equal(payload.consent.confirmation,'ROLLBACK');data.sourceWorkflowId=source.id;data.state='COMPLETED';data.completedIds=[source.completedIds[0]];data.message='Batch snapshot restored.';runs=runs.map((r,i)=>({...r,result:{...r.result,state:i===0?'ROLLED_BACK':'BATCH_ROLLED_BACK',gpoPublished:false,linkVerified:false,effectiveStatus:'ROLLBACK_ENDPOINT_PENDING'}}));}
   if(action==='verify'){data.state='COMPLETED';data.completedIds=payload.planIds;data.message='Read-only checks complete.';}
   jobs.push(data);
- }else if(url.pathname.startsWith('/api/workflows/'))data=update(jobs.find(j=>j.id===url.pathname.split('/').pop()));
+ }else if(url.pathname.startsWith('/api/workflows/')){
+  if(pollUnavailable){res.writeHead(503,{'Content-Type':'application/json'});res.end(JSON.stringify({message:'Temporary fixture outage'}));return;}
+  data=update(jobs.find(j=>j.id===url.pathname.split('/').pop()));
+ }
  else if(['/api/audit','/api/password-policies'].includes(url.pathname))data=[];
  res.setHeader('Content-Type','application/json');res.end(JSON.stringify(data));return;
  }
@@ -50,6 +53,12 @@ const server=http.createServer(async(req,res)=>{try{let body='';for await(const 
  previewDone=true;await page.locator('[data-bulk-approval]').waitFor();assert.match(await page.locator('.bulk-table').textContent(),/Will be linked/);await page.fill('#bulk-reference','CHG-BULK');await page.locator('#bulk-impact').check();await page.fill('#bulk-confirmation','APPLY');assert.equal(requests.filter(r=>/\/apply$/.test(r.path)).length,0);
  for(const theme of ['light','dark']){await page.evaluate(t=>document.documentElement.dataset.grTheme=t,theme);for(const width of [1440,390]){await page.setViewportSize({width,height:1000});assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));await page.locator('.bulk-dialog').screenshot({path:path.join(shots,`bulk-review-${theme}-${width}.png`)});}}
  await page.setViewportSize({width:1440,height:1000});await page.locator('[data-bulk-approval] button[type=submit]').click();await page.getByRole('heading',{name:'Applying selected controls',exact:true}).waitFor();assert.equal(requests.filter(r=>r.path==='/api/workflows/apply').length,1);assert.equal(requests.find(r=>r.path==='/api/workflows/apply').payload.refresh,'Auto');
+ pollUnavailable=true;
+ const pollWarning=page.locator('.bulk-dialog [role=alert]').filter({hasText:'Live updates unavailable'});
+ await pollWarning.waitFor();
+ pollUnavailable=false;
+ await pollWarning.waitFor({state:'hidden'});
+ assert.equal(requests.filter(r=>r.path==='/api/workflows/apply').length,1,'Recovering polling must only read the recorded workflow');
  await page.locator('.bulk-dialog>header [data-bulk-close]').click();await page.goto(base+'/#/operations');await page.reload();await page.locator('[data-bulk-job]').first().click();assert.equal(requests.filter(r=>r.path==='/api/workflows/apply').length,1,'Reloading must not resubmit approved writes');applyDone=true;await page.getByRole('heading',{name:'GPO settings saved · endpoint verification incomplete',exact:true}).waitFor();assert.match(await page.locator('.bulk-table').textContent(),/1 unavailable/);await page.locator('.bulk-dialog').screenshot({path:path.join(shots,'bulk-result.png')});
  await page.locator('[data-bulk-recover]').click();await page.fill('#bulk-confirmation','ROLLBACK');await page.locator('[data-bulk-recovery] button[type=submit]').click();await page.getByRole('heading',{name:'Batch snapshot restored',exact:true}).waitFor();assert.equal(requests.filter(r=>r.path==='/api/workflows/rollback').length,1);assert.match(await page.locator('.bulk-table').textContent(),/Restored with batch snapshot/);await page.locator('[data-bulk-inspect]').nth(1).click();await page.locator('.ds-recovery [data-bulk-from-operation]').waitFor();assert.equal(await page.locator('.ds-recovery [data-verify]').count(),0,'Restored child must use the full batch recovery receipt');await page.locator('.ds-recovery [data-bulk-from-operation]').click();await page.getByRole('heading',{name:'Batch snapshot restored',exact:true}).waitFor();await page.keyboard.press('Escape');assert.equal(await page.locator('.bulk-dialog').count(),0);assert.deepEqual(errors,[]);
  console.log('PASS real bulk UI: mixed user/computer selection, 5000-OU search and selected-value retention, read-only preview before approval, concrete links/values, Auto refresh, per-control results, light/dark/mobile, durable resume without replay and full-batch rollback');

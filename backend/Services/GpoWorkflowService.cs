@@ -323,7 +323,8 @@ public sealed class GpoWorkflowService(IConfiguration config,Store store,Operati
                 // Do not trust the previous stored status before a disruptive endpoint refresh.
                 // Re-read the live GPO/link state first; this catches external GPMC edits between Verify and Refresh.
                 var live=await Run<GpoWorkflowResult>("gpoVerify",c,new{plan,mapping,previous=previous.Result,consent=previous.Approval},CancellationToken.None);
-                if(live.RefreshResults.Length==0 && previous.Result.RefreshResults.Length>0) live=live with{RefreshResults=previous.Result.RefreshResults};
+                if(live.RefreshResults.Length==0 && previous.Result.RefreshResults.Length>0)
+                    live=live with{RefreshResults=previous.Result.RefreshResults,RefreshCoverage=previous.Result.RefreshCoverage};
                 previous=previous with{Result=live,UpdatedAt=PolicyValues.Now()};
                 store.Put("gpo_runs",id,previous,live.State);
                 if(live.State != "ROLLED_BACK" && (!live.GpoPublished || !live.LinkVerified || live.State is not ("PUBLISHED" or "NO_CHANGE")))
@@ -392,7 +393,7 @@ public sealed class GpoWorkflowService(IConfiguration config,Store store,Operati
                 }
                 if(stages.Count>0){stages[^1]=stages[^1] with{FinishedAt=PolicyValues.Now()};run=run with{Stages=stages.ToArray()};}
                 if(operation=="verify" && previous is not null && result.RefreshResults.Length==0 && previous.Result.RefreshResults.Length>0)
-                    result=result with{RefreshResults=previous.Result.RefreshResults};
+                    result=result with{RefreshResults=previous.Result.RefreshResults,RefreshCoverage=previous.Result.RefreshCoverage};
                 run=run with{Result=result,UpdatedAt=PolicyValues.Now()};
             }catch(Exception ex){
                 // A transport/timeout failure can occur after a remote write began.

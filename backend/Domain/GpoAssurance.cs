@@ -11,9 +11,16 @@ public static class GpoAssurance
          !decimal.TryParse(d.DesiredValue,System.Globalization.NumberStyles.Float,System.Globalization.CultureInfo.InvariantCulture,out var desired)||actual!=desired);
     public static bool EffectiveVerified(GpoWorkflowResult r)
     {
-        if(!r.GpoPublished || !r.LinkVerified || r.Verification?.ReplicationConverged!=true||DomainMismatch(r))return false;
-        if(r.EffectiveStatus=="DOMAIN_VALUE_MATCHES_ON_SELECTED_DC")return true;
+        return r.GpoPublished && r.LinkVerified && r.Verification?.ReplicationConverged==true && EndpointValuesVerified(r);
+    }
+
+    private static bool EndpointValuesVerified(GpoWorkflowResult r)
+    {
+        if(DomainMismatch(r))return false;
         var checks=r.EndpointChecks??[];
+        if(checks.Any(x=>x.State=="MISMATCH"))return false;
+        if(r.EffectiveStatus=="DOMAIN_VALUE_MATCHES_ON_SELECTED_DC")
+            return r.DomainPolicy is not null && !string.IsNullOrWhiteSpace(r.DomainPolicy.DomainController);
         if(checks.Length==0 || checks.Any(x=>x.State!="VERIFIED" || string.IsNullOrWhiteSpace(x.Hostname)))return false;
         if(r.EffectiveStatus=="VERIFIED_ON_SAMPLE" && r.EndpointCoverage is null)return true;
         return r.EffectiveStatus is "VERIFIED_ON_SAMPLE" or "VERIFIED_ON_ALL_TARGETS" &&
@@ -29,8 +36,7 @@ public static class GpoAssurance
             r.RefreshResults.All(x=>x.State=="COMPLETED")?"GPUPDATE_COMPLETED":
             r.RefreshResults.Any(x=>x.State=="STARTED")?"GPUPDATE_STARTED":r.RefreshResults.All(x=>x.State=="SCHEDULED")?"GPUPDATE_SCHEDULED":"INSUFFICIENT_EVIDENCE";
         var endpoint=DomainMismatch(r)||checks.Any(x=>x.State=="MISMATCH")?"ENDPOINT_MISMATCH":
-            checks.Length>0&&checks.All(x=>x.State=="VERIFIED")&&(r.EndpointCoverage is null||r.EndpointCoverage is {Complete:true} coverage&&checks.Length==coverage.Total)?"ENDPOINT_VERIFIED":
-            r.EffectiveStatus=="DOMAIN_VALUE_MATCHES_ON_SELECTED_DC"?"ENDPOINT_VERIFIED":"INSUFFICIENT_EVIDENCE";
+            EndpointValuesVerified(r)?"ENDPOINT_VERIFIED":"INSUFFICIENT_EVIDENCE";
         return [
             new("GPO_CONFIGURATION",r.GpoPublished?"GPO_APPLIED":"NOT_VERIFIED","Selected GPO content and local AD/SYSVOL versions; rollback restores a snapshot rather than the requested mapping."),
             new("GPO_APPLICABILITY",r.LinkVerified?"INSUFFICIENT_EVIDENCE":"NOT_VERIFIED","A direct link is checked. Effective Read/Apply permissions, WMI, nested inheritance and winning GPO require target RSoP evidence."),

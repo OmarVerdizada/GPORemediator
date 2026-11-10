@@ -11,7 +11,7 @@ const widgets={
 };
 function create({state,api,run,render,matchesRule}){
  state.bulkSelected=new Set();state.bulkMode=false;state.bulkRanges={};
- let open=false,phase='target',job=null,source=null,plans=[],pending=false,polling=false,error='',revision=0,previewKey='',queryTimer;
+ let open=false,phase='target',job=null,source=null,plans=[],pending=false,polling=false,error='',pollError='',revision=0,previewKey='',queryTimer;
  const draft={gpoId:'',scopeDn:'',endpointScopeDn:'',verificationUser:'',gpoQuery:'',scopeQuery:'',endpointQuery:'',refresh:false,reviewContext:'',reference:'',approver:'',confirmation:'',impact:false,protected:false};
  const values=new Map(),expanded=new Set();
  const mapping=id=>state.settings.find(m=>m.id===id);
@@ -22,7 +22,7 @@ function create({state,api,run,render,matchesRule}){
  function selections(){return selected().map(m=>{const e=entry(m),accountScope=m.scope==='User'?'Users':m.domainPolicySensitive&&!/^OU=/i.test(draft.scopeDn)?'Domain':'LocalComputers';return {gpoId:draft.gpoId,scopeDn:draft.scopeDn,setting:m.id,value:e.value,customValue:e.customValue,itemValues:e.itemValues,
   accountScope,firstLink:accountScope==='Domain',refresh:draft.refresh?(accountScope==='Domain'?'Pdc':'Scope'):'None',endpointScopeDn:m.scope==='User'?draft.endpointScopeDn:null,verificationUser:m.scope==='User'?draft.verificationUser.trim()||null:null,reviewContext:m.automation!=='Automated'?draft.reviewContext.trim():null};});}
  const key=()=>JSON.stringify([selections(),state.gpoSession?.sessionId,state.service?.processId]);
- function invalidate(){revision++;plans=[];job=null;source=null;previewKey='';phase='target';error='';draft.confirmation='';draft.impact=false;draft.protected=false;}
+ function invalidate(){revision++;plans=[];job=null;source=null;previewKey='';phase='target';error='';pollError='';draft.confirmation='';draft.impact=false;draft.protected=false;}
  function saveInput(target){
   const row=target.closest('[data-bulk-control]');if(row){const m=mapping(row.dataset.bulkControl),e=entry(m);e.customValue=row.querySelector('[name=customValue]')?.value??e.customValue;e.value=Number(row.querySelector('[name=value]')?.value??e.value);
    const effective=m.automation==='Automated'?m:{...m,automation:'Automated',handler:m.handler==='Manual'?'SecurityTemplate':m.handler};
@@ -47,10 +47,47 @@ function create({state,api,run,render,matchesRule}){
   return `<div class="bulk-job-result" role="status"><h3>${active(job)?(job.action==='rollback'?'Restoring batch snapshot':job.action==='verify'?'Re-checking selected controls':'Applying selected controls'):resultTitle}</h3><p>${esc(job?.message||'Waiting for server results.')}</p><p>${restored?'GPO snapshot restoration is confirmed separately from endpoint undo.':`${saved} / ${plans.length} GPO values recorded · ${runs.length} recorded operations`}</p>${active(job)?'<p class="bulk-live"><span class="checking-dot"></span> Server results update automatically. Closing this panel does not replay or cancel writes.</p>':''}</div><div class="bulk-table-wrap"><table class="bulk-table"><thead><tr><th>Control</th><th>GPO result</th><th>Endpoint verification</th><th>Action</th></tr></thead><tbody>${plans.map(p=>{const h=[...runs].reverse().find(h=>h.plan.selection.setting===p.selection.setting),o=h?window.GpoUiDomain.outcome(h):null;return `<tr><td data-label="Control">${esc(p.selection.setting)}</td><td data-label="GPO result">${h?esc(h.result.state==='BATCH_ROLLED_BACK'?'Restored with batch snapshot':o.title):'Not started'}</td><td data-label="Endpoint verification">${o?`${o.endpoints.verified} verified · ${o.endpoints.unavailable} unavailable · ${o.endpoints.mismatch} mismatch · ${Math.max(0,o.endpoints.total-o.endpoints.verified-o.endpoints.unavailable-o.endpoints.mismatch-o.endpoints.observed)} pending`:'Not checked'}</td><td data-label="Action">${h?`<button type="button" class="ds-button ds-secondary ds-sm" data-bulk-inspect="${esc(h.id)}">Details</button>`:'—'}</td></tr>`;}).join('')}</tbody></table></div><div class="bulk-actions">${!active(job)&&source?.completedIds?.length?`<button type="button" class="ds-button ds-secondary" data-bulk-verify ${offline()||restored?'disabled':''}>Re-verify batch</button>`:''}${!active(job)&&source&&runs.some(h=>h.result.backupId)?`<button type="button" class="ds-button ds-danger" data-bulk-recover ${offline()?'disabled':''}>Rollback batch</button>`:''}<button type="button" class="ds-button ds-secondary" data-bulk-close>Close</button>${!active(job)?'<button type="button" class="ds-button ds-secondary" data-bulk-new>Start another batch</button>':''}</div>`;
  }
  function recovery(){return `<h3>Confirm full batch rollback</h3><p>This restores the first changed control's complete GPO backup and all recorded AD account values. It can affect every existing GPO link. Current drift and permissions are checked again before restore.</p><form data-bulk-recovery><label>Type ROLLBACK<input id="bulk-confirmation" data-bulk-field="confirmation" pattern="ROLLBACK" required autocomplete="off"></label><label class="batch-field-check"><input id="bulk-refresh" data-bulk-field="refresh" type="checkbox" ${draft.refresh?'checked':''}> Refresh the recorded policy targets after a verified snapshot restore</label><p class="ds-caption">An older Not configured snapshot does not certify an endpoint undo. Endpoint observations remain separate.</p><div class="bulk-actions"><button type="submit" class="ds-button ds-danger" ${offline()||pending?'disabled':''}>Restore batch snapshot</button><button type="button" class="ds-button ds-secondary" data-bulk-cancel-recovery>Cancel</button></div></form>`;}
- function overlay(){if(!open)return '';if(phase==='target')for(const detail of document.querySelectorAll('.bulk-dialog [data-bulk-control]'))detail.open?expanded.add(detail.dataset.bulkControl):expanded.delete(detail.dataset.bulkControl);return `<div class="bulk-backdrop" data-bulk-close></div><section class="bulk-dialog" data-bulk-phase="${phase}" role="dialog" aria-modal="true" aria-labelledby="bulk-dialog-title" tabindex="-1"><header><div><span class="card-kicker">BULK POLICY CHANGE</span><h2 id="bulk-dialog-title">${phase==='target'?'Prepare selected controls':phase==='review'?'Preview & approval':phase==='recovery'?'Batch recovery':'Bulk operation'}</h2></div><button type="button" data-bulk-close aria-label="Close bulk apply">${window.GpoComponents.icon('close')}</button></header><div class="bulk-dialog-body">${offline()?'<p class="bulk-error">Live actions require the active domain connection. Recorded results remain available.</p>':''}${error?`<p class="bulk-error" role="alert">${esc(error)}</p>`:''}${pending?'<p role="status">Submitting to the server…</p>':phase==='target'?targetForm():phase==='review'?review():phase==='recovery'?recovery():job?.action==='preview'?`<h3>${active(job)?'Checking selected controls':'Bulk preview needs review'}</h3><p>${esc(job.message)}</p>${!active(job)?'<button type="button" class="ds-button ds-secondary" data-bulk-edit>Review targets / values</button>':''}`:result()}</div></section>`;}
+ function overlay(){if(!open)return '';if(phase==='target')for(const detail of document.querySelectorAll('.bulk-dialog [data-bulk-control]'))detail.open?expanded.add(detail.dataset.bulkControl):expanded.delete(detail.dataset.bulkControl);return `<div class="bulk-backdrop" data-bulk-close></div><section class="bulk-dialog" data-bulk-phase="${phase}" role="dialog" aria-modal="true" aria-labelledby="bulk-dialog-title" tabindex="-1"><header><div><span class="card-kicker">BULK POLICY CHANGE</span><h2 id="bulk-dialog-title">${phase==='target'?'Prepare selected controls':phase==='review'?'Preview & approval':phase==='recovery'?'Batch recovery':'Bulk operation'}</h2></div><button type="button" data-bulk-close aria-label="Close bulk apply">${window.GpoComponents.icon('close')}</button></header><div class="bulk-dialog-body">${offline()?'<p class="bulk-error">Live actions require the active domain connection. Recorded results remain available.</p>':''}${(error||pollError)?`<p class="bulk-error" role="alert">${esc(error||pollError)}</p>`:''}${pending?'<p role="status">Submitting to the server…</p>':phase==='target'?targetForm():phase==='review'?review():phase==='recovery'?recovery():job?.action==='preview'?`<h3>${active(job)?'Checking selected controls':'Bulk preview needs review'}</h3><p>${esc(job.message)}</p>${!active(job)?'<button type="button" class="ds-button ds-secondary" data-bulk-edit>Review targets / values</button>':''}`:result()}</div></section>`;}
  function history(){const rows=(state.workflowJobs||[]).filter(j=>j.action==='apply'&&j.batchId);return rows.length?`<section class="bulk-history"><h2>Bulk operations</h2>${rows.slice(0,20).map(j=>`<div><strong>${j.planIds?.length||0} controls · ${esc(j.state.replaceAll('_',' '))}</strong><small>${esc(j.updatedAt)}</small><button type="button" class="ds-button ds-secondary ds-sm" data-bulk-job="${esc(j.id)}">View bulk result</button></div>`).join('')}</section>`:'';}
- async function submit(path,payload){if(pending)return;pending=true;error='';render();try{job=await api(path,payload);phase='working';}catch(e){error=e.message+' Check Operations for an accepted workflow before retrying; no write is automatically replayed.';}finally{pending=false;render();}}
- async function poll(){if(!job||polling||pending||offline()||document.hidden)return;polling=true;const id=job.id,current=revision;try{const next=await api('/workflows/'+id);if(current!==revision||job?.id!==id)return;const changed=JSON.stringify(next)!==JSON.stringify(job);job=next;if(job.action==='preview'&&job.state==='COMPLETED'&&phase!=='review'){const ready=await api('/batches/'+job.batchId);if(current!==revision||job?.id!==id)return;plans=ready.plans;if(!plans?.length||plans.some(p=>p.selection.gpoId!==draft.gpoId||p.selection.scopeDn!==draft.scopeDn))throw Error('Batch preview context changed. Generate a fresh preview.');previewKey=key();phase='review';render();}else if(job.action!=='preview'){const history=await api('/gpo/history');if(current!==revision||job?.id!==id)return;const different=JSON.stringify(history)!==JSON.stringify(state.history);state.history=history;if(job.action==='apply')source=job;if((changed||different)&&open)render();}else if(changed&&open)render();}catch(e){error='Live updates unavailable: '+e.message;if(open)render();}finally{polling=false;}}
+ async function submit(path,payload){if(pending)return;pending=true;error='';pollError='';render();try{job=await api(path,payload);phase='working';}catch(e){error=e.message+' Check Operations for an accepted workflow before retrying; no write is automatically replayed.';}finally{pending=false;render();}}
+ async function poll(){
+  if(!job||polling||pending||offline()||document.hidden)return;
+  polling=true;
+  const id=job.id,current=revision;
+  const stillCurrent=()=>current===revision&&job?.id===id&&!pending;
+  try{
+   const next=await api('/workflows/'+id);
+   if(!stillCurrent())return;
+   let changed=JSON.stringify(next)!==JSON.stringify(job);
+   if(next.action==='preview'&&next.state==='COMPLETED'&&phase!=='review'){
+    const ready=await api('/batches/'+next.batchId);
+    if(!stillCurrent())return;
+    if(!ready.plans?.length||ready.plans.some(p=>p.selection.gpoId!==draft.gpoId||p.selection.scopeDn!==draft.scopeDn))
+     throw Error('Batch preview context changed. Generate a fresh preview.');
+    plans=ready.plans;
+    previewKey=key();
+    phase='review';
+    changed=true;
+   }else if(next.action!=='preview'){
+    const history=await api('/gpo/history');
+    if(!stillCurrent())return;
+    changed ||= JSON.stringify(history)!==JSON.stringify(state.history);
+    state.history=history;
+    if(next.action==='apply')source=next;
+   }
+   job=next;
+   const recovered=!!pollError;
+   pollError='';
+   if(open&&(changed||recovered))render();
+  }catch(e){
+   if(!stillCurrent())return;
+   const message='Live updates unavailable: '+e.message;
+   if(message!==pollError){
+    pollError=message;
+    if(open)render();
+   }
+  }finally{polling=false;}
+ }
  function handleInput(e){const t=e.target;if(!t.closest('.bulk-dialog'))return false;if(t.dataset.bulkField||t.closest('[data-bulk-control]'))saveInput(t);if(t.dataset.bulkField?.endsWith('Query')){clearTimeout(queryTimer);queryTimer=setTimeout(render,180);}return true;}
  function handleChange(e){const t=e.target;if(t.dataset.bulkRange){state.bulkRanges[t.dataset.bulkRange]=Number(t.value);return true;}if(t.dataset.bulkSelect){if(t.checked&&state.bulkSelected.size>=20){t.checked=false;state.notice='Select up to 20 controls per batch.';render();return true;}t.checked?state.bulkSelected.add(t.dataset.bulkSelect):state.bulkSelected.delete(t.dataset.bulkSelect);invalidate();render();return true;}if(!t.closest('.bulk-dialog'))return false;saveInput(t);if(phase==='target'&&t.dataset.bulkField&&['gpoId','scopeDn','endpointScopeDn','refresh'].includes(t.dataset.bulkField)){clearTimeout(queryTimer);if(t.dataset.bulkField==='scopeDn'&&userSelected()&&!draft.endpointScopeDn&&/^OU=/i.test(draft.scopeDn))draft.endpointScopeDn=draft.scopeDn;render();}return true;}
  function handleClick(e){const t=e.target;

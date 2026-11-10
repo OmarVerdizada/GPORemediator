@@ -97,8 +97,16 @@ async Task<HttpResponseMessage> Post(string action,object body,string actor="TES
  var session=actor=="TEST\\Admin"?admin:viewer;using var req=new HttpRequestMessage(HttpMethod.Post,"/api/workflows/"+action){Content=JsonContent.Create(body)};
  req.Headers.Add("Test-Identity",actor);req.Headers.Add("Origin","http://localhost");req.Headers.Add("Cookie",session.Item2+"; GpoRemediator.GpoConnection=secret-session");req.Headers.Add("X-CSRF-Token",session.Item1);return await http.SendAsync(req);
 }
-fake.Block=new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
 var request=new WorkflowRequest(Guid.NewGuid().ToString(),[first.Id],consent,"Scope");
+store.Execute("CREATE TRIGGER fixture_reject_acceptance BEFORE INSERT ON audit_macs BEGIN SELECT RAISE(ABORT,'Fixture audit write failure'); END;");
+try{
+    jobs.Start("apply",request,"secret-session","TEST\\Admin");
+    throw new Exception("An unaudited workflow was accepted");
+}
+catch(Microsoft.Data.Sqlite.SqliteException){}
+finally{store.Execute("DROP TRIGGER fixture_reject_acceptance");}
+Check(jobs.List("TEST\\Admin").Length==0&&store.AuditEvents().Length==0&&fake.Actions.Count==0,"Audit failure left a queued write or a partial acceptance");
+fake.Block=new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
 using(var response=await Post("apply",request)){Check(response.StatusCode==HttpStatusCode.Accepted,"Production API did not accept async work");}
 var jobId=jobs.List("TEST\\Admin").Single().Id;
 Check(WorkspaceRules.Active(jobs.Get(jobId,"TEST\\Admin").State),"Work completed while worker was blocked");
@@ -114,6 +122,8 @@ Check(fake.Actions.SequenceEqual(new[]{"apply:2.3.1.1","refresh:Scope","verify:2
 fake.RefreshFails=true;
 var failedRefresh=jobs.Start("refresh",new(Guid.NewGuid().ToString(),[first.Id],new(""),"Scope"),"secret-session","TEST\\Admin");
 failedRefresh=await Done(jobs,failedRefresh.Id);Check(failedRefresh.State=="NEEDS_REVIEW","Standalone failed refresh reported a completed workflow");
+Check(fake.Actions[^1]=="verify:2.3.1.1"&&store.Require<GpoWorkflowRun>("gpo_runs",first.Id).Result.RefreshResults.Single().State=="FAILED",
+    "An endpoint refresh failure suppressed read-back or discarded refresh evidence");
 fake.RefreshFails=false;
 // A published audit CSV or scheduled refresh is not evidence of effective change.
 var auditPlan=await fake.PreviewAsync("secret-session","TEST\\Admin",selection with{Setting="17.1.1"},CancellationToken.None);
@@ -140,7 +150,12 @@ var bulk=jobs.Start("apply",new(Guid.NewGuid().ToString(),batch.PlanIds,consent,
 bulk=await Done(jobs,bulk.Id);Check(bulk.State=="COMPLETED",bulk.Message);
 Check(fake.Actions.Count(x=>x.StartsWith("apply:"))==2&&fake.Actions.Count(x=>x=="refresh:Scope")==1&&fake.Actions.Count(x=>x.StartsWith("verify:"))==8,"Bulk execution or scheduled verification count incorrect");
 Check(bulk.CompletedIds[1]!=batch.PlanIds[1],"Second batch control was not re-previewed after first write");
-var promotion=jobs.Preview(Guid.NewGuid().ToString(),new([selection with{Setting="2.3.1.2",ScopeDn="OU=Production,DC=test,DC=local"},selection with{Setting="2.3.1.3",ScopeDn="OU=Production,DC=test,DC=local"}],PilotSourceId:bulk.Id),"secret-session","TEST\\Admin");
+var promotionRequest=new BatchPreviewRequest([selection with{Setting="2.3.1.2",ScopeDn="OU=Production,DC=test,DC=local"},selection with{Setting="2.3.1.3",ScopeDn="OU=Production,DC=test,DC=local"}],PilotSourceId:bulk.Id);
+var pilotRun=store.Require<GpoWorkflowRun>("gpo_runs",bulk.CompletedIds[0]);
+store.Put("gpo_runs",pilotRun.Id,pilotRun with{Result=pilotRun.Result with{EndpointChecks=[]}});
+Reject(()=>jobs.Preview(Guid.NewGuid().ToString(),promotionRequest,"secret-session","TEST\\Admin"),"PILOT_NOT_VERIFIED");
+store.Put("gpo_runs",pilotRun.Id,pilotRun);
+var promotion=jobs.Preview(Guid.NewGuid().ToString(),promotionRequest,"secret-session","TEST\\Admin");
 promotion=await Done(jobs,promotion.Id);Check(promotion.State=="COMPLETED"&&promotion.CompletedIds.All(id=>store.Get<GpoWorkflowRun>("gpo_runs",id) is null),"Pilot promotion bypassed separate preview and approval");
 Reject(()=>jobs.Preview(Guid.NewGuid().ToString(),new([selection],PilotSourceId:bulk.Id),"secret-session","TEST\\Admin"),"PILOT_CONTROL_MISMATCH");
 var recovery=jobs.Start("rollback",new(Guid.NewGuid().ToString(),[],new("ROLLBACK"),"Scope",SourceWorkflowId:bulk.Id),"secret-session","TEST\\Admin");
@@ -177,8 +192,12 @@ var userMapping=ProductionGpoMappings.Settings.First(x=>x.Scope=="User"&&x.Autom
 var mixedPreview=jobs.Preview(Guid.NewGuid().ToString(),new([selection with{Setting="2.3.1.2",AccountScope="LocalComputers"},selection with{Setting=userMapping.Id,AccountScope="Users",EndpointScopeDn="OU=Endpoints,DC=test,DC=local",VerificationUser="TEST\\user"}]),"secret-session","TEST\\Admin");
 mixedPreview=await Done(jobs,mixedPreview.Id);Check(mixedPreview.State=="COMPLETED","User/computer batch preview: "+mixedPreview.Message);
 var mixedBatch=jobs.Batches("TEST\\Admin").Single(x=>x.Id==mixedPreview.BatchId);
+fake.RefreshFails=true;
 var mixedApply=jobs.Start("apply",new(Guid.NewGuid().ToString(),mixedBatch.PlanIds,consent,"Auto",BatchId:mixedBatch.Id),"secret-session","TEST\\Admin");
-mixedApply=await Done(jobs,mixedApply.Id);Check(mixedApply.State=="COMPLETED"&&fake.Actions.Count(x=>x=="refresh:Scope")==2,"User and computer refresh contexts must be processed separately");
+mixedApply=await Done(jobs,mixedApply.Id);
+Check(mixedApply.State=="NEEDS_REVIEW"&&fake.Actions.Count(x=>x=="refresh:Scope")==2&&fake.Actions.Count(x=>x.StartsWith("verify:"))==2,
+    "A refresh failure stopped the other policy context or skipped endpoint verification");
+fake.RefreshFails=false;
 fake.Actions.Clear();var mixedVerify=jobs.Start("verify",new(Guid.NewGuid().ToString(),mixedApply.CompletedIds,new("")),"secret-session","TEST\\Admin");mixedVerify=await Done(jobs,mixedVerify.Id);
 Check(mixedVerify.State=="COMPLETED"&&fake.Actions.Count==2&&fake.Actions.All(x=>x.StartsWith("verify:")),"Read-only multi-control verification must not write or refresh");
 Reject(()=>jobs.Start("apply",new(Guid.NewGuid().ToString(),[mixedBatch.PlanIds[0]],consent,"Auto"),"secret-session","TEST\\Admin"),"INVALID_REQUEST");
@@ -243,6 +262,8 @@ sealed class FakeOperations(Store store,OperationGate gate):IWorkflowOperations
    if(operation=="verify"&&EndpointMismatch)result=result with{EffectiveStatus="ENDPOINT_MISMATCH",EndpointChecks=[new("ws.test.local","MISMATCH","Audit policy remained unchanged","0")]};
    if(operation=="verify"&&EndpointUnavailable)result=result with{EffectiveStatus="ENDPOINT_VERIFICATION_PENDING",EndpointChecks=[new("ws.test.local","UNAVAILABLE","Endpoint unreachable")]};
    if(operation=="refresh"&&RefreshFails)result=result with{RefreshResults=[new("ws.test.local","FAILED","RPC unavailable")]};
+   if(operation=="verify"&&store.Get<GpoWorkflowRun>("gpo_runs",id) is {} previous)
+    result=result with{RefreshResults=previous.Result.RefreshResults,RefreshCoverage=previous.Result.RefreshCoverage};
    var run=new GpoWorkflowRun(id,plan,result,PolicyValues.Now(),consent);store.Put("gpo_runs",id,run,state);if(operation=="apply"&&DriftAfterApply){fingerprint="external-edit";DriftAfterApply=false;}return run;
   }finally{gate.EndOperation(key);}
  }

@@ -10,7 +10,8 @@ namespace GpoRemediator.Services;
 public sealed class WorkspaceWorkflows(Store store,IWorkflowOperations service,OperationGate gate,ILogger<WorkspaceWorkflows> logger,TimeProvider clock) : BackgroundService
 {
     private sealed record Work(string Id,string Token,string? Resource);
-    private readonly Channel<Work> queue=Channel.CreateBounded<Work>(new BoundedChannelOptions(16){SingleReader=true,FullMode=BoundedChannelFullMode.Wait});
+    private const int QueueCapacity=16;
+    private readonly Channel<Work> queue=Channel.CreateBounded<Work>(new BoundedChannelOptions(QueueCapacity){SingleReader=true,FullMode=BoundedChannelFullMode.Wait});
     private readonly object sync=new();
     private readonly ConcurrentDictionary<string,Task> schedules=new();
     private CancellationToken stopping;
@@ -25,10 +26,14 @@ public sealed class WorkspaceWorkflows(Store store,IWorkflowOperations service,O
             var existing=store.Get<WorkflowJob>("workflow_jobs",job.Id);
             if(existing is not null){if(existing.Actor!=job.Actor||existing.RequestHash!=job.RequestHash)throw new PolicyException("IDEMPOTENCY_CONFLICT","Request ID was already used with a different payload.");return existing;}
             if(stopping.IsCancellationRequested||List(job.Actor).Count(x=>WorkspaceRules.Active(x.State)||x.State=="VERIFY_SCHEDULED")>=4)throw new PolicyException("GPO_CONNECTION_LIMIT","At most four unfinished workflows per operator are permitted.");
+            if(queue.Reader.Count>=QueueCapacity)throw new PolicyException("GPO_CONNECTION_LIMIT","The workflow queue is full.");
             if(resource is not null)gate.Reserve(resource,job.Id);
             try{
-                if(!queue.Writer.TryWrite(new Work(job.Id,token,resource)))throw new PolicyException("GPO_CONNECTION_LIMIT","The workflow queue is full.");
-                Save(job);store.Audit("WORKFLOW_ACCEPTED",job.Actor,jobId:job.Id,details:new{job.Action,job.PlanIds,job.Refresh,job.VerificationDelays,job.BatchId});
+                // Producers hold sync and the reader can only free slots.
+                // Commit the receipt and its audit event before releasing work.
+                store.AcceptWorkflow(job);
+                if(!queue.Writer.TryWrite(new Work(job.Id,token,resource)))
+                    throw new InvalidOperationException("The workflow queue unexpectedly closed.");
             }catch{if(resource is not null)gate.Release(resource,job.Id);throw;}
             return job;
         }
@@ -43,8 +48,8 @@ public sealed class WorkspaceWorkflows(Store store,IWorkflowOperations service,O
         if(request.PilotSourceId is not null){
             var pilot=Get(request.PilotSourceId,actor);var source=store.Require<BatchPlan>("batch_plans",pilot.BatchId??"");
             var runs=pilot.CompletedIds.Select(id=>store.Require<GpoWorkflowRun>("gpo_runs",id)).ToArray();
-            if(!source.Pilot||pilot.Action!="apply"||pilot.State!="COMPLETED"||runs.Length==0||runs.Any(run=>!WorkspaceRules.Published(run)||run.Result.Verification?.ReplicationConverged!=true||run.Result.EffectiveStatus is not ("VERIFIED_ON_SAMPLE" or "VERIFIED_ON_ALL_TARGETS")||
-                !DateTimeOffset.TryParse(run.Result.Verification.CheckedAt,out var checkedAt)||DateTimeOffset.UtcNow-checkedAt>TimeSpan.FromMinutes(30)))
+            if(!source.Pilot||pilot.Action!="apply"||pilot.State!="COMPLETED"||runs.Length==0||runs.Any(run=>!WorkspaceRules.Published(run)||!GpoAssurance.EffectiveVerified(run.Result)||run.Result.EffectiveStatus is not ("VERIFIED_ON_SAMPLE" or "VERIFIED_ON_ALL_TARGETS")||
+                !DateTimeOffset.TryParse(run.Result.Verification?.CheckedAt,out var checkedAt)||DateTimeOffset.UtcNow-checkedAt>TimeSpan.FromMinutes(30)))
                 throw new PolicyException("PILOT_NOT_VERIFIED","Promotion requires a completed pilot with replication convergence and effective sample verification for every applied control.");
             if(!selections.Select(x=>x.Setting).Order().SequenceEqual(runs.Select(x=>x.Plan.Selection.Setting).Order()))throw new PolicyException("PILOT_CONTROL_MISMATCH","Promotion must preview the same control set as the verified pilot.");
             if(selections.Any(selection=>{
@@ -99,11 +104,14 @@ public sealed class WorkspaceWorkflows(Store store,IWorkflowOperations service,O
         var job=New(request.RequestId,actor,action,new{action,request}) with{PlanIds=ids,Consent=executionConsent,Refresh=request.Refresh,VerificationDelays=schedule,BatchId=request.BatchId,SourceWorkflowId=request.SourceWorkflowId};
         return Enqueue(job,token,action=="verify"?null:Guid.Parse(plans[0].Selection.GpoId).ToString("D"));
     }
-    protected override async Task ExecuteAsync(CancellationToken stoppingToken){
-        stopping=stoppingToken;
+    public override Task StartAsync(CancellationToken cancellationToken){
         foreach(var job in store.List<WorkflowJob>("workflow_jobs").Where(x=>WorkspaceRules.Active(x.State)||x.State=="VERIFY_SCHEDULED")){
             Save(job with{State=job.Action is "scan" or "preview"||job.State=="VERIFY_SCHEDULED"?"WAITING_CONNECTION":"NEEDS_REVIEW",NextCheckAt=null,UpdatedAt=PolicyValues.Now(),Message="Service restarted. No write was replayed. Reconnect and verify recorded results before starting a new approved workflow."});
         }
+        return base.StartAsync(cancellationToken);
+    }
+    protected override async Task ExecuteAsync(CancellationToken stoppingToken){
+        stopping=stoppingToken;
         try{await foreach(var work in queue.Reader.ReadAllAsync(stoppingToken)){
             // Synchronize with submission so the durable record exists before processing.
             lock(sync){}
@@ -118,6 +126,7 @@ public sealed class WorkspaceWorkflows(Store store,IWorkflowOperations service,O
             }
             if(job.Action=="scan"){await ProcessScan(work,job,ct);return;}
             string? expected=null;
+            var refreshIncomplete=false;
             GpoRollbackAnchor? anchor=null;
             if(job.SourceWorkflowId is not null&&job.Action=="rollback"){
                 var source=Get(job.SourceWorkflowId,job.Actor);
@@ -139,8 +148,7 @@ public sealed class WorkspaceWorkflows(Store store,IWorkflowOperations service,O
                 job=Update(job.Id,j=>j with{CompletedIds=[..j.CompletedIds,plan.Id],Message=result.Result.Message});
                 if(job.Action=="apply"&&!WorkspaceRules.Published(result)||job.Action=="rollback"&&result.Result.State!="ROLLED_BACK"||job.Action=="verify"&&result.Result.State is "REVIEW_REQUIRED" or "DRIFT_DETECTED" or "ROLLBACK_DRIFT_DETECTED")
                     throw new PolicyException("WORKFLOW_RESULT_REVIEW","A step requires review. Remaining writes and refresh were stopped.");
-                if(job.Action=="refresh" && (result.Result.RefreshResults.Length==0 || result.Result.RefreshResults.Any(x=>x.State=="FAILED") || result.Result.State is "DRIFT_DETECTED" or "ROLLBACK_DRIFT_DETECTED" or "REVIEW_REQUIRED"))
-                    throw new PolicyException("REFRESH_REVIEW_REQUIRED","Refresh was not scheduled on every authorized target. Inspect per-host evidence.");
+                if(job.Action=="refresh")refreshIncomplete|=InspectRefresh(result.Result);
                 expected=result.Result.PostFingerprint??plan.Preview.Fingerprint;
             }
             if(job.SourceWorkflowId is not null){
@@ -167,8 +175,7 @@ public sealed class WorkspaceWorkflows(Store store,IWorkflowOperations service,O
                         var merged=combined.GroupBy(r=>r.Computer,StringComparer.OrdinalIgnoreCase).Select(g=>new GpoRefreshResult(g.Key,State(g.Select(r=>r.State)),string.Join(" | ",g.Select(r=>r.Message)),Half(g.Select(r=>r.ComputerState)),Half(g.Select(r=>r.UserState)))).ToArray();
                         store.Put("gpo_runs",refreshId,refreshed with{Result=refreshed.Result with{RefreshResults=merged,RefreshCoverage=new(merged.Length,merged.Length,target.Id==groups[^1].Id)}},refreshed.Result.State);
                     }
-                    if(refreshed.Result.RefreshResults.Length==0||refreshed.Result.RefreshResults.Any(x=>x.State=="FAILED")||refreshed.Result.State is "DRIFT_DETECTED" or "ROLLBACK_DRIFT_DETECTED" or "REVIEW_REQUIRED")
-                        throw new PolicyException("REFRESH_REVIEW_REQUIRED","The policy operation was retained, but refresh needs review. Inspect each target result.");
+                    refreshIncomplete|=InspectRefresh(refreshed.Result);
                 }
             }
             var effectivePending=false;
@@ -181,6 +188,11 @@ public sealed class WorkspaceWorkflows(Store store,IWorkflowOperations service,O
                     if(HasEndpointMismatch(measured))endpointMismatches.Add(measured.Plan.Selection.Setting);
                     effectivePending|=!GpoAssurance.EffectiveVerified(measured.Result);
                 }
+            }
+            if(refreshIncomplete)
+            {
+                var mismatches=endpointMismatches.Count==0?"":$" Endpoint values differ for controls {string.Join(", ",endpointMismatches)}.";
+                throw new PolicyException("REFRESH_REVIEW_REQUIRED","Refresh did not finish or schedule on every target. Inspect the per-host refresh and verification results."+mismatches);
             }
             if(job.VerificationDelays.Length==0)RequireMatchingEndpoints(endpointMismatches);
             if(job.VerificationDelays.Length>0){
@@ -259,6 +271,14 @@ public sealed class WorkspaceWorkflows(Store store,IWorkflowOperations service,O
         if(run.Result.State is "REVIEW_REQUIRED" or "DRIFT_DETECTED" or "ROLLBACK_DRIFT_DETECTED")
             throw new PolicyException("WORKFLOW_RESULT_REVIEW","Verification found GPO drift or an uncertain outcome. Inspect the recorded evidence before retrying.");
         return run.Result.EffectiveStatus=="ENDPOINT_MISMATCH" || (run.Result.EndpointChecks??[]).Any(x=>x.State=="MISMATCH");
+    }
+    private static bool InspectRefresh(GpoWorkflowResult result)
+    {
+        if(result.State!="ROLLED_BACK" && (!result.GpoPublished || !result.LinkVerified ||
+            result.State is "DRIFT_DETECTED" or "ROLLBACK_DRIFT_DETECTED" or "REVIEW_REQUIRED" or "FAILED_SAFE"))
+            throw new PolicyException("REFRESH_REVIEW_REQUIRED","The live policy or restore state requires review. Remaining refresh steps were stopped.");
+        return result.State=="REFRESH_PARTIAL" || result.RefreshResults.Length==0 || result.RefreshCoverage is {Complete:false} ||
+            result.RefreshResults.Any(x=>x.State is not ("COMPLETED" or "SCHEDULED"));
     }
     private static void RequireMatchingEndpoints(List<string> controls){
         if(controls.Count>0)

@@ -150,6 +150,13 @@ public sealed class Store : IDisposable
     public long GpoRunSnapshot(string actor){lock(gate){using var command=Command("SELECT COALESCE(MAX(rowid),0) FROM gpo_runs WHERE json_extract(data,'$.plan.actor')=$actor COLLATE NOCASE",("$actor",actor));return Convert.ToInt64(command.ExecuteScalar());}}
     public int GpoRunCount(string actor,long snapshot=long.MaxValue){lock(gate){using var command=Command("SELECT COUNT(*) FROM gpo_runs WHERE json_extract(data,'$.plan.actor')=$actor COLLATE NOCASE AND rowid<=$snapshot",("$actor",actor),("$snapshot",snapshot));return Convert.ToInt32(command.ExecuteScalar());}}
     public void Audit(string eventName, string operatorName, string? jobId = null, string? controlId = null, string? gpoId = null, object? details = null)
+        => AppendAudit(eventName,operatorName,jobId,controlId,gpoId,details);
+
+    public void AcceptWorkflow(WorkflowJob job)
+        => AppendAudit("WORKFLOW_ACCEPTED",job.Actor,job.Id,null,null,
+            new{job.Action,job.PlanIds,job.Refresh,job.VerificationDelays,job.BatchId},job);
+
+    private void AppendAudit(string eventName,string operatorName,string? jobId,string? controlId,string? gpoId,object? details,WorkflowJob? acceptedJob=null)
     {
         lock(gate)
         {
@@ -158,6 +165,13 @@ public sealed class Store : IDisposable
             var at=PolicyValues.Now();var safe=Redactor.Clean(JsonDefaults.Serialize(details??new{}));
             var hash=PolicyValues.Hash(new{eventName,operatorName,jobId,controlId,gpoId,details=safe,at,previous});
             using var tx=db.BeginTransaction();
+            if(acceptedJob is not null)
+            {
+                using var insertJob=Command("INSERT INTO workflow_jobs(id,state,data,updated_at) VALUES($id,$state,$data,$at)",
+                    ("$id",acceptedJob.Id),("$state",acceptedJob.State),("$data",JsonDefaults.Serialize(acceptedJob)),("$at",acceptedJob.UpdatedAt));
+                insertJob.Transaction=tx;
+                insertJob.ExecuteNonQuery();
+            }
             using(var insert=Command("INSERT INTO audit(event,operator,job_id,control_id,gpo_id,details,created_at,previous_hash,hash) VALUES($e,$o,$j,$c,$g,$d,$a,$p,$h)",
                 ("$e",eventName),("$o",operatorName),("$j",jobId),("$c",controlId),("$g",gpoId),("$d",safe),("$a",at),("$p",previous),("$h",hash)))
             {insert.Transaction=tx;insert.ExecuteNonQuery();}

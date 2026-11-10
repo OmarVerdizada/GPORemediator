@@ -1464,6 +1464,7 @@ switch($Operation){
         $plan=$Data.plan;$map=$Data.mapping;$directory=Run-Directory $plan;$manifest=$null;if(Test-Path -LiteralPath (Join-Path $directory 'manifest.json')){$manifest=Get-Content -LiteralPath (Join-Path $directory 'manifest.json') -Raw|ConvertFrom-Json}
         $rollback=$manifest -and [string]$manifest.phase -eq 'ROLLED_BACK'
         $refreshPlan=Read-Field $Data 'batchRefreshPlan' $null;$refreshMap=Read-Field $Data 'batchRefreshMapping' $null
+        $batchRefresh=[bool]$refreshPlan
         if($refreshPlan){if(!$rollback -or !$refreshMap -or [string]$refreshPlan.selection.gpoId -ine [string]$plan.selection.gpoId -or [string]$refreshPlan.selection.scopeDn -ine [string]$plan.selection.scopeDn){Fail 'BATCH_RECOVERY_REQUIRED' 'Batch refresh context does not match the restored GPO/scope.'}}else{$refreshPlan=$plan;$refreshMap=$map}
         if($manifest -and [string]$manifest.phase -notin @('PUBLISHED','VERIFY_MISMATCH','ROLLED_BACK') -and !(Publication-Review $manifest)){Fail 'REFRESH_REVIEW_REQUIRED' 'Verify the interrupted execution before refresh.'}
         if(!$manifest -and [string](Read-Field $Data.previous 'state' '') -ne 'NO_CHANGE'){Fail 'REFRESH_REVIEW_REQUIRED' 'No completed execution is available for refresh.'}
@@ -1481,12 +1482,13 @@ switch($Operation){
         if($strategy -eq 'Scope' -and $null -ne $pinned){$computers=@($pinned)}
         if(!$computers.Count){return Result $(if($rollback){'ROLLED_BACK'}else{'REFRESH_NOT_CONFIGURED'}) 'No authorized refresh hosts are available. Choose the endpoint OU and automatic OU targeting, or configure explicit hosts in Settings.' $manifest $before @()}
         Emit-Stage 'GPUPDATE'
-        $refresh=@();$target=if($rollback){'Both'}elseif([string]$map.scope -eq 'User'){'User'}else{'Computer'}
+        $refresh=@()
+        $target=if($rollback -and !$batchRefresh){'Both'}elseif([string]$refreshMap.scope -eq 'User'){'User'}else{'Computer'}
         $refreshCoverage=$null
         # Complete computer processing using delegated WinRM even after restore.
         # A signed-in user's policy requires a separate task in the user context;
         # neither its scheduling nor its failure changes computer completion.
-        if(($rollback -or $target -eq 'Computer') -and (Endpoint-CredentialOptions).Count){
+        if($target -ne 'User' -and (Endpoint-CredentialOptions).Count){
             $offset=[int](Read-Field $Data 'refreshOffset' 0);if($offset -lt 0){Fail 'INVALID_REQUEST' 'Invalid refresh offset.'}
             $total=$computers.Count;$computers=@($computers|Select-Object -Skip $offset -First 64)
             $runTargets=@($computers|Where-Object{$_ -in $liveComputers})
@@ -1496,7 +1498,12 @@ switch($Operation){
                 $entry=@($done|Where-Object{[string]$_.PSComputerName -ieq $computer}|Select-Object -Last 1)
                 $computerState=if($entry.Count){[string]$entry[0].state}else{'FAILED'}
                 $message=if($entry.Count){[string]$entry[0].message}else{'No completion result. Check endpoint WinRM/Kerberos and execution permissions.'}
-                if(!$rollback){$refresh+=@{computer=$computer;state=$computerState;message=$message};continue}
+                if($target -eq 'Computer'){
+                    $entryResult=@{computer=$computer;state=$computerState;message=$message}
+                    if($batchRefresh){$entryResult.computerState=$computerState}
+                    $refresh+=$entryResult
+                    continue
+                }
                 $userState='SCHEDULED';$userMessage='Signed-in user policy refresh scheduled; completion is not yet confirmed.'
                 try{Invoke-GPUpdate -Computer $computer -Target User -Force -RandomDelayInMinutes 0 -ErrorAction Stop|Out-Null}catch{$userState='FAILED';$userMessage='Signed-in user refresh could not be scheduled. Check RPC/task-scheduler permissions and firewall. '+(Endpoint-FailureMessage $_)}
                 $refresh+=@{computer=$computer;state=$(if($computerState -eq 'FAILED' -or $userState -eq 'FAILED'){'FAILED'}else{'SCHEDULED'});computerState=$computerState;userState=$userState;message=('Computer: '+$message+' User: '+$userMessage)}
@@ -1506,7 +1513,24 @@ switch($Operation){
             $offset=[int](Read-Field $Data 'refreshOffset' 0);if($offset -lt 0){Fail 'INVALID_REQUEST' 'Invalid refresh offset.'}
             $total=$computers.Count;$computers=@($computers|Select-Object -Skip $offset -First 64)
             $refreshCoverage=@{total=$total;checked=[math]::Min($offset+64,$total);complete=($offset+64 -ge $total)}
-            foreach($computer in $computers){if($computer -notin $liveComputers){$refresh+=@{computer=$computer;state='FAILED';message='The pinned endpoint is no longer in the enabled authorized endpoint scope. No refresh was scheduled.'};continue};try{$options=@{Computer=$computer;Force=$true;RandomDelayInMinutes=0;ErrorAction='Stop'};if(!$rollback){$options.Target=$target};Invoke-GPUpdate @options|Out-Null;$refresh+=@{computer=$computer;state='SCHEDULED';message=$(if($rollback){'gpupdate /force scheduled for computer and signed-in user policies after rollback.'}else{'gpupdate /target:'+$target.ToLowerInvariant()+' /force scheduled.'})}}catch{$refresh+=@{computer=$computer;state='FAILED';message='Remote gpupdate could not be scheduled. Check RPC/task-scheduler firewall and permissions.'}}}
+            foreach($computer in $computers){
+                $entryResult=@{computer=$computer;state='FAILED'}
+                if($computer -notin $liveComputers){
+                    $entryResult.message='The pinned endpoint is no longer in the enabled authorized endpoint scope. No refresh was scheduled.'
+                }else{
+                    try{
+                        $options=@{Computer=$computer;Force=$true;RandomDelayInMinutes=0;ErrorAction='Stop'}
+                        if($target -ne 'Both'){$options.Target=$target}
+                        Invoke-GPUpdate @options|Out-Null
+                        $entryResult.state='SCHEDULED'
+                        $entryResult.message=if($target -eq 'Both'){'gpupdate /force scheduled for computer and signed-in user policies after rollback.'}else{'gpupdate /target:'+$target.ToLowerInvariant()+' /force scheduled.'}
+                    }catch{$entryResult.message='Remote gpupdate could not be scheduled. Check RPC/task-scheduler firewall and permissions.'}
+                }
+                if($batchRefresh){
+                    if($target -eq 'User'){$entryResult.userState=$entryResult.state}else{$entryResult.computerState=$entryResult.state}
+                }
+                $refresh+=$entryResult
+            }
         }
         # Invoke-GPUpdate schedules a task; it does not wait for policy processing.
         $v=if($rollback){Verify-Rollback $plan $map $manifest}else{Verify-Published $plan $map $false};$failed=@($refresh|Where-Object{$_.state -eq 'FAILED'}).Count
