@@ -22,12 +22,14 @@
     const count=state=>checks.filter(x=>x.state===state).length,total=r.endpointCoverage?.total??checks.length;
     const endpoints={total,verified:count('VERIFIED'),mismatch:count('MISMATCH'),unavailable:count('UNAVAILABLE')+count('OUTSIDE_SCOPE'),observed:count('OBSERVED'),remaining:Math.max(0,total-checks.length)};
     const refresh=r.refreshResults||[],refreshFailed=refresh.filter(x=>x.state==='FAILED').length;
-    const title=restored?(r.state==='BATCH_ROLLED_BACK'?'Restored with batch snapshot':'Rollback completed successfully'):
+    const restoreMismatch=restored&&checks.some(x=>x.state==='RESTORE_MISMATCH');
+    const restoreSampleMatch=restored&&r.effectiveStatus==='ROLLBACK_ENDPOINT_SAMPLE_MATCH'&&checks.length>0&&checks.every(x=>x.state==='RESTORE_MATCH');
+    const title=restored?(r.state==='BATCH_ROLLED_BACK'?'Restored with batch snapshot':restoreMismatch?'GPO snapshot restored · endpoint value differs':'GPO snapshot restored'):
       busy?'Checking policy':mismatch?(applied?'GPO saved · endpoint mismatch':'Policy is not effective'):
       applied?(verified?'Endpoint values verified':'GPO saved · endpoint verification incomplete'):
       q.attention?'Operation needs review':'Application not verified';
-    return {restored,applied,busy,mismatch,verified,endpoints,refreshFailed,refreshTotal:refresh.length,
-      success:!busy&&!mismatch&&(restored||verified),title};
+    return {restored,restoreMismatch,restoreSampleMatch,applied,busy,mismatch,verified,endpoints,refreshFailed,refreshTotal:refresh.length,
+      success:!busy&&!mismatch&&!restored&&verified,title};
   }
   function classify(run) {
     const result = run?.result || {};

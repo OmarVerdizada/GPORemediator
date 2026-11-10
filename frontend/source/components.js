@@ -117,14 +117,21 @@
   function operationStatus(s,h){
     const o=window.GpoUiDomain.outcome(h);
     if(s.serviceOffline||s.serviceTransition)return status(s,window.GpoUiDomain.resultState(h));
+    if(o.restored)return {tone:o.restoreMismatch?'danger':'neutral',label:o.title,
+      html:`<span class="ds-badge ${o.restoreMismatch?'ds-danger':'ds-neutral'}">${esc(o.title)}</span>`};
     if(!o.success)return status(s,window.GpoUiDomain.resultState(h));
-    const label=o.restored?'Rollback successful':'Endpoint values verified';
+    const label='Endpoint values verified';
     return {tone:'success',label,html:`<span class="operation-outcome-badge"><span class="ds-badge ds-success">${icon('check')}${label}</span>${o.refreshFailed?`<small>Refresh: ${o.refreshFailed} failed</small>`:''}</span>`};
   }
   function endpointSummary(s,h){
     const r=h.result||{},o=window.GpoUiDomain.outcome(h),e=o.endpoints,offline=s.serviceOffline||s.serviceTransition;
     const checks=r.endpointChecks||[],unavailable=checks.filter(x=>['UNAVAILABLE','OUTSIDE_SCOPE'].includes(x.state));
-    const value=r.domainPolicy?(o.restored?`AD snapshot value: ${r.restoreChecks?.some(x=>x.area==='DOMAIN_POLICY'&&x.state==='MATCH')?'restored and verified':'see recorded restore checks'}`:`AD value: ${window.GpoUiDomain.domainMismatch(r)?'does not match the request':o.verified?'verified on the selected DC':'read requires review'}`):o.restored?`Post-restore endpoint readings: ${e.observed} observed${e.unavailable?` · ${e.unavailable} unavailable`:''}`:e.total?`Endpoint values: ${e.verified} of ${e.total} verified${e.mismatch?` · ${e.mismatch} mismatch`:''}${e.unavailable?` · ${e.unavailable} unavailable`:''}${e.remaining?` · ${e.remaining} not checked`:''}`:'Endpoint values: no reading collected';
+    const restoreMatches=checks.filter(x=>x.state==='RESTORE_MATCH').length;
+    const restoreMismatches=checks.filter(x=>x.state==='RESTORE_MISMATCH').length;
+    const endpointRestore=o.restoreMismatch||restoreMatches
+      ?`Endpoint rollback sample: ${restoreMatches} match · ${restoreMismatches} differ${e.unavailable?` · ${e.unavailable} unavailable`:''}`
+      :`Endpoint rollback unverified${e.observed?` · ${e.observed} observed`:''}${e.unavailable?` · ${e.unavailable} unavailable`:''}`;
+    const value=r.domainPolicy?(o.restored?`AD snapshot value: ${r.restoreChecks?.some(x=>x.area==='DOMAIN_POLICY'&&x.state==='MATCH')?'restored and verified':'see recorded restore checks'}`:`AD value: ${window.GpoUiDomain.domainMismatch(r)?'does not match the request':o.verified?'verified on the selected DC':'read requires review'}`):o.restored?endpointRestore:e.total?`Endpoint values: ${e.verified} of ${e.total} verified${e.mismatch?` · ${e.mismatch} mismatch`:''}${e.unavailable?` · ${e.unavailable} unavailable`:''}${e.remaining?` · ${e.remaining} not checked`:''}`:'Endpoint values: no reading collected';
     const refresh=r.refreshResults||[],half=refresh.some(x=>x.computerState||x.userState),counts=key=>['COMPLETED','SCHEDULED','FAILED'].map(state=>`${refresh.filter(x=>(key?x[key]:x.state)===state).length} ${state.toLowerCase()}`).join(' · ');
     return `<section class="endpoint-summary ${o.mismatch?'bad':e.unavailable||o.refreshFailed?'partial':'neutral'}" aria-label="Endpoint results"><strong>${offline?'Recorded · ':''}${esc(value)}</strong>${unavailable.length?`<p>${unavailable.map(x=>`${esc(x.hostname)} · value unavailable`).join('<br>')}</p>`:''}${refresh.length?`<p>${half?'Computer refresh: '+counts('computerState')+'<br>Signed-in user refresh: '+counts('userState'):'Endpoint refresh: '+counts('')}</p>`:''}<small>${o.restored?'GPO snapshot restoration is confirmed separately from endpoint undo.':r.domainPolicy?'AD value was checked on the selected controller.':r.endpointCoverage?'Coverage: pinned endpoints for this control.':'Coverage: inspected endpoints only; whole-scope verification is not established.'}</small></section>`;
   }

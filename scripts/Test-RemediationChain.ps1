@@ -20,7 +20,14 @@ function Sysvol-Policies {return $script:folder}
 function Gpo-Folder {param($Id) return $script:folder}
 function Remote-GpoFolder {param($Server,$Id) return $script:folder}
 function Resolve-DnsName {param($Name,$Type,$ErrorAction) [pscustomobject]@{IPAddress='127.0.0.1'}}
-function Invoke-Command {throw 'Fixture attempted unmocked remoting; no endpoint connection is allowed'}
+$script:endpointDword=0
+function Invoke-Command {
+ param($ComputerName,$Authentication,$ErrorAction,$ArgumentList,$ScriptBlock,$SessionOption)
+ if($ArgumentList[-1] -eq $true -and $Data.mapping.id -eq '2.3.10.4'){
+  return @{supported=$true;match=($script:endpointDword -eq 1);actual=('DisableDomainCreds='+$script:endpointDword);message='Fixture DWORD read.'}
+ }
+ throw 'Fixture attempted unmocked remoting; no endpoint connection is allowed'
+}
 function Get-ADDomain {param($Identity,$Server,$ErrorAction) return $domain}
 function Get-ADDomainController {param($Filter,$Server) [pscustomobject]@{HostName=$cfg.domainController}}
 function Get-ADReplicationPartnerMetadata {param($Target,$Scope,$ErrorAction) @()}
@@ -221,7 +228,7 @@ function Test-ExactLockoutIncident($Selection,$Mapping,$ExactFixtures){
 }
 $catalog=(Get-Content (Join-Path $repo 'backend/data/gpo-production-mappings.json') -Raw|ConvertFrom-Json).mappings
 try{
- $cases=@(@('1.1.1','LocalComputers'),@('1.1.1','Domain'),@('1.2.2','Domain'),@('2.2.24','LocalComputers'),@('2.3.1.1','LocalComputers'),@('18.4.4','LocalComputers'),@('17.1.1','LocalComputers'),@('19.5.1.1','Users'))
+ $cases=@(@('1.1.1','LocalComputers'),@('1.1.1','Domain'),@('1.2.2','Domain'),@('2.2.24','LocalComputers'),@('2.3.1.1','LocalComputers'),@('2.3.10.4','LocalComputers'),@('18.4.4','LocalComputers'),@('17.1.1','LocalComputers'),@('19.5.1.1','Users'))
  foreach($entry in @($catalog|Where-Object{$_.domainPolicySensitive -and $_.id -notin @('1.1.1','1.2.2')})){$cases+=,@([string]$entry.id,'Domain')}
  foreach($manual in @($catalog|Where-Object automation -ne 'Automated')){$cases+=,@([string]$manual.id,'LocalComputers')}
  if($AllControls){$cases=@();foreach($entry in $catalog){$cases+=,@([string]$entry.id,$(if($entry.scope -eq 'User'){'Users'}else{'LocalComputers'}));if($entry.domainPolicySensitive){$cases+=,@([string]$entry.id,'Domain')}}}
@@ -263,6 +270,11 @@ try{
   $refreshBefore=$script:refreshes
   $Operation='gpoApply';$Data=@{plan=$plan;mapping=$map;consent=@{confirmation='APPLY'}};$result=& $dispatch
   Check ($result.state -eq 'PUBLISHED') ('backup/write/link/publication '+$map.id+' '+$case[1]+': '+$result.message)
+  if($map.id -eq '2.3.10.4'){
+   $receipt=Get-Content -LiteralPath (Join-Path (Run-Directory $plan) 'manifest.json') -Raw|ConvertFrom-Json
+   Check ($receipt.beforeEndpointReadings.checks[0].actualValue -eq 'DisableDomainCreds=0') 'DisableDomainCreds pre-Apply registry reading is saved with the backup'
+   $script:endpointDword=1
+  }
   Check ($result.currentValueSource.gpoId -eq $gpoId -and $result.currentValueSource.gpoName -eq 'Dedicated pilot') ('configured source '+$map.id)
   # The stored value can match even when the selected target has no direct link.
   $savedLinks=$script:rawLinks;$script:rawLinks=''
@@ -286,6 +298,12 @@ try{
   Check ($result.state -eq 'ROLLED_BACK') ('snapshot rollback '+$map.id)
   $Operation='gpoVerify';$result=& $dispatch
   Check ($result.state -eq 'ROLLED_BACK') ('rollback read-back '+$map.id)
+  if($map.id -eq '2.3.10.4'){
+   Check ($result.effectiveStatus -eq 'ROLLBACK_ENDPOINT_MISMATCH' -and $result.endpointChecks[0].actualValue -eq 'DisableDomainCreds=1') '2.3.10.4 snapshot restore exposes unchanged endpoint policy'
+   $script:endpointDword=0
+   $result=& $dispatch
+   Check ($result.effectiveStatus -eq 'ROLLBACK_ENDPOINT_SAMPLE_MATCH') '2.3.10.4 read-only verification recognizes return to the saved endpoint value'
+  }
   if($map.id -eq '1.2.2' -and $case[1] -eq 'Domain'){Check ($script:domainState.LockoutThreshold -eq 0 -and $result.currentValue -eq '5') 'Rollback restores the recorded AD threshold separately from the GPO snapshot'}else{Check ($null -eq $result.currentValue -and $null -eq $result.currentValueSource) ('rollback clears configured value and source '+$map.id)}
   if($map.id -eq '1.2.2' -and $case[1] -eq 'Domain'){
    $failedPlan=@{id=[guid]::NewGuid().ToString('N');domain=$cfg.domain;domainController=$cfg.domainController;selection=$s}

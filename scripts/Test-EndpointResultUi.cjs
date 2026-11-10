@@ -22,7 +22,13 @@ assert.match(html,/<h2>GPO saved · endpoint mismatch<\/h2>/,'do not hide a meas
 html=view.resultSummary({...run,result:{...run.result,refreshResults:[],effectiveStatus:'ENDPOINT_MISMATCH',endpointChecks:[{hostname:'dc.example.test',state:'MISMATCH',actualValue:'SeNetworkLogonRight=S-1-1-0',message:'Unexpected SID S-1-1-0'},{hostname:'ws.example.test',state:'UNAVAILABLE',actualValue:'',message:'LSA read unavailable'}]}});
 assert(!html.includes('Mixed values'),'Unavailable empty evidence must not become a second measured value');assert.match(html,/SeNetworkLogonRight=S-1-1-0/);assert.match(html,/ws.example.test/);
 html=view.resultSummary({...run,result:{...run.result,state:'ROLLED_BACK',refreshResults:[],effectiveStatus:'ROLLBACK_ENDPOINT_PENDING',endpointChecks:[{hostname:'dc.example.test',state:'OBSERVED',actualValue:'Audit=3',message:'Pre-change effective value was not captured.'}]}});
-assert.match(html,/Rollback completed successfully/);assert.match(html,/Audit=3/);assert.match(html,/Pre-change effective value was not captured/);assert(!html.includes('data-effective-outcome="VERIFIED"'));
+assert.match(html,/GPO snapshot restored/);assert.match(html,/Audit=3/);assert.match(html,/Pre-change effective value was not captured/);assert(!html.includes('data-effective-outcome="VERIFIED"'));
+const sticky={...run,plan:{selection:{setting:'2.3.10.4'},preview:{desiredValue:'1'}},result:{...run.result,state:'ROLLED_BACK',refreshResults:[],effectiveStatus:'ROLLBACK_ENDPOINT_MISMATCH',endpointChecks:[{hostname:'ws.example.test',state:'RESTORE_MISMATCH',actualValue:'DisableDomainCreds=1',message:'Saved endpoint value: DisableDomainCreds=0.'}]}};
+html=view.resultSummary(sticky);
+assert.match(html,/GPO snapshot restored · endpoint value differs/);
+assert.match(html,/0 match · 1 differ/);
+assert.match(html,/Windows must restart/);
+assert(!html.includes('Rollback completed successfully'));
 html=view.resultSummary({...run,result:{...run.result,state:'ROLLBACK_REVIEW_REQUIRED',gpoPublished:false,linkVerified:false,restoreChecks:[{area:'CONTENT',state:'MISMATCH',expected:'before',actual:'after',message:'Different <file>'},{area:'SCOPE_LINKS',state:'MATCH',expected:'link',actual:'link',message:'Original links match.'}]}});
 assert.match(html,/Recorded snapshot read-back/);assert.match(html,/data-restore-check="CONTENT" data-restore-state="MISMATCH"/);assert.match(html,/Different &lt;file&gt;/);assert.match(html,/Scope link list · Matches/);
 console.log('PASS endpoint result UI: failed refresh persists after re-verification, per-host escaped diagnostics, completed counts, guarded manual check and rollback/mismatch outcomes');
@@ -38,6 +44,6 @@ const all={...mixed,result:{...mixed.result,effectiveStatus:'VERIFIED_ON_ALL_TAR
 assert.match(view.resultSummary(all),/<h2>Endpoint values verified<\/h2>/);
 const unlinked={...mixed,result:{...mixed.result,linkVerified:false}};assert(!window.GpoUiDomain.outcome(unlinked).success);assert(!view.resultSummary(unlinked).includes('<h2>GPO saved · endpoint verification incomplete'));
 const restored={...mixed,result:{...mixed.result,state:'ROLLED_BACK',gpoPublished:false,linkVerified:false,effectiveStatus:'ROLLBACK_ENDPOINT_PENDING',endpointChecks:[],refreshResults:[{computer:'ws.example.test',state:'FAILED',computerState:'COMPLETED',userState:'FAILED',message:'Computer completed; user RPC scheduling failed.'}]}};
-html=view.resultSummary(restored);assert.match(html,/<h2>Rollback completed successfully<\/h2>/);assert.match(html,/Computer refresh: 1 completed/);assert.match(html,/Signed-in user refresh: 0 completed · 0 scheduled · 1 failed/);assert(!html.includes('data-effective-outcome="VERIFIED"'));
+html=view.resultSummary(restored);assert.match(html,/<h2>GPO snapshot restored<\/h2>/);assert.match(html,/Computer refresh: 1 completed/);assert.match(html,/Signed-in user refresh: 0 completed · 0 scheduled · 1 failed/);assert(!html.includes('data-effective-outcome="VERIFIED"'));
 const restoreTimeline=window.GpoComponents.timeline({}, {...restored,result:{...restored.result,restoreChecks:[{area:'CONTENT',state:'MATCH'}]}});assert.match(restoreTimeline,/Endpoint readings/);assert.match(restoreTimeline,/No pre-change endpoint baseline; undo cannot be compared/);assert(!restoreTimeline.includes('Effective result'));
 console.log('PASS honest success outcomes: mixed endpoint availability, stale verified flag rejected, all-target success, unlinked plan blocked, successful rollback with failed user refresh');

@@ -1,6 +1,6 @@
-# GPO Remediator 3.18.2
+# GPO Remediator 3.18.3
 
-3.18.2 records workflow acceptance atomically, retains verification after partial refresh, and separates User and Computer refresh contexts after batch rollback. See [release notes](docs/RELEASE-3.18.2.md).
+3.18.3 separates GPO snapshot restoration from endpoint rollback and compares post-restore readings with values captured before Apply. See [release notes](docs/RELEASE-3.18.3.md).
 
 3.17.8 keeps rollback inspection stable across session heartbeats, refreshes recovery checks before confirmation, and separates endpoint policy input, resultant values and unavailable probes. See [release notes](docs/RELEASE-3.17.8.md).
 

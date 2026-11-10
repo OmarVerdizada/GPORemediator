@@ -940,8 +940,37 @@ function Verification-Page($Plan,$Fallback){
     if($offset -lt 0){Fail 'INVALID_REQUEST' 'Invalid verification offset.'}
     return @($all|Select-Object -Skip $offset -First 25)
 }
-function Verify-EffectiveSamples($Plan,$Map){
+function Rollback-DwordItem($Map){
+    $items=@(Read-Field $Map 'items' @())
+    if([string](Read-Field $Map 'scope' '') -eq 'Computer' -and [string](Read-Field $Map 'handler' '') -in @('Registry','RegistrySet') -and
+        $items.Count -eq 1 -and [string]$items[0].type -eq 'DWORD' -and [string]$items[0].key -match '^HKLM\\'){
+        return $items[0]
+    }
+}
+function Rollback-ReadingSignature($Map){
+    $fields=foreach($item in @(Mapping-Items $Map)){
+        [ordered]@{
+            key=[string](Read-Field $item 'key' '')
+            name=[string](Read-Field $item 'name' '')
+            section=[string](Read-Field $item 'section' '')
+            guid=[string](Read-Field $item 'guid' '')
+            type=[string](Read-Field $item 'type' '')
+        }
+    }
+    return ([ordered]@{scope=[string]$Map.scope;handler=[string]$Map.handler;fields=@($fields)}|ConvertTo-Json -Depth 5 -Compress)
+}
+function Read-RollbackSamples($Plan,$Map){
+    $dword=[bool](Rollback-DwordItem $Map)
+    $pinned=Read-Field $Plan.preview 'verificationComputers' $null
+    if($null -eq $pinned){return @(Verify-EffectiveSamples $Plan $Map $dword $true)}
+    $sample=@($pinned|Select-Object -First 5)
+    if(!$sample.Count){return @()}
+    return @(Verify-EffectiveSamples @{selection=$Plan.selection;preview=@{verificationComputers=$sample;impact=$null;refreshComputers=@()}} $Map $dword $true)
+}
+function Verify-EffectiveSamples($Plan,$Map,[bool]$RollbackDword=$false,[bool]$RollbackProbe=$false){
     $s=$Plan.selection;$checks=@();$remoteCredential=Endpoint-CredentialOptions
+    $probeOptions=@{}
+    if($RollbackProbe){$probeOptions.SessionOption=New-PSSessionOption -OpenTimeout 4000 -OperationTimeout 15000}
     if([bool]$Map.domainPolicySensitive){return @()}
     if([string]$Map.scope -eq 'User'){
       $identity=[string](Read-Field $s 'verificationUser' '')
@@ -954,7 +983,7 @@ function Verify-EffectiveSamples($Plan,$Map){
       foreach($hostName in $hosts){
         Send-CheckProgress 'ENDPOINT' 'CHECKING' $hostName 'Reading effective policy on the endpoint.'
         try{
-          $probe=Invoke-Command -ComputerName $hostName -Authentication Kerberos @remoteCredential -ErrorAction Stop -ArgumentList $sid,$expected -ScriptBlock {
+          $probe=Invoke-Command -ComputerName $hostName -Authentication Kerberos @remoteCredential @probeOptions -ErrorAction Stop -ArgumentList $sid,$expected -ScriptBlock {
             param($UserSid,$ExpectedItems)
             $ErrorActionPreference='Stop';$actual=@();$ok=$true
             if(!(Test-Path -LiteralPath ('Registry::HKEY_USERS\'+$UserSid))){return @{supported=$false;match=$false;actual='';message='The selected user profile hive is not loaded on this endpoint. The user must have an active or loaded profile before HKCU policy can be verified.'}}
@@ -982,8 +1011,8 @@ function Verify-EffectiveSamples($Plan,$Map){
     foreach($hostName in $hosts){
         Send-CheckProgress 'ENDPOINT' 'CHECKING' $hostName 'Reading effective policy on the endpoint.'
       try{
-        $probe=Invoke-Command -ComputerName $hostName -Authentication Kerberos @remoteCredential -ErrorAction Stop -ArgumentList $handler,$expected,([string]$Map.comparator),(UserRight-ProbeSource) -ScriptBlock {
-          param($Handler,$ExpectedItems,$Comparator,$UserRightNativeSource)
+        $probe=Invoke-Command -ComputerName $hostName -Authentication Kerberos @remoteCredential @probeOptions -ErrorAction Stop -ArgumentList $handler,$expected,([string]$Map.comparator),(UserRight-ProbeSource),$RollbackDword -ScriptBlock {
+          param($Handler,$ExpectedItems,$Comparator,$UserRightNativeSource,[bool]$RollbackDword)
           $ErrorActionPreference='Stop'
           function Read-IniValue([string]$Text,[string]$Section,[string]$Key){$inside=$false;foreach($line in ($Text -split "`r?`n")){$t=$line.Trim();if($t -match '^\[(.+)\]$'){$inside=($Matches[1] -ieq $Section);continue};if($inside -and $t -match '^([^=]+)=(.*)$' -and $Matches[1].Trim() -ieq $Key){return $Matches[2].Trim()}};return $null}
           function Normalize-Sids([string]$Raw){if($null -eq $Raw){return $null};$v=@();foreach($part in ($Raw -split ',')){if($part.Trim()){$name=$part.Trim().TrimStart('*');if($name -notmatch '^S-\d-(?:\d+-){1,14}\d+$'){$name=([Security.Principal.NTAccount]$name).Translate([Security.Principal.SecurityIdentifier]).Value};$v+=$name}};return (($v|Sort-Object -Unique)-join ',')}
@@ -1058,6 +1087,23 @@ function Verify-EffectiveSamples($Plan,$Map){
             return $null
           }
           $actual=@();$ok=$true
+          if($RollbackDword){
+            $item=@($ExpectedItems)[0]
+            $name=[string]$item.name
+            $path='Registry::HKEY_LOCAL_MACHINE\'+([string]$item.key).Substring(5)
+            $registryKey=$null
+            try{$registryKey=Get-Item -LiteralPath $path -ErrorAction Stop}catch{
+              if($_.FullyQualifiedErrorId -notmatch 'ItemNotFound|PathNotFound'){throw}
+            }
+            if(!$registryKey -or $name -notin $registryKey.GetValueNames()){
+              return @{supported=$true;match=$false;actual=($name+'=<not configured>');message='The endpoint registry value is absent.'}
+            }
+            if($registryKey.GetValueKind($name) -ne [Microsoft.Win32.RegistryValueKind]::DWord){
+              return @{supported=$false;match=$false;state='UNAVAILABLE';actual=$null;message='The endpoint registry type is not DWORD.'}
+            }
+            $value=[string]([long]$registryKey.GetValue($name) -band 4294967295L)
+            return @{supported=$true;match=(Value-Matches $value $item.expected '==');actual=($name+'='+$value);message='The endpoint DWORD was read directly.'}
+          }
           # The policy registry is configuration input. Firewall evidence must
           # additionally query the resultant active store (GPO + local merges).
           if($Handler -in @('Registry','RegistrySet') -and @($ExpectedItems).Count -gt 0 -and @($ExpectedItems|Where-Object{[string]$_.key -notmatch '^HKLM\\SOFTWARE\\Policies\\Microsoft\\WindowsFirewall\\(Domain|Private|Public)Profile(?:\\Logging)?$'}).Count -eq 0){
@@ -1271,14 +1317,38 @@ function Verify-Rollback($Plan,$Map,$Manifest,[bool]$CheckEndpoints=$false){
         try{$actual=Domain-PolicyRead ([string]$entry.property) ([string]$entry.value);if($before -and [string]$entry.property -eq [string]$before.property){$domainPolicy=$actual};$restoreChecks+=@{area='DOMAIN_POLICY';state=$(if([string]$actual.value -ceq [string]$entry.value){'MATCH'}else{'MISMATCH'});expected=[string]$entry.value;actual=[string]$actual.value;message=('Compared saved AD '+[string]$entry.property+' independently of the GPO.')}}catch{$restoreChecks+=@{area='DOMAIN_POLICY';state='UNAVAILABLE';expected=[string]$entry.value;actual=$null;message=('Could not read saved AD '+[string]$entry.property+'.')}}
     }}else{$restoreChecks+=@{area='DOMAIN_POLICY';state='NOT_APPLICABLE';expected=$null;actual=$null;message='No direct AD domain-policy change is part of this record.'}}
     $matches=@($restoreChecks|Where-Object{$_.state -notin @('MATCH','NOT_APPLICABLE')}).Count -eq 0
-    $observed=@()
+    $observed=@();$endpointStatus='ROLLBACK_ENDPOINT_PENDING'
     if($CheckEndpoints -and !$before){
         try{
-            $observed=@(Verify-EffectiveSamples $Plan $Map)
-            foreach($check in $observed){if([string]$check.state -in @('VERIFIED','MISMATCH')){$check.state='OBSERVED';$check.message='Observed after snapshot restore. The pre-change effective endpoint value was not captured, so this observation does not certify an endpoint undo. '+[string]$check.message}}
+            $saved=Read-Field $Manifest 'beforeEndpointReadings' $null
+            $observed=@(Read-RollbackSamples $Plan $Map)
+            $baselines=@{}
+            if($saved -and [string]$saved.signature -ceq (Rollback-ReadingSignature $Map)){
+                foreach($check in @($saved.checks)){
+                    if([string]$check.state -in @('VERIFIED','MISMATCH') -and ![string]::IsNullOrWhiteSpace([string]$check.actualValue)){
+                        $baselines[[string]$check.hostname]=[string]$check.actualValue
+                    }
+                }
+            }
+            foreach($check in $observed){
+                if([string]$check.state -notin @('VERIFIED','MISMATCH')){continue}
+                $prior=$baselines[[string]$check.hostname]
+                if($null -ne $prior){
+                    $check.state=if([string]$check.actualValue -ceq $prior){'RESTORE_MATCH'}else{'RESTORE_MISMATCH'}
+                    $check.message='Saved endpoint value: '+$prior+'. Current endpoint value: '+[string]$check.actualValue+'.'
+                }else{
+                    $sameAsApply=[string]$check.state -eq 'VERIFIED'
+                    $check.state='OBSERVED'
+                    $check.message='No pre-change endpoint reading was recorded for this host. '+[string]$check.message
+                    if($sameAsApply){$check.message+=' The current value matches the Apply request.'}
+                }
+            }
+            if(@($observed|Where-Object state -eq 'RESTORE_MISMATCH').Count){$endpointStatus='ROLLBACK_ENDPOINT_MISMATCH'}
+            elseif($observed.Count -gt 0 -and $observed.Count -eq $baselines.Count -and
+                @($observed|Where-Object state -ne 'RESTORE_MATCH').Count -eq 0){$endpointStatus='ROLLBACK_ENDPOINT_SAMPLE_MATCH'}
         }catch{$observed=@(@{hostname='<endpoint-scope>';state='UNAVAILABLE';actualValue=$null;message=('Post-restore endpoint evidence could not be collected (category '+[string]$_.CategoryInfo.Category+'). Check current authorized endpoint discovery and read access. GPO snapshot restoration is measured separately.')})}
     }
-    return @{restored=[bool]$matches;published=$false;linked=$false;link=(Selected-Link $s.scopeDn $s.gpoId);effective='ROLLBACK_ENDPOINT_PENDING';verification=(Verification-Metadata $s);endpointChecks=$observed;domainPolicy=$domainPolicy;restoreChecks=$restoreChecks;currentValue=(Mapping-Display $s.gpoId $Map $s $false)}
+    return @{restored=[bool]$matches;published=$false;linked=$false;link=(Selected-Link $s.scopeDn $s.gpoId);effective=$endpointStatus;verification=(Verification-Metadata $s);endpointChecks=$observed;domainPolicy=$domainPolicy;restoreChecks=$restoreChecks;currentValue=(Mapping-Display $s.gpoId $Map $s $false)}
 }
 function Failed-RollbackEvidence($Manifest){
     $evidence=@{published=$false;linked=$false;effective='ROLLBACK_ENDPOINT_PENDING';currentValue=$null}
@@ -1382,6 +1452,18 @@ switch($Operation){
             Emit-Stage 'BACKUP'
             $backup=Backup-GPO -Guid ([guid]$s.gpoId) -Path $directory -Domain $cfg.domain -Server $cfg.domainController -Comment ('GpoRemediator '+$plan.id)
             $manifest.backupId=$backup.Id.ToString();$manifest.phase='BACKED_UP';Save-Manifest $manifest $directory
+            if(!$map.domainPolicySensitive){
+                Emit-Stage 'ENDPOINT_BASELINE'
+                try{
+                    $samples=@(Read-RollbackSamples $plan $map | Where-Object {
+                        $_.state -in @('VERIFIED','MISMATCH') -and ![string]::IsNullOrWhiteSpace([string]$_.actualValue)
+                    })
+                }catch{$samples=@()}
+                if($samples.Count){
+                    $manifest.beforeEndpointReadings=@{signature=(Rollback-ReadingSignature $map);checks=$samples}
+                    Save-Manifest $manifest $directory
+                }
+            }
             if((Fingerprint $s.gpoId $s.scopeDn) -cne $plan.preview.fingerprint){Fail 'GPO_CHANGED' 'GPO changed during backup; no policy write started.'}
             Emit-Stage 'WRITING'
             $manifest.phase='WRITING';Save-Manifest $manifest $directory;$null=Write-Mapping $plan $map

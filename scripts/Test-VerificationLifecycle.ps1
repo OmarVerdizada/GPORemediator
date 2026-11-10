@@ -76,6 +76,22 @@ try{
  function Verify-EffectiveSamples {param($Plan,$Map) @(@{hostname='one.example.test';state='VERIFIED';actualValue='Audit=3';message='Measured current audit.'},@{hostname='two.example.test';state='UNAVAILABLE';actualValue=$null;message='Read unavailable.'})}
  $restore=Verify-Rollback @{selection=@{gpoId=$selection.gpoId;scopeDn='OU=Endpoints,DC=example,DC=test'};preview=@{scopeLinks=''}} @{} @{beforeContent='saved-content';beforeExtensions='fixture-extension';beforeUserExtensions='fixture-user-extension'} $true
  Assert-Test ($restore.restored -and $restore.endpointChecks.Count -eq 2 -and $restore.endpointChecks[0].state -eq 'OBSERVED' -and $restore.endpointChecks[0].actualValue -eq 'Audit=3' -and $restore.endpointChecks[1].state -eq 'UNAVAILABLE' -and $restore.effective -eq 'ROLLBACK_ENDPOINT_PENDING') 'post-restore endpoint observations never certify an unknown pre-change endpoint value'
+ $key='HKLM\SYSTEM\CurrentControlSet\Control\Lsa'
+ $dwordMap=@{scope='Computer';handler='Registry';items=@(@{key=$key;name='DisableDomainCreds';type='DWORD'})}
+ $dwordPlan=@{selection=@{gpoId=$selection.gpoId;scopeDn='OU=Endpoints,DC=example,DC=test'};preview=@{scopeLinks='';verificationComputers=@('one.example.test')}}
+ $dwordManifest=@{beforeContent='saved-content';beforeExtensions='fixture-extension';beforeUserExtensions='fixture-user-extension'}
+ $script:dwordCurrent='DisableDomainCreds=1'
+ $readSamples=(Get-Item Function:\Read-RollbackSamples).ScriptBlock
+ function Read-RollbackSamples {param($Plan,$Map) @{hostname='one.example.test';state='VERIFIED';actualValue=$script:dwordCurrent;message='DWORD read.'}}
+ $legacy=Verify-Rollback $dwordPlan $dwordMap $dwordManifest $true
+ Assert-Test ($legacy.restored -and $legacy.endpointChecks[0].state -eq 'OBSERVED' -and $legacy.endpointChecks[0].message -match 'matches the Apply request') 'legacy record exposes the remaining applied value without claiming a known baseline'
+ $dwordManifest.beforeEndpointReadings=@{signature=(Rollback-ReadingSignature $dwordMap);checks=@(@{hostname='one.example.test';state='MISMATCH';actualValue='DisableDomainCreds=0'})}
+ $sticky=Verify-Rollback $dwordPlan $dwordMap $dwordManifest $true
+ Assert-Test ($sticky.restored -and $sticky.effective -eq 'ROLLBACK_ENDPOINT_MISMATCH' -and $sticky.endpointChecks[0].state -eq 'RESTORE_MISMATCH') 'GPO restore can succeed while the endpoint value remains changed'
+ $script:dwordCurrent='DisableDomainCreds=0'
+ $matched=Verify-Rollback $dwordPlan $dwordMap $dwordManifest $true
+ Assert-Test ($matched.restored -and $matched.effective -eq 'ROLLBACK_ENDPOINT_SAMPLE_MATCH' -and $matched.endpointChecks[0].state -eq 'RESTORE_MATCH') 'sample match compares to the captured before value, not Apply'
+ Set-Item Function:\Read-RollbackSamples $readSamples
  function Verify-EffectiveSamples {param($Plan,$Map) throw [UnauthorizedAccessException]::new('Private scope probe fixture')}
  $restore=Verify-Rollback @{selection=@{gpoId=$selection.gpoId;scopeDn='OU=Endpoints,DC=example,DC=test'};preview=@{scopeLinks=''}} @{} @{beforeContent='saved-content';beforeExtensions='fixture-extension';beforeUserExtensions='fixture-user-extension'} $true
  Assert-Test ($restore.restored -and $restore.endpointChecks[0].state -eq 'UNAVAILABLE' -and $restore.endpointChecks[0].message -notmatch 'Private scope probe fixture') 'unavailable endpoint discovery preserves snapshot evidence without leaking exception text'

@@ -125,6 +125,15 @@ failedRefresh=await Done(jobs,failedRefresh.Id);Check(failedRefresh.State=="NEED
 Check(fake.Actions[^1]=="verify:2.3.1.1"&&store.Require<GpoWorkflowRun>("gpo_runs",first.Id).Result.RefreshResults.Single().State=="FAILED",
     "An endpoint refresh failure suppressed read-back or discarded refresh evidence");
 fake.RefreshFails=false;
+var rollbackTarget=await fake.PreviewAsync("secret-session","TEST\\Admin",selection with{Setting="2.3.10.4"},CancellationToken.None);
+await fake.ExecuteAsync(rollbackTarget.Id,"apply",consent,"secret-session","TEST\\Admin");
+fake.RestoreEndpointDiff=true;
+var stickyRollback=jobs.Start("rollback",new(Guid.NewGuid().ToString(),[rollbackTarget.Id],new("ROLLBACK"),"Scope"),"secret-session","TEST\\Admin");
+stickyRollback=await Done(jobs,stickyRollback.Id);
+Check(stickyRollback.State=="NEEDS_REVIEW"&&stickyRollback.Message.Contains("ROLLBACK_ENDPOINT_MISMATCH")&&
+    store.Require<GpoWorkflowRun>("gpo_runs",rollbackTarget.Id).Result.State=="ROLLED_BACK",
+    "Snapshot restore with a sticky endpoint value was reported as complete");
+fake.RestoreEndpointDiff=false;
 // A published audit CSV or scheduled refresh is not evidence of effective change.
 var auditPlan=await fake.PreviewAsync("secret-session","TEST\\Admin",selection with{Setting="17.1.1"},CancellationToken.None);
 fake.EndpointMismatch=true;
@@ -243,6 +252,7 @@ sealed class FakeOperations(Store store,OperationGate gate):IWorkflowOperations
  public readonly List<GpoSelection> PreviewSelections=[];
  public Func<GpoSelection,GpoPreview,GpoPreview>? ConfigurePreview;
  public readonly List<string> Actions=[];public TaskCompletionSource? Block;public bool FailNext;public bool DriftAfterApply;public bool RefreshFails;public bool EndpointMismatch;public bool EndpointUnavailable;public GpoRollbackAnchor? LastAnchor;public string? LastRestore;private string fingerprint="initial";
+ public bool RestoreEndpointDiff;
  public void ValidateConnection(string token,string actor){if(token!="secret-session")throw new PolicyException("GPO_LOGIN_REQUIRED","Reconnect.");}
  public Task<GpoWorkflowPlan> PreviewAsync(string token,string actor,GpoSelection selection,CancellationToken ct,bool requireWriteAccess=true){
   PreviewAccessRequirements.Add(requireWriteAccess);
@@ -256,11 +266,14 @@ sealed class FakeOperations(Store store,OperationGate gate):IWorkflowOperations
   ValidateConnection(token,actor);var plan=store.Require<GpoWorkflowPlan>("gpo_plans",id);var key=Guid.Parse(plan.Selection.GpoId).ToString("D");gate.BeginOperation(key,()=>{},workflowId);
   try{
    Actions.Add(operation+":"+(operation=="refresh"?consent.Refresh:plan.Selection.Setting));if(Block is not null){await Block.Task;Block=null;}
-   var state=FailNext?"REVIEW_REQUIRED":operation=="rollback"?"ROLLED_BACK":"PUBLISHED";FailNext=false;
+   var saved=store.Get<GpoWorkflowRun>("gpo_runs",id);
+   var state=FailNext?"REVIEW_REQUIRED":operation=="rollback"||((operation is "refresh" or "verify")&&saved?.Result.State=="ROLLED_BACK")?"ROLLED_BACK":"PUBLISHED";FailNext=false;
    if(operation=="apply")fingerprint=Guid.NewGuid().ToString("N");if(operation=="rollback"){LastAnchor=rollbackAnchor;LastRestore=id;}
    var result=new GpoWorkflowResult(state,"Recorded",operation=="apply"?"backup-"+id:store.Get<GpoWorkflowRun>("gpo_runs",id)?.Result.BackupId,"backup",fingerprint,operation!="rollback",operation!="rollback",operation=="refresh"?[new("ws.test.local","SCHEDULED","scheduled")]:[],"VERIFIED_ON_SAMPLE",new("1","1",true,[],[],PolicyValues.Now(),true),[new("ws.test.local","VERIFIED","fixture effective value")]);
    if(operation=="verify"&&EndpointMismatch)result=result with{EffectiveStatus="ENDPOINT_MISMATCH",EndpointChecks=[new("ws.test.local","MISMATCH","Audit policy remained unchanged","0")]};
    if(operation=="verify"&&EndpointUnavailable)result=result with{EffectiveStatus="ENDPOINT_VERIFICATION_PENDING",EndpointChecks=[new("ws.test.local","UNAVAILABLE","Endpoint unreachable")]};
+   if(operation=="verify"&&state=="ROLLED_BACK"&&RestoreEndpointDiff)
+    result=result with{EffectiveStatus="ROLLBACK_ENDPOINT_MISMATCH",EndpointChecks=[new("ws.test.local","RESTORE_MISMATCH","Saved DWORD differs","DisableDomainCreds=1")]};
    if(operation=="refresh"&&RefreshFails)result=result with{RefreshResults=[new("ws.test.local","FAILED","RPC unavailable")]};
    if(operation=="verify"&&store.Get<GpoWorkflowRun>("gpo_runs",id) is {} previous)
     result=result with{RefreshResults=previous.Result.RefreshResults,RefreshCoverage=previous.Result.RefreshCoverage};

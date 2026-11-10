@@ -179,12 +179,20 @@ public sealed class WorkspaceWorkflows(Store store,IWorkflowOperations service,O
                 }
             }
             var effectivePending=false;
+            var restoredSnapshot=false;
             var endpointMismatches=new List<string>();
-            if(job.Action is "apply" or "refresh" or "verify"){
+            if(job.Action is "apply" or "refresh" or "verify" or "rollback"){
                 foreach(var id in job.CompletedIds){
                     var measured=job.Action=="verify"?store.Require<GpoWorkflowRun>("gpo_runs",id):
                         await service.ExecuteAsync(id,"verify",new(""),work.Token,job.Actor,job.Id);
-                    if(measured.Result.State=="ROLLED_BACK")continue;
+                    if(measured.Result.State=="ROLLED_BACK"){
+                        restoredSnapshot=true;
+                        if((measured.Result.EndpointChecks??[]).Any(x=>x.State=="RESTORE_MISMATCH"))
+                            endpointMismatches.Add(measured.Plan.Selection.Setting);
+                        continue;
+                    }
+                    if(job.Action=="rollback")
+                        throw new PolicyException("ROLLBACK_REVIEW_REQUIRED","The saved snapshot could not be confirmed on re-verification.");
                     if(HasEndpointMismatch(measured))endpointMismatches.Add(measured.Plan.Selection.Setting);
                     effectivePending|=!GpoAssurance.EffectiveVerified(measured.Result);
                 }
@@ -194,7 +202,11 @@ public sealed class WorkspaceWorkflows(Store store,IWorkflowOperations service,O
                 var mismatches=endpointMismatches.Count==0?"":$" Endpoint values differ for controls {string.Join(", ",endpointMismatches)}.";
                 throw new PolicyException("REFRESH_REVIEW_REQUIRED","Refresh did not finish or schedule on every target. Inspect the per-host refresh and verification results."+mismatches);
             }
-            if(job.VerificationDelays.Length==0)RequireMatchingEndpoints(endpointMismatches);
+            if(job.VerificationDelays.Length==0){
+                if(restoredSnapshot&&endpointMismatches.Count>0)
+                    throw new PolicyException("ROLLBACK_ENDPOINT_MISMATCH","The GPO snapshot was restored. Some endpoint values still differ from their recorded pre-change readings.");
+                RequireMatchingEndpoints(endpointMismatches);
+            }
             if(job.VerificationDelays.Length>0){
                 job=Update(job.Id,j=>j with{State="VERIFY_SCHEDULED",NextCheckAt=DateTimeOffset.UtcNow.AddSeconds(j.VerificationDelays[0]).ToString("O"),Message="Publication/restore completed. Read-only follow-up verification is scheduled."});
                 var scheduleTask=VerifyLater(work,job,ct);schedules[job.Id]=scheduleTask;
@@ -256,7 +268,11 @@ public sealed class WorkspaceWorkflows(Store store,IWorkflowOperations service,O
                         skipped=true;Update(job.Id,j=>j with{Message="A read-only check was skipped while the GPO/service was busy. The remaining scheduled checks are retained."});continue;
                     }
                     if(run.Result.State is "REVIEW_REQUIRED" or "DRIFT_DETECTED" or "ROLLBACK_DRIFT_DETECTED")throw new PolicyException("FOLLOWUP_DRIFT","Follow-up detected drift or an ambiguous result; inspect recovery.");
-                    if(run.Result.State=="ROLLED_BACK")continue;
+                    if(run.Result.State=="ROLLED_BACK"){
+                        if((run.Result.EndpointChecks??[]).Any(x=>x.State=="RESTORE_MISMATCH"))
+                            endpointMismatches.Add(run.Plan.Selection.Setting);
+                        continue;
+                    }
                     if(HasEndpointMismatch(run))endpointMismatches.Add(run.Plan.Selection.Setting);
                     effectivePending|=!GpoAssurance.EffectiveVerified(run.Result);
                 }
