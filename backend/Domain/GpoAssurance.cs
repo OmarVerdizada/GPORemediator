@@ -14,6 +14,18 @@ public static class GpoAssurance
         return r.GpoPublished && r.LinkVerified && r.Verification?.ReplicationConverged==true && EndpointValuesVerified(r);
     }
 
+    public static bool RestoredValuesVerified(GpoWorkflowResult r)
+    {
+        if(r.State!="ROLLED_BACK" || r.Verification?.ReplicationConverged!=true ||
+            r.RestoreChecks is not {Length:>0} restore || restore.Any(x=>x.State is not ("MATCH" or "NOT_APPLICABLE")))return false;
+        if(r.DomainPolicy is { } policy)
+            return !string.IsNullOrWhiteSpace(policy.DomainController) && !DomainMismatch(r) && restore.Any(x=>x.Area=="DOMAIN_POLICY"&&x.State=="MATCH");
+        var checks=r.EndpointChecks??[];
+        return r.EffectiveStatus=="ROLLBACK_ENDPOINT_SAMPLE_MATCH" && checks.Length>0 &&
+            checks.All(x=>x.State=="RESTORE_MATCH"&&!string.IsNullOrWhiteSpace(x.Hostname)) &&
+            checks.Select(x=>x.Hostname).Distinct(StringComparer.OrdinalIgnoreCase).Count()==checks.Length;
+    }
+
     private static bool EndpointValuesVerified(GpoWorkflowResult r)
     {
         if(DomainMismatch(r))return false;

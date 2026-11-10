@@ -73,7 +73,9 @@ try{
  $script:denyPath=$unrelated
  $script:gpoAttributes=@('gPCMachineExtensionNames');Reject {Assert-SelectionAccess $selection $mapping} 'GPO_EDIT_ACCESS_DENIED'
  $script:gpoAttributes=@('versionNumber','gPCMachineExtensionNames');$script:ouAttributes=@('description');Reject {Assert-SelectionAccess $selection $mapping} 'OU_LINK_ACCESS_DENIED'
- $script:existingLink=@{enabled=$true;order=3};$null=Assert-SelectionAccess $selection $mapping
+ $script:existingLink=@{enabled=$true;order=3;enforced=$false};$null=Assert-SelectionAccess $selection $mapping
+ Reject {Assert-SelectionAccess $selection $mapping @{existingLink=$null}} 'OU_LINK_ACCESS_DENIED'
+ $null=Assert-SelectionAccess $selection $mapping @{existingLink=$script:existingLink}
  $selection.firstLink=$true;Reject {Assert-SelectionAccess $selection $mapping} 'OU_LINK_ACCESS_DENIED'
  $selection.firstLink=$false;$script:existingLink=$null
  $script:ouAttributes=@('gPLink');$script:fileAllowed=$false;Reject {Assert-SelectionAccess $selection $mapping} 'SYSVOL_WRITE_ACCESS_DENIED'

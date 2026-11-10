@@ -438,6 +438,11 @@ function Link-ChangeRequired($S,$Link){
     if($null -eq $Link){return $true}
     return (!$Link.enabled -or ([bool](Read-Field $S 'firstLink' $false) -and [int]$Link.order -ne 1))
 }
+function Restore-LinkChangeRequired($Saved,$Current){
+    if($null -eq $Saved){return ($null -ne $Current)}
+    return ($null -eq $Current -or [int]$Saved.order -ne [int]$Current.order -or
+        [bool]$Saved.enabled -ne [bool]$Current.enabled -or [bool]$Saved.enforced -ne [bool]$Current.enforced)
+}
 function Policy-WritePaths($S,$Map){
     $folder=Gpo-Folder $S.gpoId
     $branch=if([string]$Map.scope -eq 'User'){'User'}else{'Machine'}
@@ -458,13 +463,17 @@ function Policy-WritePaths($S,$Map){
     $paths+=@($parent)
     return @($paths|Select-Object -Unique)
 }
-function Selection-Access($S,$Map){
+function Selection-Access($S,$Map,$RestorePreview=$null){
     $checks=@()
     $gpoDn='CN='+([guid]$S.gpoId).ToString('B').ToUpperInvariant()+',CN=Policies,CN=System,'+$domainDn
     $extension=if([string]$Map.scope -eq 'User'){'gPCUserExtensionNames'}else{'gPCMachineExtensionNames'}
     $checks+=@{id='gpo-edit';state=(Attribute-WriteState $gpoDn @('versionNumber',$extension));code='GPO_EDIT_ACCESS_DENIED';label='GPO edit authority'}
     $linkState='UNKNOWN'
-    try{$link=Selected-Link ([string]$S.scopeDn) ([string]$S.gpoId);$linkState=if(Link-ChangeRequired $S $link){Attribute-WriteState ([string]$S.scopeDn) @('gPLink')}else{'ALLOWED'}}catch{}
+    try{
+        $link=Selected-Link ([string]$S.scopeDn) ([string]$S.gpoId)
+        $needsLinkWrite=if($null -ne $RestorePreview){Restore-LinkChangeRequired (Read-Field $RestorePreview 'existingLink' $null) $link}else{Link-ChangeRequired $S $link}
+        $linkState=if($needsLinkWrite){Attribute-WriteState ([string]$S.scopeDn) @('gPLink')}else{'ALLOWED'}
+    }catch{}
     $checks+=@{id='link-write';state=$linkState;code='OU_LINK_ACCESS_DENIED';label='GPO link authority or unchanged link'}
     $fileState='UNKNOWN'
     try{
@@ -474,8 +483,8 @@ function Selection-Access($S,$Map){
     $checks+=@{id='sysvol-write';state=$fileState;code='SYSVOL_WRITE_ACCESS_DENIED';label='SYSVOL GPO write authority'}
     return @{checks=@($checks);executionUser=[Security.Principal.WindowsIdentity]::GetCurrent().Name}
 }
-function Assert-SelectionAccess($S,$Map){
-    $access=Selection-Access $S $Map
+function Assert-SelectionAccess($S,$Map,$RestorePreview=$null){
+    $access=Selection-Access $S $Map $RestorePreview
     $denied=@($access.checks|Where-Object{$_.state -eq 'DENIED'}|Select-Object -First 1)
     if($denied.Count){
         $code=[string]$denied[0].code
@@ -1482,6 +1491,11 @@ function Run-Directory($Plan){
     if(Test-Path -LiteralPath $directory){Assert-BackupStorage $directory -Recurse}
     return $directory
 }
+function Test-RecoveryBackup([string]$Directory,$Manifest){
+    $id=[guid]::Empty
+    if(![guid]::TryParse([string](Read-Field $Manifest 'backupId' ''),[ref]$id) -or $id -eq [guid]::Empty){return $false}
+    return (Test-Path -LiteralPath (Join-Path (Join-Path $Directory $id.ToString('B')) 'DomainSysvol\GPO') -PathType Container)
+}
 function Save-Manifest($Manifest,[string]$Directory){Atomic-Text (Join-Path $Directory 'manifest.json') ($Manifest|ConvertTo-Json -Depth 50) ([Text.UTF8Encoding]::new($false))}
 function Read-Field($Object,[string]$Name,$Default=$null){
     if($null -eq $Object){return $Default}
@@ -1738,12 +1752,17 @@ switch($Operation){
         $assessment=@{canRestore=$false;driftDetected=$false;manifestPhase=$phase;backupId=(Read-Field $m 'backupId' $null);hasPostFingerprint=[bool](Read-Field $m 'postFingerprint' $null);checkedAt=[DateTimeOffset]::UtcNow.ToString('O');failure=$null;restoreChecks=(Read-Field $restoreReadback 'restoreChecks' $null)}
         if($phase -eq 'ROLLED_BACK' -and @($assessment.restoreChecks|Where-Object{$_.state -eq 'UNAVAILABLE'}).Count){$assessment.reason='RESTORE_EVIDENCE_UNAVAILABLE';$assessment.message='Required snapshot evidence could not be established. Inspect the individual restore checks before another restore.';return $assessment}
         if($failure){$assessment.failure=@{code=[string](Read-Field $failure 'code' '');stage=[string](Read-Field $failure 'stage' '');message=[string](Read-Field $failure 'message' '')}}
+        if((Read-Field $m 'backupId' $null) -and !(Test-RecoveryBackup $directory $m)){$assessment.reason='BACKUP_FILES_UNAVAILABLE';$assessment.message='The backup is recorded, but its native GPO files are missing or unavailable on the selected controller. Restore access to the retained backup before retrying.';return $assessment}
         if((Read-Field $m 'backupId' $null) -and !(Read-Field $m 'postFingerprint' $null)){$assessment.reason='UNANCHORED_POST_STATE';$assessment.message='The retained backup exists, but a complete matching post-write state could not be proven. Check later GPO/AD changes and backup integrity before full restore. Live publication verification and explicit refresh do not authorize overwriting unrelated changes.';return $assessment}
         if(!(Read-Field $m 'backupId' $null) -or !(Read-Field $m 'postFingerprint' $null)){$assessment.reason='INCOMPLETE_BACKUP';$assessment.message='A completed backup and post-write fingerprint are required. Run read-only Verify and inspect the retained manifest; do not retry restore blindly.';return $assessment}
         if($phase -notin @('PUBLISHED','VERIFY_MISMATCH','ROLLED_BACK')){$assessment.reason='MANUAL_REVIEW_REQUIRED';$assessment.message=('Manifest phase '+$phase+' requires independent recovery review. Run read-only Verify to establish whether the original snapshot is already restored. Partial or unanchored writes require administrator assessment.');return $assessment}
         $current=Fingerprint $s.gpoId $s.scopeDn
         $expected=Rollback-ExpectedFingerprint $plan $m $current
         $drift=(!$expected -or $current -cne [string]$expected)
+        if(!$drift){
+            try{$null=Assert-SelectionAccess $s $Data.mapping $plan.preview}
+            catch{$problem=Operation-Failure $_ 'RESTORE_ACCESS_CHECK';$assessment.reason=$problem.code;$assessment.message=$problem.message;return $assessment}
+        }
         $gpo=Get-GPO -Guid ([guid]$s.gpoId) -Domain $cfg.domain -Server $cfg.domainController
         $direct=Selected-Link $s.scopeDn $s.gpoId
         return @{canRestore=(-not $drift);driftDetected=[bool]$drift;restoreMethod='Import-GPO';restorePermissionVerified=$false;manifestPhase=$phase;hasPostFingerprint=$assessment.hasPostFingerprint;failure=$assessment.failure;reason=$(if($drift){'ROLLBACK_CONFLICT'}else{'READY'});message=$(if($drift){'The live GPO, its link or the recorded AD domain setting changed since Apply; rollback must not overwrite the external change.'}else{'Live fingerprint matches the saved post-apply state. Recovery imports the saved settings into the same GPO and preserves its ACL. Edit settings, backup read access and required link authority are checked again before import.'});gpoName=[string]$gpo.DisplayName;gpoId=[string]$s.gpoId;scopeDn=[string]$s.scopeDn;backupId=[string]$m.backupId;controlId=[string]$m.mappingId;domainSnapshotDiverges=([bool](Read-Field $m 'beforeDomainPolicy' $null) -and [string]$plan.preview.previousValue -match '^\d+$' -and !(Numeric-Complies ([string]$m.beforeDomainPolicy.value) ([string]$plan.preview.previousValue) '=='));beforeValue=[string]$plan.preview.previousValue;afterValue=[string]$plan.preview.desiredValue;beforeDomainPolicy=(Read-Field $m 'beforeDomainPolicy' $null);afterDomainPolicy=(Read-Field $m 'afterDomainPolicy' $null);beforeLink=$plan.preview.existingLink;currentLink=$direct;otherLinkedScopes=@($plan.preview.impact.existingLinkScopes);fullGpoRestore=$true;checkedAt=$assessment.checkedAt;restoreChecks=$assessment.restoreChecks}
@@ -1754,6 +1773,7 @@ switch($Operation){
         $restoreStarted=$false;$phaseBeforeRestore=[string]$manifest.phase
         try{
             Emit-Stage 'RESTORE_PREFLIGHT'
+            if(!(Test-RecoveryBackup $directory $manifest)){Fail 'ROLLBACK_NOT_AVAILABLE' 'The recorded native GPO backup files are missing or unavailable. Restore was not started.'}
             if([string]$manifest.phase -in @('PUBLICATION_PENDING','REVIEW_REQUIRED')){$observed=Verify-Published $plan $map $false;$null=Reconcile-Publication $plan $map $manifest $directory $observed}
             $phaseBeforeRestore=[string]$manifest.phase
             if(!(Read-Field $manifest 'postFingerprint' $null)){Fail 'ROLLBACK_VERSION_UNKNOWN' 'No complete post-write state could be proven from the checkpoint or retained backup. Restore was not started; inspect the retained evidence before recovery.'}
@@ -1776,7 +1796,7 @@ switch($Operation){
                 if($batchPolicies.Count){$manifest|Add-Member -NotePropertyName beforeBatchDomainPolicies -NotePropertyValue $batchPolicies -Force}
             }
             Emit-Stage 'RESTORE_ACCESS_CHECK'
-            $null=Assert-SelectionAccess $s $map
+            $null=Assert-SelectionAccess $s $map $plan.preview
             $domainBefore=Read-Field $manifest 'beforeDomainPolicy' $null
             $batchPolicies=@(Read-Field $manifest 'beforeBatchDomainPolicies' @())
             if($batchPolicies.Count){$null=Domain-BatchOptions $batchPolicies}else{
@@ -1792,8 +1812,11 @@ switch($Operation){
             if($batchPolicies.Count){Emit-Stage 'RESTORING_DOMAIN_POLICY';Domain-BatchRestore $batchPolicies}elseif($domainBefore){Emit-Stage 'RESTORING_DOMAIN_POLICY';$null=Domain-PolicyWrite ([string]$domainBefore.property) ([string]$domainBefore.value)}
             Emit-Stage 'RESTORING_LINK'
             $before=$plan.preview.existingLink
-            if($null -eq $before){Remove-GPLink -Guid ([guid]$s.gpoId) -Target $s.scopeDn -Domain $cfg.domain -Server $cfg.domainController -Confirm:$false|Out-Null}
-            else{Set-GPLink -Guid ([guid]$s.gpoId) -Target $s.scopeDn -Domain $cfg.domain -Server $cfg.domainController -Order ([int]$before.order) -LinkEnabled $(if($before.enabled){'Yes'}else{'No'}) -Enforced $(if($before.enforced){'Yes'}else{'No'})|Out-Null}
+            $currentLink=Selected-Link $s.scopeDn $s.gpoId
+            if(Restore-LinkChangeRequired $before $currentLink){
+                if($null -eq $before){Remove-GPLink -Guid ([guid]$s.gpoId) -Target $s.scopeDn -Domain $cfg.domain -Server $cfg.domainController -Confirm:$false|Out-Null}
+                else{Set-GPLink -Guid ([guid]$s.gpoId) -Target $s.scopeDn -Domain $cfg.domain -Server $cfg.domainController -Order ([int]$before.order) -LinkEnabled $(if($before.enabled){'Yes'}else{'No'}) -Enforced $(if($before.enforced){'Yes'}else{'No'})|Out-Null}
+            }
             Emit-Stage 'RESTORE_CHECK'
             $v=Verify-Rollback $plan $map $manifest;$matches=[bool]$v.restored
             $manifest.phase=if($matches){'ROLLED_BACK'}else{'ROLLBACK_REVIEW_REQUIRED'}

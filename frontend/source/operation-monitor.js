@@ -22,7 +22,7 @@ window.GpoOperationMonitor={create({state,api,render}){
   if(renderPending&&!state.busy&&!state.confirmAction&&!state.scopeModal&&!state.notificationOpen&&!state.inspectedOperation&&!state.helpOpen&&(!document.activeElement?.closest('form')||location.hash==='#/control'&&state.tab==='verification')){renderPending=false;render();}
  }
  async function submitSingle(action,id,consent,refresh='None'){
-  if(action==='refresh'||action==='rollback')await api('/gpo/'+id+'/authorize',{});
+  if(action==='refresh')await api('/gpo/'+id+'/authorize',{});
   const job=await api('/workflows/'+action,{requestId:crypto.randomUUID(),planIds:[id],consent,refresh,verificationDelays:[]});
   const selection=(state.history.find(h=>h.id===id)?.plan||state.plan)?.selection;
   state.singleOperation={id,selection:selection?{...selection}:null,setting:selection?.setting||state.selectedRule?.backendSetting,jobId:job.id,action,startedAt:new Date().toISOString(),job,pollError:''};

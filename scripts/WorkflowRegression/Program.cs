@@ -221,6 +221,7 @@ using(var grantStore=new Store(":memory:")){
  Reject(()=>grantService.ValidateSubmission(grantPlan.Id,"apply",new("APPLY",true,ChangeReference:"CHG-test"),"two",grantPlan.Actor),"GPO_WRITE_NOT_AUTHORIZED");
  Reject(()=>grantService.ValidateSubmission(grantPlan.Id,"apply",new("APPLY",true,ChangeReference:"CHG-test"),"one","EXAMPLE\\Other"),"GPO_LOGIN_REQUIRED");
  grantStore.Put("gpo_runs",grantPlan.Id,new GpoWorkflowRun(grantPlan.Id,grantPlan,new("PUBLISHED","",null,null,null,true,true,[],"ENDPOINT_VERIFICATION_PENDING"),PolicyValues.Now()));
+ Reject(()=>grantService.ValidateSubmission(grantPlan.Id,"rollback",new("ROLLBACK"),"two",grantPlan.Actor),"ROLLBACK_NOT_AVAILABLE");
  await grantService.AuthorizeRecordedTargetAsync(grantPlan.Id,"one",grantPlan.Actor,CancellationToken.None);
  Reject(()=>grantService.AuthorizeRecordedTargetAsync(grantPlan.Id,"one","EXAMPLE\\Other",CancellationToken.None).GetAwaiter().GetResult(),"GPO_LOGIN_REQUIRED");
  var dependent=grantPlan with{Id="dependency-plan",Preview=grantPreview with{Dependency=new("DOMAIN_LOCKOUT_DEPENDENCY","Review 1.2.4 first","1.2.4",15,"LockoutObservationWindow","30")}};
@@ -229,6 +230,17 @@ using(var grantStore=new Store(":memory:")){
  Check(PolicyValues.Hash(JsonDefaults.Deserialize<GpoPreview>(JsonDefaults.Serialize(grantPreview)))==PolicyValues.Hash(grantPreview),"Absent dependency changed legacy preview serialization");
  Console.WriteLine("PASS lockout prerequisite blocks submission; recorded target authorization reuses current exact grant and rejects other actors");
  grantService.Disconnect("one");Reject(()=>grantService.AuthorizePreviewTarget("one",grantPlan.Actor,grantSelection,grantPreview,false),"GPO_LOGIN_REQUIRED");
+ var executed=grantStore.Require<GpoWorkflowRun>("gpo_runs",grantPlan.Id);
+ grantStore.Put("gpo_runs",grantPlan.Id,executed with{Result=executed.Result with{BackupId="retained-backup"}});
+ using var restarted=new GpoWorkflowService(grantCfg,grantStore,new OperationGate(grantStore),new EphemeralDataProtectionProvider(),new WindowsPowerShellExecutor(NullLogger<WindowsPowerShellExecutor>.Instance));
+ var restartedSessions=typeof(GpoWorkflowService).GetField("connections",BindingFlags.Instance|BindingFlags.NonPublic)!.GetValue(restarted)!;
+ var reconnected=Activator.CreateInstance(grantType,BindingFlags.Instance|BindingFlags.Public|BindingFlags.NonPublic,null,[grantPlan.Actor,grantInv.ExecutionUser,Array.Empty<byte>(),grantInv,DateTimeOffset.UtcNow.AddMinutes(15),DateTimeOffset.UtcNow],null)!;
+ restartedSessions.GetType().GetMethod("TryAdd")!.Invoke(restartedSessions,["reconnected",reconnected]);
+ Reject(()=>restarted.ValidateSubmission(grantPlan.Id,"rollback",new("ROLLBACK"),"one",grantPlan.Actor),"GPO_LOGIN_REQUIRED");
+ Check(restarted.ValidateSubmission(grantPlan.Id,"rollback",new("ROLLBACK"),"reconnected",grantPlan.Actor).Id==grantPlan.Id,"Saved rollback was rejected by a freshly started service with no Apply grant");
+ Reject(()=>restarted.ValidateSubmission(grantPlan.Id,"apply",new("APPLY",true),"reconnected",grantPlan.Actor),"GPO_WRITE_NOT_AUTHORIZED");
+ Reject(()=>restarted.ValidateSubmission(grantPlan.Id,"rollback",new("ROLLBACK"),"reconnected","EXAMPLE\\Other"),"GPO_LOGIN_REQUIRED");
+ Console.WriteLine("PASS restarted service accepts the saved rollback with fresh authentication and grants no Apply permission");
  ConnectGrant("expired",DateTimeOffset.UtcNow.AddHours(-3));Reject(()=>grantService.AuthorizePreviewTarget("expired",grantPlan.Actor,grantSelection,grantPreview,false),"GPO_LOGIN_REQUIRED");
  Console.WriteLine("PASS session target authorization: second GPO without config changes/restart; preview/readiness, exact pair, actor, other-session, disconnect and absolute-expiry guards; no native execution");
 }

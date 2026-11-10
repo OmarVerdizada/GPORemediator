@@ -1,4 +1,6 @@
-# GPO Remediator 3.18.4
+# GPO Remediator 3.18.5
+
+3.18.5 reopens recorded rollback after restart and reports snapshot and endpoint verification separately. See [release notes](docs/RELEASE-3.18.5.md).
 
 3.18.4 adds reviewed endpoint registry recovery for supported rollback mismatches and distinguishes absent values from empty lists. See [release notes](docs/RELEASE-3.18.4.md).
 

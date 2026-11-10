@@ -206,6 +206,7 @@ $plan=[pscustomobject]@{id='batch-first';selection=[pscustomobject]@{gpoId='31b2
 $anchorPlan=[pscustomobject]@{id='batch-last';selection=$plan.selection}
 function Run-Directory {param($Plan) if($Plan.id -eq 'batch-last'){return $script:batchLast};return $script:batchFirst}
 $firstManifest=@{phase='PUBLISHED';postFingerprint='batch-first';backupId='22222222-2222-2222-2222-222222222222';beforeContent=$content;beforeExtensions='security';directory=$script:batchFirst}
+$null=New-Item -ItemType Directory -Path (Join-Path $script:batchFirst '{22222222-2222-2222-2222-222222222222}\DomainSysvol\GPO') -Force
 $firstManifest|ConvertTo-Json -Depth 5|Set-Content (Join-Path $script:batchFirst 'manifest.json')
 @{phase='PUBLISHED';postFingerprint='batch-last'}|ConvertTo-Json|Set-Content (Join-Path $script:batchLast 'manifest.json')
 $script:currentFingerprint='batch-last';$script:restoreCalls=0

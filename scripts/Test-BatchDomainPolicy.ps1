@@ -43,7 +43,7 @@ try{
  function Compare-RestoreContent {param($Plan,$Manifest) @{matches=$true;expected='same';actual='same';message='Private snapshot fixture'}}
  function Gpo-Ad {param($Id) @{gPCMachineExtensionNames='machine';gPCUserExtensionNames='user'}}
  function Scope-Links {param($Dn) 'links'}
- function Selected-Link {param($Dn,$Id) @{enabled=$true;order=1}}
+ function Selected-Link {param($Dn,$Id) @{enabled=$true;order=1;enforced=$false}}
  function Verification-Metadata {param($S) @{replicationConverged=$true}}
  function Mapping-Display {param($Id,$Map,$S,$Desired) $null}
  $a.preview=@{scopeLinks='links'};$manifest.beforeContent='same';$manifest.beforeExtensions='machine';$manifest.beforeUserExtensions='user';$manifest.beforeDomainPolicy=@{property='LockoutObservationWindow';value='30'}
@@ -63,6 +63,7 @@ try{
  $a.preview.existingLink=@{order=1;enabled=$true;enforced=$false};$a.preview.gpo=@{id=$gpo;name='Fixture policy'}
  $backup='22222222-2222-2222-2222-222222222222'
  foreach($pair in @(@{plan=$a;property='LockoutObservationWindow';post='first'},@{plan=$b;property='LockoutDuration';post='final'})){
+  $null=New-Item -ItemType Directory -Path (Join-Path (Run-Directory $pair.plan) ('{'+$backup+'}\DomainSysvol\GPO')) -Force
   Save-Manifest @{plan=$pair.plan;mappingId=$pair.plan.selection.setting;phase='PUBLISHED';backupId=$backup;directory=(Run-Directory $pair.plan);postFingerprint=$pair.post;beforeContent='same';beforeExtensions='machine';beforeUserExtensions='user';beforeDomainPolicy=@{property=$pair.property;value='30'};afterDomainPolicy=@{property=$pair.property;value='15'}} (Run-Directory $pair.plan)
  }
  $switch=$ast.FindAll({param($n)$n -is [Management.Automation.Language.SwitchStatementAst]},$false)|Select-Object -Last 1

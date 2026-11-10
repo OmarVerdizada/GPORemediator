@@ -189,6 +189,7 @@ public sealed class WorkspaceWorkflows(Store store,IWorkflowOperations service,O
                         restoredSnapshot=true;
                         if((measured.Result.EndpointChecks??[]).Any(x=>x.State=="RESTORE_MISMATCH"))
                             endpointMismatches.Add(measured.Plan.Selection.Setting);
+                        effectivePending|=job.SourceWorkflowId is not null || !GpoAssurance.RestoredValuesVerified(measured.Result);
                         continue;
                     }
                     if(job.Action=="rollback")
@@ -203,17 +204,15 @@ public sealed class WorkspaceWorkflows(Store store,IWorkflowOperations service,O
                 throw new PolicyException("REFRESH_REVIEW_REQUIRED","Refresh did not finish or schedule on every target. Inspect the per-host refresh and verification results."+mismatches);
             }
             if(job.VerificationDelays.Length==0){
-                if(restoredSnapshot&&endpointMismatches.Count>0)
-                    throw new PolicyException("ROLLBACK_ENDPOINT_MISMATCH","The GPO snapshot was restored. Some endpoint values still differ from their recorded pre-change readings.");
-                RequireMatchingEndpoints(endpointMismatches);
+                RequireMatchingEndpoints(endpointMismatches,restoredSnapshot);
             }
             if(job.VerificationDelays.Length>0){
                 job=Update(job.Id,j=>j with{State="VERIFY_SCHEDULED",NextCheckAt=DateTimeOffset.UtcNow.AddSeconds(j.VerificationDelays[0]).ToString("O"),Message="Publication/restore completed. Read-only follow-up verification is scheduled."});
                 var scheduleTask=VerifyLater(work,job,ct);schedules[job.Id]=scheduleTask;
                 _=scheduleTask.ContinueWith(_=>schedules.TryRemove(job.Id,out var removed),TaskScheduler.Default);
             }else Finish(job.Id,effectivePending?"CHECKS_INCOMPLETE":"COMPLETED",effectivePending?
-                "GPO operation recorded, but effective endpoint application is not verified. Inspect endpoint values and replication; refresh or re-verify after policy processing.":
-                "Server workflow finished. Inspect publication, replication and endpoint evidence separately.");
+                restoredSnapshot?"GPO snapshot restored. Endpoint rollback verification is incomplete. Inspect the per-host readings and replication.":"GPO operation recorded, but effective endpoint application is not verified. Inspect endpoint values and replication; refresh or re-verify after policy processing.":
+                restoredSnapshot?"GPO snapshot and the recorded restore values match. Inspect the verification scope and readings.":"Server workflow finished. Inspect publication, replication and endpoint evidence separately.");
         }catch(OperationCanceledException)when(ct.IsCancellationRequested){Finish(job.Id,"WAITING_CONNECTION","Service stopping. No remaining step will be replayed automatically.");}
         catch(Exception error){FailJob(job.Id,error);}
         finally{if(work.Resource is not null)gate.Release(work.Resource,job.Id);}
@@ -253,9 +252,10 @@ public sealed class WorkspaceWorkflows(Store store,IWorkflowOperations service,O
     private async Task VerifyLater(Work work,WorkflowJob job,CancellationToken ct){
         try{
             var start=clock.GetUtcNow();
-            var skipped=false;var effectivePending=false;
+            var skipped=false;var effectivePending=false;var restoredSnapshot=false;
             foreach(var seconds in job.VerificationDelays){
                 effectivePending=false;
+                restoredSnapshot=false;
                 var endpointMismatches=new List<string>();
                 var due=start.AddSeconds(seconds);Update(job.Id,j=>j with{NextCheckAt=due.ToString("O")});
                 var delay=due-clock.GetUtcNow();if(delay>TimeSpan.Zero)await Task.Delay(delay,clock,ct);
@@ -269,17 +269,19 @@ public sealed class WorkspaceWorkflows(Store store,IWorkflowOperations service,O
                     }
                     if(run.Result.State is "REVIEW_REQUIRED" or "DRIFT_DETECTED" or "ROLLBACK_DRIFT_DETECTED")throw new PolicyException("FOLLOWUP_DRIFT","Follow-up detected drift or an ambiguous result; inspect recovery.");
                     if(run.Result.State=="ROLLED_BACK"){
+                        restoredSnapshot=true;
                         if((run.Result.EndpointChecks??[]).Any(x=>x.State=="RESTORE_MISMATCH"))
                             endpointMismatches.Add(run.Plan.Selection.Setting);
+                        effectivePending|=job.SourceWorkflowId is not null || !GpoAssurance.RestoredValuesVerified(run.Result);
                         continue;
                     }
                     if(HasEndpointMismatch(run))endpointMismatches.Add(run.Plan.Selection.Setting);
                     effectivePending|=!GpoAssurance.EffectiveVerified(run.Result);
                 }
-                if(seconds==job.VerificationDelays[^1])RequireMatchingEndpoints(endpointMismatches);
+                if(seconds==job.VerificationDelays[^1])RequireMatchingEndpoints(endpointMismatches,restoredSnapshot);
                 Update(job.Id,j=>j with{Message="Read-only follow-up completed at "+PolicyValues.Now()});
             }
-            Finish(job.Id,skipped||effectivePending?"CHECKS_INCOMPLETE":"COMPLETED",skipped?"One or more scheduled checks were skipped while busy. Submit read-only Verify after the current GPO operation finishes.":effectivePending?"Scheduled checks ended without verified endpoint application. Inspect the pending endpoint/replication evidence.":"Scheduled checks completed with verified effective values.");
+            Finish(job.Id,skipped||effectivePending?"CHECKS_INCOMPLETE":"COMPLETED",skipped?"One or more scheduled checks were skipped while busy. Submit read-only Verify after the current GPO operation finishes.":effectivePending?restoredSnapshot?"GPO snapshot restored. Scheduled checks did not establish endpoint rollback.":"Scheduled checks ended without verified endpoint application. Inspect the pending endpoint/replication evidence.":"Scheduled checks completed with verified effective values.");
         }catch(OperationCanceledException)when(ct.IsCancellationRequested){Finish(job.Id,"WAITING_CONNECTION","Follow-up interrupted by service shutdown. Reconnect and submit read-only verification.");}
         catch(Exception error){FailJob(job.Id,error);}
     }
@@ -296,7 +298,9 @@ public sealed class WorkspaceWorkflows(Store store,IWorkflowOperations service,O
         return result.State=="REFRESH_PARTIAL" || result.RefreshResults.Length==0 || result.RefreshCoverage is {Complete:false} ||
             result.RefreshResults.Any(x=>x.State is not ("COMPLETED" or "SCHEDULED"));
     }
-    private static void RequireMatchingEndpoints(List<string> controls){
+    private static void RequireMatchingEndpoints(List<string> controls,bool restoredSnapshot){
+        if(restoredSnapshot&&controls.Count>0)
+            throw new PolicyException("ROLLBACK_ENDPOINT_MISMATCH","The GPO snapshot was restored. Some endpoint values still differ from their recorded pre-change readings.");
         if(controls.Count>0)
             throw new PolicyException("ENDPOINT_POLICY_MISMATCH",$"Endpoint values differ from the request for controls {string.Join(", ",controls)}. Open each control's verification details for measured values and processing evidence.");
     }

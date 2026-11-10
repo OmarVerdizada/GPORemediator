@@ -134,6 +134,14 @@ Check(stickyRollback.State=="NEEDS_REVIEW"&&stickyRollback.Message.Contains("ROL
     store.Require<GpoWorkflowRun>("gpo_runs",rollbackTarget.Id).Result.State=="ROLLED_BACK",
     "Snapshot restore with a sticky endpoint value was reported as complete");
 fake.RestoreEndpointDiff=false;
+var restoredPending=jobs.Start("verify",new(Guid.NewGuid().ToString(),[rollbackTarget.Id],new("")),"secret-session","TEST\\Admin");
+restoredPending=await Done(jobs,restoredPending.Id);
+Check(restoredPending.State=="CHECKS_INCOMPLETE"&&restoredPending.Message.Contains("Endpoint rollback verification is incomplete"),"Restored snapshot without a baseline was reported as complete");
+fake.RestoreEndpointMatch=true;
+var restoredMatch=jobs.Start("verify",new(Guid.NewGuid().ToString(),[rollbackTarget.Id],new("")),"secret-session","TEST\\Admin");
+restoredMatch=await Done(jobs,restoredMatch.Id);
+Check(restoredMatch.State=="COMPLETED","Matching restore evidence was not recognized: "+restoredMatch.Message);
+fake.RestoreEndpointMatch=false;
 // A published audit CSV or scheduled refresh is not evidence of effective change.
 var auditPlan=await fake.PreviewAsync("secret-session","TEST\\Admin",selection with{Setting="17.1.1"},CancellationToken.None);
 fake.EndpointMismatch=true;
@@ -168,13 +176,13 @@ var promotion=jobs.Preview(Guid.NewGuid().ToString(),promotionRequest,"secret-se
 promotion=await Done(jobs,promotion.Id);Check(promotion.State=="COMPLETED"&&promotion.CompletedIds.All(id=>store.Get<GpoWorkflowRun>("gpo_runs",id) is null),"Pilot promotion bypassed separate preview and approval");
 Reject(()=>jobs.Preview(Guid.NewGuid().ToString(),new([selection],PilotSourceId:bulk.Id),"secret-session","TEST\\Admin"),"PILOT_CONTROL_MISMATCH");
 var recovery=jobs.Start("rollback",new(Guid.NewGuid().ToString(),[],new("ROLLBACK"),"Scope",SourceWorkflowId:bulk.Id),"secret-session","TEST\\Admin");
-recovery=await Done(jobs,recovery.Id);Check(recovery.State=="COMPLETED",recovery.Message);
+recovery=await Done(jobs,recovery.Id);Check(recovery.State=="CHECKS_INCOMPLETE",recovery.Message);
 Check(fake.LastAnchor is not null&&fake.LastRestore==bulk.CompletedIds[0],"Batch rollback did not use first snapshot plus final publication anchor");
 Check(store.Require<GpoWorkflowRun>("gpo_runs",bulk.CompletedIds[1]).Result.State=="BATCH_ROLLED_BACK","Batch restore left later controls marked as applied");
 var restoredChild=store.Require<GpoWorkflowRun>("gpo_runs",bulk.CompletedIds[1]).Result;
 Check(!restoredChild.GpoPublished&&!restoredChild.LinkVerified&&restoredChild.EndpointChecks?.Length==0&&restoredChild.CurrentValue is null,"Restored batch member retained stale forward publication or endpoint claims");
 var repeatRecovery=jobs.Start("rollback",new(Guid.NewGuid().ToString(),[],new("ROLLBACK"),SourceWorkflowId:bulk.Id),"secret-session","TEST\\Admin");
-repeatRecovery=await Done(jobs,repeatRecovery.Id);Check(repeatRecovery.State=="COMPLETED","Completed batch could not be restored again: "+repeatRecovery.Message);
+repeatRecovery=await Done(jobs,repeatRecovery.Id);Check(repeatRecovery.State=="CHECKS_INCOMPLETE","Completed batch could not be restored again: "+repeatRecovery.Message);
 Check(repeatRecovery.Id!=recovery.Id&&fake.LastRestore==bulk.CompletedIds[0],"Repeat batch recovery did not retain the first snapshot");
 // An uncertain write blocks later writes and refresh.
 var p=await fake.PreviewAsync("secret-session","TEST\\Admin",selection with{Setting="2.3.1.5"},CancellationToken.None);
@@ -252,7 +260,7 @@ sealed class FakeOperations(Store store,OperationGate gate):IWorkflowOperations
  public readonly List<GpoSelection> PreviewSelections=[];
  public Func<GpoSelection,GpoPreview,GpoPreview>? ConfigurePreview;
  public readonly List<string> Actions=[];public TaskCompletionSource? Block;public bool FailNext;public bool DriftAfterApply;public bool RefreshFails;public bool EndpointMismatch;public bool EndpointUnavailable;public GpoRollbackAnchor? LastAnchor;public string? LastRestore;private string fingerprint="initial";
- public bool RestoreEndpointDiff;
+ public bool RestoreEndpointDiff;public bool RestoreEndpointMatch;
  public void ValidateConnection(string token,string actor){if(token!="secret-session")throw new PolicyException("GPO_LOGIN_REQUIRED","Reconnect.");}
  public Task<GpoWorkflowPlan> PreviewAsync(string token,string actor,GpoSelection selection,CancellationToken ct,bool requireWriteAccess=true){
   PreviewAccessRequirements.Add(requireWriteAccess);
@@ -274,6 +282,8 @@ sealed class FakeOperations(Store store,OperationGate gate):IWorkflowOperations
    if(operation=="verify"&&EndpointUnavailable)result=result with{EffectiveStatus="ENDPOINT_VERIFICATION_PENDING",EndpointChecks=[new("ws.test.local","UNAVAILABLE","Endpoint unreachable")]};
    if(operation=="verify"&&state=="ROLLED_BACK"&&RestoreEndpointDiff)
     result=result with{EffectiveStatus="ROLLBACK_ENDPOINT_MISMATCH",EndpointChecks=[new("ws.test.local","RESTORE_MISMATCH","Saved DWORD differs","DisableDomainCreds=1")]};
+   if(operation=="verify"&&state=="ROLLED_BACK"&&RestoreEndpointMatch)
+    result=result with{EffectiveStatus="ROLLBACK_ENDPOINT_SAMPLE_MATCH",EndpointChecks=[new("ws.test.local","RESTORE_MATCH","Saved DWORD matches","DisableDomainCreds=0")],RestoreChecks=[new("CONTENT","MATCH","same","same","Matches")]};
    if(operation=="refresh"&&RefreshFails)result=result with{RefreshResults=[new("ws.test.local","FAILED","RPC unavailable")]};
    if(operation=="verify"&&store.Get<GpoWorkflowRun>("gpo_runs",id) is {} previous)
     result=result with{RefreshResults=previous.Result.RefreshResults,RefreshCoverage=previous.Result.RefreshCoverage};

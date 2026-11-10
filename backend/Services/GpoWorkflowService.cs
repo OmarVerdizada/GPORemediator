@@ -248,7 +248,8 @@ public sealed class GpoWorkflowService(IConfiguration config,Store store,Operati
         }
         if(operation!="verify"){
             if(!config.GetValue<bool>("Windows:EnableWrites"))throw new PolicyException("WRITES_DISABLED","Enable the production change gate first.");
-            ValidateWriteAuthorization(connection,plan.Selection);
+            if(operation=="rollback")GpoWorkflowRules.ValidateWriteScope(ApprovedGpos,AuthorizedOus);
+            else ValidateWriteAuthorization(connection,plan.Selection);
         }
         if(operation=="apply"){
             if(plan.Preview.Dependency is {} dependency)throw new PolicyException(dependency.Code,dependency.Message);
@@ -270,6 +271,9 @@ public sealed class GpoWorkflowService(IConfiguration config,Store store,Operati
         var c=Get(token,actor);
         var plan=store.Require<GpoWorkflowPlan>("gpo_plans",id);AssertContext(plan,c,actor);
         var mapping=ProductionGpoMappings.Effective(plan.Selection);
+        var recordedRollbackRefresh=operation=="refresh" && workflowId is not null &&
+            store.Get<WorkflowJob>("workflow_jobs",workflowId) is {Action:"rollback",State:"RUNNING"} recovery &&
+            recovery.Actor.Equals(actor,StringComparison.OrdinalIgnoreCase) && recovery.CompletedIds.FirstOrDefault()==id;
         var batchRefreshPlan=operation=="refresh"?rollbackAnchor?.RefreshPlan:null;
         if(operation is "verify" or "refresh" && store.Get<GpoWorkflowRun>("gpo_runs",id)?.Result.State=="BATCH_ROLLED_BACK")
             throw new PolicyException("BATCH_RECOVERY_REQUIRED","This control was restored through a batch snapshot. Re-verify the first restored operation from the batch result; its receipt covers the complete GPO and saved AD properties.");
@@ -296,7 +300,11 @@ public sealed class GpoWorkflowService(IConfiguration config,Store store,Operati
         if(operation!="verify")
         {
             if(!config.GetValue<bool>("Windows:EnableWrites"))throw new PolicyException("WRITES_DISABLED","Enable the production change gate first.");
-            ValidateWriteAuthorization(c,plan.Selection);
+            // Recovery is bound to the original actor, execution account, config and
+            // backup. The worker rechecks current AD/SYSVOL restore permissions before
+            // importing it. Recovery grants no forward Apply rights to the session.
+            if(operation=="rollback"||recordedRollbackRefresh)GpoWorkflowRules.ValidateWriteScope(ApprovedGpos,AuthorizedOus);
+            else ValidateWriteAuthorization(c,plan.Selection);
         }
         // Read and validate the latest execution record only after claiming the GPO.
         // Verification and refresh must not overwrite another operation's result.
@@ -315,7 +323,7 @@ public sealed class GpoWorkflowService(IConfiguration config,Store store,Operati
             }else if(operation=="rollback"){
                 if(consent.Confirmation!="ROLLBACK")throw new PolicyException("CONFIRMATION_REQUIRED","Type ROLLBACK.");
                 if(previous is null)throw new PolicyException("NOT_FOUND","No execution exists for this plan.");
-                if(previous.Result.State=="NO_CHANGE")throw new PolicyException("ROLLBACK_NOT_AVAILABLE","No backup exists because this operation required no change.");
+                if(previous.Result.State=="NO_CHANGE"||string.IsNullOrEmpty(previous.Result.BackupId))throw new PolicyException("ROLLBACK_NOT_AVAILABLE","No completed backup exists for this operation. Re-verify an interrupted operation to recover its backup record.");
             }
             if(operation!="apply"&&previous is null)throw new PolicyException("NOT_FOUND","Apply has not been started.");
             if(operation=="refresh" && previous is not null)
@@ -327,7 +335,7 @@ public sealed class GpoWorkflowService(IConfiguration config,Store store,Operati
                     live=live with{RefreshResults=previous.Result.RefreshResults,RefreshCoverage=previous.Result.RefreshCoverage};
                 previous=previous with{Result=live,UpdatedAt=PolicyValues.Now()};
                 store.Put("gpo_runs",id,previous,live.State);
-                if(live.State != "ROLLED_BACK" && (!live.GpoPublished || !live.LinkVerified || live.State is not ("PUBLISHED" or "NO_CHANGE")))
+                if(live.State != "ROLLED_BACK" && (recordedRollbackRefresh || !live.GpoPublished || !live.LinkVerified || live.State is not ("PUBLISHED" or "NO_CHANGE")))
                     throw new PolicyException("GPO_DRIFT_DETECTED","Live GPO or link state no longer matches the requested state. Refresh was blocked; prepare a fresh remediation plan.");
             }
             var result=previous?.Result??new("APPLYING","Execution started; inspect backup after an interruption.",null,null,null,false,false,[],"PENDING");

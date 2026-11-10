@@ -280,6 +280,18 @@ try{
    $script:endpointDword=1
   }
   if($map.id -eq '2.3.10.7'){$script:endpointPipesPresent=$true}
+  if($map.id -eq '2.3.10.7'){
+   $directory=Run-Directory $plan
+   $backup=Join-Path $directory (([guid]$result.backupId).ToString('B'))
+   $held=$backup+'.fixture-held'
+   Move-Item -LiteralPath $backup -Destination $held
+   try{
+    $Operation='gpoRollbackInspect';$assessment=& $dispatch
+    Check (!$assessment.canRestore -and $assessment.reason -eq 'BACKUP_FILES_UNAVAILABLE') 'a manifest without its native backup cannot report rollback ready'
+    $Operation='gpoRollback';$blocked=& $dispatch
+    Check ($blocked.state -eq 'FAILED_SAFE' -and $blocked.message -match 'ROLLBACK_NOT_AVAILABLE' -and $script:rawLinks) 'missing backup blocks rollback before mutating the GPO or link'
+   }finally{Move-Item -LiteralPath $held -Destination $backup}
+  }
   Check ($result.currentValueSource.gpoId -eq $gpoId -and $result.currentValueSource.gpoName -eq 'Dedicated pilot') ('configured source '+$map.id)
   # The stored value can match even when the selected target has no direct link.
   $savedLinks=$script:rawLinks;$script:rawLinks=''
