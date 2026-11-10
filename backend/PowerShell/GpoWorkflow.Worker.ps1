@@ -940,10 +940,10 @@ function Verification-Page($Plan,$Fallback){
     if($offset -lt 0){Fail 'INVALID_REQUEST' 'Invalid verification offset.'}
     return @($all|Select-Object -Skip $offset -First 25)
 }
-function Rollback-DwordItem($Map){
+function Rollback-RegistryItem($Map){
     $items=@(Read-Field $Map 'items' @())
     if([string](Read-Field $Map 'scope' '') -eq 'Computer' -and [string](Read-Field $Map 'handler' '') -in @('Registry','RegistrySet') -and
-        $items.Count -eq 1 -and [string]$items[0].type -eq 'DWORD' -and [string]$items[0].key -match '^HKLM\\'){
+        $items.Count -eq 1 -and [string]$items[0].type -in @('DWORD','MultiString') -and [string]$items[0].key -match '^HKLM\\'){
         return $items[0]
     }
 }
@@ -960,14 +960,14 @@ function Rollback-ReadingSignature($Map){
     return ([ordered]@{scope=[string]$Map.scope;handler=[string]$Map.handler;fields=@($fields)}|ConvertTo-Json -Depth 5 -Compress)
 }
 function Read-RollbackSamples($Plan,$Map){
-    $dword=[bool](Rollback-DwordItem $Map)
+    $registry=[bool](Rollback-RegistryItem $Map)
     $pinned=Read-Field $Plan.preview 'verificationComputers' $null
-    if($null -eq $pinned){return @(Verify-EffectiveSamples $Plan $Map $dword $true)}
+    if($null -eq $pinned){return @(Verify-EffectiveSamples $Plan $Map $registry $true)}
     $sample=@($pinned|Select-Object -First 5)
     if(!$sample.Count){return @()}
-    return @(Verify-EffectiveSamples @{selection=$Plan.selection;preview=@{verificationComputers=$sample;impact=$null;refreshComputers=@()}} $Map $dword $true)
+    return @(Verify-EffectiveSamples @{selection=$Plan.selection;preview=@{verificationComputers=$sample;impact=$null;refreshComputers=@()}} $Map $registry $true)
 }
-function Verify-EffectiveSamples($Plan,$Map,[bool]$RollbackDword=$false,[bool]$RollbackProbe=$false){
+function Verify-EffectiveSamples($Plan,$Map,[bool]$RollbackRegistry=$false,[bool]$RollbackProbe=$false){
     $s=$Plan.selection;$checks=@();$remoteCredential=Endpoint-CredentialOptions
     $probeOptions=@{}
     if($RollbackProbe){$probeOptions.SessionOption=New-PSSessionOption -OpenTimeout 4000 -OperationTimeout 15000}
@@ -1011,8 +1011,8 @@ function Verify-EffectiveSamples($Plan,$Map,[bool]$RollbackDword=$false,[bool]$R
     foreach($hostName in $hosts){
         Send-CheckProgress 'ENDPOINT' 'CHECKING' $hostName 'Reading effective policy on the endpoint.'
       try{
-        $probe=Invoke-Command -ComputerName $hostName -Authentication Kerberos @remoteCredential @probeOptions -ErrorAction Stop -ArgumentList $handler,$expected,([string]$Map.comparator),(UserRight-ProbeSource),$RollbackDword -ScriptBlock {
-          param($Handler,$ExpectedItems,$Comparator,$UserRightNativeSource,[bool]$RollbackDword)
+        $probe=Invoke-Command -ComputerName $hostName -Authentication Kerberos @remoteCredential @probeOptions -ErrorAction Stop -ArgumentList $handler,$expected,([string]$Map.comparator),(UserRight-ProbeSource),$RollbackRegistry -ScriptBlock {
+          param($Handler,$ExpectedItems,$Comparator,$UserRightNativeSource,[bool]$RollbackRegistry)
           $ErrorActionPreference='Stop'
           function Read-IniValue([string]$Text,[string]$Section,[string]$Key){$inside=$false;foreach($line in ($Text -split "`r?`n")){$t=$line.Trim();if($t -match '^\[(.+)\]$'){$inside=($Matches[1] -ieq $Section);continue};if($inside -and $t -match '^([^=]+)=(.*)$' -and $Matches[1].Trim() -ieq $Key){return $Matches[2].Trim()}};return $null}
           function Normalize-Sids([string]$Raw){if($null -eq $Raw){return $null};$v=@();foreach($part in ($Raw -split ',')){if($part.Trim()){$name=$part.Trim().TrimStart('*');if($name -notmatch '^S-\d-(?:\d+-){1,14}\d+$'){$name=([Security.Principal.NTAccount]$name).Translate([Security.Principal.SecurityIdentifier]).Value};$v+=$name}};return (($v|Sort-Object -Unique)-join ',')}
@@ -1087,22 +1087,31 @@ function Verify-EffectiveSamples($Plan,$Map,[bool]$RollbackDword=$false,[bool]$R
             return $null
           }
           $actual=@();$ok=$true
-          if($RollbackDword){
+          if($RollbackRegistry){
             $item=@($ExpectedItems)[0]
             $name=[string]$item.name
+            $type=[string]$item.type
             $path='Registry::HKEY_LOCAL_MACHINE\'+([string]$item.key).Substring(5)
             $registryKey=$null
             try{$registryKey=Get-Item -LiteralPath $path -ErrorAction Stop}catch{
               if($_.FullyQualifiedErrorId -notmatch 'ItemNotFound|PathNotFound'){throw}
             }
-            if(!$registryKey -or $name -notin $registryKey.GetValueNames()){
-              return @{supported=$true;match=$false;actual=($name+'=<not configured>');message='The endpoint registry value is absent.'}
-            }
-            if($registryKey.GetValueKind($name) -ne [Microsoft.Win32.RegistryValueKind]::DWord){
-              return @{supported=$false;match=$false;state='UNAVAILABLE';actual=$null;message='The endpoint registry type is not DWORD.'}
-            }
-            $value=[string]([long]$registryKey.GetValue($name) -band 4294967295L)
-            return @{supported=$true;match=(Value-Matches $value $item.expected '==');actual=($name+'='+$value);message='The endpoint DWORD was read directly.'}
+            try{
+              if(!$registryKey -or $name -notin $registryKey.GetValueNames()){
+                return @{supported=$true;match=$false;actual=($name+'=<not configured>');registryValue=@{present=$false;values=@()};message='The endpoint registry value is absent.'}
+              }
+              if([string]$registryKey.GetValueKind($name) -ine $type){
+                return @{supported=$false;match=$false;state='UNAVAILABLE';actual=$null;message=('The endpoint registry type differs from '+$type+'.')}
+              }
+              if($type -ieq 'DWORD'){
+                $values=@([string]([long]$registryKey.GetValue($name) -band 4294967295L))
+              }else{
+                $values=[string[]]$registryKey.GetValue($name)
+                [array]::Sort($values,[StringComparer]::Ordinal)
+              }
+              $display=($values|Sort-Object) -join '|'
+              return @{supported=$true;match=(Value-Matches $display $item.expected '');actual=($name+'='+$display);registryValue=@{present=$true;values=@($values)};message='The endpoint registry value and type were read directly.'}
+            }finally{if($registryKey){$registryKey.Dispose()}}
           }
           # The policy registry is configuration input. Firewall evidence must
           # additionally query the resultant active store (GPO + local merges).
@@ -1234,7 +1243,12 @@ function Verify-EffectiveSamples($Plan,$Map,[bool]$RollbackDword=$false,[bool]$R
           }
           return @{supported=$false;match=$false;actual='';message='No endpoint verifier exists for this handler.'}
         }
-        if([bool]$probe.supported){$checks+=@{hostname=$hostName;state=$(if([bool]$probe.match){'VERIFIED'}else{'MISMATCH'});message=[string]$probe.message;actualValue=[string]$probe.actual}}else{$checks+=@{hostname=$hostName;state=[string](Read-Field $probe 'state' 'PENDING');message=[string]$probe.message;actualValue=$(if([string]::IsNullOrWhiteSpace([string]$probe.actual)){$null}else{[string]$probe.actual})}}
+        if([bool]$probe.supported){
+            $entry=@{hostname=$hostName;state=$(if([bool]$probe.match){'VERIFIED'}else{'MISMATCH'});message=[string]$probe.message;actualValue=[string]$probe.actual}
+            $registryValue=Read-Field $probe 'registryValue' $null
+            if($registryValue){$entry.registryValue=$registryValue}
+            $checks+=$entry
+        }else{$checks+=@{hostname=$hostName;state=[string](Read-Field $probe 'state' 'PENDING');message=[string]$probe.message;actualValue=$(if([string]::IsNullOrWhiteSpace([string]$probe.actual)){$null}else{[string]$probe.actual})}}
       }catch{$checks+=@{hostname=$hostName;state='UNAVAILABLE';message=(Endpoint-FailureMessage $_);actualValue=$null}}
       $check=$checks[-1];Send-CheckProgress 'ENDPOINT' ([string]$check.state) $hostName ([string]$check.message) ([string]$check.actualValue)
     }
@@ -1301,6 +1315,58 @@ function Compare-RestoreContent($Plan,$Manifest){
         if(Test-Path -LiteralPath $full){Remove-Item -LiteralPath $full -Recurse -Force -ErrorAction Stop}
     }
 }
+function Registry-SnapshotKey($Snapshot){
+    return ([ordered]@{present=[bool]$Snapshot.present;values=@($Snapshot.values)}|ConvertTo-Json -Depth 4 -Compress)
+}
+function Registry-RecoveryCommand($Item,[string]$Hostname,$Saved,$Observed){
+    $data=[ordered]@{host=$Hostname;key=([string]$Item.key).Substring(5);name=[string]$Item.name;type=(Registry-Type ([string]$Item.type));saved=$Saved;observed=$Observed}
+    $json=$data|ConvertTo-Json -Depth 6 -Compress
+    $payload=[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($json))
+    return ('& {'+"`r`n"+"`$plan = ConvertFrom-Json ([Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('$payload')))"+"`r`n"+@'
+$ErrorActionPreference = 'Stop'
+$network = [Net.NetworkInformation.IPGlobalProperties]::GetIPGlobalProperties()
+$localHost = ($network.HostName + '.' + $network.DomainName).TrimEnd('.')
+if ($localHost -ine $plan.host) { throw 'Run this only on the recorded endpoint.' }
+if ((Read-Host ('Restore the saved value of ' + $plan.name + ' on ' + $localHost + '? Type RESTORE')) -cne 'RESTORE') { return }
+function Read-Snapshot($Key) {
+    if (!$Key -or $plan.name -notin $Key.GetValueNames()) { return @{ present = $false; values = @() } }
+    if ([string]$Key.GetValueKind($plan.name) -ine $plan.type) { throw 'Registry type changed. Re-verify first.' }
+    if ($plan.type -eq 'DWord') {
+        $values = @([string]([long]$Key.GetValue($plan.name) -band 4294967295L))
+    } else {
+        $values = [string[]]$Key.GetValue($plan.name)
+        [array]::Sort($values, [StringComparer]::Ordinal)
+    }
+    return @{ present = $true; values = @($values) }
+}
+function Matches($First, $Second) {
+    return $First.present -eq $Second.present -and
+        (ConvertTo-Json -InputObject @($First.values) -Compress) -ceq (ConvertTo-Json -InputObject @($Second.values) -Compress)
+}
+$root = [Microsoft.Win32.RegistryKey]::OpenBaseKey('LocalMachine', 'Registry64')
+$key = $null
+try {
+    $key = $root.OpenSubKey($plan.key, $true)
+    $current = Read-Snapshot $key
+    if (Matches $current $plan.saved) { 'The registry value already matches the saved snapshot.'; return }
+    if (!(Matches $current $plan.observed)) { throw 'Registry state changed since verification. Run Re-verify first.' }
+    if (!$plan.saved.present) {
+        $key.DeleteValue($plan.name, $true)
+    } elseif ($plan.type -eq 'DWord') {
+        $value = [BitConverter]::ToInt32([BitConverter]::GetBytes([uint32]$plan.saved.values[0]), 0)
+        $key.SetValue($plan.name, $value, 'DWord')
+    } else {
+        $key.SetValue($plan.name, [string[]]$plan.saved.values, 'MultiString')
+    }
+    if (!(Matches (Read-Snapshot $key) $plan.saved)) { throw 'Registry restore read-back differs from the saved snapshot.' }
+    'Saved registry value restored and read back. Run Re-verify in GPO Remediator.'
+} finally {
+    if ($key) { $key.Dispose() }
+    $root.Dispose()
+}
+}
+'@)
+}
 function Verify-Rollback($Plan,$Map,$Manifest,[bool]$CheckEndpoints=$false){
     $s=$Plan.selection
     $restoreChecks=@();$domainPolicy=$null;$before=Read-Field $Manifest 'beforeDomainPolicy' $null
@@ -1317,6 +1383,7 @@ function Verify-Rollback($Plan,$Map,$Manifest,[bool]$CheckEndpoints=$false){
         try{$actual=Domain-PolicyRead ([string]$entry.property) ([string]$entry.value);if($before -and [string]$entry.property -eq [string]$before.property){$domainPolicy=$actual};$restoreChecks+=@{area='DOMAIN_POLICY';state=$(if([string]$actual.value -ceq [string]$entry.value){'MATCH'}else{'MISMATCH'});expected=[string]$entry.value;actual=[string]$actual.value;message=('Compared saved AD '+[string]$entry.property+' independently of the GPO.')}}catch{$restoreChecks+=@{area='DOMAIN_POLICY';state='UNAVAILABLE';expected=[string]$entry.value;actual=$null;message=('Could not read saved AD '+[string]$entry.property+'.')}}
     }}else{$restoreChecks+=@{area='DOMAIN_POLICY';state='NOT_APPLICABLE';expected=$null;actual=$null;message='No direct AD domain-policy change is part of this record.'}}
     $matches=@($restoreChecks|Where-Object{$_.state -notin @('MATCH','NOT_APPLICABLE')}).Count -eq 0
+    $metadata=Verification-Metadata $s
     $observed=@();$endpointStatus='ROLLBACK_ENDPOINT_PENDING'
     if($CheckEndpoints -and !$before){
         try{
@@ -1326,7 +1393,7 @@ function Verify-Rollback($Plan,$Map,$Manifest,[bool]$CheckEndpoints=$false){
             if($saved -and [string]$saved.signature -ceq (Rollback-ReadingSignature $Map)){
                 foreach($check in @($saved.checks)){
                     if([string]$check.state -in @('VERIFIED','MISMATCH') -and ![string]::IsNullOrWhiteSpace([string]$check.actualValue)){
-                        $baselines[[string]$check.hostname]=[string]$check.actualValue
+                        $baselines[[string]$check.hostname]=$check
                     }
                 }
             }
@@ -1334,8 +1401,39 @@ function Verify-Rollback($Plan,$Map,$Manifest,[bool]$CheckEndpoints=$false){
                 if([string]$check.state -notin @('VERIFIED','MISMATCH')){continue}
                 $prior=$baselines[[string]$check.hostname]
                 if($null -ne $prior){
-                    $check.state=if([string]$check.actualValue -ceq $prior){'RESTORE_MATCH'}else{'RESTORE_MISMATCH'}
-                    $check.message='Saved endpoint value: '+$prior+'. Current endpoint value: '+[string]$check.actualValue+'.'
+                    $savedRegistry=Read-Field $prior 'registryValue' $null
+                    $liveRegistry=Read-Field $check 'registryValue' $null
+                    $item=Rollback-RegistryItem $Map
+                    # A legacy DWORD display is lossless. A legacy list joined with pipes is not.
+                    if(!$savedRegistry -and $liveRegistry -and $item -and [string]$item.type -eq 'DWORD'){
+                        $prefix=[string]$item.name+'='
+                        if(([string]$prior.actualValue).StartsWith($prefix,[StringComparison]::Ordinal)){
+                            $value=([string]$prior.actualValue).Substring($prefix.Length);[uint32]$numeric=0
+                            if($value -ceq '<not configured>'){$savedRegistry=@{present=$false;values=@()}}
+                            elseif([uint32]::TryParse($value,[ref]$numeric)){$savedRegistry=@{present=$true;values=@([string]$numeric)}}
+                        }
+                    }
+                    $same=if($savedRegistry -and $liveRegistry){(Registry-SnapshotKey $savedRegistry) -ceq (Registry-SnapshotKey $liveRegistry)}else{[string]$check.actualValue -ceq [string]$prior.actualValue}
+                    $check.state=if($same){'RESTORE_MATCH'}else{'RESTORE_MISMATCH'}
+                    if($same -and $liveRegistry -and !$savedRegistry -and [string]$item.type -eq 'MultiString'){$check.state='OBSERVED'}
+                    $check.beforeActualValue=[string]$prior.actualValue
+                    $check.message='Saved endpoint value: '+$check.beforeActualValue+'. Current endpoint value: '+[string]$check.actualValue+'.'
+                    if($matches -and [bool](Read-Field $metadata 'replicationConverged' $false) -and !$same -and $item -and $savedRegistry -and $liveRegistry -and $liveRegistry.present -and
+                        $item.key -notlike 'HKLM\SOFTWARE\Policies\Microsoft\Windows Defender*' -and $item.key -notlike 'HKLM\SYSTEM\CurrentControlSet\Services\Spooler' -and
+                        [string]$check.hostname -match '^[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+$'){
+                        $desired=[string[]]@(Desired-Item $Map $item $s)
+                        [array]::Sort($desired,[StringComparer]::Ordinal)
+                        if((Registry-SnapshotKey @{present=$true;values=$desired}) -ceq (Registry-SnapshotKey $liveRegistry)){
+                            $check.recoveryCommand=Registry-RecoveryCommand $item ([string]$check.hostname) $savedRegistry $liveRegistry
+                        }
+                    }
+                    if($item -and [string]$item.type -eq 'MultiString'){
+                        $prefix=[string]$item.name+'='
+                        if($savedRegistry -and $savedRegistry.present){$check.beforeActualValue=$prefix+(ConvertTo-Json -InputObject @($savedRegistry.values) -Compress)}
+                        elseif($check.beforeActualValue -ceq $prefix){$check.beforeActualValue+='(blank list in legacy record)'}
+                        if($liveRegistry -and $liveRegistry.present){$check.actualValue=$prefix+(ConvertTo-Json -InputObject @($liveRegistry.values) -Compress)}
+                        $check.message='Saved endpoint value: '+$check.beforeActualValue+'. Current endpoint value: '+[string]$check.actualValue+'.'
+                    }
                 }else{
                     $sameAsApply=[string]$check.state -eq 'VERIFIED'
                     $check.state='OBSERVED'
@@ -1348,7 +1446,7 @@ function Verify-Rollback($Plan,$Map,$Manifest,[bool]$CheckEndpoints=$false){
                 @($observed|Where-Object state -ne 'RESTORE_MATCH').Count -eq 0){$endpointStatus='ROLLBACK_ENDPOINT_SAMPLE_MATCH'}
         }catch{$observed=@(@{hostname='<endpoint-scope>';state='UNAVAILABLE';actualValue=$null;message=('Post-restore endpoint evidence could not be collected (category '+[string]$_.CategoryInfo.Category+'). Check current authorized endpoint discovery and read access. GPO snapshot restoration is measured separately.')})}
     }
-    return @{restored=[bool]$matches;published=$false;linked=$false;link=(Selected-Link $s.scopeDn $s.gpoId);effective=$endpointStatus;verification=(Verification-Metadata $s);endpointChecks=$observed;domainPolicy=$domainPolicy;restoreChecks=$restoreChecks;currentValue=(Mapping-Display $s.gpoId $Map $s $false)}
+    return @{restored=[bool]$matches;published=$false;linked=$false;link=(Selected-Link $s.scopeDn $s.gpoId);effective=$endpointStatus;verification=$metadata;endpointChecks=$observed;domainPolicy=$domainPolicy;restoreChecks=$restoreChecks;currentValue=(Mapping-Display $s.gpoId $Map $s $false)}
 }
 function Failed-RollbackEvidence($Manifest){
     $evidence=@{published=$false;linked=$false;effective='ROLLBACK_ENDPOINT_PENDING';currentValue=$null}

@@ -33,7 +33,9 @@ public record GpoAffectedObjects(int Computers, int Servers, int Workstations, i
 public record GpoImpactDetails(string Inheritance, bool BlockInheritance, GpoConflictInfo[] Conflicts,
     GpoAffectedObjects AffectedObjects, string[] ExistingLinkScopes, string[] SecurityFiltering, string? WmiFilter);
 public record GpoDcVersionStatus(string DomainController, string? AdVersion, string? GptVersion, bool Reachable, bool VersionsMatch, string Message);
-public record GpoEndpointCheck(string Hostname, string State, string Message, string? ActualValue = null);
+public record GpoEndpointCheck(string Hostname, string State, string Message, string? ActualValue = null,
+    [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] string? BeforeActualValue = null,
+    [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] string? RecoveryCommand = null);
 public record GpoRestoreCheck(string Area,string State,string? Expected,string? Actual,string Message);
 public record GpoLiveCheck(string Phase, string State, string Subject, string? ActualValue, string Message, string CheckedAt);
 public record GpoVerificationDetails(string AdVersion, string GptVersion, bool VersionsMatch,

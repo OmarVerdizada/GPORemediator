@@ -21,10 +21,14 @@ function Gpo-Folder {param($Id) return $script:folder}
 function Remote-GpoFolder {param($Server,$Id) return $script:folder}
 function Resolve-DnsName {param($Name,$Type,$ErrorAction) [pscustomobject]@{IPAddress='127.0.0.1'}}
 $script:endpointDword=0
+$script:endpointPipesPresent=$false
 function Invoke-Command {
  param($ComputerName,$Authentication,$ErrorAction,$ArgumentList,$ScriptBlock,$SessionOption)
  if($ArgumentList[-1] -eq $true -and $Data.mapping.id -eq '2.3.10.4'){
   return @{supported=$true;match=($script:endpointDword -eq 1);actual=('DisableDomainCreds='+$script:endpointDword);message='Fixture DWORD read.'}
+ }
+ if($ArgumentList[-1] -eq $true -and $Data.mapping.id -eq '2.3.10.7'){
+  return @{supported=$true;match=$script:endpointPipesPresent;actual=$(if($script:endpointPipesPresent){'NullSessionPipes='}else{'NullSessionPipes=<not configured>'});registryValue=@{present=$script:endpointPipesPresent;values=@()};message='Fixture MultiString read.'}
  }
  throw 'Fixture attempted unmocked remoting; no endpoint connection is allowed'
 }
@@ -228,7 +232,7 @@ function Test-ExactLockoutIncident($Selection,$Mapping,$ExactFixtures){
 }
 $catalog=(Get-Content (Join-Path $repo 'backend/data/gpo-production-mappings.json') -Raw|ConvertFrom-Json).mappings
 try{
- $cases=@(@('1.1.1','LocalComputers'),@('1.1.1','Domain'),@('1.2.2','Domain'),@('2.2.24','LocalComputers'),@('2.3.1.1','LocalComputers'),@('2.3.10.4','LocalComputers'),@('18.4.4','LocalComputers'),@('17.1.1','LocalComputers'),@('19.5.1.1','Users'))
+ $cases=@(@('1.1.1','LocalComputers'),@('1.1.1','Domain'),@('1.2.2','Domain'),@('2.2.24','LocalComputers'),@('2.3.1.1','LocalComputers'),@('2.3.10.4','LocalComputers'),@('2.3.10.7','LocalComputers'),@('18.4.4','LocalComputers'),@('17.1.1','LocalComputers'),@('19.5.1.1','Users'))
  foreach($entry in @($catalog|Where-Object{$_.domainPolicySensitive -and $_.id -notin @('1.1.1','1.2.2')})){$cases+=,@([string]$entry.id,'Domain')}
  foreach($manual in @($catalog|Where-Object automation -ne 'Automated')){$cases+=,@([string]$manual.id,'LocalComputers')}
  if($AllControls){$cases=@();foreach($entry in $catalog){$cases+=,@([string]$entry.id,$(if($entry.scope -eq 'User'){'Users'}else{'LocalComputers'}));if($entry.domainPolicySensitive){$cases+=,@([string]$entry.id,'Domain')}}}
@@ -275,6 +279,7 @@ try{
    Check ($receipt.beforeEndpointReadings.checks[0].actualValue -eq 'DisableDomainCreds=0') 'DisableDomainCreds pre-Apply registry reading is saved with the backup'
    $script:endpointDword=1
   }
+  if($map.id -eq '2.3.10.7'){$script:endpointPipesPresent=$true}
   Check ($result.currentValueSource.gpoId -eq $gpoId -and $result.currentValueSource.gpoName -eq 'Dedicated pilot') ('configured source '+$map.id)
   # The stored value can match even when the selected target has no direct link.
   $savedLinks=$script:rawLinks;$script:rawLinks=''
@@ -303,6 +308,13 @@ try{
    $script:endpointDword=0
    $result=& $dispatch
    Check ($result.effectiveStatus -eq 'ROLLBACK_ENDPOINT_SAMPLE_MATCH') '2.3.10.4 read-only verification recognizes return to the saved endpoint value'
+  }
+  if($map.id -eq '2.3.10.7'){
+   $endpoint=$result.endpointChecks[0]
+   Check ($result.effectiveStatus -eq 'ROLLBACK_ENDPOINT_MISMATCH' -and $endpoint.beforeActualValue -eq 'NullSessionPipes=<not configured>' -and $endpoint.actualValue -eq 'NullSessionPipes=[]' -and $endpoint.recoveryCommand -match 'DeleteValue') '2.3.10.7 distinguishes an absent baseline from a retained blank list and prepares guarded recovery'
+   $script:endpointPipesPresent=$false
+   $result=& $dispatch
+   Check ($result.effectiveStatus -eq 'ROLLBACK_ENDPOINT_SAMPLE_MATCH' -and !(Read-Field $result.endpointChecks[0] 'recoveryCommand')) '2.3.10.7 confirms the restored absent value and offers no second repair'
   }
   if($map.id -eq '1.2.2' -and $case[1] -eq 'Domain'){Check ($script:domainState.LockoutThreshold -eq 0 -and $result.currentValue -eq '5') 'Rollback restores the recorded AD threshold separately from the GPO snapshot'}else{Check ($null -eq $result.currentValue -and $null -eq $result.currentValueSource) ('rollback clears configured value and source '+$map.id)}
   if($map.id -eq '1.2.2' -and $case[1] -eq 'Domain'){

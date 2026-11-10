@@ -65,6 +65,34 @@ try{
  foreach($fn in $launcher.FindAll({param($n)$n -is [Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -in @('Get-StartupFailureCategory','Get-SafeStartupIssue')},$false)){. ([scriptblock]::Create($fn.Extent.Text))}
  Assert-Test ((Get-StartupFailureCategory 'Runtime exit after readiness') -eq 'RUNTIME_EXIT_AFTER_READY') 'post-readiness exit has its own diagnosis'
  Assert-Test ((Get-SafeStartupIssue 'Runtime exit after readiness') -notmatch 'before readiness') 'post-readiness summary preserves observed chronology'
+ # Exercise the generated command on a disposable HKCU key. The production command uses HKLM.
+ $network=[Net.NetworkInformation.IPGlobalProperties]::GetIPGlobalProperties()
+ $localHost=($network.HostName+'.'+$network.DomainName).TrimEnd('.')
+ $subkey='Software\GpoRemediator-RestoreFixture-'+[guid]::NewGuid().ToString('N')
+ $item=@{key='HKLM\'+$subkey;name='NullSessionPipes';type='MultiString'}
+ $registry=[Microsoft.Win32.Registry]::CurrentUser.CreateSubKey($subkey)
+ try{
+  function Read-Host {param($Prompt) 'RESTORE'}
+  $empty=@{present=$true;values=@()};$absent=@{present=$false;values=@()}
+  $registry.SetValue($item.name,[string[]]@(),'MultiString')
+  $command=(Registry-RecoveryCommand $item $localHost $absent $empty).Replace("'LocalMachine'","'CurrentUser'")
+  $wrongHost=(Registry-RecoveryCommand $item 'other.example.test' $absent $empty).Replace("'LocalMachine'","'CurrentUser'")
+  try{& ([scriptblock]::Create($wrongHost));throw 'Wrong host accepted'}catch{if($_.Exception.Message -notmatch 'recorded endpoint'){throw}}
+  Assert-Test ($item.name -in $registry.GetValueNames()) 'registry recovery refuses a different endpoint'
+  $registry.SetValue($item.name,[string[]]@('third-party-change'),'MultiString')
+  try{& ([scriptblock]::Create($command));throw 'External change accepted'}catch{if($_.Exception.Message -notmatch 'changed since verification'){throw}}
+  Assert-Test ($registry.GetValue($item.name)[0] -ceq 'third-party-change') 'registry recovery preserves an unexpected concurrent change'
+  $registry.SetValue($item.name,[string[]]@(),'MultiString')
+  $null=& ([scriptblock]::Create($command))
+  Assert-Test ($item.name -notin $registry.GetValueNames()) 'actual Windows registry recovery removes only the retained empty value'
+  $null=& ([scriptblock]::Create($command))
+  $registry.SetValue($item.name,[string[]]@(),'MultiString')
+  $savedEntry='first'+[char]0x2019+'|entry'
+  $saved=@{present=$true;values=@($savedEntry,'second')}
+  $command=(Registry-RecoveryCommand $item $localHost $saved $empty).Replace("'LocalMachine'","'CurrentUser'")
+  $null=& ([scriptblock]::Create($command))
+  Assert-Test (($registry.GetValue($item.name) -join ',') -ceq ($savedEntry+',second')) 'actual Windows registry recovery restores the exact saved list, including quotes and separators'
+ }finally{$registry.Dispose();[Microsoft.Win32.Registry]::CurrentUser.DeleteSubKey($subkey,$false)}
  # A restored snapshot and matching forward value are separate observations.
  function Get-NormalizedGpoContentFingerprint {param($Directory) 'saved-content'}
  function Snapshot-ExtensionsMatch {param($Manifest,$Id,$Selection) $true}

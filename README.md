@@ -1,4 +1,6 @@
-# GPO Remediator 3.18.3
+# GPO Remediator 3.18.4
+
+3.18.4 adds reviewed endpoint registry recovery for supported rollback mismatches and distinguishes absent values from empty lists. See [release notes](docs/RELEASE-3.18.4.md).
 
 3.18.3 separates GPO snapshot restoration from endpoint rollback and compares post-restore readings with values captured before Apply. See [release notes](docs/RELEASE-3.18.3.md).
 
