@@ -1,28 +1,21 @@
 /* Final semantic surface layer shared by both themes and all accent choices. */
-/* Shared hierarchy: quiet surfaces, visible boundaries and readable secondary text. */
-:root{--color-success:#07735f;--color-warning:#87560f;--color-danger:#ad3047;--color-background:#f4f6fa;--color-surface-muted:#f8fafc;--color-text-muted:#53657c;--color-border:#dce4ef;--color-border-strong:#afbed0;--focus:0 0 0 3px color-mix(in srgb,var(--color-primary) 24%,transparent)}
-:root[data-gr-theme=dark]{--color-background:#0c1422;--color-surface:#142134;--color-surface-muted:#1b2b40;--color-text:#edf3fc;--color-text-muted:#b1c1d6;--color-border:#30445e;--color-border-strong:#607996}
-
-
-
-
-
-
-:root[data-contrast=true]{--color-text-muted:var(--color-text);--color-border:var(--color-text);--color-border-strong:var(--color-text)}
-:root{color-scheme:light;--surface:var(--color-surface);--border:var(--color-border);--muted:var(--color-text-muted);--text:var(--color-text)}
-:root[data-gr-theme=dark]{color-scheme:dark}
 body{color:var(--color-text);background:var(--color-background)}
+:root[data-theme-changing] *,
+:root[data-theme-changing] *::before,
+:root[data-theme-changing] *::after{transition:none!important}
 body.operator-custom-page ::selection{color:var(--color-text);background:var(--color-primary-soft)}
 body.operator-custom-page :is(input,textarea,select){color:var(--color-text);background-color:var(--color-surface-muted);border-color:var(--color-border-strong);accent-color:var(--color-primary)}
 body.operator-custom-page :is(input,textarea)::placeholder{color:var(--color-text-muted);opacity:1}
+input:autofill,input:-webkit-autofill{-webkit-text-fill-color:var(--color-text);caret-color:var(--color-text);box-shadow:0 0 0 1000px var(--color-surface) inset}
 body.operator-custom-page :is(input,textarea,select):focus-visible{outline:2px solid var(--color-primary);outline-offset:2px;box-shadow:var(--focus)}
 body.operator-custom-page :is(button.primary,.primary-action,.primary-inline,.page-primary,.pr-primary-link,.gr-auto-btn.primary){background:var(--color-primary);color:var(--color-on-primary);border-color:var(--color-primary);box-shadow:var(--shadow-sm)}
 body.operator-custom-page :is(button.primary,.primary-action,.primary-inline,.page-primary,.pr-primary-link,.gr-auto-btn.primary):hover{background:var(--color-primary-hover);color:var(--color-on-primary)}
 body.operator-custom-page :is(.ds-preferences-panel,.command-panel,.notification-panel,.visual-scope-modal,.gpo-picker-menu,.confirm-panel){background:var(--color-surface);color:var(--color-text);border-color:var(--color-border-strong)}
-body.operator-custom-page :is(.studio-pulse-item,.target-card,.plan-card,.content-card,.op-card,.summary-card,.health-item){background:var(--color-surface);color:var(--color-text);border-color:var(--color-border)}
+body.operator-custom-page :is(.studio-pulse-item,.target-card,.plan-card,.content-card,.op-card,.health-item){background:var(--color-surface);color:var(--color-text);border-color:var(--color-border)}
 body.operator-custom-page .domain-policy-boundary{background:var(--color-primary-soft);border-color:var(--color-border-strong);color:var(--color-text)}
 body.operator-custom-page .domain-policy-boundary p{color:var(--color-text)}
 #gr-auto-panel{height:100dvh;background:var(--color-background);color:var(--color-text);border-color:var(--color-border-strong);font-family:inherit}
+#gr-auto-panel:not(.open){visibility:hidden}
 #gr-auto-panel :is(.gr-auto-card,.gr-auto-rail){background:var(--color-surface);border-color:var(--color-border);box-shadow:var(--shadow-sm)}
 #gr-auto-panel :is(h3,.gr-auto-rail b){color:var(--color-text)}
 #gr-auto-panel :is(.gr-auto-field,.gr-auto-help,.gr-auto-row small,.gr-auto-title-row p,.gr-auto-rail small,.gr-auto-card>p){color:var(--color-text-muted);font-size:12px;line-height:1.65}

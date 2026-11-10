@@ -8,7 +8,7 @@ function prompt(initial){return new Promise(resolve=>{
  const root=document.getElementById('root');root.inert=true;root.hidden=true;
  const overlay=document.createElement('div');overlay.className='operator-sign-in';overlay.setAttribute('role','dialog');overlay.setAttribute('aria-modal','true');overlay.setAttribute('aria-labelledby','operator-sign-in-title');
  let current=initial;
- overlay.innerHTML=`<form class="operator-sign-in-card"><span class="operator-sign-in-emblem" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><path d="M12 3 20 6v6c0 4-4 7-8 9-4-2-8-5-8-9V6l8-3Z" fill="currentColor"/></svg></span><span class="card-kicker">GPO REMEDIATOR</span><h1 id="operator-sign-in-title"></h1><p data-sign-in-copy></p><label><span data-account-label></span><input name="actor" autocomplete="username" maxlength="256" required></label><label>${'Password'}<input name="password" type="password" autocomplete="current-password" maxlength="1024" required></label><p class="operator-sign-in-error" role="alert"></p><button class="primary" type="submit"></button><small data-sign-in-note></small></form>`;
+ overlay.innerHTML=`<form class="operator-sign-in-card"><div class="operator-sign-in-header"><span class="operator-sign-in-emblem" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><path d="M12 3 20 6v6c0 4-4 7-8 9-4-2-8-5-8-9V6l8-3Z" fill="currentColor"/></svg></span><label class="operator-sign-in-appearance">Theme<select data-sign-in-theme>${window.GpoTheme.options()}</select></label></div><span class="card-kicker">GPO REMEDIATOR</span><h1 id="operator-sign-in-title"></h1><p data-sign-in-copy></p><label><span data-account-label></span><input name="actor" autocomplete="username" maxlength="256" required></label><label>${'Password'}<input name="password" type="password" autocomplete="current-password" maxlength="1024" required></label><p class="operator-sign-in-error" role="alert"></p><button class="primary" type="submit"></button><small data-sign-in-note></small></form>`;
  document.body.append(overlay);const form=overlay.querySelector('form'),account=form.elements.actor,password=form.elements.password,button=form.querySelector('button'),error=form.querySelector('[role=alert]');
  function configure(){
   const domain=current?.domainSignIn===true;
@@ -21,8 +21,9 @@ function prompt(initial){return new Promise(resolve=>{
   overlay.querySelector('[data-sign-in-note]').textContent=domain?'Your password stays in the active session and is not saved to disk.':'Only an authorized Windows operator can change configuration.';
  }
  configure();
+ form.querySelector('[data-sign-in-theme]').addEventListener('change',e=>window.GpoTheme.set(e.target.value));
  if(!current)error.textContent='Session unavailable. Check the service and Windows sign-in, then retry.';
- overlay.addEventListener('keydown',e=>{if(e.key==='Tab'){const items=[...form.querySelectorAll('input:not([readonly]),button')].filter(x=>!x.disabled),first=items[0],last=items.at(-1);if(e.shiftKey&&document.activeElement===first){e.preventDefault();last.focus();}else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first.focus();}}});
+ overlay.addEventListener('keydown',e=>{if(e.key==='Tab'){const items=[...form.querySelectorAll('input:not([readonly]),select,button')].filter(x=>!x.disabled),first=items[0],last=items.at(-1);if(e.shiftKey&&document.activeElement===first){e.preventDefault();last.focus();}else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first.focus();}}});
  form.addEventListener('submit',async e=>{e.preventDefault();if(button.disabled)return;button.disabled=true;error.textContent='';
   try{
    if(!current){current=await session();configure();if(current.operatorConfirmationRequired!==true){finish();return;}password.focus();return;}

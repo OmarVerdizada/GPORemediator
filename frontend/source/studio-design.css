@@ -1,32 +1,6 @@
 /* GPORemediator Studio / design system v1.0
  * Light and dark themes share semantic colors. No backend or approval behavior changes.
  * Visual approach: editorial typography, restrained vivid signals, consistent surfaces. */
-:root{
- --color-background:#f3f6fb;--color-surface:#ffffff;--color-surface-muted:#f7f9fc;
- --color-text:#172640;--color-text-muted:#61718a;--color-border:#e0e7f0;--color-border-strong:#b9c8da;
- --color-primary:#365ed5;--color-primary-hover:#2649b3;--color-primary-soft:#eaf0ff;
- --color-on-primary:#ffffff;--color-success:#087d68;--color-success-soft:#dcf7ec;
- --color-warning:#996319;--color-warning-soft:#fff2d9;--color-danger:#bf3f54;
- --color-danger-soft:#fff0f2;--color-purple:#7857ca;--color-navigation:#14233b;
- --color-navigation-raised:#233c5b;--shadow-sm:0 4px 16px #1c35540a;
- --shadow-lg:0 22px 60px #14294b1f;--radius-sm:9px;--radius-md:13px;--radius-lg:16px;
- --studio-navy:#14233b;--studio-blue:#4369ed;--studio-teal:#16ab8c;--studio-amber:#eca44a;
- --studio-violet:#9375e0;--studio-pink:#d75a77;--studio-divider:#e6edf5;
- --studio-font:Geist,"Segoe UI Variable","Segoe UI",system-ui,Arial,sans-serif;
- --focus:0 0 0 4px #4369ed3c;
-}
-:root[data-gr-theme=dark]{
- --color-background:#0d1726;--color-surface:#142338;--color-surface-muted:#1a2d44;
- --color-text:#f0f5ff;--color-text-muted:#acc0da;--color-border:#2b3f59;--color-border-strong:#516784;
- --color-primary:#9cb6ff;--color-primary-hover:#bed1ff;--color-primary-soft:#223a60;--color-on-primary:#111f36;
- --color-success:#76deb9;--color-success-soft:#173d38;--color-warning:#ffd08a;--color-warning-soft:#493721;
- --color-danger:#ff9cae;--color-danger-soft:#482a3a;--color-purple:#c3b0ff;
- --color-navigation:#0a1321;--color-navigation-raised:#1b2e47;
- --studio-navy:#0a1321;--studio-blue:#90abff;--studio-teal:#6de0bd;
- --studio-amber:#ffc574;--studio-violet:#c2afff;--studio-pink:#ff91b1;
- --studio-divider:#2b405a;--shadow-sm:0 8px 20px #0002;--shadow-lg:0 22px 58px #0006;
-}
-:root[data-contrast=true]{--color-border:var(--color-text-muted);--color-border-strong:var(--color-text)}
 body.operator-custom-page{font-family:var(--studio-font);background:var(--color-background);color:var(--color-text);-webkit-font-smoothing:antialiased}
 .skip-link{position:fixed;top:8px;left:16px;z-index:200;transform:translateY(-200%);padding:10px 16px;border-radius:8px;background:var(--color-primary);color:var(--color-on-primary)}
 .skip-link:focus{transform:translateY(0)}

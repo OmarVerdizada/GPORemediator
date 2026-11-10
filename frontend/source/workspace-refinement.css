@@ -96,15 +96,18 @@ body.operator-custom-page .assurance-stage{padding:10px 12px;margin:6px 0;border
 body.operator-custom-page .assurance-stage header strong{font-size:12px}
 body.operator-custom-page .assurance-stage .assurance-context{font-size:12px;margin:5px 0}
 body.operator-custom-page .assurance-stage details{font-size:11px;margin-top:4px}
-.operator-sign-in{background:var(--color-background)!important;color:var(--color-text);padding:32px;display:grid;place-items:center}
-.operator-sign-in .operator-sign-in-card{width:min(440px,100%);max-width:440px;padding:36px;border-radius:14px;border:1px solid var(--color-border);background:var(--color-surface);box-shadow:0 12px 40px #1020400a;color:var(--color-text)}
-.operator-sign-in .operator-sign-in-emblem{width:40px;height:40px;display:grid;place-items:center;background:#3864df;color:#fff;border-radius:10px;margin-bottom:18px;box-shadow:none}
+html:has(.operator-sign-in){scrollbar-gutter:auto;overflow:hidden}
+.operator-sign-in{background:radial-gradient(ellipse at 50% 0,var(--color-primary-soft),transparent 65%),var(--color-background);color:var(--color-text);padding:32px;display:grid;place-items:center}
+.operator-sign-in .operator-sign-in-card{width:min(440px,100%);max-width:440px;padding:36px;border-radius:14px;border:1px solid var(--color-border);background:var(--color-surface);box-shadow:var(--shadow-lg);color:var(--color-text)}
+.operator-sign-in-header{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:18px}
+.operator-sign-in .operator-sign-in-emblem{width:40px;height:40px;display:grid;place-items:center;background:var(--color-primary);color:var(--color-on-primary);border-radius:10px;box-shadow:none}
 .operator-sign-in-emblem svg{width:26px;height:26px}
 .operator-sign-in .operator-sign-in-card h1{font-size:27px;line-height:1.25;letter-spacing:-.6px;margin:8px 0 12px;color:var(--color-text)}
 .operator-sign-in .operator-sign-in-card p{font-size:13px;line-height:1.65;color:var(--color-text-muted)}
 .operator-sign-in .operator-sign-in-card label{font-size:12px;color:var(--color-text);margin-top:20px}
 .operator-sign-in .operator-sign-in-card input{font-size:14px;min-height:44px;border:1px solid var(--color-border-strong);border-radius:7px;padding:10px 12px;background:var(--color-surface);color:var(--color-text);box-shadow:none}
-.operator-sign-in .operator-sign-in-card button.primary{min-height:44px;margin-top:24px;border-radius:7px;background:#365ed5!important;background-image:none!important;color:#fff;box-shadow:none;font-size:14px;border:1px solid #365ed5}
+.operator-sign-in .operator-sign-in-card button.primary{min-height:44px;margin-top:24px;border-radius:7px;background:var(--color-primary);color:var(--color-on-primary);box-shadow:none;font-size:14px;border:1px solid var(--color-primary)}
+.operator-sign-in .operator-sign-in-card button.primary:hover:not(:disabled){background:var(--color-primary-hover);border-color:var(--color-primary-hover)}
 .operator-sign-in .operator-sign-in-card small{font-size:11px;line-height:1.6;color:var(--color-text-muted);margin-top:16px}
 @media(max-width:1000px){body.operator-custom-page .remediation-layout{grid-template-columns:minmax(0,1fr)}body.operator-custom-page .control-title h1{font-size:21px}}
 @media(max-width:600px){body.operator-custom-page .product-main{padding:18px 14px 28px}body.operator-custom-page .control-header,body.operator-custom-page .target-card,body.operator-custom-page .result-summary{padding:18px}body.operator-custom-page .control-header .control-tabs{margin-bottom:-12px;flex-wrap:wrap}body.operator-custom-page .control-title-row{gap:10px}body.operator-custom-page .control-title h1{font-size:19px}body.operator-custom-page .control-id-block{min-width:48px;width:48px;min-height:48px}body.operator-custom-page .stepper .step span{display:none}body.operator-custom-page .result-diff.measured-values{gap:4px;grid-template-columns:minmax(0,1fr) 12px minmax(0,1fr) 12px minmax(0,1fr)}body.operator-custom-page .measured-values>div{padding:10px 8px}body.operator-custom-page .measured-values strong{font-size:20px}body.operator-custom-page .measured-values small{font-size:10px}body.operator-custom-page .result-identity{grid-template-columns:minmax(0,1fr);gap:12px}body.operator-custom-page .result-summary-head h2{font-size:21px}.operator-sign-in{padding:18px}.operator-sign-in .operator-sign-in-card{padding:28px 24px}}
@@ -128,6 +131,11 @@ body.operator-custom-page .domain-value-plan strong{font-size:13px;font-weight:6
 .operator-sign-in .operator-sign-in-card label>span{display:block;margin-bottom:7px}
 .operator-sign-in .operator-sign-in-card label>input{display:block;width:100%;margin-top:7px;box-sizing:border-box}
 .operator-sign-in .operator-sign-in-card p{margin:0 0 20px}
+.operator-sign-in .operator-sign-in-card .operator-sign-in-appearance{display:flex;align-items:center;gap:8px;margin:0;color:var(--color-text-muted)}
+.operator-sign-in-appearance select{min-height:36px;padding:6px 10px;background:var(--color-surface-muted);color:var(--color-text);border:1px solid var(--color-border-strong);border-radius:7px}
+.operator-sign-in .operator-sign-in-card .operator-sign-in-error{margin:12px 0 0;color:var(--color-danger)}
+.operator-sign-in-error:empty{display:none}
+.operator-sign-in ::selection{background:var(--color-primary-soft);color:var(--color-text)}
 .operator-sign-in .operator-sign-in-card .operator-sign-in-error:empty{display:none}
 .operator-sign-in .operator-sign-in-card button.primary{width:100%;display:block;margin-top:24px}
 .operator-sign-in .operator-sign-in-card small{display:block;margin-top:16px}

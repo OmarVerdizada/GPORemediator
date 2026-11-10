@@ -1,4 +1,6 @@
-# GPO Remediator 3.18.5
+# GPO Remediator 3.18.6
+
+3.18.6 improves Light, Dark and System appearance, including sign-in, form controls and verification contrast. See [release notes](docs/RELEASE-3.18.6.md).
 
 3.18.5 reopens recorded rollback after restart and reports snapshot and endpoint verification separately. See [release notes](docs/RELEASE-3.18.5.md).
 

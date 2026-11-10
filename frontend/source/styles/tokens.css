@@ -1,5 +1,87 @@
-/* Canonical design tokens. Component sources do not redefine these colors. */
-:root{--color-background:#f5f6f8;--color-surface:#fff;--color-surface-muted:#f8f9fb;--color-text:#20252e;--color-text-muted:#616b79;--color-border:#e4e7ec;--color-border-strong:#cdd3dc;--color-primary:#3267d6;--color-primary-hover:#2454b5;--color-primary-soft:#edf2ff;--color-on-primary:#fff;--color-success:#087a5c;--color-success-soft:#e6f6ef;--color-warning:#8c5b0c;--color-warning-soft:#fff5df;--color-danger:#b62f49;--color-danger-soft:#fff0f4;--color-purple:#6856c9;--color-navigation:#151b24;--color-navigation-raised:#222d3d;--shadow-sm:0 2px 8px #1013180a;--shadow-lg:0 12px 36px #10131820;--radius-sm:8px;--radius-md:10px;--radius-lg:10px;--space-1:4px;--space-2:8px;--space-3:12px;--space-4:16px;--space-5:20px;--space-6:24px;--space-8:32px;--space-10:40px;--text-11:11px;--text-12:12px;--text-14:14px;--text-16:16px;--text-20:20px;--text-28:28px;--text-36:36px;--text-48:48px;--focus:0 0 0 3px #3267d630}
-:root[data-gr-theme=dark]{--color-background:#101318;--color-surface:#191e26;--color-surface-muted:#222933;--color-text:#edf0f5;--color-text-muted:#b4bdcc;--color-border:#343e4c;--color-border-strong:#536173;--color-primary:#8ab4ff;--color-primary-hover:#aecbff;--color-primary-soft:#233349;--color-on-primary:#102038;--color-success:#75e0b6;--color-success-soft:#133c30;--color-warning:#f3cd86;--color-warning-soft:#3b3020;--color-danger:#ffa4b7;--color-danger-soft:#442633;--color-purple:#c3afff;--color-navigation:#11151b;--color-navigation-raised:#212a36;--shadow-sm:0 4px 20px #0002;--shadow-lg:0 16px 48px #0004;color-scheme:dark}
-:root[data-contrast=true]{--color-text-muted:var(--color-text);--color-border:var(--color-text-muted);--color-border-strong:var(--color-text)}
-:root[data-large-text=true]{--text-11:13px;--text-12:14px;--text-14:16px;--text-16:18px;--text-20:22px;--text-28:30px}
+/* Semantic colors shared by the workspace, dialogs, and signed-out screens. */
+:root {
+  color-scheme: light;
+  --color-background: #f4f6fa;
+  --color-surface: #fff;
+  --color-surface-muted: #f8fafc;
+  --color-text: #172640;
+  --color-text-muted: #53657c;
+  --color-border: #dce4ef;
+  --color-border-strong: #788ba3;
+  --color-primary: #365ed5;
+  --color-primary-hover: #2649b3;
+  --color-primary-soft: #eaf0ff;
+  --color-on-primary: #fff;
+  --color-success: #07735f;
+  --color-success-soft: #dcf7ec;
+  --color-warning: #87560f;
+  --color-warning-soft: #fff2d9;
+  --color-danger: #ad3047;
+  --color-danger-soft: #fff0f2;
+  --color-on-danger: #fff;
+  --color-purple: #7857ca;
+  --color-navigation: #14233b;
+  --color-navigation-raised: #233c5b;
+  --studio-navy: var(--color-navigation);
+  --studio-blue: #4369ed;
+  --studio-teal: #16ab8c;
+  --studio-amber: #eca44a;
+  --studio-violet: #9375e0;
+  --studio-pink: #d75a77;
+  --studio-divider: #e6edf5;
+  --studio-font: Geist,"Segoe UI Variable","Segoe UI",system-ui,Arial,sans-serif;
+  --shadow-sm: 0 4px 16px #1c35540a;
+  --shadow-lg: 0 22px 60px #14294b1f;
+  --focus: 0 0 0 3px color-mix(in srgb,var(--color-primary) 24%,transparent);
+  --color-surface-subtle: var(--color-surface-muted);
+  --surface: var(--color-surface);
+  --border: var(--color-border);
+  --muted: var(--color-text-muted);
+  --text: var(--color-text);
+  --radius-sm:9px;--radius-md:13px;--radius-lg:16px;
+  --space-1:4px;--space-2:8px;--space-3:12px;--space-4:16px;--space-5:20px;--space-6:24px;--space-8:32px;--space-10:40px;
+  --text-11:11px;--text-12:12px;--text-14:14px;--text-16:16px;--text-20:20px;--text-28:28px;--text-36:36px;--text-48:48px;
+}
+/* Printed reports use the light palette in either screen theme. */
+@media screen {
+  :root[data-gr-theme=dark] {
+    color-scheme: dark;
+    --color-background: #0c1422;
+    --color-surface: #142134;
+    --color-surface-muted: #1b2b40;
+    --color-text: #edf3fc;
+    --color-text-muted: #b1c1d6;
+    --color-border: #30445e;
+    --color-border-strong: #758eac;
+    --color-primary: #9cb6ff;
+    --color-primary-hover: #bed1ff;
+    --color-primary-soft: #223a60;
+    --color-on-primary: #111f36;
+    --color-success: #76deb9;
+    --color-success-soft: #173d38;
+    --color-warning: #ffd08a;
+    --color-warning-soft: #493721;
+    --color-danger: #ff9cae;
+    --color-danger-soft: #482a3a;
+    --color-on-danger: #351623;
+    --color-purple: #c3b0ff;
+    --color-navigation: #0a1321;
+    --color-navigation-raised: #1b2e47;
+    --studio-blue: #90abff;
+    --studio-teal: #6de0bd;
+    --studio-amber: #ffc574;
+    --studio-violet: #c2afff;
+    --studio-pink: #ff91b1;
+    --studio-divider: #2b405a;
+    --shadow-sm: 0 8px 20px #0002;
+    --shadow-lg: 0 22px 58px #0006;
+  }
+}
+:root[data-contrast=true] {
+  --color-text-muted: var(--color-text);
+  --color-border: var(--color-text);
+  --color-border-strong: var(--color-text);
+}
+:root[data-large-text=true] {
+  --text-11:13px;--text-12:14px;--text-14:16px;--text-16:18px;--text-20:22px;--text-28:30px;
+}
