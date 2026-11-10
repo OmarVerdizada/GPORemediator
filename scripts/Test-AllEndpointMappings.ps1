@@ -22,6 +22,7 @@ function Invoke-Command {param($ComputerName,$Authentication,$ArgumentList,$Scri
  return ,([string[]]@(([string]$item.expected -split ',')|Where-Object{$_}))
 }
 function Test-Path {param($LiteralPath) if($LiteralPath -like 'Registry::*'){return $true};Microsoft.PowerShell.Management\Test-Path -LiteralPath $LiteralPath}
+$script:registryListOverride=$null
 function Get-ItemPropertyValue {
  param($LiteralPath,$Name,$ErrorAction)
  if($script:registryValueMissing){
@@ -31,7 +32,10 @@ function Get-ItemPropertyValue {
  $entry=@($script:expected|Where-Object{$_.name -ceq $Name})[0]
  $value=$entry.expected
  if($script:wrong){return '__mismatch__'}
- if($entry.type -eq 'MultiString'){return ,([string[]]@($value -split '\|'))}
+ if($entry.type -eq 'MultiString'){
+  if($null -ne $script:registryListOverride){return ,$script:registryListOverride}
+  return ,([string[]](ConvertFrom-Json -InputObject $value))
+ }
  return $value
 }
 function Get-Item {param($LiteralPath,$ErrorAction) $result=[pscustomobject]@{};$result|Add-Member ScriptMethod GetValueKind {param($name) return (@($script:expected|Where-Object{$_.name -ceq $name})[0].type)};return $result}
@@ -140,6 +144,18 @@ foreach($map in $catalog.mappings){
     $cases++
    }
    $script:runtimeState='match'
+  }
+  if($map.id -eq '2.3.10.7'){
+   $script:wrong=$false
+   $original=$script:expected[0].expected
+   try{
+    $script:registryListOverride=[string[]]@('')
+    if(@(Verify-EffectiveSamples $plan $map)[0].state -ne 'MISMATCH'){throw 'Empty list falsely matched one empty endpoint entry'}
+    $script:expected[0].expected=MultiString-Key @('one','two')
+    $script:registryListOverride=[string[]]@('one|two')
+    if(@(Verify-EffectiveSamples $plan $map)[0].state -ne 'MISMATCH'){throw 'Endpoint list with a literal pipe falsely matched two entries'}
+    $cases+=2
+   }finally{$script:registryListOverride=$null;$script:expected[0].expected=$original}
   }
   if($ExactPlans -and !$map.domainPolicySensitive){
    foreach($item in $script:expected|Where-Object{$_.type -in @('DWORD','Integer') -and $_.comparator -eq '=='}){

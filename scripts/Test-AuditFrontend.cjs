@@ -11,7 +11,16 @@ assert.equal(window.GpoUiDomain.impact({automation:'Automated',domainPolicySensi
  let calls=0,fail=true;const state={session:{mode:'WINDOWS'},history:[],workflowJobs:[],plan:run.plan};
  const api=async(p,body)=>{calls++;if(body)return {id:'queued',state:'QUEUED'};if(fail&&p==='/workflows')throw Error('Transient read failure');return p==='/workflows'?[{id:'queued',state:'COMPLETED'}]:[];};
  const monitor=window.GpoOperationMonitor.create({state,api,render(){}});await monitor.submitSingle('apply',run.id,{});assert.equal(state.singleOperation.job.state,'QUEUED');fail=false;const previous=calls;await monitor.poll();assert(calls>previous);assert.equal(state.singleOperation.job.state,'COMPLETED');
- const refreshCalls=[];const authMonitor=window.GpoOperationMonitor.create({state:{...state,singleOperation:null},api:async(p,b)=>{refreshCalls.push(p);return p==='/workflows/refresh'?{id:'refresh',state:'QUEUED'}:[];},render(){}});await authMonitor.submitSingle('refresh',run.id,{},'Pdc');assert.deepEqual(refreshCalls.slice(0,2),['/gpo/'+run.id+'/authorize','/workflows/refresh']);const deniedCalls=[];const deniedMonitor=window.GpoOperationMonitor.create({state:{...state,singleOperation:null},api:async p=>{deniedCalls.push(p);throw Error('Access denied');},render(){}});await assert.rejects(()=>deniedMonitor.submitSingle('rollback',run.id,{}),/Access denied/);assert.deepEqual(deniedCalls,['/gpo/'+run.id+'/authorize']);
+ const refreshCalls=[];
+ const authMonitor=window.GpoOperationMonitor.create({state:{...state,singleOperation:null},api:async p=>{refreshCalls.push(p);return p==='/workflows/refresh'?{id:'refresh',state:'QUEUED'}:[];},render(){}});
+ await authMonitor.submitSingle('refresh',run.id,{},'Pdc');
+ assert.deepEqual(refreshCalls.slice(0,2),['/gpo/'+run.id+'/authorize','/workflows/refresh']);
+ const deniedCalls=[];
+ const deniedMonitor=window.GpoOperationMonitor.create({state:{...state,singleOperation:null},api:async p=>{deniedCalls.push(p);throw Error('Access denied');},render(){}});
+ await assert.rejects(()=>deniedMonitor.submitSingle('refresh',run.id,{},'Pdc'),/Access denied/);
+ assert.deepEqual(deniedCalls.splice(0),['/gpo/'+run.id+'/authorize']);
+ await assert.rejects(()=>deniedMonitor.submitSingle('rollback',run.id,{}),/Access denied/);
+ assert.deepEqual(deniedCalls,['/workflows/rollback'],'recorded rollback authorization is checked by the rollback endpoint');
  const requests=[],browserWindow={};const clientCtx=vm.createContext({window:browserWindow,Date,JSON,String,Number,Boolean,Map,Set,URL,AbortController,setTimeout,clearTimeout,location:{origin:'http://fixture'},sessionStorage:{getItem:()=>null,setItem(){}},document:{documentElement:{}},fetch:async url=>{requests.push(url);const offset=Number(new URL(url,'http://fixture').searchParams.get('offset')||0),items=Array.from({length:Math.min(200,405-offset)},(_,i)=>({id:offset+i}));return {ok:true,headers:{get:key=>key==='X-History-Next-Offset'&&offset+items.length<405?String(offset+items.length):null},text:async()=>JSON.stringify(items)};}});
  vm.runInContext(fs.readFileSync(path.join(root,'frontend/source/client.js'),'utf8'),clientCtx);const history=await browserWindow.GpoClient.request('/api/gpo/history');assert.equal(history.length,405);assert.equal(new Set(history.map(x=>x.id)).size,405);assert.equal(requests.length,3);
  assert(!('ephemeralCredential' in browserWindow.GpoClient));assert.equal((fs.readFileSync(path.join(root,'frontend/source/workspace.js'),'utf8').match(/function notifications\(\)/g)||[]).length,1);

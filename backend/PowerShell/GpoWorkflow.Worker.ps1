@@ -181,6 +181,12 @@ function Audit-CanonicalLines([string[]]$Lines){
     }
     return $result.ToArray()
 }
+function MultiString-Key([string[]]$Values){
+    $ordered=[string[]]@()
+    if($null -ne $Values){$ordered=[string[]]$Values.Clone()}
+    [array]::Sort($ordered,[StringComparer]::Ordinal)
+    return ConvertTo-Json -InputObject $ordered -Compress
+}
 function Get-ItemCurrent([string]$Id,$Map,$Item){
     switch([string]$Map.handler){
       {$_ -in @('SecurityTemplate')} {
@@ -191,7 +197,7 @@ function Get-ItemCurrent([string]$Id,$Map,$Item){
         try{
           $entry=Get-GPRegistryValue -Guid ([guid]$Id) -Key ([string]$Item.key) -ValueName ([string]$Item.name) -Domain $cfg.domain -Server $cfg.domainController -ErrorAction Stop
           $v=$entry.Value;if([string]$entry.Type -ine (Registry-Type ([string]$Item.type))){return ('<type mismatch: '+[string]$entry.Type+'> '+[string]$v)}
-          if(([string]$Item.type).ToUpperInvariant() -eq 'MULTISTRING'){return ((@($v)|ForEach-Object{[string]$_}|Sort-Object)-join '|')};return [string]$v
+          if([string]$Item.type -eq 'MultiString'){return MultiString-Key $v};return [string]$v
         }catch{
           # Missing policy data is a valid "not configured" state. Any other GroupPolicy/transport
           # failure must fail closed instead of being misreported as an absent setting.
@@ -221,7 +227,7 @@ function Desired-Normalized($Map,$Item,$S){
     if([string]$Map.handler -eq 'AdvancedAudit'){return [string]$Item.mask}
     $desired=Desired-Item $Map $Item $S
     if([string]$Map.handler -eq 'SecurityTemplate' -and [string]$Item.type -eq 'Principals'){return Normalize-Principals (Principals-Desired @($Item.value))}
-    if(([string]$Item.type).ToUpperInvariant() -eq 'MULTISTRING'){return ((@($desired)|ForEach-Object{[string]$_}|Sort-Object)-join '|')}
+    if([string]$Item.type -eq 'MultiString'){return MultiString-Key $desired}
     if([string]$Item.type -eq 'QuotedString'){return '"'+([string]$desired)+'"'}
     return [string]$desired
 }
@@ -262,6 +268,10 @@ function Mapping-Display([string]$Id,$Map,$S,[bool]$Desired=$false){
     foreach($item in Mapping-Items $Map){
         $label=[string]$(if($item.name){$item.name}elseif($item.key){$item.key}else{$item.guid})
         $v=if($Desired){Desired-Normalized $Map $item $S}else{Get-ItemCurrent $Id $Map $item}
+        if([string]$item.type -eq 'MultiString' -and $null -ne $v -and $v.StartsWith('[')){
+            $values=[string[]](ConvertFrom-Json -InputObject $v)
+            if(!@($values|Where-Object{$null -ne $_ -and ($_ -eq '' -or $_.Contains('|'))}).Count){$v=$values -join '|'}
+        }
         if($null -ne $v){$configured=$true}
         if(@(Mapping-Items $Map).Count -eq 1){return $(if($null -eq $v){$null}else{[string]$v})}
         $parts+=($label+'='+$(if($null -eq $v){'<not configured>'}else{[string]$v}))
@@ -776,7 +786,7 @@ function Legacy-PublicationProof($Plan,$Map,$Manifest,[string]$Directory){
 }
 function Publication-Review($Manifest){
     $phase=[string]$Manifest.phase;$failure=Read-Field $Manifest 'failure' $null
-    return $phase -eq 'PUBLICATION_PENDING' -or ($phase -eq 'REVIEW_REQUIRED' -and $failure -and [string]$failure.stage -eq 'PUBLICATION_CHECK')
+    return $phase -eq 'PUBLICATION_PENDING' -or ($phase -eq 'REVIEW_REQUIRED' -and $failure -and [string]$failure.stage -eq 'PUBLICATION_CHECK' -and [string]$failure.code -ne 'GPO_PUBLICATION_DRIFT')
 }
 function Reconcile-Publication($Plan,$Map,$Manifest,[string]$Directory,$Verification){
     $phase=[string]$Manifest.phase;$failure=Read-Field $Manifest 'failure' $null
@@ -1000,7 +1010,11 @@ function Verify-EffectiveSamples($Plan,$Map,[bool]$RollbackRegistry=$false,[bool
               $key=[string]$item.key;if($key -notmatch '^HKCU\\'){return @{supported=$false;match=$false;actual='';message='The user-policy verifier only accepts HKCU registry mappings.'}}
               $path='Registry::HKEY_USERS\'+$UserSid+'\'+$key.Substring(5)
               try{$value=Get-ItemPropertyValue -LiteralPath $path -Name ([string]$item.name) -ErrorAction Stop;$kind=(Get-Item -LiteralPath $path -ErrorAction Stop).GetValueKind([string]$item.name)}catch{if($_.FullyQualifiedErrorId -match 'ItemNotFound|PathNotFound|PropertyNotFound' -or $_.FullyQualifiedErrorId -eq 'Argument,Microsoft.PowerShell.Commands.GetItemPropertyValueCommand'){$value=$null;$kind=$null}else{return @{supported=$false;match=$false;actual='';message='The user registry policy could not be read because access or transport failed.'}}}
-              if(([string]$item.type).ToUpperInvariant() -eq 'MULTISTRING'){$current=if($null -eq $value){$null}else{((@($value)|ForEach-Object{[string]$_}|Sort-Object)-join '|')}}else{$current=if($null -eq $value){$null}else{[string]$value}}
+              $current=if($null -eq $value){$null}else{[string]$value}
+              if([string]$item.type -eq 'MultiString' -and $null -ne $value){
+                $values=[string[]]@($value);[array]::Sort($values,[StringComparer]::Ordinal)
+                $current=ConvertTo-Json -InputObject $values -Compress
+              }
               $actual+=([string]$item.name+'='+$(if($null -eq $current){'<not configured>'}else{$current}));if($null -eq $current -or [string]$current -cne [string]$item.expected -or ($kind -and [string]$kind -ine [string]$item.type)){$ok=$false}
             }
             return @{supported=$true;match=$ok;actual=($actual -join '; ');message='The effective HKCU policy values were read from the selected user profile hive.'}
@@ -1119,7 +1133,8 @@ function Verify-EffectiveSamples($Plan,$Map,[bool]$RollbackRegistry=$false,[bool
                 [array]::Sort($values,[StringComparer]::Ordinal)
               }
               $display=($values|Sort-Object) -join '|'
-              return @{supported=$true;match=(Value-Matches $display $item.expected '');actual=($name+'='+$display);registryValue=@{present=$true;values=@($values)};message='The endpoint registry value and type were read directly.'}
+              $comparable=if($type -ieq 'DWORD'){$display}else{ConvertTo-Json -InputObject $values -Compress}
+              return @{supported=$true;match=(Value-Matches $comparable $item.expected '');actual=($name+'='+$display);registryValue=@{present=$true;values=@($values)};message='The endpoint registry value and type were read directly.'}
             }finally{if($registryKey){$registryKey.Dispose()}}
           }
           # The policy registry is configuration input. Firewall evidence must
@@ -1153,7 +1168,26 @@ function Verify-EffectiveSamples($Plan,$Map,[bool]$RollbackRegistry=$false,[bool
             return @{supported=$true;match=$ok;actual=($actual -join '; ');message='Endpoint policy registry value/type and resultant Get-NetFirewallProfile -PolicyStore ActiveStore were compared separately with the request. Both must match. This does not prove packet-level enforcement, log-file creation or service health.'}
           }
           if($Handler -in @('Registry','RegistrySet')){
-            foreach($item in @($ExpectedItems)){$key=[string]$item.key;if($key -notmatch '^HKLM\\'){return @{supported=$false;match=$false;actual='';message='Only computer-scope HKLM registry policies can be verified without a user session.'}};$path='Registry::HKEY_LOCAL_MACHINE\'+$key.Substring(5);try{$v=Get-ItemPropertyValue -LiteralPath $path -Name ([string]$item.name) -ErrorAction Stop;$kind=(Get-Item -LiteralPath $path -ErrorAction Stop).GetValueKind([string]$item.name);if([string]$kind -ine [string]$item.type){$ok=$false;$actual+=([string]$item.name+' type='+[string]$kind+' (expected '+[string]$item.type+')')}}catch{if($_.FullyQualifiedErrorId -match 'ItemNotFound|PathNotFound|PropertyNotFound' -or $_.FullyQualifiedErrorId -eq 'Argument,Microsoft.PowerShell.Commands.GetItemPropertyValueCommand'){$v=$null}else{return @{supported=$false;match=$false;actual='';message='Registry policy could not be read because access or transport failed.'}}};if(([string]$item.type).ToUpperInvariant() -eq 'MULTISTRING'){$cur=if($null -eq $v){$null}else{((@($v)|ForEach-Object{[string]$_}|Sort-Object)-join '|')}}else{$cur=if($null -eq $v){$null}else{[string]$v}};$actual+=([string]$item.name+'='+$(if($null -eq $cur){'<not configured>'}else{$cur}));if(!(Value-Matches $cur $item.expected $(if($item.comparator){$item.comparator}else{$Comparator}))){$ok=$false}}
+            foreach($item in @($ExpectedItems)){
+              $key=[string]$item.key
+              if($key -notmatch '^HKLM\\'){return @{supported=$false;match=$false;actual='';message='Only computer-scope HKLM registry policies can be verified without a user session.'}}
+              $path='Registry::HKEY_LOCAL_MACHINE\'+$key.Substring(5)
+              try{
+                $v=Get-ItemPropertyValue -LiteralPath $path -Name ([string]$item.name) -ErrorAction Stop
+                $kind=(Get-Item -LiteralPath $path -ErrorAction Stop).GetValueKind([string]$item.name)
+                if([string]$kind -ine [string]$item.type){$ok=$false;$actual+=([string]$item.name+' type='+[string]$kind+' (expected '+[string]$item.type+')')}
+              }catch{
+                if($_.FullyQualifiedErrorId -match 'ItemNotFound|PathNotFound|PropertyNotFound' -or $_.FullyQualifiedErrorId -eq 'Argument,Microsoft.PowerShell.Commands.GetItemPropertyValueCommand'){$v=$null}
+                else{return @{supported=$false;match=$false;actual='';message='Registry policy could not be read because access or transport failed.'}}
+              }
+              $cur=if($null -eq $v){$null}else{[string]$v}
+              if([string]$item.type -eq 'MultiString' -and $null -ne $v){
+                $values=[string[]]@($v);[array]::Sort($values,[StringComparer]::Ordinal)
+                $cur=ConvertTo-Json -InputObject $values -Compress
+              }
+              $actual+=([string]$item.name+'='+$(if($null -eq $cur){'<not configured>'}else{$cur}))
+              if(!(Value-Matches $cur $item.expected $(if($item.comparator){$item.comparator}else{$Comparator}))){$ok=$false}
+            }
             if(!$ok){return @{supported=$true;match=$false;actual=($actual -join '; ');message='Endpoint registry value or type differs from the request.'}}
             try{$additional=Read-AdditionalEndpointValues $ExpectedItems}catch{
               return @{supported=$false;match=$false;state='UNAVAILABLE';actual=($actual -join '; ');message='The endpoint registry matches, but the required Defender or service read-back is unavailable. Check provider availability and read permissions.'}
@@ -1391,6 +1425,13 @@ function Verify-Rollback($Plan,$Map,$Manifest,[bool]$CheckEndpoints=$false){
     if($domainSnapshots.Count){foreach($entry in $domainSnapshots){
         try{$actual=Domain-PolicyRead ([string]$entry.property) ([string]$entry.value);if($before -and [string]$entry.property -eq [string]$before.property){$domainPolicy=$actual};$restoreChecks+=@{area='DOMAIN_POLICY';state=$(if([string]$actual.value -ceq [string]$entry.value){'MATCH'}else{'MISMATCH'});expected=[string]$entry.value;actual=[string]$actual.value;message=('Compared saved AD '+[string]$entry.property+' independently of the GPO.')}}catch{$restoreChecks+=@{area='DOMAIN_POLICY';state='UNAVAILABLE';expected=[string]$entry.value;actual=$null;message=('Could not read saved AD '+[string]$entry.property+'.')}}
     }}else{$restoreChecks+=@{area='DOMAIN_POLICY';state='NOT_APPLICABLE';expected=$null;actual=$null;message='No direct AD domain-policy change is part of this record.'}}
+    $recordedFingerprint=Read-Field $Manifest 'rollbackFingerprint' $null
+    if($recordedFingerprint){
+        try{
+            $actual=Fingerprint $s.gpoId $s.scopeDn
+            $restoreChecks+=@{area='RESTORED_FINGERPRINT';state=$(if($actual -ceq $recordedFingerprint){'MATCH'}else{'MISMATCH'});expected=$recordedFingerprint;actual=$actual;message='Compared with the verified post-restore GPO, linked scopes and delegation fingerprint.'}
+        }catch{$restoreChecks+=@{area='RESTORED_FINGERPRINT';state='UNAVAILABLE';expected=$recordedFingerprint;actual=$null;message='Could not check the previously verified GPO fingerprint.'}}
+    }
     $matches=@($restoreChecks|Where-Object{$_.state -notin @('MATCH','NOT_APPLICABLE')}).Count -eq 0
     $metadata=Verification-Metadata $s
     $observed=@();$endpointStatus='ROLLBACK_ENDPOINT_PENDING'
@@ -1497,6 +1538,13 @@ function Test-RecoveryBackup([string]$Directory,$Manifest){
     return (Test-Path -LiteralPath (Join-Path (Join-Path $Directory $id.ToString('B')) 'DomainSysvol\GPO') -PathType Container)
 }
 function Save-Manifest($Manifest,[string]$Directory){Atomic-Text (Join-Path $Directory 'manifest.json') ($Manifest|ConvertTo-Json -Depth 50) ([Text.UTF8Encoding]::new($false))}
+function Record-VerifiedRestore($Plan,$Manifest,[string]$Directory){
+    $saved=Read-Field $Manifest 'rollbackFingerprint' $null
+    if([string]$Manifest.phase -eq 'ROLLED_BACK' -and $saved){return}
+    if(!$saved){$Manifest|Add-Member -NotePropertyName rollbackFingerprint -NotePropertyValue (Fingerprint $Plan.selection.gpoId $Plan.selection.scopeDn) -Force}
+    $Manifest.phase='ROLLED_BACK'
+    Save-Manifest $Manifest $Directory
+}
 function Read-Field($Object,[string]$Name,$Default=$null){
     if($null -eq $Object){return $Default}
     if($Object -is [Collections.IDictionary]){if($Object.Contains($Name)){return $Object[$Name]};return $Default}
@@ -1592,7 +1640,9 @@ switch($Operation){
             }
             $manifest.postFingerprint=Fingerprint $s.gpoId $s.scopeDn;$manifest.phase='PUBLICATION_PENDING';Save-Manifest $manifest $directory
             Emit-Stage 'PUBLICATION_CHECK'
-            $v=Verify-Published $plan $map $false;$manifest.postFingerprint=Fingerprint $s.gpoId $s.scopeDn;$manifest.phase=if(!$v.published -or !$v.linked){'VERIFY_MISMATCH'}else{'PUBLISHED'};Save-Manifest $manifest $directory
+            $v=Verify-Published $plan $map $false
+            if((Fingerprint $s.gpoId $s.scopeDn) -cne $manifest.postFingerprint){Fail 'GPO_PUBLICATION_DRIFT' 'GPO content, links or delegation changed during the publication check. The original post-write checkpoint was retained for recovery review.'}
+            $manifest.phase=if(!$v.published -or !$v.linked){'VERIFY_MISMATCH'}else{'PUBLISHED'};Save-Manifest $manifest $directory
             # Do not force endpoint refresh as a side effect of Apply. Publication and refresh are
             # intentionally separate operator decisions so the change result is visible first.
             $state=if(!$v.published -or !$v.linked){'VERIFY_MISMATCH'}else{'PUBLISHED'};return Result $state 'GPO content and selected link were read back after the write. gpupdate /force was not run automatically; use the explicit Refresh action after reviewing this result.' $manifest $v @()
@@ -1620,14 +1670,14 @@ switch($Operation){
         $manifest=Get-Content -LiteralPath (Join-Path $directory 'manifest.json') -Raw|ConvertFrom-Json
         if([string]$manifest.phase -in @('PUBLISHED','VERIFY_MISMATCH') -and (Read-Field $manifest 'rollbackFailure' $null)){
             $restoration=Verify-Rollback $plan $map $manifest $true
-            if($restoration.restored){$manifest.phase='ROLLED_BACK';$manifest|Add-Member -NotePropertyName rollbackFingerprint -NotePropertyValue (Fingerprint $plan.selection.gpoId $plan.selection.scopeDn) -Force;Save-Manifest $manifest $directory;return Result 'ROLLED_BACK' 'The saved GPO, link and AD restoration target were verified live.' $manifest $restoration @()}
+            if($restoration.restored){Record-VerifiedRestore $plan $manifest $directory;return Result 'ROLLED_BACK' 'The saved GPO, link and AD restoration target were verified live.' $manifest $restoration @()}
             $failure=$manifest.rollbackFailure
             return Result 'ROLLBACK_REVIEW_REQUIRED' ('The recorded rollback did not restore the saved snapshot. Read-only verification does not retry it. Resolve '+[string]$failure.code+' at '+[string]$failure.stage+' and review rollback availability before confirming another restore.') $manifest $restoration @()
         }
         if([string]$manifest.phase -in @('ROLLING_BACK','ROLLED_BACK','ROLLBACK_REVIEW_REQUIRED','ROLLBACK_DRIFT_DETECTED')){
             $v=Verify-Rollback $plan $map $manifest $true;$rolledBack=[bool]$v.restored
             if($rolledBack){
-                $manifest.phase='ROLLED_BACK';$manifest|Add-Member -NotePropertyName rollbackFingerprint -NotePropertyValue (Fingerprint $plan.selection.gpoId $plan.selection.scopeDn) -Force;Save-Manifest $manifest $directory
+                Record-VerifiedRestore $plan $manifest $directory
                 return Result 'ROLLED_BACK' 'Rollback was re-verified against the pre-change GPO content, extensions and link state. Endpoint policy convergence may still be pending.' $manifest $v @()
             }
             $hadVerifiedRestore=[string]$manifest.phase -eq 'ROLLED_BACK' -or ([string]$manifest.phase -eq 'ROLLBACK_DRIFT_DETECTED' -and [bool](Read-Field $manifest 'rollbackFingerprint' $null))
@@ -1744,13 +1794,14 @@ switch($Operation){
         $restoreReadback=$null
         if([string]$m.phase -in @('ROLLING_BACK','ROLLED_BACK','ROLLBACK_REVIEW_REQUIRED','ROLLBACK_DRIFT_DETECTED') -and (Read-Field $Data 'mapping' $null)){
             $restoreReadback=Verify-Rollback $plan $Data.mapping $m
-            if($restoreReadback.restored){$m.phase='ROLLED_BACK';$m|Add-Member -NotePropertyName rollbackFingerprint -NotePropertyValue (Fingerprint $s.gpoId $s.scopeDn) -Force;Save-Manifest $m $directory}
+            if($restoreReadback.restored){Record-VerifiedRestore $plan $m $directory}
             elseif([string]$m.phase -eq 'ROLLBACK_DRIFT_DETECTED' -and !(Read-Field $m 'rollbackFingerprint' $null)){$m.phase='ROLLBACK_REVIEW_REQUIRED';Save-Manifest $m $directory}
         }
         $phase=[string]$m.phase
         $failure=Read-Field $m 'rollbackFailure' (Read-Field $m 'failure' $null)
         $assessment=@{canRestore=$false;driftDetected=$false;manifestPhase=$phase;backupId=(Read-Field $m 'backupId' $null);hasPostFingerprint=[bool](Read-Field $m 'postFingerprint' $null);checkedAt=[DateTimeOffset]::UtcNow.ToString('O');failure=$null;restoreChecks=(Read-Field $restoreReadback 'restoreChecks' $null)}
         if($phase -eq 'ROLLED_BACK' -and @($assessment.restoreChecks|Where-Object{$_.state -eq 'UNAVAILABLE'}).Count){$assessment.reason='RESTORE_EVIDENCE_UNAVAILABLE';$assessment.message='Required snapshot evidence could not be established. Inspect the individual restore checks before another restore.';return $assessment}
+        if($phase -eq 'ROLLED_BACK' -and $restoreReadback -and !$restoreReadback.restored){$assessment.reason='ROLLBACK_CONFLICT';$assessment.driftDetected=$true;$assessment.message='The live GPO no longer matches the verified restore. Inspect the changed fields before another restore.';return $assessment}
         if($failure){$assessment.failure=@{code=[string](Read-Field $failure 'code' '');stage=[string](Read-Field $failure 'stage' '');message=[string](Read-Field $failure 'message' '')}}
         if((Read-Field $m 'backupId' $null) -and !(Test-RecoveryBackup $directory $m)){$assessment.reason='BACKUP_FILES_UNAVAILABLE';$assessment.message='The backup is recorded, but its native GPO files are missing or unavailable on the selected controller. Restore access to the retained backup before retrying.';return $assessment}
         if((Read-Field $m 'backupId' $null) -and !(Read-Field $m 'postFingerprint' $null)){$assessment.reason='UNANCHORED_POST_STATE';$assessment.message='The retained backup exists, but a complete matching post-write state could not be proven. Check later GPO/AD changes and backup integrity before full restore. Live publication verification and explicit refresh do not authorize overwriting unrelated changes.';return $assessment}
@@ -1805,6 +1856,7 @@ switch($Operation){
             }
             Emit-Stage 'RESTORING_GPO'
             $manifest | Add-Member -NotePropertyName rollbackAttempts -NotePropertyValue ([int](Read-Field $manifest 'rollbackAttempts' 0)+1) -Force
+            $manifest.PSObject.Properties.Remove('rollbackFingerprint')
             $manifest.phase='ROLLING_BACK';Save-Manifest $manifest $directory
             $restoreStarted=$true
             Import-GPO -BackupId ([guid]$manifest.backupId) -TargetGuid ([guid]$s.gpoId) -Path $directory -Domain $cfg.domain -Server $cfg.domainController|Out-Null
@@ -1819,9 +1871,8 @@ switch($Operation){
             }
             Emit-Stage 'RESTORE_CHECK'
             $v=Verify-Rollback $plan $map $manifest;$matches=[bool]$v.restored
-            $manifest.phase=if($matches){'ROLLED_BACK'}else{'ROLLBACK_REVIEW_REQUIRED'}
-            if($matches){$manifest | Add-Member -NotePropertyName rollbackFingerprint -NotePropertyValue (Fingerprint $s.gpoId $s.scopeDn) -Force}
-            Save-Manifest $manifest $directory
+            if($matches){Record-VerifiedRestore $plan $manifest $directory}
+            else{$manifest.phase='ROLLBACK_REVIEW_REQUIRED';Save-Manifest $manifest $directory}
             $message=if($matches){'GPO snapshot and selected link restored. Endpoint refresh/replication still need to converge.'}else{'Restore read-back is not confirmed for: '+(@($v.restoreChecks|Where-Object{$_.state -notin @('MATCH','NOT_APPLICABLE')}|ForEach-Object{$_.area}) -join ', ')+'. Inspect the separate restore checks before another restore.'}
             return Result $manifest.phase $message $manifest $v @()
         }catch{

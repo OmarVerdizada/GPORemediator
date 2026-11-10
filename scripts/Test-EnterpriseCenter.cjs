@@ -20,6 +20,12 @@ assert.equal(record(full).status,'EVIDENCE_VERIFIED');assert.equal(ctx.window.Gp
 full.result.endpointCoverage.complete=false;assert.notEqual(record(full).status,'EVIDENCE_VERIFIED');assert.equal(ctx.window.GpoUiDomain.classify(full).compliant,false);
 full.result.endpointCoverage.complete=true;full.result.endpointChecks[200].hostname='ws0';assert.notEqual(record(full).status,'EVIDENCE_VERIFIED','duplicated endpoint rows must not establish full coverage');
 assert.equal(ctx.window.GpoUiDomain.classify({...base,result:{...base.result,state:'ROLLED_BACK'}}).compliant,false,'rollback must not count as compliant with stale publication flags');
+const restore=record({...base,result:{...base.result,state:'ROLLED_BACK',currentValue:'A',endpointChecks:[{hostname:'srv1',state:'RESTORE_MATCH',actualValue:'A',beforeActualValue:'A'}],restoreChecks:[{area:'CONTENT',state:'MATCH'}]}});
+assert.equal(restore.targetKind,'RESTORE');assert.equal(restore.requested,'B');assert.equal(restore.restoreTarget,'A');
+assert.equal(restore.endpointChecks[0].beforeActualValue,'A');assert.equal(restore.restoreChecks[0].area,'CONTENT');
+assert.match(html({entries:[restore]}),/A → A/);assert.doesNotMatch(html({entries:[restore]}),/A → B/);
+const restoreDomain=record({...base,plan:{...base.plan,preview:{...base.plan.preview,domainPolicy:{value:'30',desiredValue:'15'}}},result:{...base.result,state:'ROLLBACK_REVIEW_REQUIRED',domainPolicy:{value:'15',desiredValue:'15'}}});
+assert.equal(restoreDomain.restoreTarget,'30');assert.match(html({entries:[restoreDomain]}),/30 → 30/);
 for(const mod of [
  r=>r.result.gpoPublished=false,
  r=>r.result.linkVerified=false,

@@ -13,7 +13,7 @@ $dispatch=[scriptblock]::Create(($ast.EndBlock.Statements|Where-Object{$_ -is [M
 $cfg=@{domain='example.test';domainController='dc.example.test';backupPath=(Join-Path $temp 'Backups');allowedHosts=@();endpointTargeting='SelectedOu';emitProgress=$false}
 $domainDn='DC=example,DC=test';$target='OU=Pilot,'+$domainDn
 $domain=@{DNSRoot='example.test';DistinguishedName=$domainDn;PDCEmulator='dc.example.test'};$dc=@{HostName='dc.example.test'}
-$protectedBuiltInGpoIds=@();$gpoId='11111111-1111-1111-1111-111111111111'
+$EndpointCredential=$null;$protectedBuiltInGpoIds=@();$gpoId='11111111-1111-1111-1111-111111111111'
 $script:folder=Join-Path $temp 'Policy';$script:rawLinks='';$script:version=0;$script:extensions='';$script:userExtensions='';$script:registry=@{};$script:backupDenied=$false;$script:refreshes=0
 function Check($ok,$name){if(!$ok){foreach($record in @($Error|Select-Object -First 3)){[Console]::Error.WriteLine(('Fixture diagnostic: '+$record.Exception.ToString()+' Stack: '+$record.ScriptStackTrace))};throw $name};Write-Output ('PASS '+$name)}
 function Sysvol-Policies {return $script:folder}
@@ -42,7 +42,8 @@ function Get-ADObject {param($Identity,$Server,$Properties,$Replace,$ErrorAction
 }
 function Set-ADObject {param($Identity,$Server,$Replace) $script:version=[int]$Replace.versionNumber;$script:extensions=[string]$Replace.gPCMachineExtensionNames}
 function Get-GPO {param($Guid,$Domain,$Server) [pscustomobject]@{Id=[guid]$gpoId;DisplayName='Dedicated pilot';GpoStatus='AllSettingsEnabled'}}
-function Get-GPPermission {param($Guid,[switch]$All,$Domain,$Server) [pscustomobject]@{Permission='GpoApply';Trustee=[pscustomobject]@{Name='Authenticated Users';Sid=[Security.Principal.SecurityIdentifier]::new('S-1-5-11')}}}
+$script:fixturePermission='GpoApply'
+function Get-GPPermission {param($Guid,[switch]$All,$Domain,$Server) [pscustomobject]@{Permission=$script:fixturePermission;Trustee=[pscustomobject]@{Name='Authenticated Users';Sid=[Security.Principal.SecurityIdentifier]::new('S-1-5-11')}}}
 function Get-ADDefaultDomainPasswordPolicy {param($Identity,$Server,$ErrorAction) [pscustomobject]$script:domainState}
 function Set-ADDefaultDomainPasswordPolicy {
  [CmdletBinding()]param($Identity,$Server,$PasswordHistoryCount,$MinPasswordAge,$MinPasswordLength,$ComplexityEnabled,$ReversibleEncryptionEnabled,$LockoutDuration,$LockoutThreshold,$LockoutObservationWindow)
@@ -51,7 +52,7 @@ function Set-ADDefaultDomainPasswordPolicy {
  foreach($key in @($PSBoundParameters.Keys|Where-Object{$_ -in $script:domainState.Keys})){$script:domainState[$key]=$PSBoundParameters[$key]}
 }
 
-function All-LinkScopes {@([pscustomobject]@{dn=$target;rawLinks=$script:rawLinks})}
+function All-LinkScopes {@([pscustomobject]@{dn=$script:target;rawLinks=$script:rawLinks})}
 function Get-GPInheritance {param($Target,$Domain,$Server)
  $links=@();if($script:rawLinks){$links=@([pscustomobject]@{GpoId=[guid]$gpoId;Order=1;Enforced=$false;Enabled=$true;DisplayName='Dedicated pilot'})}
  [pscustomobject]@{GpoLinks=$links;InheritedGpoLinks=@();GpoInheritanceBlocked=$false}
@@ -117,6 +118,16 @@ function Test-NativeRestoreFormatting($Selection,$Mapping){
    Check ((Get-NormalizedGpoContentFingerprint $script:folder) -cne [string]$m.beforeContent) ('semantic restore never rewrites the legacy drift fingerprint '+$mode)
    $Operation='gpoVerify';$verified=& $dispatch;Check ($verified.state -eq 'ROLLED_BACK') ('read-only Verify retains authenticated formatted restore '+$mode)
    $Operation='gpoRefresh';$Data.refresh='Scope';$refresh=& $dispatch;Check ($refresh.state -eq 'ROLLED_BACK' -and $refresh.refreshResults.Count -gt 0) ('Scope gpupdate is permitted after verified native restore '+$mode)
+   if($mode -eq 'new'){
+    $fingerprint=(Get-Content -LiteralPath $manifestPath -Raw|ConvertFrom-Json).rollbackFingerprint
+    try{
+     $script:fixturePermission='GpoRead';$Operation='gpoVerify';$changed=& $dispatch
+     Check ($changed.state -eq 'ROLLBACK_DRIFT_DETECTED' -and ($changed.restoreChecks|Where-Object area -eq 'CONTENT').state -eq 'MATCH' -and ($changed.restoreChecks|Where-Object area -eq 'RESTORED_FINGERPRINT').state -eq 'MISMATCH') 'restore re-verification detects changed delegation even with matching snapshot content'
+     $Operation='gpoRollbackInspect';$denied=& $dispatch
+     Check (!$denied.canRestore -and (Get-Content -LiteralPath $manifestPath -Raw|ConvertFrom-Json).rollbackFingerprint -ceq $fingerprint) 'read-only inspection cannot replace the saved rollback fingerprint'
+    }finally{$script:fixturePermission='GpoApply'}
+    $Operation='gpoVerify';$verified=& $dispatch;Check ($verified.state -eq 'ROLLED_BACK') 'restoring the recorded delegation makes the original fingerprint verifiable again'
+   }
    [IO.File]::WriteAllText((Join-Path $script:folder 'opaque.dat'),'external change');$Operation='gpoVerify';$changed=& $dispatch
    Check ($changed.state -eq 'ROLLBACK_DRIFT_DETECTED' -and $changed.message -match 'CONTENT') ('real post-restore file change still reports content drift '+$mode)
    $m=Get-Content -LiteralPath $manifestPath -Raw|ConvertFrom-Json;$m.phase='ROLLBACK_REVIEW_REQUIRED';$m.PSObject.Properties.Remove('rollbackFingerprint');Save-Manifest $m $directory
@@ -139,7 +150,7 @@ function Test-PublicationRecovery($Selection,$Mapping){
  $originalVerifier=(Get-Item Function:\Verify-Published).ScriptBlock
  $script:publicationVerifier=$originalVerifier
  try{
-  foreach($mode in @('checkpoint','legacy','direct','legacy-direct','legacy-unchanged')){
+  foreach($mode in @('checkpoint','legacy','direct','legacy-direct','legacy-unchanged','interleaved')){
    $script:domainState.LockoutDuration=[timespan]::FromMinutes(30);$script:domainState.LockoutObservationWindow=[timespan]::FromMinutes(30);$script:domainState.LockoutThreshold=0
    New-GPLink -Guid ([guid]$s.gpoId) -Target $s.scopeDn -Domain $cfg.domain -Server $cfg.domainController -LinkEnabled Yes -Order 1|Out-Null
    $path=Security-Path $s.gpoId;$null=[IO.Directory]::CreateDirectory([IO.Path]::GetDirectoryName($path))
@@ -149,10 +160,23 @@ function Test-PublicationRecovery($Selection,$Mapping){
    $foreign=Join-Path $script:folder 'unrelated-policy.txt';[IO.File]::WriteAllText($foreign,'retain')
    $plan=@{id=[guid]::NewGuid().ToString('N');domain=$cfg.domain;domainController=$cfg.domainController;selection=$s;preview=(Preview $s $Mapping)}
    $script:failPublication=$true
-   function Verify-Published {param($Plan,$Map,[bool]$CheckEndpoints=$false) if($script:failPublication){$script:failPublication=$false;throw [Management.Automation.MethodInvocationException]::new('Fixture metadata invocation failure')};return & $script:publicationVerifier $Plan $Map $CheckEndpoints}
+   function Verify-Published {param($Plan,$Map,[bool]$CheckEndpoints=$false)
+    if(!$script:failPublication){return & $script:publicationVerifier $Plan $Map $CheckEndpoints}
+    $script:failPublication=$false
+    if($mode -ne 'interleaved'){throw [Management.Automation.MethodInvocationException]::new('Fixture metadata invocation failure')}
+    $readback=& $script:publicationVerifier $Plan $Map $CheckEndpoints
+    [IO.File]::WriteAllText($foreign,'concurrent edit')
+    return $readback
+   }
    $Operation='gpoApply';$Data=@{plan=$plan;mapping=$Mapping;consent=@{confirmation='APPLY'}};$failed=& $dispatch
    $directory=Run-Directory $plan;$manifestPath=Join-Path $directory 'manifest.json';$manifest=Get-Content -LiteralPath $manifestPath -Raw|ConvertFrom-Json
    Check ($failed.state -eq 'REVIEW_REQUIRED' -and $script:domainState.LockoutObservationWindow.TotalMinutes -eq 15 -and $manifest.failure.stage -eq 'PUBLICATION_CHECK' -and $manifest.postFingerprint) ('publication failure retains completed write checkpoint '+$mode)
+   if($mode -eq 'interleaved'){
+    Check ($manifest.failure.code -eq 'GPO_PUBLICATION_DRIFT' -and (Fingerprint $s.gpoId $s.scopeDn) -cne $manifest.postFingerprint) 'an external publication edit cannot become the rollback checkpoint'
+    $Operation='gpoVerify';$observed=& $dispatch;Check ($observed.state -eq 'REVIEW_REQUIRED') 'read-only Verify cannot promote a known concurrent publication edit'
+    $Operation='gpoRollbackInspect';$blocked=& $dispatch;Check (!$blocked.canRestore) 'known concurrent edit blocks full-GPO recovery without overwriting external content'
+    continue
+   }
    if($mode -like 'legacy*'){$manifest.postFingerprint=$null;Save-Manifest $manifest $directory}
    if($mode -eq 'legacy'){
     [IO.File]::WriteAllText($foreign,'external-change')

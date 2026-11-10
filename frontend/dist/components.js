@@ -98,7 +98,7 @@
   }
   function restoreReadback(s,h){
     const rows=rollbackCheck(s,h)?.restoreChecks||h.result?.restoreChecks;if(!rows?.length)return '';
-    const names={CONTENT:'GPO content',MACHINE_EXTENSIONS:'Computer extensions',USER_EXTENSIONS:'User extensions',SCOPE_LINKS:'Scope link list',DOMAIN_POLICY:'AD domain value'};
+    const names={CONTENT:'GPO content',MACHINE_EXTENSIONS:'Computer extensions',USER_EXTENSIONS:'User extensions',SCOPE_LINKS:'Scope link list',DOMAIN_POLICY:'AD domain value',RESTORED_FINGERPRINT:'Post-restore GPO fingerprint'};
     return `<details class="rollback-assessment restore-readback" ${rows.some(x=>!['MATCH','NOT_APPLICABLE'].includes(x.state))?'open':''}><summary>Recorded snapshot read-back · ${rows.filter(x=>x.state==='MATCH').length} checks passed</summary><p>Snapshot restoration and endpoint-effective values are checked separately.</p><ul>${rows.map(x=>`<li data-restore-check="${esc(x.area)}" data-restore-state="${esc(x.state)}"><strong>${esc(names[x.area]||x.area)} · ${esc(x.state==='MATCH'?'Matches':x.state==='MISMATCH'?'Mismatch':x.state==='NOT_APPLICABLE'?'Not applicable':'Unavailable')}</strong><p>${esc(x.message||'')}</p>${x.state!=='NOT_APPLICABLE'?`<details><summary>Expected / observed</summary><dl><dt>Expected snapshot</dt><dd><pre>${esc(x.expected===''?'Empty':x.expected??'Not recorded')}</pre></dd><dt>Observed at check</dt><dd><pre>${esc(x.actual===''?'Empty':x.actual??'Unavailable')}</pre></dd></dl></details>`:''}</li>`).join('')}</ul></details>`;
   }
   function endpointRestoreCheck(s,h,check){

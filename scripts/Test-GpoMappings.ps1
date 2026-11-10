@@ -76,6 +76,17 @@ if(Test-Path -LiteralPath $customPath){$customFixtures=Get-Content -LiteralPath 
  Assert-Test (!(Write-Mapping $plan $map)) ($map.id+': custom mapping was not idempotent')
  $null=Endpoint-Expected $map $selection
 };Write-Output 'PASS custom DWORD, HKCU, audit None, account policy, principal list and registry set write/read-back/idempotence'}
+$listMap=$catalog.mappings|Where-Object id -eq '2.3.10.7'
+$listItem=$listMap.items[0];$listItem.value=@('one','two')
+$listKey=$listItem.key+'|'+$listItem.name
+$script:registry[$listKey]=@{type='MultiString';value=[string[]]@('one|two')}
+Assert-Test (!(Mapping-Matches $selection.gpoId $listMap $selection)) 'One list entry containing a pipe matched two separate entries'
+Assert-Test ((Mapping-Display $selection.gpoId $listMap $selection) -eq '["one|two"]') 'Ambiguous registry list display lost the item boundary'
+$script:registry[$listKey].value=[string[]]@('two','one')
+Assert-Test (Mapping-Matches $selection.gpoId $listMap $selection) 'Registry list ordering changed equality'
+$listItem.value=@();$script:registry[$listKey].value=[string[]]@('')
+Assert-Test (!(Mapping-Matches $selection.gpoId $listMap $selection)) 'An empty list matched a list containing one empty entry'
+Write-Output 'PASS unambiguous MultiString GPO value comparisons'
 # Preserve stronger existing deny/audit entries when the benchmark says "include".
 $script:folder=Join-Path $sandbox 'incl';$null=New-Item -ItemType Directory -Path $script:folder
 $map=$catalog.mappings|Where-Object{$_.id -eq '2.2.23'}
