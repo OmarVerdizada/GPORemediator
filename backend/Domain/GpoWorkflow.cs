@@ -25,7 +25,9 @@ public record GpoSelection(string GpoId, string ScopeDn, string Setting, int Val
 public record GpoHealthCheck(string Id, string Label, string State, string Message, bool Required = true);
 public record GpoEnvironmentStatus(string Domain, string DomainController, string ExecutionUser,
     bool Ready, GpoHealthCheck[] Checks, string CheckedAt);
-public record GpoConflictInfo(string Severity, string Code, string Message, string? GpoId = null, string? GpoName = null, string? Scope = null);
+public record GpoConflictInfo(string Severity, string Code, string Message, string? GpoId = null, string? GpoName = null, string? Scope = null,
+    string? Domain = null, string? RelatedControl = null, bool BlocksApply = false);
+public record GpoPolicyField(string Address,string Type,string? CurrentValue,string DesiredValue);
 public record GpoAffectedObjects(int Computers, int Servers, int Workstations, int Disabled, string[] SampleHosts, bool Truncated,
     int Users = 0, string[]? SampleUsers = null,
     [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] string? TargetKind = null,
@@ -49,7 +51,9 @@ public record GpoPreview(GpoChoice Gpo, GpoScope Scope, string? PreviousValue, s
     [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] string[]? VerificationComputers = null,
     GpoValueSource? PreviousValueSource = null, GpoDomainPolicy? DomainPolicy = null,
     [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] bool? CustomValues = null,
-    [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] GpoPolicyDependency? Dependency = null);
+    [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] GpoPolicyDependency? Dependency = null,
+    [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] GpoPolicyField[]? Fields = null,
+    [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] GpoConflictInfo[]? RelatedConflicts = null);
 
 public record GpoWorkflowPlan(string Id, string Actor, string ExecutionUser, string Mode, string Domain, string DomainController,
     GpoSelection Selection, GpoPreview Preview, string CreatedAt, string? MappingHash = null, string? ConfigHash = null, bool WriteAuthorized = false);
@@ -75,10 +79,11 @@ public record GpoWorkflowResult(string State, string Message, string? BackupId, 
     public string[] Diagnosis => GpoAssurance.Diagnose(this);
 }
 public record GpoWorkflowRun(string Id, GpoWorkflowPlan Plan, GpoWorkflowResult Result, string UpdatedAt, GpoConsent? Approval = null,
-    string? CorrelationId = null, string? StartedAt = null, GpoStage[]? Stages = null, GpoLiveCheck[]? LiveChecks = null);
+    string? CorrelationId = null, string? StartedAt = null, GpoStage[]? Stages = null, GpoLiveCheck[]? LiveChecks = null,
+    [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingDefault)] bool BatchStepRestored = false);
 public record GpoStage(string Phase, string StartedAt, string? FinishedAt = null);
 public record GpoRollbackAnchor(GpoWorkflowPlan Plan, string PostFingerprint,
-    GpoWorkflowPlan[]? BatchPlans = null, GpoWorkflowPlan? RefreshPlan = null);
+    GpoWorkflowPlan[]? BatchPlans = null, GpoWorkflowPlan? RefreshPlan = null, string? RestoredFromFingerprint = null);
 public record GpoHistoryPage(GpoWorkflowRun[] Items,int Total,int? NextOffset,long Snapshot);
 
 public record GpoEvidence(string SchemaVersion, string Product, string Benchmark, string OperationId, string GeneratedAt,

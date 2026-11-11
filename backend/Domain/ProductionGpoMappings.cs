@@ -97,9 +97,15 @@ public static class ProductionGpoMappings
     public static GpoRuleMapping Require(string id) => Settings.SingleOrDefault(x => string.Equals(x.Id, id, StringComparison.OrdinalIgnoreCase))
         ?? throw new PolicyException("GPO_SETTING_UNSUPPORTED", "This CIS control does not have a validated production mapping.");
 
-    public static GpoRuleMapping Effective(GpoSelection selection)
+    public static bool IsLegacyPrintSelection(GpoSelection selection)=>selection.ItemValues is {Length:1}&&selection.Setting is "18.7.11" or "18.7.12";
+    public static GpoSelection ForFreshPreview(GpoSelection saved)=>IsLegacyPrintSelection(saved)
+        ?saved with{ItemValues=[..saved.ItemValues!,["1"]]}:saved;
+
+    public static GpoRuleMapping Effective(GpoSelection selection,bool historical=false)
     {
         var mapping=Require(selection.Setting);
+        if(historical&&IsLegacyPrintSelection(selection))
+            mapping=mapping with{Items=[mapping.Items[0]],Handler="Registry"};
         if(!mapping.Writable && selection.ReviewContext is not null)
         {
             if(string.IsNullOrWhiteSpace(selection.ReviewContext)||selection.ReviewContext.Length>2048||selection.ReviewContext.Contains('\0'))

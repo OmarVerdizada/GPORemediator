@@ -213,13 +213,13 @@ Write-Output 'PASS rollback scope refresh and per-host scheduling failure report
 $rollbackBlock=$switchAst.Clauses|Where-Object{$_.Item1.Extent.Text -eq "'gpoRollback'"}|ForEach-Object{$_.Item2}
 $script:batchFirst=Join-Path $sandbox 'batch-first';$script:batchLast=Join-Path $sandbox 'batch-last'
 $null=New-Item -ItemType Directory -Path $script:batchFirst,$script:batchLast -Force
-$plan=[pscustomobject]@{id='batch-first';selection=[pscustomobject]@{gpoId='31b2f340-016d-11d2-945f-00c04fb984f9';scopeDn='OU=Pilot,DC=example,DC=local'};preview=[pscustomobject]@{scopeLinks='old links';existingLink=$null}}
-$anchorPlan=[pscustomobject]@{id='batch-last';selection=$plan.selection}
+$plan=[pscustomobject]@{id='batch-first';domain='example.local';domainController='dc.example.local';selection=[pscustomobject]@{setting='18.7.11';gpoId='31b2f340-016d-11d2-945f-00c04fb984f9';scopeDn='OU=Pilot,DC=example,DC=local'};preview=[pscustomobject]@{scopeLinks='old links';existingLink=$null}}
+$anchorPlan=[pscustomobject]@{id='batch-last';domain=$plan.domain;domainController=$plan.domainController;selection=[pscustomobject]@{setting='18.7.12';gpoId=$plan.selection.gpoId;scopeDn=$plan.selection.scopeDn}}
 function Run-Directory {param($Plan) if($Plan.id -eq 'batch-last'){return $script:batchLast};return $script:batchFirst}
 $firstManifest=@{phase='PUBLISHED';postFingerprint='batch-first';backupId='22222222-2222-2222-2222-222222222222';beforeContent=$content;beforeExtensions='security';directory=$script:batchFirst}
 $null=New-Item -ItemType Directory -Path (Join-Path $script:batchFirst '{22222222-2222-2222-2222-222222222222}\DomainSysvol\GPO') -Force
 $firstManifest|ConvertTo-Json -Depth 5|Set-Content (Join-Path $script:batchFirst 'manifest.json')
-@{phase='PUBLISHED';postFingerprint='batch-last'}|ConvertTo-Json|Set-Content (Join-Path $script:batchLast 'manifest.json')
+@{phase='PUBLISHED';mappingId=$anchorPlan.selection.setting;postFingerprint='batch-last'}|ConvertTo-Json|Set-Content (Join-Path $script:batchLast 'manifest.json')
 $script:currentFingerprint='batch-last';$script:restoreCalls=0
 function Fingerprint {param($Id,$ScopeDn) return $script:currentFingerprint}
 function Import-GPO {param($BackupId,$TargetGuid,$Path,$Domain,$Server) $script:restoreCalls++;$script:currentFingerprint='restored-'+$script:restoreCalls;[IO.File]::WriteAllText((Join-Path $script:folder 'policy.txt'),'restored snapshot')}

@@ -5,3 +5,18 @@
 @media(max-width:640px){.bulk-dialog{inset:10px 10px 80px}.bulk-dialog>header,.bulk-dialog-body{padding:16px}.bulk-dialog h2{font-size:20px}.bulk-target-grid{grid-template-columns:minmax(0,1fr)}.bulk-actions>.ds-button{width:100%;justify-content:center}.bulk-control-select{padding:0 8px}.bulk-section-tools{padding:10px}.bulk-history small{width:100%}}
 
 @media(max-width:640px){.bulk-table{min-width:0;display:block}.bulk-table thead{display:none}.bulk-table tbody{display:grid;gap:14px}.bulk-table tr{display:grid;border:1px solid var(--color-border);border-radius:8px;padding:8px}.bulk-table td{display:block;max-width:none;padding:8px;border-bottom:0}.bulk-table td::before{content:attr(data-label);display:block;font-size:11px;color:var(--color-text-muted);margin-bottom:5px}.bulk-table-wrap{overflow:visible}}
+
+.policy-conflicts{border:1px solid var(--color-border);border-radius:10px;padding:14px;margin:16px 0;background:var(--color-surface)}
+.policy-conflicts h3{margin:0 0 12px;font-size:15px}
+.policy-conflicts ul{list-style:none;padding:0;margin:0;display:grid;gap:8px}
+.policy-conflicts li{padding:10px 12px;border-left:3px solid var(--color-warning);border-radius:6px;background:var(--color-warning-soft);overflow-wrap:anywhere}
+.policy-conflicts li[data-conflict-level=blocking]{border-left-color:var(--color-danger);background:var(--color-danger-soft)}
+.policy-conflicts li[data-conflict-level=info]{border-left-color:var(--color-primary);background:var(--color-surface-muted)}
+.policy-conflicts li strong{font-size:12px}
+.policy-conflicts li p{font-size:13px;margin:4px 0 0;line-height:1.5}
+.bulk-metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(116px,1fr));gap:8px;margin:14px 0 0}
+.bulk-metrics>div{padding:9px 12px;border:1px solid var(--color-border);border-radius:8px;background:var(--color-surface)}
+.bulk-metrics dt{font-size:12px;color:var(--color-text-muted)}
+.bulk-metrics dd{margin:4px 0 0;font-size:20px;font-weight:700;font-variant-numeric:tabular-nums}
+.bulk-endpoint-notes{margin-top:8px}
+.bulk-endpoint-notes p{margin:4px 0}

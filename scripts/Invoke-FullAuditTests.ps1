@@ -33,6 +33,7 @@ try{
  Run-Check 'frontend-syntax' $node @('-e',"const fs=require('fs'),cp=require('child_process');for(const x of fs.readdirSync('frontend/source').filter(x=>x.endsWith('.js'))){const r=cp.spawnSync(process.execPath,['--check','frontend/source/'+x],{stdio:'inherit'});if(r.status)process.exit(r.status)}") 'syntax'
  Run-Check 'Test-EndpointBatching' 'powershell.exe' @('-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-File','scripts/Test-EndpointBatching.ps1')
  Run-Check 'Test-BatchDomainPolicy' 'powershell.exe' @('-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-File','scripts/Test-BatchDomainPolicy.ps1') 'batch AD snapshot rollback; native dispatcher, mocked AD/GPMC'
+ Run-Check 'Test-PrintBatch' 'powershell.exe' @('-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-File','scripts/Test-RemediationChain.ps1','-PrintBatchOnly') '12 print controls, linked GPO conflict and reverse snapshot recovery; mocked AD/GPMC'
  Run-Check 'Test-BulkApplyUi' $node @('scripts/Test-BulkApplyUi.cjs') 'real browser, mocked HTTP; opt-in bulk approval and durable recovery'
  Run-Check 'Test-AssuranceScale' $node @('scripts/Test-AssuranceScale.cjs')
  Run-Check 'Test-AuditFrontend' $node @('scripts/Test-AuditFrontend.cjs')

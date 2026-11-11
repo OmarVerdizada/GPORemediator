@@ -1,13 +1,43 @@
 namespace GpoRemediator.Domain;
 
-// Batch-only planning. Ordinary single-control plans retain their existing path.
 public static class BatchWorkflowRules
 {
+    public static GpoWorkflowPlan[] CheckSharedFields(GpoWorkflowPlan[] plans) => plans.Select(plan=>{
+        var fields=(plan.Preview.Fields??[]).ToDictionary(field=>field.Address,StringComparer.OrdinalIgnoreCase);
+        var conflicts=new List<GpoConflictInfo>(plan.Preview.RelatedConflicts??[]);
+        foreach(var peer in plans.Where(peer=>peer.Id!=plan.Id))
+        foreach(var field in peer.Preview.Fields??[]){
+            if(!fields.TryGetValue(field.Address,out var own))continue;
+            var compatible=SameValue(own,field);
+            conflicts.Add(new(compatible?"Info":"Warning",compatible?"SHARED_POLICY_FIELD":"BATCH_FIELD_CONFLICT",
+                compatible?$"Both controls write {field.DesiredValue} to {field.Address}.":$"The controls request incompatible values ({own.DesiredValue} and {field.DesiredValue}) for {field.Address}.",
+                plan.Selection.GpoId,plan.Preview.Gpo.Name,plan.Selection.ScopeDn,plan.Domain,peer.Selection.Setting,!compatible));
+        }
+        return plan with{Preview=plan.Preview with{RelatedConflicts=conflicts.ToArray()}};
+    }).ToArray();
+
+    public static void ValidateConflicts(GpoWorkflowPlan plan){
+        if((plan.Preview.RelatedConflicts??[]).FirstOrDefault(conflict=>conflict.BlocksApply) is {} conflict)
+            throw new PolicyException(conflict.Code,$"Control {plan.Selection.Setting} and {conflict.RelatedControl}: {conflict.Message}");
+    }
+
+    private static bool SameValue(GpoPolicyField left,GpoPolicyField right)=>left.Type==right.Type&&left.DesiredValue==right.DesiredValue;
+
+    public static bool CanRebase(GpoPreview approved,GpoPreview fresh,IReadOnlyDictionary<string,GpoPolicyField> published){
+        if(approved.DomainPolicy?.DesiredValue!=fresh.DomainPolicy?.DesiredValue||approved.DomainPolicy?.Value!=fresh.DomainPolicy?.Value||
+            (fresh.Impact?.Conflicts??[]).Except(approved.Impact?.Conflicts??[]).Any())return false;
+        if(approved.Fields is null||fresh.Fields is null)
+            return approved.PreviousValue==fresh.PreviousValue&&approved.DesiredValue==fresh.DesiredValue;
+        var oldFields=approved.Fields.ToDictionary(field=>field.Address,StringComparer.OrdinalIgnoreCase);
+        return fresh.Fields.Length==oldFields.Count&&fresh.Fields.All(field=>oldFields.TryGetValue(field.Address,out var old)&&SameValue(old,field)&&
+            (old.CurrentValue==field.CurrentValue||published.TryGetValue(field.Address,out var prior)&&SameValue(prior,field)&&field.CurrentValue==prior.DesiredValue));
+    }
+
     public static string Refresh(GpoWorkflowPlan plan,string requested)=>requested!="Auto"?requested:
-        ProductionGpoMappings.Effective(plan.Selection).DomainPolicySensitive?"Pdc":"Scope";
+        ProductionGpoMappings.Effective(plan.Selection,historical:true).DomainPolicySensitive?"Pdc":"Scope";
 
     public static GpoWorkflowPlan[] RefreshGroups(IEnumerable<GpoWorkflowPlan> plans,string requested)=>plans
-        .GroupBy(p=>new{Refresh=Refresh(p,requested),Scope=ProductionGpoMappings.Effective(p.Selection).Scope,
+        .GroupBy(p=>new{Refresh=Refresh(p,requested),Scope=ProductionGpoMappings.Effective(p.Selection,historical:true).Scope,
             p.Selection.ScopeDn,p.Selection.EndpointScopeDn,p.Selection.VerificationUser})
         .Select(g=>g.Last()).ToArray();
 

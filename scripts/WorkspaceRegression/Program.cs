@@ -239,6 +239,40 @@ Reject(()=>BatchWorkflowRules.Order([dependencyPlan,invalidWindow with{Preview=i
 var threshold=dependencyPlan with{Selection=dependencyPlan.Selection with{Setting="1.2.2"},Preview=dependencyPlan.Preview with{Dependency=null,DomainPolicy=new("LockoutThreshold","0","5","dc.test.local")}};
 Check(BatchWorkflowRules.Order([threshold,dependencyPlan,invalidWindow])[^1].Selection.Setting=="1.2.2","Account lockout was enabled before the explicitly selected duration/window prerequisites");
 Console.WriteLine("PASS domain account batch dependency order, exact approved values, single PDC refresh and invalid/incomplete dependency rejection");
+
+// Exercise the exact print selection that triggered the batch incident.
+fake.Actions.Clear();
+const string restricted=@"Registry:HKLM\SOFTWARE\Policies\Microsoft\Windows NT\Printers\PointAndPrint\Restricted";
+fake.ConfigurePreview=(s,p)=>s.Setting is "18.7.11" or "18.7.12"?p with{
+    PreviousValue=fake.Actions.Contains("apply:18.7.11")?"Restricted=1":null,
+    Fields=[new(restricted,"DWORD",fake.Actions.Contains("apply:18.7.11")?"1":null,s.ItemValues?[1][0]??"1"),
+        new(restricted+"/"+s.Setting,"DWORD",null,"0")]}:p;
+var printSelections=Enumerable.Range(1,12).Select(n=>selection with{Setting=$"18.7.{n}"}).ToArray();
+var conflicting=jobs.Preview(Guid.NewGuid().ToString(),new([printSelections[10],printSelections[11] with{ItemValues=[["0"],["0"]]}]),"secret-session","TEST\\Admin");
+conflicting=await Done(jobs,conflicting.Id);
+var conflictBatch=jobs.Batches("TEST\\Admin").Single(b=>b.Id==conflicting.BatchId);
+Reject(()=>jobs.Start("apply",new(Guid.NewGuid().ToString(),conflictBatch.PlanIds,consent,BatchId:conflictBatch.Id),"secret-session","TEST\\Admin"),"BATCH_FIELD_CONFLICT");
+Check(fake.Actions.Count==0,"A conflicting shared enable value reached Apply");
+var printPreview=jobs.Preview(Guid.NewGuid().ToString(),new(printSelections),"secret-session","TEST\\Admin");
+printPreview=await Done(jobs,printPreview.Id);
+var printBatch=jobs.Batches("TEST\\Admin").Single(b=>b.Id==printPreview.BatchId);
+Check(store.Require<GpoWorkflowPlan>("gpo_plans",printBatch.PlanIds[11]).Preview.RelatedConflicts?.Any(c=>c.Code=="SHARED_POLICY_FIELD"&&c.RelatedControl=="18.7.11")==true,"The print preview omitted the shared enable field");
+var printApply=jobs.Start("apply",new(Guid.NewGuid().ToString(),printBatch.PlanIds,consent,BatchId:printBatch.Id),"secret-session","TEST\\Admin");
+printApply=await Done(jobs,printApply.Id);
+Check(printApply.CompletedIds.Length==12&&fake.Actions.Where(a=>a.StartsWith("apply:")).SequenceEqual(printSelections.Select(s=>"apply:"+s.Setting)),"The approved shared enable value stopped the print batch: "+printApply.Message);
+Check(printApply.State=="CHECKS_INCOMPLETE","The batch reported success while print RPC transport was unverified");
+var printIds=printApply.CompletedIds;
+var rollbackConsent=new GpoConsent("ROLLBACK");
+Reject(()=>jobs.Start("rollback",new(Guid.NewGuid().ToString(),[printIds[10]],rollbackConsent),"secret-session","TEST\\Admin"),"BATCH_ROLLBACK_ORDER");
+foreach(var index in new[]{11,10}){
+    var undo=jobs.Start("rollback",new(Guid.NewGuid().ToString(),[printIds[index]],rollbackConsent),"secret-session","TEST\\Admin");
+    undo=await Done(jobs,undo.Id);
+    Check(undo.CompletedIds.SequenceEqual([printIds[index]])&&fake.LastAnchor is {BatchPlans:null}&&
+        fake.LastAnchor.Plan.Id==printIds[11]&&(index==11||fake.LastAnchor.RestoredFromFingerprint is not null),"Individual rollback did not use the newest valid anchor");
+    Check(store.Require<GpoWorkflowRun>("gpo_runs",printIds[index-1]).Result.State=="PUBLISHED","Individual rollback retired an earlier batch step");
+}
+fake.ConfigurePreview=null;
+Console.WriteLine("PASS 18.7.1–18.7.12 approved together, incompatible enable values blocked, RPC enforcement kept pending and individual rollback proceeds newest first");
 using(var req=new HttpRequestMessage(HttpMethod.Get,"/api/workflows/"+jobId+"/report")){req.Headers.Add("Test-Identity","TEST\\Admin");using var response=await http.SendAsync(req);var html=await response.Content.ReadAsStringAsync();Check(response.IsSuccessStatusCode&&html.Contains("&lt;unsafe&gt;")&&!html.Contains("<unsafe>"),"Report escaping failed");}
 var reportSource=store.Require<WorkflowJob>("workflow_jobs",jobId).CompletedIds[0];var reportRun=store.Require<GpoWorkflowRun>("gpo_runs",reportSource);
 store.Put("gpo_runs",reportSource,reportRun with{Result=reportRun.Result with{CurrentLink=new(reportRun.Plan.Selection.ScopeDn,2,false,false)}});
@@ -279,7 +313,8 @@ sealed class FakeOperations(Store store,OperationGate gate):IWorkflowOperations
    var saved=store.Get<GpoWorkflowRun>("gpo_runs",id);
    var state=FailNext?"REVIEW_REQUIRED":operation=="rollback"||((operation is "refresh" or "verify")&&saved?.Result.State=="ROLLED_BACK")?"ROLLED_BACK":"PUBLISHED";FailNext=false;
    if(operation=="apply")fingerprint=Guid.NewGuid().ToString("N");if(operation=="rollback"){LastAnchor=rollbackAnchor;LastRestore=id;}
-   var result=new GpoWorkflowResult(state,"Recorded",operation=="apply"?"backup-"+id:store.Get<GpoWorkflowRun>("gpo_runs",id)?.Result.BackupId,"backup",fingerprint,operation!="rollback",operation!="rollback",operation=="refresh"?[new("ws.test.local","SCHEDULED","scheduled")]:[],"VERIFIED_ON_SAMPLE",new("1","1",true,[],[],PolicyValues.Now(),true),[new("ws.test.local","VERIFIED","fixture effective value")]);
+   var result=new GpoWorkflowResult(state,"Recorded",operation=="apply"?"backup-"+id:saved?.Result.BackupId,"backup",operation=="apply"?fingerprint:saved?.Result.PostFingerprint,operation!="rollback",operation!="rollback",operation=="refresh"?[new("ws.test.local","SCHEDULED","scheduled")]:[],"VERIFIED_ON_SAMPLE",new("1","1",true,[],[],PolicyValues.Now(),true),[new("ws.test.local","VERIFIED","fixture effective value")]);
+   if(operation=="verify"&&plan.Selection.Setting=="18.7.3")result=result with{EffectiveStatus="ENDPOINT_VERIFICATION_PENDING",EndpointChecks=[new("ws.test.local","OBSERVED","Print registry configuration matches; transport is unverified.")]};
    if(operation=="verify"&&EndpointMismatch)result=result with{EffectiveStatus="ENDPOINT_MISMATCH",EndpointChecks=[new("ws.test.local","MISMATCH","Audit policy remained unchanged","0")]};
    if(operation=="verify"&&EndpointUnavailable)result=result with{EffectiveStatus="ENDPOINT_VERIFICATION_PENDING",EndpointChecks=[new("ws.test.local","UNAVAILABLE","Endpoint unreachable")]};
    if(operation=="verify"&&state=="ROLLED_BACK"&&RestoreEndpointDiff)

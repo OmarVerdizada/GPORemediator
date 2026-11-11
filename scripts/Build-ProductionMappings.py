@@ -171,6 +171,13 @@ if '2.3.10.4' in maps:
     maps['2.3.10.4']['warnings'].append('Windows restart is required before this Credential Manager policy becomes effective.')
 if '18.7.1' in maps:
     maps['18.7.1']['warnings'].append('The Print Spooler service must be restarted before this policy becomes effective.')
+for cid in ('18.7.11', '18.7.12'):
+    mapping = maps[cid]
+    mapping['handler'] = 'RegistrySet'
+    mapping['items'].append({
+        'key': mapping['items'][0]['key'], 'name': 'Restricted',
+        'type': 'DWORD', 'value': ['1'],
+    })
 
 # Reviewed corrections are explicit and reproducible; see docs/REMEDIATION-AUDIT.md.
 with open(os.path.join(root, 'backend', 'data', 'mapping_sources', 'reviewed-overrides.json'), encoding='utf-8') as f:

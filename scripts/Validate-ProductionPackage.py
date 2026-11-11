@@ -39,10 +39,17 @@ check(mapping_doc['meta'].get('totalUnique')==405, 'mapping meta.totalUnique != 
 
 handlers={'SecurityTemplate','Registry','RegistrySet','AdvancedAudit','Manual'}
 check(all(x.get('handler') in handlers for x in mappings), 'unapproved handler found')
-check(sum(x['handler']=='Registry' for x in mappings)==319, 'Registry count changed')
+check(sum(x['handler']=='Registry' for x in mappings)==317, 'Registry count changed')
 check(sum(x['handler']=='SecurityTemplate' for x in mappings)==44, 'SecurityTemplate count changed')
 check(sum(x['handler']=='AdvancedAudit' for x in mappings)==27, 'AdvancedAudit count changed')
-check(sum(x['handler']=='RegistrySet' for x in mappings)==8, 'RegistrySet count changed')
+check(sum(x['handler']=='RegistrySet' for x in mappings)==10, 'RegistrySet count changed')
+
+print_key=r'HKLM\SOFTWARE\Policies\Microsoft\Windows NT\Printers\PointAndPrint'
+for control, prompt in [('18.7.11','NoWarningNoElevationOnInstall'),('18.7.12','UpdatePromptSettings')]:
+    recipe=by_id.get(control,{})
+    fields={(item.get('key'),item.get('name'),item.get('type'),tuple(item.get('value') or [])) for item in recipe.get('items',[])}
+    check(recipe.get('handler')=='RegistrySet' and fields=={(print_key,prompt,'DWORD',('0',)),(print_key,'Restricted','DWORD',('1',))},
+          f'{control}: Point and Print requires the matching prompt and parent enable field')
 
 sid_guid=re.compile(r'^\{[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}\}$')
 for m in mappings:

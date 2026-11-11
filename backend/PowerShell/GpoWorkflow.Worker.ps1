@@ -263,6 +263,16 @@ function Mapping-Matches([string]$Id,$Map,$S){
     }
     return $true
 }
+function Mapping-Fields([string]$Id,$Map,$S){
+    foreach($item in Mapping-Items $Map){
+        $address=switch([string]$Map.handler){
+            {$_ -in @('Registry','RegistrySet')}{'Registry:'+ $item.key+'\'+$item.name}
+            'SecurityTemplate'{'SecurityTemplate:'+ $item.section+'\'+$item.key}
+            'AdvancedAudit'{'AdvancedAudit:'+([guid]$item.guid).ToString('D')}
+        }
+        @{address=$address;type=[string]$item.type;currentValue=(Get-ItemCurrent $Id $Map $item);desiredValue=[string](Desired-Normalized $Map $item $S)}
+    }
+}
 function Mapping-Display([string]$Id,$Map,$S,[bool]$Desired=$false){
     $parts=@();$configured=$false
     foreach($item in Mapping-Items $Map){
@@ -520,12 +530,102 @@ function Selection-Preflight($S,$Map,$Access=$null){
     $ready=@($checks|Where-Object{$_.required -and $_.state -ne 'PASS'}).Count -eq 0
     return @{domain=$base.domain;domainController=$dc.HostName;executionUser=$base.executionUser;ready=$ready;checks=$checks.ToArray();checkedAt=[DateTimeOffset]::UtcNow.ToString('O')}
 }
-function Impact-Details($S,$Map,$Gpo,$Scope,[string[]]$LinkScopes){
-    $inherit=Get-GPInheritance -Target $Scope.dn -Domain $cfg.domain -Server $cfg.domainController;$conflicts=@();$allLinks=@($inherit.GpoLinks)+@($inherit.InheritedGpoLinks);$desired=Mapping-Display $S.gpoId $Map $S $true
-    foreach($link in $allLinks){try{$id=([guid]$link.GpoId).ToString();if($id -eq ([guid]$S.gpoId).ToString()){continue};$other=Mapping-Display $id $Map $S $false;if($null -ne $other -and [string]$other -cne [string]$desired){$conflicts+=@{severity=$(if($link.Enforced){'HIGH'}else{'MEDIUM'});code='SETTING_DEFINED_ELSEWHERE';message=('The same control is configured differently in another applicable GPO: '+$other);gpoId=$id;gpoName=[string]$link.DisplayName;scope=[string]$Scope.dn}};if($link.Enforced){$conflicts+=@{severity='HIGH';code='ENFORCED_LINK';message='An enforced GPO link is present in the inheritance path.';gpoId=$id;gpoName=[string]$link.DisplayName;scope=[string]$Scope.dn}}}catch{Fail 'ANALYSIS_INCOMPLETE' 'Conflict analysis could not read or interpret an applicable GPO. Apply is blocked until the analysis succeeds.'}}
-    if([bool]$inherit.GpoInheritanceBlocked){$conflicts+=@{severity='HIGH';code='BLOCK_INHERITANCE';message='Block Inheritance is enabled on the selected scope.';gpoId=$null;gpoName=$null;scope=[string]$Scope.dn}}
+function Policy-HalfEnabled([string]$Status,[string]$Scope){
+    return $Status -ne 'AllSettingsDisabled' -and !($Scope -eq 'User' -and $Status -eq 'UserSettingsDisabled') -and !($Scope -ne 'User' -and $Status -eq 'ComputerSettingsDisabled')
+}
+function Scope-Contains([string]$Parent,[string]$Child){
+    if($Child -ieq $Parent){return $true}
+    if(!$Child.EndsWith(','+$Parent,[StringComparison]::OrdinalIgnoreCase)){return $false}
+    $separator=$Child.Length-$Parent.Length-1
+    $escapes=0
+    for($i=$separator-1;$i -ge 0 -and $Child[$i] -eq '\';$i--){$escapes++}
+    return ($escapes % 2) -eq 0
+}
+function Policy-Conflicts($S,$Map,$Scope,$Inheritance,$DirectoryScopes,[string[]]$LinkScopes){
+    $selected=([guid]$S.gpoId).ToString('D')
+    $candidates=[Collections.Generic.List[object]]::new()
+    foreach($link in @($Inheritance.GpoLinks)+@($Inheritance.InheritedGpoLinks)){
+        if(!$link -or !(Read-Field $link 'Enabled' $true)){continue}
+        $id=([guid]$link.GpoId).ToString('D')
+        $target=[string](Read-Field $link 'Target' '')
+        if($target -notmatch '^(?i:OU|DC|CN)='){
+            $target=[string](@($DirectoryScopes|Where-Object{
+                (Scope-Contains $_.dn $Scope.dn) -and (Read-Field (Link $_.rawLinks $id $_.dn) 'enabled' $false)
+            }|Sort-Object {$_.dn.Length} -Descending|Select-Object -First 1 -ExpandProperty dn) -join '')
+        }
+        $candidates.Add(@{id=$id;dn=$target;enforced=[bool](Read-Field $link 'Enforced' $false);context='Selected scope inheritance'})
+    }
+    $impacted=@($Scope.dn)+@($LinkScopes)
+    foreach($candidate in $DirectoryScopes){
+        $dn=[string]$candidate.dn
+        $site=$dn -match '(?i),CN=Sites,CN=Configuration,'
+        $overlap=$false
+        foreach($target in $impacted){
+            if((Scope-Contains $target $dn) -or ($target -ine $Scope.dn -and (Scope-Contains $dn $target))){$overlap=$true;break}
+        }
+        if(!$site -and !$overlap){continue}
+        foreach($entry in [regex]::Matches([string]$candidate.rawLinks,'(?i)\[LDAP://CN=\{([0-9a-f-]{36})\},CN=Policies,CN=System,([^;]+);([0-3])\]')){
+            $options=[int]$entry.Groups[3].Value
+            if($options -band 1){continue}
+            $context=if($site){'Site link'}elseif($dn -ieq $Scope.dn){'Direct link'}else{'Overlapping scope'}
+            $owner=($entry.Groups[2].Value -split ',' | ForEach-Object{$_ -replace '^(?i:DC=)',''}) -join '.'
+            $candidates.Add(@{id=([guid]$entry.Groups[1].Value).ToString('D');dn=$dn;enforced=[bool]($options -band 2);context=$context;owner=$owner})
+        }
+    }
+    $seen=@{};$read=@{};$limit=100
+    foreach($candidate in @($candidates|Sort-Object {if($_.ContainsKey('owner')){0}else{1}})){
+        $id=$candidate.id
+        if($id -eq $selected){continue}
+        $key=$id+'|'+$candidate.dn
+        if($seen.ContainsKey($key)){continue}
+        $seen[$key]=$true
+        $owner=[string](Read-Field $candidate 'owner' $cfg.domain)
+        if($owner -ine [string]$cfg.domain){
+            @{severity='MEDIUM';code='GPO_CROSS_DOMAIN_LINK';message='A GPO from another domain is linked to this scope. Its policy values require review in the owning domain.';gpoId=$id;scope=$candidate.dn;domain=$owner}
+            continue
+        }
+        if(!$read.ContainsKey($id)){
+            if($read.Count -ge $limit){
+                return @{severity='MEDIUM';code='GPO_CONFLICT_COVERAGE_LIMIT';message='Conflict analysis checked up to 100 competing GPOs. Review remaining linked scopes in GPMC.';scope=[string]$Scope.dn;domain=[string]$cfg.domain}
+            }
+            try{
+                $gpo=Get-GPO -Guid ([guid]$id) -Domain $cfg.domain -Server $cfg.domainController -ErrorAction Stop
+                $differences=@()
+                if(Policy-HalfEnabled ([string]$gpo.GpoStatus) ([string]$Map.scope)){
+                    foreach($item in Mapping-Items $Map){
+                        $actual=Get-ItemCurrent $id $Map $item
+                        $desired=Desired-Normalized $Map $item $S
+                        if($null -ne $actual -and !(Item-Matches $actual $desired $Map $item)){
+                            $label=if($item.name){$item.name}elseif($item.key){$item.key}else{$item.guid}
+                            $differences+=('{0} = {1} (requested {2})' -f $label,$actual,$desired)
+                        }
+                    }
+                }
+                $read[$id]=@{name=[string]$gpo.DisplayName;differences=$differences;unavailable=$false}
+            }catch{$read[$id]=@{name=$null;differences=@();unavailable=$true}}
+        }
+        $entry=$read[$id]
+        if($entry.unavailable){
+            @{severity='MEDIUM';code='GPO_CONFLICT_READ_UNAVAILABLE';message='This linked GPO could not be read. Its effect on the requested setting requires review.';gpoId=$id;scope=$candidate.dn;domain=$owner}
+        }elseif($entry.differences.Count){
+            @{severity=$(if($candidate.enforced){'HIGH'}else{'MEDIUM'});code='SETTING_DEFINED_ELSEWHERE';message=($candidate.context+': '+($entry.differences -join '; ')+'. Endpoint RSoP is needed to establish the winning policy.');gpoId=$id;gpoName=$entry.name;scope=$candidate.dn;domain=[string]$cfg.domain}
+        }
+    }
+}
+function Conflict-Keys($Impact){
+    foreach($conflict in @(Read-Field $Impact 'conflicts' @())){
+        ConvertTo-Json -InputObject @(
+            [string]$conflict.code,[string]$conflict.severity,[string](Read-Field $conflict 'gpoId' ''),
+            [string](Read-Field $conflict 'scope' ''),[string]$conflict.message
+        ) -Compress
+    }
+}
+function Impact-Details($S,$Map,$Gpo,$Scope,[string[]]$LinkScopes,$DirectoryScopes){
+    $inherit=Get-GPInheritance -Target $Scope.dn -Domain $cfg.domain -Server $cfg.domainController
+    $conflicts=@(Policy-Conflicts $S $Map $Scope $inherit $DirectoryScopes $LinkScopes)
+    if([bool]$inherit.GpoInheritanceBlocked){$conflicts+=@{severity='HIGH';code='BLOCK_INHERITANCE';message='Block Inheritance is enabled on the selected scope.';gpoId=$null;gpoName=$null;scope=[string]$Scope.dn;domain=[string]$cfg.domain}}
     $permissions=@(Get-GPPermission -Guid ([guid]$S.gpoId) -All -Domain $cfg.domain -Server $cfg.domainController|Where-Object{$_.Permission -eq 'GpoApply'}|ForEach-Object{[string]$_.Trustee.Name}|Sort-Object -Unique);$ad=Gpo-Ad $S.gpoId
-    if($ad.gPCWQLFilter){$conflicts+=@{severity='MEDIUM';code='WMI_FILTER';message='The selected GPO has a WMI filter. Effective application must be verified on an endpoint.';gpoId=([guid]$S.gpoId).ToString();gpoName=[string]$Gpo.DisplayName;scope=[string]$Scope.dn}}
+    if($ad.gPCWQLFilter){$conflicts+=@{severity='MEDIUM';code='WMI_FILTER';message='The selected GPO has a WMI filter. Effective application must be verified on an endpoint.';gpoId=([guid]$S.gpoId).ToString();gpoName=[string]$Gpo.DisplayName;scope=[string]$Scope.dn;domain=[string]$cfg.domain}}
     # Smart Target Discovery: keep domain account policy distinct from GPO client OU targeting.
     # This is a bounded pre-filter directory inventory, never a claim of RSoP compliance.
     $objects=@();$users=@();$domainAccount=[bool]$Map.domainPolicySensitive
@@ -657,9 +757,10 @@ function Preview($S,$Map,[bool]$RequireWriteAccess=$true){
     Validate-Selection $S $Map;$access=if($RequireWriteAccess){Assert-SelectionAccess $S $Map}else{@{checks=@()}};$gpo=Get-GPO -Guid ([guid]$S.gpoId) -Domain $cfg.domain -Server $cfg.domainController;$scope=Scope $S.scopeDn;$raw=Scope-Links $scope.dn;$existing=Selected-Link $scope.dn $S.gpoId;$computers=@()
     $endpointScope=[string](Read-Field $S 'endpointScopeDn' '')
     $computers=@(Refresh-Targets ([string]$S.refresh) ([string]$scope.dn) $endpointScope ([string]$Map.scope))
-    $links=@();foreach($candidateScope in All-LinkScopes){if(Link $candidateScope.rawLinks $S.gpoId $candidateScope.dn){$links+=$candidateScope.dn}}
+    $directoryScopes=@(All-LinkScopes)
+    $links=@();foreach($candidateScope in $directoryScopes){if(Link $candidateScope.rawLinks $S.gpoId $candidateScope.dn){$links+=$candidateScope.dn}}
     $verificationComputers=@();if(![bool]$Map.domainPolicySensitive -and ([string]$Map.scope -ne 'User' -or $endpointScope)){$verificationComputers=@(Refresh-Targets 'Scope' ([string]$scope.dn) $endpointScope ([string]$Map.scope))}
-    $preflight=Selection-Preflight $S $Map $access;$impact=Impact-Details $S $Map $gpo $scope $links;$warnings=@('Changing this GPO affects all of its existing links, not only the selected link.',('Existing links: '+$(if($links.Count){$links -join '; '}else{'none'})),'Security filtering, WMI filtering, inheritance and precedence are analyzed but are never silently changed.','gpupdate scheduling does not by itself prove effective endpoint compliance.','A full GPO backup is created before any policy write; rollback is blocked after external changes.','Rollback imports the saved policy settings into the same GPO and restores the selected link. Security filtering, GPO ACLs and WMI filter ownership are preserved; Edit settings and any required link delegation are checked again.')+@($Map.warnings)
+    $preflight=Selection-Preflight $S $Map $access;$impact=Impact-Details $S $Map $gpo $scope $links $directoryScopes;$warnings=@('Changing this GPO affects all of its existing links, not only the selected link.',('Existing links: '+$(if($links.Count){$links -join '; '}else{'none'})),'Security filtering, WMI filtering, inheritance and precedence are analyzed but are never silently changed.','gpupdate scheduling does not by itself prove effective endpoint compliance.','A full GPO backup is created before any policy write; rollback is blocked after external changes.','Rollback imports the saved policy settings into the same GPO and restores the selected link. Security filtering, GPO ACLs and WMI filter ownership are preserved; Edit settings and any required link delegation are checked again.')+@($Map.warnings)
     if([string]$Map.handler -eq 'AdvancedAudit'){$warnings+='AUDIT_DEPENDENCY: Review control 2.3.2.1: SCENoApplyLegacyAuditPolicy=1 on the endpoint prevents legacy category policy overriding audit subcategories. This separate control is not silently changed.';$warnings+='AUDIT_FORMAT: Applying an audit control also normalizes legacy system audit CSV rows without changing their other numeric settings. The full GPO backup preserves the original file.'}
     foreach($c in @($impact.conflicts|Where-Object{$_.severity -eq 'HIGH'})){$warnings+=('High-impact conflict: '+$c.message)}
     if([string]$Map.scope -eq 'User' -and [int]$impact.affectedObjects.users -eq 0){$warnings+='TARGET_EMPTY: No enabled users were discovered under the selected user OU. Writing the GPO is not proof it will affect any user.'}
@@ -667,6 +768,7 @@ function Preview($S,$Map,[bool]$RequireWriteAccess=$true){
     if(@($impact.securityFiltering).Count -eq 0){$warnings+='GPO_APPLY_PERMISSION_MISSING: No GPO Apply trustees were discovered. Verify Security Filtering and Read/Apply permissions before deployment.'}
     if([string]$Map.scope -eq 'Computer' -and [int]$impact.affectedObjects.servers -gt 0){$warnings+='ROLE_BASELINE_REVIEW: This computer scope contains servers. Verify that each role (DC, IIS, SQL, Exchange, RDS) supports the requested policy and values.'}
     if([string]$Map.scope -eq 'User'){$warnings+='USER_POLICY_APPLICATION: Linked OU and GPO registry values are not proof of user-session convergence. Check Security Filtering, user GPO status, loopback processing, gpresult /scope user /r and HKCU evidence.'}
+    if([string]$Map.id -eq '18.7.3'){$warnings+='PRINT_RPC_RUNTIME: Verify print RPC support on the target Windows release and check the actual Print Spooler transport. A matching registry setting establishes configuration only.'}
 
     # Apply regenerates the preview on the DC. Use the same host boundary here
     # so filtering cannot make a fresh plan reject its own refresh target list.
@@ -681,7 +783,7 @@ function Preview($S,$Map,[bool]$RequireWriteAccess=$true){
     if($domainPolicy -and (Read-Field $domainPolicy 'notes' $null)){$warnings+=@($domainPolicy.notes)}
     $domainMatches=(!$domainPolicy -or (Numeric-Complies $domainPolicy.value $domainPolicy.desiredValue $(if($RequireWriteAccess){'=='}else{[string]$Map.comparator})))
     $choice=Gpo-Choice $gpo;$previous=Mapping-Display $S.gpoId $Map $S $false
-    return @{gpo=$choice;scope=$scope;previousValue=$previous;previousValueSource=(Value-Source $choice $previous);desiredValue=$desired;noChange=($contentMatches -and $linkMatches -and $domainMatches);domainPolicy=$domainPolicy;dependency=$dependency;fingerprint=(Fingerprint $S.gpoId $scope.dn);scopeLinks=$raw;existingLink=$existing;refreshComputers=$computers;verificationComputers=$verificationComputers;warnings=$warnings;impact=$impact;preflight=$preflight}
+    return @{gpo=$choice;scope=$scope;previousValue=$previous;previousValueSource=(Value-Source $choice $previous);desiredValue=$desired;noChange=($contentMatches -and $linkMatches -and $domainMatches);domainPolicy=$domainPolicy;dependency=$dependency;fingerprint=(Fingerprint $S.gpoId $scope.dn);scopeLinks=$raw;existingLink=$existing;refreshComputers=$computers;verificationComputers=$verificationComputers;warnings=$warnings;impact=$impact;preflight=$preflight;fields=@(Mapping-Fields $S.gpoId $Map $S)}
 }
 function Atomic-Text([string]$Path,[string]$Text,[Text.Encoding]$Encoding){
     $null=[IO.Directory]::CreateDirectory([IO.Path]::GetDirectoryName($Path));$temp=$Path+'.'+[guid]::NewGuid().ToString('N')+'.tmp'
@@ -802,9 +904,24 @@ function Reconcile-Publication($Plan,$Map,$Manifest,[string]$Directory,$Verifica
     if($Manifest -is [Collections.IDictionary]){$Manifest['publicationRecovery']=$receipt}else{$Manifest|Add-Member -NotePropertyName publicationRecovery -NotePropertyValue $receipt -Force}
     Save-Manifest $Manifest $Directory;return $true
 }
-function Rollback-ExpectedFingerprint($Plan,$Manifest,[string]$Current){
+function Rollback-ExpectedFingerprint($Plan,$Manifest,[string]$Current,$Anchor=$null){
     if(!(Domain-RollbackMatches $Manifest ([string]$Manifest.phase -eq 'ROLLED_BACK'))){return $null}
-    if([string]$Manifest.phase -ne 'ROLLED_BACK'){return [string]$Manifest.postFingerprint}
+    if([string]$Manifest.phase -ne 'ROLLED_BACK'){
+        if(!$Anchor){return [string]$Manifest.postFingerprint}
+        $reference=$Anchor.plan
+        if([string]$reference.domain -ine [string]$Plan.domain -or [string]$reference.domainController -ine [string]$Plan.domainController -or
+           [string]$reference.selection.gpoId -ine [string]$Plan.selection.gpoId -or [string]$reference.selection.scopeDn -ine [string]$Plan.selection.scopeDn){return $null}
+        $referencePath=Join-Path (Run-Directory $reference) 'manifest.json'
+        if(!(Test-Path -LiteralPath $referencePath)){return $null}
+        $checkpoint=Get-Content -LiteralPath $referencePath -Raw|ConvertFrom-Json
+        if([string]$checkpoint.mappingId -cne [string]$reference.selection.setting -or [string]$checkpoint.postFingerprint -cne [string]$Anchor.postFingerprint){return $null}
+        $restoredFrom=[string](Read-Field $Anchor 'restoredFromFingerprint' '')
+        if(!$restoredFrom){if([string]$checkpoint.phase -eq 'PUBLISHED'){return [string]$checkpoint.postFingerprint};return $null}
+        if([string]$checkpoint.phase -eq 'ROLLED_BACK' -and [string]$checkpoint.preFingerprint -ceq $restoredFrom -and (Domain-RollbackMatches $checkpoint $true)){
+            return [string](Read-Field $checkpoint 'rollbackFingerprint' '')
+        }
+        return $null
+    }
     $saved=Read-Field $Manifest 'rollbackFingerprint' $null
     if($saved){return [string]$saved}
     # Old releases did not save a post-restore fingerprint. Accept that baseline
@@ -1189,6 +1306,9 @@ function Verify-EffectiveSamples($Plan,$Map,[bool]$RollbackRegistry=$false,[bool
               if(!(Value-Matches $cur $item.expected $(if($item.comparator){$item.comparator}else{$Comparator}))){$ok=$false}
             }
             if(!$ok){return @{supported=$true;match=$false;actual=($actual -join '; ');message='Endpoint registry value or type differs from the request.'}}
+            if(@($ExpectedItems|Where-Object{$_.key -ieq 'HKLM\SOFTWARE\Policies\Microsoft\Windows NT\Printers\RPC' -and $_.name -eq 'RpcUseNamedPipeProtocol'}).Count){
+              return @{supported=$false;match=$true;state='OBSERVED';actual=($actual -join '; ');message='The configured print RPC protocol matches. Verify support on this Windows release and the actual Print Spooler transport before confirming enforcement.'}
+            }
             try{$additional=Read-AdditionalEndpointValues $ExpectedItems}catch{
               return @{supported=$false;match=$false;state='UNAVAILABLE';actual=($actual -join '; ');message='The endpoint registry matches, but the required Defender or service read-back is unavailable. Check provider availability and read permissions.'}
             }
@@ -1300,7 +1420,7 @@ function Verify-EffectiveSamples($Plan,$Map,[bool]$RollbackRegistry=$false,[bool
 function Verify-Published($Plan,$Map,[bool]$CheckEndpoints=$false){
     $s=$Plan.selection
     $status=[string](Get-GPO -Guid ([guid]$s.gpoId) -Domain $cfg.domain -Server $cfg.domainController -ErrorAction Stop).GpoStatus
-    $policyEnabled=$status -ne 'AllSettingsDisabled' -and !([string]$Map.scope -eq 'User' -and $status -eq 'UserSettingsDisabled') -and !([string]$Map.scope -ne 'User' -and $status -eq 'ComputerSettingsDisabled')
+    $policyEnabled=Policy-HalfEnabled $status ([string]$Map.scope)
     Send-CheckProgress 'GPO' 'CHECKING' ([string]$s.gpoId) 'Reading the stored GPO configuration.'
     $contentMatches=(Mapping-Matches $s.gpoId $Map $s) -and $policyEnabled
     if([bool]$Map.domainPolicySensitive){foreach($item in Mapping-Items $Map){if(!(Numeric-Complies (Get-ItemCurrent $s.gpoId $Map $item) (Desired-Normalized $Map $item $s) '==')){$contentMatches=$false}}}
@@ -1600,6 +1720,10 @@ switch($Operation){
             Emit-Stage 'PREFLIGHT'
             $fresh=Preview $s $map;if($fresh.dependency){Fail ([string]$fresh.dependency.code) ([string]$fresh.dependency.message)};if(!$fresh.preflight.ready){Fail 'ENVIRONMENT_NOT_READY' 'Required environment preflight checks must pass before Apply.'}
             if($fresh.fingerprint -cne $plan.preview.fingerprint -or (@($fresh.refreshComputers)-join '|') -cne (@($plan.preview.refreshComputers)-join '|')){Fail 'GPO_CHANGED' 'GPO, links or refresh targets changed after preview. Prepare a new plan.'}
+            if($null -ne (Read-Field $plan.preview 'fields' $null)){
+                $reviewed=@(Conflict-Keys (Read-Field $plan.preview 'impact' $null))
+                if(@(Conflict-Keys $fresh.impact|Where-Object{$_ -cnotin $reviewed}).Count){Fail 'GPO_CHANGED' 'A competing GPO or scope warning changed after preview. Review the new conflict before applying.'}
+            }
             $domainBefore=Read-Field $fresh 'domainPolicy' $null
             if($domainBefore){
                 $plannedDomain=Read-Field $plan.preview 'domainPolicy' $null
@@ -1808,7 +1932,7 @@ switch($Operation){
         if(!(Read-Field $m 'backupId' $null) -or !(Read-Field $m 'postFingerprint' $null)){$assessment.reason='INCOMPLETE_BACKUP';$assessment.message='A completed backup and post-write fingerprint are required. Run read-only Verify and inspect the retained manifest; do not retry restore blindly.';return $assessment}
         if($phase -notin @('PUBLISHED','VERIFY_MISMATCH','ROLLED_BACK')){$assessment.reason='MANUAL_REVIEW_REQUIRED';$assessment.message=('Manifest phase '+$phase+' requires independent recovery review. Run read-only Verify to establish whether the original snapshot is already restored. Partial or unanchored writes require administrator assessment.');return $assessment}
         $current=Fingerprint $s.gpoId $s.scopeDn
-        $expected=Rollback-ExpectedFingerprint $plan $m $current
+        $expected=Rollback-ExpectedFingerprint $plan $m $current (Read-Field $Data 'rollbackAnchor' $null)
         $drift=(!$expected -or $current -cne [string]$expected)
         if(!$drift){
             try{$null=Assert-SelectionAccess $s $Data.mapping $plan.preview}
@@ -1830,17 +1954,9 @@ switch($Operation){
             if(!(Read-Field $manifest 'postFingerprint' $null)){Fail 'ROLLBACK_VERSION_UNKNOWN' 'No complete post-write state could be proven from the checkpoint or retained backup. Restore was not started; inspect the retained evidence before recovery.'}
             if([string]$manifest.phase -notin @('PUBLISHED','VERIFY_MISMATCH','ROLLED_BACK')){Fail 'ROLLBACK_CONFLICT' 'The backup manifest requires independent review before another restore.'}
             $currentFingerprint=Fingerprint $s.gpoId $s.scopeDn
-            $expectedFingerprint=Rollback-ExpectedFingerprint $plan $manifest $currentFingerprint
-            if(!$expectedFingerprint){Fail 'ROLLBACK_CONFLICT' 'The GPO or recorded AD domain setting no longer matches the snapshot.'}
             $anchor=Read-Field $Data 'rollbackAnchor' $null
-            if($anchor -and [string]$manifest.phase -ne 'ROLLED_BACK'){
-                $anchorPlan=$anchor.plan
-                if([string]$anchorPlan.selection.gpoId -ne [string]$s.gpoId -or [string]$anchorPlan.selection.scopeDn -ne [string]$s.scopeDn){Fail 'ROLLBACK_CONFLICT' 'Batch recovery anchor has a different GPO or scope.'}
-                $anchorDirectory=Run-Directory $anchorPlan
-                $anchorManifest=Get-Content -LiteralPath (Join-Path $anchorDirectory 'manifest.json') -Raw | ConvertFrom-Json
-                if([string]$anchorManifest.phase -ne 'PUBLISHED' -or [string]$anchorManifest.postFingerprint -cne [string]$anchor.postFingerprint){Fail 'ROLLBACK_CONFLICT' 'The last batch publication is not a valid recovery anchor.'}
-                $expectedFingerprint=[string]$anchorManifest.postFingerprint
-            }
+            $expectedFingerprint=Rollback-ExpectedFingerprint $plan $manifest $currentFingerprint $anchor
+            if(!$expectedFingerprint){Fail 'ROLLBACK_CONFLICT' 'The recorded publication or restore checkpoint does not match the selected batch snapshot.'}
             if((Fingerprint $s.gpoId $s.scopeDn) -cne $expectedFingerprint){Fail 'ROLLBACK_CONFLICT' 'The GPO or links changed after Apply. Automatic full-GPO restore is blocked.'}
             if($anchor -and [string]$manifest.phase -ne 'ROLLED_BACK' -and !(Read-Field $manifest 'beforeBatchDomainPolicies' $null)){
                 $batchPolicies=@(Domain-BatchSnapshots $anchor $plan)

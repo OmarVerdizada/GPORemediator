@@ -29,6 +29,7 @@ function Get-ItemPropertyValue {
   return Microsoft.PowerShell.Management\Get-ItemPropertyValue -LiteralPath 'Registry::HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft' -Name '__GpRemediatorMissingFixture' -ErrorAction Stop
  }
  if($Name -eq 'SCENoApplyLegacyAuditPolicy' -and $script:map.handler -eq 'AdvancedAudit'){return 1}
+ if($Name -eq 'Restricted' -and $null -ne $script:pointAndPrintRestricted){return $script:pointAndPrintRestricted}
  $entry=@($script:expected|Where-Object{$_.name -ceq $Name})[0]
  $value=$entry.expected
  if($script:wrong){return '__mismatch__'}
@@ -117,14 +118,26 @@ foreach($map in $catalog.mappings){
  $script:expected=@(Endpoint-Expected $map $script:selection)
  $script:runtimeState='match'
  $script:registryValueMissing=$false
+ $script:pointAndPrintRestricted=$null
  try{
   foreach($wrong in @($false,$true)){
    $script:wrong=$wrong
    if($map.domainPolicySensitive){$result=Verify-Published $plan $map $true;$passed=$result.effective -eq 'DOMAIN_VALUE_MATCHES_ON_SELECTED_DC'}
-   else{$result=@(Verify-EffectiveSamples $plan $map);$passed=$result.Count -eq 1 -and $result[0].state -eq 'VERIFIED'}
+   else{
+    $result=@(Verify-EffectiveSamples $plan $map)
+    $expectedState=if($wrong){'MISMATCH'}elseif($map.id -eq '18.7.3'){'OBSERVED'}else{'VERIFIED'}
+    if($result.Count -ne 1 -or $result[0].state -ne $expectedState){throw ("Expected endpoint state $expectedState; result="+($result|ConvertTo-Json -Depth 10 -Compress))}
+    $passed=!$wrong
+   }
    if($passed -eq $wrong){throw ("Expected mismatch=$wrong; result="+($result|ConvertTo-Json -Depth 10 -Compress))}
   }
   $cases=2
+  if($map.id -in @('18.7.11','18.7.12')){
+   $script:wrong=$false;$script:pointAndPrintRestricted=0
+   $disabled=@(Verify-EffectiveSamples $plan $map)[0]
+   if($disabled.state -ne 'MISMATCH' -or $disabled.actualValue -notlike '*Restricted=0*'){throw 'Matching prompt with Point and Print disabled was accepted'}
+   $script:pointAndPrintRestricted=$null;$cases++
+  }
   if($map.id -in @('18.1.1.1','19.7.5.2','9.2.4')){
    $script:wrong=$false
    $script:registryValueMissing=$true

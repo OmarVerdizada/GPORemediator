@@ -7896,7 +7896,7 @@
       "category": "18.7",
       "level": "L1",
       "automation": "Automated",
-      "handler": "Registry",
+      "handler": "RegistrySet",
       "items": [
         {
           "key": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows NT\\Printers\\PointAndPrint",
@@ -7904,6 +7904,14 @@
           "type": "DWORD",
           "value": [
             "0"
+          ]
+        },
+        {
+          "key": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows NT\\Printers\\PointAndPrint",
+          "name": "Restricted",
+          "type": "DWORD",
+          "value": [
+            "1"
           ]
         }
       ],
@@ -7924,7 +7932,7 @@
       "requiresRestart": false,
       "warnings": [
         "This CIS recipe contains benchmark notes/cautions or environment-specific exceptions. Review the imported benchmark description and application dependencies before Apply.",
-        "Review the parent Point and Print Restrictions policy and current printer-driver security updates. An option value alone is not proof that the parent policy or driver-installation restrictions are active."
+        "Printing.admx enables Computer Point and Print Restrictions through Restricted=1. This plan writes the installation prompt and preserves TrustedServers, ServerList and InForest. Review current printer-driver security updates."
       ],
       "source": "operator CIS v4.0.0 + validated Windows policy mapping"
     },
@@ -7935,7 +7943,7 @@
       "category": "18.7",
       "level": "L1",
       "automation": "Automated",
-      "handler": "Registry",
+      "handler": "RegistrySet",
       "items": [
         {
           "key": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows NT\\Printers\\PointAndPrint",
@@ -7943,6 +7951,14 @@
           "type": "DWORD",
           "value": [
             "0"
+          ]
+        },
+        {
+          "key": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows NT\\Printers\\PointAndPrint",
+          "name": "Restricted",
+          "type": "DWORD",
+          "value": [
+            "1"
           ]
         }
       ],
@@ -7963,7 +7979,7 @@
       "requiresRestart": false,
       "warnings": [
         "This CIS recipe contains benchmark notes/cautions or environment-specific exceptions. Review the imported benchmark description and application dependencies before Apply.",
-        "Review the parent Point and Print Restrictions policy and current printer-driver security updates. An option value alone is not proof that the parent policy or driver-installation restrictions are active."
+        "Printing.admx enables Computer Point and Print Restrictions through Restricted=1. This plan writes the update prompt and preserves TrustedServers, ServerList and InForest. Review current printer-driver security updates."
       ],
       "source": "operator CIS v4.0.0 + validated Windows policy mapping"
     },

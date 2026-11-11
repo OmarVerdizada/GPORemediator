@@ -1,6 +1,6 @@
 ﻿# Real worker dispatch + writer + manifests against private filesystem fixtures.
 # AD, GPMC, DNS and remote endpoints are mocked. No live domain is contacted.
-param([switch]$AllControls,[switch]$ReviewedControlsOnly,[switch]$ExactPlans,[switch]$LockoutIncidentOnly,[switch]$PublicationRecoveryOnly,[string]$ReportPath)
+param([switch]$AllControls,[switch]$ReviewedControlsOnly,[switch]$ExactPlans,[switch]$LockoutIncidentOnly,[switch]$PublicationRecoveryOnly,[switch]$PrintBatchOnly,[string]$ReportPath)
 $ErrorActionPreference='Stop';Set-StrictMode -Version Latest
 $repo=Split-Path $PSScriptRoot -Parent
 $temp=Join-Path ([IO.Path]::GetTempPath()) ('gpr-chain-'+[guid]::NewGuid().ToString('N'))
@@ -15,6 +15,7 @@ $domainDn='DC=example,DC=test';$target='OU=Pilot,'+$domainDn
 $domain=@{DNSRoot='example.test';DistinguishedName=$domainDn;PDCEmulator='dc.example.test'};$dc=@{HostName='dc.example.test'}
 $EndpointCredential=$null;$protectedBuiltInGpoIds=@();$gpoId='11111111-1111-1111-1111-111111111111'
 $script:folder=Join-Path $temp 'Policy';$script:rawLinks='';$script:version=0;$script:extensions='';$script:userExtensions='';$script:registry=@{};$script:backupDenied=$false;$script:refreshes=0
+$script:advanceRestoreVersion=$false
 function Check($ok,$name){if(!$ok){foreach($record in @($Error|Select-Object -First 3)){[Console]::Error.WriteLine(('Fixture diagnostic: '+$record.Exception.ToString()+' Stack: '+$record.ScriptStackTrace))};throw $name};Write-Output ('PASS '+$name)}
 function Sysvol-Policies {return $script:folder}
 function Gpo-Folder {param($Id) return $script:folder}
@@ -80,9 +81,11 @@ function Backup-GPO {param($Guid,$Path,$Domain,$Server,$Comment)
  [pscustomobject]@{Id=$backupId}
 }
 function Import-GPO {param($BackupId,$TargetGuid,$Path,$Domain,$Server)
+ $versionBeforeRestore=$script:version
  Get-ChildItem -LiteralPath $script:folder -Force|Remove-Item -Recurse -Force
  Copy-Item -Path (Join-Path $Path 'snapshot/*') -Destination $script:folder -Recurse
  $script:version=$script:snapshot.version;$script:extensions=$script:snapshot.extensions;$script:userExtensions=$script:snapshot.userExtensions;$script:registry=$script:snapshot.registry.Clone()
+ if($script:advanceRestoreVersion){$script:version=$versionBeforeRestore+1;[IO.File]::WriteAllText((Join-Path $script:folder 'GPT.INI'),"[General]`r`nVersion=$script:version`r`n")}
 }
 function Invoke-GPUpdate {param($Computer,$Force,$RandomDelayInMinutes,$ErrorAction,$Target) $script:refreshes++}
 function Test-NativeRestoreFormatting($Selection,$Mapping){
@@ -256,6 +259,44 @@ function Test-ExactLockoutIncident($Selection,$Mapping,$ExactFixtures){
 }
 $catalog=(Get-Content (Join-Path $repo 'backend/data/gpo-production-mappings.json') -Raw|ConvertFrom-Json).mappings
 try{
+ if($PrintBatchOnly){
+  $null=New-Item -ItemType Directory -Path $script:folder
+  [IO.File]::WriteAllText((Join-Path $script:folder 'GPT.INI'),"[General]`r`nVersion=0`r`n")
+  $snapshots=@{};$published=@{}
+  foreach($n in 1..12){
+   $id='18.7.'+$n;$map=$catalog|Where-Object id -eq $id
+   foreach($item in $map.items){foreach($field in @('section','key','name','type','guid','state','mask','value')){if(!$item.PSObject.Properties[$field]){$item|Add-Member NoteProperty $field $null}}}
+   $s=@{gpoId=$gpoId;scopeDn=$target;setting=$id;value=0;customValue='';refresh='None';firstLink=$false;accountScope='LocalComputers';endpointScopeDn='';verificationUser=''}
+   $Operation='gpoPreview';$Data=@{selection=$s;mapping=$map};$script:workerStage='VALIDATING';$preview=& $dispatch
+   $plan=@{id=[guid]::NewGuid().ToString('N');domain=$cfg.domain;domainController=$cfg.domainController;selection=$s;preview=$preview}
+   $Operation='gpoApply';$Data=@{plan=$plan;mapping=$map;consent=@{confirmation='APPLY'}};$run=& $dispatch
+   Check ($run.state -eq 'PUBLISHED') ('native batch publication '+$id+': '+$run.message)
+   $snapshots[$id]=$script:snapshot;$published[$id]=@{plan=$plan;map=$map;run=$run}
+  }
+  $last=$published['18.7.12'];$previous=$published['18.7.11'];$key=$last.map.items[0].key+'|'
+  Check ($script:registry[$key+'Restricted'].Value -eq 1 -and $script:registry[$key+'UpdatePromptSettings'].Value -eq 0 -and $script:registry[$key+'NoWarningNoElevationOnInstall'].Value -eq 0) 'both print prompts published and parent enabled'
+  $competing='22222222-2222-2222-2222-222222222222';$foreign='33333333-3333-3333-3333-333333333333'
+  $script:registry[$key+'Restricted']=@{Type='DWORD';Value=0}
+  $scopes=@(@{dn=$target;rawLinks="[LDAP://CN={$competing},CN=Policies,CN=System,$domainDn;2][LDAP://CN={$foreign},CN=Policies,CN=System,DC=other,DC=test;0]"})
+  $conflicts=@(Policy-Conflicts $last.plan.selection $last.map @{dn=$target} @{GpoLinks=@();InheritedGpoLinks=@()} $scopes @())
+  Check ($conflicts.Count -eq 2 -and @($conflicts|Where-Object{$_.gpoId -eq $competing -and $_.code -eq 'SETTING_DEFINED_ELSEWHERE' -and $_.severity -eq 'HIGH'}).Count -eq 1 -and @($conflicts|Where-Object{$_.domain -eq 'other.test'}).Count -eq 1) 'same-field competing GPO and cross-domain ownership identified'
+  $script:registry[$key+'Restricted']=@{Type='DWORD';Value=1}
+  $script:advanceRestoreVersion=$true
+  $anchor=@{plan=$last.plan;postFingerprint=$last.run.postFingerprint}
+  $Data=@{plan=$last.plan;mapping=$last.map;rollbackAnchor=$anchor};$Operation='gpoRollbackInspect';$assessment=& $dispatch
+  Check $assessment.canRestore 'latest batch member passes guarded rollback inspection'
+  $script:snapshot=$snapshots['18.7.12'];$Operation='gpoRollback';$restored=& $dispatch
+  Check ($restored.state -eq 'ROLLED_BACK' -and !$script:registry.ContainsKey($key+'UpdatePromptSettings') -and $script:registry[$key+'Restricted'].Value -eq 1) '18.7.12 rollback preserves 18.7.11'
+  Check ((Fingerprint $gpoId $target) -cne $previous.run.postFingerprint) 'restoring a snapshot advances the GPO fingerprint'
+  $anchor.restoredFromFingerprint=$previous.run.postFingerprint
+  $Data=@{plan=$previous.plan;mapping=$previous.map;rollbackAnchor=$anchor};$Operation='gpoRollbackInspect';$assessment=& $dispatch
+  Check $assessment.canRestore 'next rollback accepts the authenticated new restore fingerprint'
+  $script:fixturePermission='GpoRead';$assessment=& $dispatch
+  Check (!$assessment.canRestore -and $assessment.driftDetected) 'external delegation drift blocks the next batch rollback'
+  $script:fixturePermission='GpoApply';$script:snapshot=$snapshots['18.7.11'];$Operation='gpoRollback';$restored=& $dispatch
+  Check ($restored.state -eq 'ROLLED_BACK' -and !$script:registry.ContainsKey($key+'Restricted') -and $script:registry.Count -eq 10) '18.7.11 rollback preserves the ten earlier controls'
+  return
+ }
  $cases=@(@('1.1.1','LocalComputers'),@('1.1.1','Domain'),@('1.2.2','Domain'),@('2.2.24','LocalComputers'),@('2.3.1.1','LocalComputers'),@('2.3.10.4','LocalComputers'),@('2.3.10.7','LocalComputers'),@('18.4.4','LocalComputers'),@('17.1.1','LocalComputers'),@('19.5.1.1','Users'))
  foreach($entry in @($catalog|Where-Object{$_.domainPolicySensitive -and $_.id -notin @('1.1.1','1.2.2')})){$cases+=,@([string]$entry.id,'Domain')}
  foreach($manual in @($catalog|Where-Object automation -ne 'Automated')){$cases+=,@([string]$manual.id,'LocalComputers')}
