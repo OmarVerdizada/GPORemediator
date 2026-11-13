@@ -1,6 +1,6 @@
-# GPO Remediator 3.18.8
+# GPO Remediator 3.18.9
 
-3.18.8 adds GPO conflict details to plans, improves bulk results and individual recovery, and corrects the 18.7 print policy checks. See [release notes](docs/RELEASE-3.18.8.md).
+3.18.9 adds a structured Bulk Apply workspace and keeps the Operations drawer up to date during re-verification. See [release notes](docs/RELEASE-3.18.9.md).
 
 3.18.6 improves Light, Dark and System appearance, including sign-in, form controls and verification contrast. See [release notes](docs/RELEASE-3.18.6.md).
 

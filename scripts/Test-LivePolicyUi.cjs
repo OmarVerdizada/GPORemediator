@@ -80,5 +80,24 @@ const server=http.createServer(async(req,res)=>{try{
  result.effectiveStatus='ENDPOINT_MISMATCH';result.endpointChecks=[{hostname:'ws1.example.test',state:'VERIFIED',actualValue:'5',message:'Measured 5.'},{hostname:'ws2.example.test',state:'MISMATCH',actualValue:'0',message:'Measured 0.'}];
  await page.locator('.service-right [data-refresh]').click();await page.locator('[data-effective-outcome=MISMATCH]').waitFor();assert.equal(await page.locator('.effective-value strong').textContent(),'Mixed values · see hosts','Different endpoint values must not be summarized as the first value');
  for(const width of [390,320]){await page.setViewportSize({width,height:844});assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),'Mobile overflow '+width);await page.screenshot({path:path.join(shots,'result-'+width+'.png'),fullPage:true});}
- assert.deepEqual(errors,[]);console.log('PASS live checking: queued, streamed stage/host updates, interrupted polling, unavailable result, missing-link plan, collapsed rail, mobile and exactly one read-only submission; fixture only.');
+ await page.setViewportSize({width:1440,height:1000});
+ result.state='ROLLED_BACK';result.gpoPublished=false;result.linkVerified=false;result.message='Restored snapshot';result.effectiveStatus='ROLLBACK_ENDPOINT_PENDING';
+ result.restoreChecks=['CONTENT','MACHINE_EXTENSIONS','USER_EXTENSIONS','SCOPE_LINKS'].map(area=>({area,state:'MATCH',message:'Matches snapshot'}));
+ await page.goto('http://127.0.0.1:'+server.address().port+'/#/operations');await page.reload();
+ await page.locator('[data-inspect="'+plan.id+'"]').first().click();
+ const drawer=page.getByRole('dialog',{name:/Default Domain Policy/});
+ await drawer.getByRole('heading',{name:'GPO snapshot restored',exact:true}).waitFor();
+ await drawer.locator('[data-verify]').click();
+ await drawer.getByRole('heading',{name:'Waiting for the server worker',exact:true}).waitFor();
+ assert(await drawer.locator('[data-verify]').isDisabled(),'Queued verification can be submitted twice');
+ jobs[0].state='RUNNING';result.state='VERIFYING';history[0].liveChecks=[{phase:'ENDPOINT',state:'CHECKING',subject:'ws.example.test',message:'Rechecking rollback evidence'}];
+ await drawer.getByText('Rechecking rollback evidence',{exact:true}).waitFor();
+ jobs[0].state='CHECKS_INCOMPLETE';result.state='ROLLED_BACK';result.message='Snapshot restored; endpoint unavailable';
+ result.endpointChecks=[{hostname:'ws.example.test',state:'UNAVAILABLE',message:'Endpoint unavailable after snapshot read-back.'}];
+ await drawer.getByRole('heading',{name:'GPO snapshot restored',exact:true}).waitFor();
+ assert(await drawer.locator('[data-verify]').isEnabled(),'Verification stayed disabled after the operation finished');
+ assert.match(await drawer.locator('.product-endpoint').textContent(),/unavailable after snapshot/);
+ assert.equal(requests.filter(x=>x.path==='/api/workflows/verify').length,2,'Polling replayed a verify request');
+ assert.equal(requests.filter(x=>/\/(apply|refresh|rollback)$/.test(x.path)).length,0,'Read-only verification caused a mutation');
+ assert.deepEqual(errors,[]);console.log('PASS live checking in the control page and open Operations drawer: queued, streamed stage/host updates, interrupted polling and terminal rollback evidence.');
 }finally{await browser?.close();server.close();}})().catch(e=>{console.error(e);process.exitCode=1;});

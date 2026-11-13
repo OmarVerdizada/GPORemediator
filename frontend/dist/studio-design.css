@@ -90,11 +90,7 @@ body.operator-custom-page :is(.op-timeline,.wf-steps){border-radius:11px}
 body.operator-custom-page :is(.state-pill.ok,.ent-status.pass){background:var(--color-success-soft);color:var(--color-success)}
 body.operator-custom-page :is(.state-pill.bad,.ent-status.fail){background:var(--color-danger-soft);color:var(--color-danger)}
 /* Wave 5 / diagnostic & reporting surfaces */
-body.operator-custom-page .ent-metrics>div:nth-child(5n+1){border-top:3px solid var(--studio-blue)}
-body.operator-custom-page .ent-metrics>div:nth-child(5n+2){border-top:3px solid var(--studio-teal)}
-body.operator-custom-page .ent-metrics>div:nth-child(5n+3){border-top:3px solid var(--studio-amber)}
-body.operator-custom-page .ent-metrics>div:nth-child(5n+4){border-top:3px solid var(--studio-violet)}
-body.operator-custom-page .ent-metrics>div:nth-child(5n){border-top:3px solid var(--studio-pink)}
+body.operator-custom-page .ent-metrics>div{border-top:3px solid var(--color-border)}
 body.operator-custom-page .ent-panel{border-radius:var(--radius-lg);box-shadow:var(--shadow-sm)}
 body.operator-custom-page .ent-check{border-left:3px solid var(--studio-blue)}
 body.operator-custom-page .ent-check:has(.ent-status.pass){border-left-color:var(--studio-teal)}

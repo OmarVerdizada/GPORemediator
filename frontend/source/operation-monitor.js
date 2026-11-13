@@ -2,8 +2,13 @@
    actions and reads their progress; it has no batch/workflow-center interface. */
 (() => {'use strict';
 window.GpoOperationMonitor={create({state,api,render}){
- let polling=false,loaded=false,error='',renderPending=false;
+ let polling=false,loaded=false,error='',renderPending=false,renderedDrawer=null;
  const active=j=>['QUEUED','RUNNING','VERIFY_SCHEDULED'].includes(j.state);
+ const drawerState=()=>{
+  const id=state.inspectedOperation;
+  return id?JSON.stringify([id,state.history.find(h=>h.id===id),window.GpoComponents.activeOperation(state,id),state.operationMonitorError]):null;
+ };
+ function noteRendered(){renderedDrawer=drawerState();}
  async function reload(){
   const [jobs,history]=await Promise.all([api('/workflows'),api('/gpo/history')]);
   const next=Array.isArray(jobs)?jobs:[];
@@ -14,12 +19,16 @@ window.GpoOperationMonitor={create({state,api,render}){
  }
  async function poll(){
   if(polling||state.busy||document.hidden||state.session?.mode!=='WINDOWS')return;
-  if(!['#/dashboard','#/operations'].includes(location.hash)&&!active(state.singleOperation?.job||{})&&!(state.workflowJobs||[]).some(active)&&!state.history.some(window.GpoProduct.active)&&!renderPending)return;
+  if(!['#/dashboard','#/operations'].includes(location.hash)&&!state.inspectedOperation&&!active(state.singleOperation?.job||{})&&!(state.workflowJobs||[]).some(active)&&!state.history.some(window.GpoProduct.active)&&!renderPending)return;
   polling=true;
   try{if(await reload())renderPending=true;}
   catch(e){if(state.singleOperation)state.singleOperation.pollError=e.message;state.operationMonitorError=e.message;if(error!==e.message){error=e.message;renderPending=true;}}
   finally{polling=false;}
-  if(renderPending&&!state.busy&&!state.confirmAction&&!state.scopeModal&&!state.notificationOpen&&!state.inspectedOperation&&!state.helpOpen&&(!document.activeElement?.closest('form')||location.hash==='#/control'&&state.tab==='verification')){renderPending=false;render();}
+  const canRender=!state.busy&&!state.confirmAction&&!state.scopeModal&&!state.notificationOpen&&!state.helpOpen&&
+    (!document.activeElement?.closest('form')||location.hash==='#/control'&&state.tab==='verification');
+  if(canRender&&(state.inspectedOperation?renderedDrawer!==drawerState():renderPending)){
+    renderPending=false;render();
+  }
  }
  async function submitSingle(action,id,consent,refresh='None'){
   if(action==='refresh')await api('/gpo/'+id+'/authorize',{});
@@ -29,6 +38,6 @@ window.GpoOperationMonitor={create({state,api,render}){
   try{await reload();}catch(e){state.singleOperation.pollError=e.message;state.operationMonitorError=e.message;error=e.message;renderPending=true;}
   return job;
  }
- return {poll,submitSingle};
+ return {poll,submitSingle,noteRendered};
 }};
 })();

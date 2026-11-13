@@ -1,6 +1,6 @@
 const fs=require('node:fs'),path=require('node:path'),vm=require('node:vm'),assert=require('node:assert/strict');
 const root=path.join(__dirname,'../frontend/source'),window={},context=vm.createContext({window});
-for(const file of ['ui-domain.js','components.js'])vm.runInContext(fs.readFileSync(path.join(root,file),'utf8'),context);
+for(const file of ['ui-domain.js','components.js','product.js'])vm.runInContext(fs.readFileSync(path.join(root,file),'utf8'),context);
 context.GpoUiDomain=window.GpoUiDomain;
 // Expose the actual renderer inside the test only; avoid a parallel UI model.
 vm.runInContext(fs.readFileSync(path.join(root,'control-view.js'),'utf8').replace('return {ensureSelection,','return {resultSummary,ensureSelection,'),context);

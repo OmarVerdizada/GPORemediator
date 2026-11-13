@@ -5,6 +5,9 @@
   const text=(s,_fallback,en)=>en;
   const paths={
     grid:'<rect x="3" y="3" width="7" height="7" rx="2"/><rect x="14" y="3" width="7" height="7" rx="2"/><rect x="3" y="14" width="7" height="7" rx="2"/><rect x="14" y="14" width="7" height="7" rx="2"/>',
+    report:'<path d="M5 3h10l4 4v14H5zM14 3v5h5M9 17v-3m3 3v-6m3 6v-4"/>',
+    history:'<path d="M3 10a9 9 0 1 1 0 5M3 4v6h6m3-4v6l4 2"/>',
+    diagnostics:'<path d="M9 3H4v5m11-5h5v5M4 16v5h5m6 0h5v-5M2 12h5l3-5 4 10 3-5h5"/>',
     library:'<path d="M4 4h6v16H4zM10 4h6v16h-6zM18 4l3 15-3 1-3-15z"/>',
     publish:'<path d="M12 16V3m-5 5 5-5 5 5M4 14v6h16v-6"/>',
     network:'<rect x="8" y="2" width="8" height="5" rx="1"/><path d="M12 7v6M5 17v-4h14v4"/><rect x="2" y="17" width="6" height="5" rx="1"/><rect x="16" y="17" width="6" height="5" rx="1"/>',
@@ -47,7 +50,7 @@
     if(!items.length)return '';
     const min=Math.min(...items.map(x=>Number.isFinite(x.start)?Math.min(x.start,x.end):x.end)),max=Math.max(...items.map(x=>x.end)),range=Math.max(1,max-min);
     const duration=ms=>{const seconds=Math.round(ms/1000),days=Math.floor(seconds/86400),hours=Math.floor(seconds%86400/3600),minutes=Math.floor(seconds%3600/60);return days?`${days} ${'d'} ${hours} ${'h'}`:hours?`${hours} ${'h'} ${minutes} ${'min'}`:minutes?`${minutes} ${'min'} ${seconds%60} ${'sec.'}`:`${seconds} ${'sec.'}`;};
-    return `<details class="ds-activity" open><summary>${icon('activity')}${'Operation timeline'}<span>${items.length} ${'recent records'}</span></summary><p class="ds-caption">${'Bars show the interval from start to last server update, not active execution time.'}</p><div class="ds-activity-list">${items.map(({h,start,end})=>{const known=Number.isFinite(start)&&start<=end;return `<button type="button" data-inspect="${esc(h.id)}" class="ds-activity-row"><span class="ds-activity-copy"><strong>${esc(h.plan?.selection?.setting||'GPO')} · ${esc(h.plan?.preview?.gpo?.name||'GPO')}</strong><small>${window.GpoProduct.date(h.updatedAt,s.lang)}</small></span><span class="ds-activity-track" aria-hidden="true"><i style="margin-left:${(known?start-min:end-min)/range*95}%;width:${known?Math.max(1,(end-start)/range*95):1}%"></i></span><span class="ds-activity-duration">${known?duration(end-start):'Start unavailable'}</span>${operationStatus(s,h).html}${icon('chevron')}</button>`;}).join('')}</div></details>`;
+    return `<details class="ds-activity" open><summary>${icon('activity')}${'Operation timeline'}<span>${items.length} ${'recent records'}</span></summary><p class="ds-caption">${'Newest server records first. Elapsed time covers start to last update, not active execution time.'}</p><div class="ds-activity-list">${items.map(({h,start,end})=>{const known=Number.isFinite(start)&&start<=end;return `<button type="button" data-inspect="${esc(h.id)}" class="ds-activity-row"><span class="ds-activity-copy"><strong>${esc(h.plan?.selection?.setting||'GPO')} · ${esc(h.plan?.preview?.gpo?.name||'GPO')}</strong><small>${window.GpoProduct.date(h.updatedAt,s.lang)}</small></span><span class="ds-activity-track" aria-hidden="true"><i style="margin-left:${(known?start-min:end-min)/range*95}%;width:${known?Math.max(1,(end-start)/range*95):1}%"></i></span><span class="ds-activity-duration">${known?duration(end-start):'Start unavailable'}</span>${operationStatus(s,h).html}${icon('chevron')}</button>`;}).join('')}</div></details>`;
   }
   function psQuote(value){return `'${String(value??'').replaceAll("'","''")}'`;}
   function registryPath(key){return String(key||'').replace(/^HKLM\\/i,'HKEY_LOCAL_MACHINE\\').replace(/^HKCU\\/i,'HKEY_CURRENT_USER\\');}
@@ -113,7 +116,7 @@
   }
   function refreshAction(s,h){
     if(h.result?.state==='BATCH_ROLLED_BACK')return '';
-    const r=h.result||{},busy=/^(APPLYING|ROLLBACKING|VERIFYING|REFRESHING)$/.test(r.state||''),offline=s.serviceOffline||s.serviceTransition||!s.gpoSession?.connected;
+    const r=h.result||{},busy=window.GpoProduct.active(h)||!!activeOperation(s,h.id),offline=s.serviceOffline||s.serviceTransition||!s.gpoSession?.connected;
     const known=r.state==='ROLLED_BACK'||r.gpoPublished===true&&r.linkVerified===true&&['PUBLISHED','NO_CHANGE','REVIEW_REQUIRED','REFRESH_COMPLETED','REFRESH_PARTIAL','REFRESH_SCHEDULED','PUBLISHED_REFRESH_FAILED'].includes(r.state);
     const user=window.GpoUiDomain.isUserPolicy(h,s.settings||[]),choices=window.GpoUiDomain.refreshChoices(h,s.settings||[]);
     const enabled=known&&!busy&&!offline&&choices.length>0;
@@ -131,9 +134,16 @@
       return `<li data-conflict-level="${c.blocksApply?'blocking':level==='Info'||level==='Shared value'?'info':'review'}"><strong>${esc(level)}${where.length?` · ${esc(where.join(' · '))}`:''}</strong><p>${esc(c.message)}</p></li>`;
     }).join('')}</ul></section>`;
   }
+  function activeOperation(s,id){
+    const active=j=>['QUEUED','RUNNING','VERIFY_SCHEDULED'].includes(j?.state);
+    const tracked=s.singleOperation?.id===id?s.singleOperation.job:null;
+    return (s.workflowJobs||[]).find(j=>j.action!=='preview'&&active(j)&&
+      (j.currentOperationId===id||(j.action==='verify'||j.planIds?.length===1)&&j.planIds?.includes(id)))||
+      (active(tracked)?tracked:null);
+  }
   function recovery(s,h){
     if(h.result?.state==='BATCH_ROLLED_BACK')return `<section class="ds-recovery"><h3>${icon('undo')}Restored with batch snapshot</h3><p>The first restored operation contains the complete snapshot checks and recovery actions for this batch.</p><button type="button" class="ds-button ds-secondary" data-bulk-from-operation="${esc(h.id)}">Open bulk results</button></section>`;
-    const r=h.result||{},busy=/^(APPLYING|ROLLBACKING|VERIFYING|REFRESHING)$/.test(r.state||''),offline=s.serviceOffline||s.serviceTransition||!s.gpoSession?.connected;
+    const r=h.result||{},busy=window.GpoProduct.active(h)||!!activeOperation(s,h.id),offline=s.serviceOffline||s.serviceTransition||!s.gpoSession?.connected;
     const batch=(s.workflowJobs||[]).find(j=>j.action==='apply'&&j.planIds?.length>1&&j.completedIds?.includes(h.id));
     const check=rollbackCheck(s,h),available=!!r.backupId&&check?.canRestore===true&&!busy&&!offline;
     const inspection=check?`<section class="rollback-assessment"><strong>${check.canRestore?'Snapshot state permits a guarded restore':'Automatic restore blocked'}</strong><p>${esc(check.message||'')}</p><dl><dt>Manifest phase</dt><dd>${esc(check.manifestPhase||'Not reported')}</dd><dt>Reason</dt><dd>${esc(check.reason||'Unknown')}</dd><dt>Checked at (UTC)</dt><dd>${esc(check.checkedAt||'Not reported')}</dd></dl>${check.failure?`<p><strong>Last retained failure</strong></p><p>${esc(check.failure.code||'')} · ${esc(check.failure.stage||'')}</p><p>${esc(check.failure.message||'')}</p>`:''}${check.beforeDomainPolicy?`<p><strong>AD ${esc(check.beforeDomainPolicy.property)}</strong>: ${esc(check.afterDomainPolicy?.value??'—')} → ${esc(check.beforeDomainPolicy.value)} on ${esc(check.beforeDomainPolicy.domainController)}</p>`:''}${check.domainSnapshotDiverges?`<aside class="domain-policy-notes" role="note"><strong>Saved GPO and AD values differed before this change</strong><p>The saved GPO value is ${esc(check.beforeValue)}, while the AD snapshot is ${esc(check.beforeDomainPolicy?.value)}. Rollback restores both snapshots. A subsequent policy refresh may apply the stored GPO value again; review this difference before choosing gpupdate.</p></aside>`:''}<p class="ds-caption">The full GPO snapshot may affect every linked scope. Restore rechecks live drift and permissions under a lock.</p></section>`:'';
@@ -182,5 +192,5 @@
     const name=known?(source?.gpoName||gpo?.name):null,id=known?(source?.gpoId||gpo?.id):null;
     return `<small class="value-source" title="Source of the configured GPO value. Endpoint winning policy is checked separately.">Source GPO: ${esc(name||id||'—')}${name&&id?`<span>${esc(id)}</span>`:''}</small>`;
   }
-  window.GpoComponents=Object.freeze({esc,text,icon,domainIcon:id=>icon(domains[id]||'shield'),status,operationStatus,endpointSummary,breadcrumb,operations,timeline,domainEvidence,skeleton,auditChain,activity,recovery,rollbackCheck,restoreReadback,endpointRestoreCheck,refreshAction,manualCheck,assuranceStages,valueSource,planConflicts,conflictList});
+  window.GpoComponents=Object.freeze({esc,text,icon,domainIcon:id=>icon(domains[id]||'shield'),status,operationStatus,endpointSummary,breadcrumb,operations,timeline,domainEvidence,skeleton,auditChain,activity,recovery,rollbackCheck,restoreReadback,endpointRestoreCheck,refreshAction,manualCheck,assuranceStages,valueSource,planConflicts,conflictList,activeOperation});
 })();

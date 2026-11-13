@@ -47,11 +47,11 @@ $script:nativeExit=0;$script:ini='[Privilege Rights]';$map.items[0].value=@()
 Assert-Test ((@(Verify-EffectiveSamples $plan $map))[0].state -eq 'VERIFIED') 'LSA no assigned accounts must match an explicitly empty assignment'
 $map.items[0].value=@('S-1-5-32-546');$map.comparator='includes';$script:ini="[Privilege Rights]`nSeSystemtimePrivilege = *S-1-5-32-546,*S-1-5-113"
 Assert-Test ((@(Verify-EffectiveSamples $plan $map))[0].state -eq 'VERIFIED') 'Additional deny principals were treated as noncompliant'
-$map.handler='AdvancedAudit';$map.items=@(@{name= $null;section= $null;key= $null;type= $null;guid='{0CCE9235-69AE-11D9-BED3-505054503030}';mask=1});$script:auditMask=3
+$map.handler='AdvancedAudit';$map.items=@(@{name= $null;section= $null;key= $null;type= $null;guid='{0CCE9235-69AE-11D9-BED3-505054503030}';mask=1});$script:auditMask=3;$script:auditLabel='Erfolg und Fehler'
 function auditpol.exe {
  Assert-Test ($args.Count -eq 2 -and $args[0] -eq '/backup' -and $args[1] -like '/file:*') 'auditpol must export numeric backup format, not parse localized /get report'
  $file=([string]$args[1]).Substring('/file:'.Length);$script:lastAuditFile=$file
- [IO.File]::WriteAllLines($file,[string[]]@('Machine Name,Policy Target,Subcategory,Subcategory GUID,Inclusion Setting,Exclusion Setting,Setting Value',('WS,System,Lokalisiert,{0CCE9235-69AE-11D9-BED3-505054503030},Erfolg und Fehler,,'+$script:auditMask)))
+ [IO.File]::WriteAllLines($file,[string[]]@('Machine Name,Policy Target,Subcategory,Subcategory GUID,Inclusion Setting,Exclusion Setting,Setting Value',("WS,System,Lokalisiert,{0CCE9235-69AE-11D9-BED3-505054503030},$script:auditLabel,,$script:auditMask")))
  $global:LASTEXITCODE=$script:nativeExit
 }
 Assert-Test ((@(Verify-EffectiveSamples $plan $map))[0].state -eq 'VERIFIED') 'Audit superset did not satisfy include Success'
@@ -65,8 +65,13 @@ $script:auditMask=4
 $auditResult=@(Verify-EffectiveSamples $plan $map)[0]
 Assert-Test ($auditResult.state -eq 'MISMATCH' -and $auditResult.actualValue -match 'No Auditing') 'Explicit No Auditing must report an observed mismatch, not pending'
 Assert-Test (!(Test-Path -LiteralPath $script:lastAuditFile)) 'Audit export temporary file was not cleaned up'
-$script:auditMask=0
+$script:auditMask=0;$script:auditLabel='Not Specified'
 Assert-Test ((@(Verify-EffectiveSamples $plan $map))[0].state -eq 'PENDING') 'Unchanged audit setting was accepted as explicit evidence'
+$script:auditLabel='No Auditing'
+$auditResult=@(Verify-EffectiveSamples $plan $map)[0]
+Assert-Test ($auditResult.state -eq 'MISMATCH' -and $auditResult.actualValue -match 'No Auditing') 'Runtime 0 with explicit No Auditing did not report the missing audit bit'
+$map.items[0].mask=0;$map.comparator='=='
+Assert-Test ((@(Verify-EffectiveSamples $plan $map))[0].state -eq 'VERIFIED') 'Runtime 0 with explicit No Auditing did not match an exact request for No Auditing'
 $script:nativeExit=5
 Assert-Test ((@(Verify-EffectiveSamples $plan $map))[0].state -eq 'PENDING') 'Failed auditpol produced compliance evidence'
 Assert-Test (!(Numeric-Complies 0 5 '<=')) 'Disabled lockout passed the maximum threshold'

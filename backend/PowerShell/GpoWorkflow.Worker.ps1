@@ -1394,7 +1394,11 @@ function Verify-EffectiveSamples($Plan,$Map,[bool]$RollbackRegistry=$false,[bool
                 })
                 if($rows.Count -ne 1){return @{supported=$false;match=$false;actual='';message='auditpol did not return exactly one row for the requested subcategory GUID.'}}
                 $row=$rows[0];$value=[string]($row.PSObject.Properties.Value|Select-Object -Last 1);$numeric=0
-                if(![int]::TryParse($value,[ref]$numeric) -or $numeric -lt 1 -or $numeric -gt 4){return @{supported=$false;match=$false;actual=$value;message='auditpol export did not expose a valid explicit numeric setting (1-4).'}}
+                if(![int]::TryParse($value,[ref]$numeric) -or $numeric -lt 0 -or $numeric -gt 4){return @{supported=$false;match=$false;actual=$value;message='The auditpol export returned an invalid audit mask.'}}
+                # A runtime backup can emit 0 for an explicitly labeled No Auditing row.
+                # Unspecified or unrecognized labels remain inconclusive. GPO CSV rules are separate.
+                $inclusion=[string](@($row.PSObject.Properties.Value)[4])
+                if($numeric -eq 0 -and $inclusion.Trim() -ine 'No Auditing'){return @{supported=$false;match=$false;actual=$value;message='The auditpol export reported 0 without an explicit No Auditing label. Check the live subcategory with auditpol /get.'}}
                 if($numeric -eq 4){$numeric=0}
                 $label=switch($numeric){0{'No Auditing'}1{'Success'}2{'Failure'}3{'Success and Failure'}}
                 $expectedMask=[int]$item.expected;$actual+=([string]$item.guid+'='+$numeric+' ('+$label+')');if($Comparator -eq 'includes'){if(($numeric -band $expectedMask) -ne $expectedMask){$ok=$false}}elseif($numeric -ne $expectedMask){$ok=$false}

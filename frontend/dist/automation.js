@@ -45,8 +45,8 @@
     }catch(e){state.notice=e.message;}finally{state.busy=false;render();}
   }
   function setRootBlocked(blocked){const root=document.getElementById('root');if(!root)return;root.inert=!!blocked;if(blocked)root.setAttribute('aria-hidden','true');else{root.removeAttribute('inert');root.removeAttribute('aria-hidden');}}
-  function open(){if(panel.classList.contains('open'))return;returnFocus=document.activeElement;state.loaded=false;state.config=null;state.service=null;state.gpoSession=null;state.readiness=null;state.notice='';draft=null;setRootBlocked(true);document.body.style.overflow='hidden';panel.classList.add('open');backdrop.classList.add('open');render();load();panel.querySelector('[data-close]')?.focus();}
-  function close(){capture();setRootBlocked(false);document.body.style.overflow='';panel.classList.remove('open');backdrop.classList.remove('open');returnFocus?.focus();window.dispatchEvent(new CustomEvent('gr:refresh'));}
+  function open(){if(panel.classList.contains('open'))return;returnFocus=document.activeElement;state.loaded=false;state.config=null;state.service=null;state.gpoSession=null;state.readiness=null;state.notice='';draft=null;setRootBlocked(true);document.body.style.overflow='hidden';panel.inert=false;panel.removeAttribute('aria-hidden');panel.classList.add('open');backdrop.classList.add('open');render();load();panel.querySelector('[data-close]')?.focus();}
+  function close(){capture();setRootBlocked(false);document.body.style.overflow='';panel.classList.remove('open');panel.inert=true;panel.setAttribute('aria-hidden','true');backdrop.classList.remove('open');returnFocus?.focus();window.dispatchEvent(new CustomEvent('gr:refresh'));}
   async function action(fn){if(state.busy)return;capture();state.busy=true;state.notice='';render();try{await fn();}catch(e){state.notice=e.message;}finally{state.busy=false;render();}}
   async function restart(result){
     if(!result.restartScheduled){state.loaded=false;state.session=null;state.gpoSession=null;draft=null;state.notice='Saved. Restart the application to activate the changes.';return;}
@@ -67,7 +67,7 @@
   }
   function init(){
     backdrop=document.createElement('div');backdrop.id='gr-auto-backdrop';backdrop.onclick=close;document.body.append(backdrop);
-    panel=document.createElement('aside');panel.id='gr-auto-panel';panel.setAttribute('role','dialog');panel.setAttribute('aria-modal','true');panel.setAttribute('aria-label','GPO settings');document.body.append(panel);
+    panel=document.createElement('aside');panel.id='gr-auto-panel';panel.setAttribute('role','dialog');panel.setAttribute('aria-modal','true');panel.setAttribute('aria-label','GPO settings');panel.inert=true;panel.setAttribute('aria-hidden','true');document.body.append(panel);
     panel.addEventListener('input',capture);
     panel.addEventListener('change',e=>{if(e.target.name==='endpointTargeting'){capture();const manual=panel.querySelector('[name=allowedHosts]');if(manual)manual.disabled=e.target.value!=='ExplicitHosts';}});
     panel.addEventListener('submit',e=>{e.preventDefault();capture();const c={...draft};action(async()=>{
