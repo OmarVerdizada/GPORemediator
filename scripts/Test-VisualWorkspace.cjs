@@ -52,6 +52,7 @@ const server=http.createServer(async(req,res)=>{try{const url=new URL(req.url,'h
   if(phase!=='before')assert.equal(await page.locator('.experience-queue').count(),1);
   await page.locator('nav [href="#/operations"]').click();await page.locator('.ops-summary').waitFor();await shot(`operations-${theme}-${width}`);
   await page.locator('[data-inspect="run-review"]').first().click();await page.locator('.product-drawer').waitFor();await shot(`drawer-${theme}-${width}`);await page.keyboard.press('Escape');
+  assert.equal(await page.locator('#gr-auto-panel').evaluate(el=>el.inert),true,'Closing Operations must not unlock the hidden Settings drawer');
   await goto('benchmark');await page.locator('#catalog-search').fill('1.2');await page.locator('[data-rule="1.2.2"]').first().waitFor();await shot(`benchmark-${theme}-${width}`);
   await page.locator('[data-rule="1.2.2"]').first().click();await page.locator('[data-tab=verification]').click();await page.locator('.result-summary').waitFor();await shot(`verification-${theme}-${width}`);
   if(phase!=='before'){

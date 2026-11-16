@@ -6,7 +6,7 @@ namespace GpoRemediator.Services;
 internal static class BatchRecovery
 {
     public static WorkflowJob? Source(Store store,string actor,string operationId) => store.List<WorkflowJob>("workflow_jobs")
-        .FirstOrDefault(job=>job.Action=="apply"&&job.PlanIds.Length>1&&job.Actor.Equals(actor,StringComparison.OrdinalIgnoreCase)&&job.CompletedIds.Contains(operationId));
+        .FirstOrDefault(job=>job.Action=="apply"&&job.BatchId is not null&&job.Actor.Equals(actor,StringComparison.OrdinalIgnoreCase)&&job.CompletedIds.Contains(operationId));
 
     public static (string Target,GpoRollbackAnchor Anchor) Resolve(Store store,WorkflowJob source,string? single)
     {

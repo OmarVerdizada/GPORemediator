@@ -1,10 +1,10 @@
 /* Real optional batch UI, mocked durable HTTP jobs. Never contacts AD. */
 const fs=require('node:fs'),path=require('node:path'),http=require('node:http'),assert=require('node:assert/strict'),{chromium}=require('playwright');
-const root=path.resolve(__dirname,'../frontend/source'),shots=path.resolve(__dirname,'../work/screens/3.18.9');fs.mkdirSync(shots,{recursive:true});
+const root=path.resolve(__dirname,'../frontend/source'),shots=path.resolve(__dirname,'../work/screens/3.18.10');fs.mkdirSync(shots,{recursive:true});
 const mappings=JSON.parse(fs.readFileSync(path.resolve(root,'../../backend/data/gpo-production-mappings.json'),'utf8')).mappings;
 const gpo={id:'11111111-1111-1111-1111-111111111111',name:'Bulk test policy',protected:false,selectable:true},scope='OU=Mixed,DC=test,DC=local',endpoint='OU=Sessions,DC=test,DC=local';
 const scopes=[{dn:'DC=test,DC=local',name:'test.local',kind:'Domain'},{dn:scope,name:'Mixed users and computers',kind:'OU'},{dn:endpoint,name:'Session computers',kind:'OU'},...Array.from({length:5000},(_,i)=>({dn:`OU=Unit${i},DC=test,DC=local`,name:`Unit${i}`,kind:'OU'}))];
-const requests=[],jobs=[],batches=new Map();let runs=[],previewDone=false,applyDone=false,applyFailed=false,pollUnavailable=false,number=0;
+const requests=[],jobs=[],batches=new Map();let runs=[],previewDone=false,applyDone=false,applyFailed=false,pollUnavailable=false,omitBulkHistory=false,number=0;
 function makePlan(s){const m=mappings.find(m=>m.id===s.setting),value=s.itemValues?.[0]?.join(',')??(m.allowValueOverride?String(s.value):m.requiresInput?s.customValue:m.handler==='AdvancedAudit'?String(m.items[0].mask):(m.items[0].value||[]).join(','));return {id:'plan-'+(++number),selection:s,writeAuthorized:true,executionUser:'TEST\\operator',preview:{gpo,scope:{dn:s.scopeDn,name:'Mixed',kind:'OU'},previousValue:null,desiredValue:value,existingLink:null,warnings:['Changing this GPO affects all of its links.'],relatedConflicts:[{severity:'HIGH',code:'SETTING_DEFINED_ELSEWHERE',message:'Competing value differs',gpoName:'Branch baseline',domain:'test.local',scope:s.scopeDn}],verificationComputers:['ws.test.local']}};}
 function update(job){
  if(job.action==='preview'&&previewDone){job.state='COMPLETED';job.message='Batch preview ready.';job.completedIds=batches.get(job.batchId).plans.map(p=>p.id);}
@@ -23,10 +23,17 @@ const server=http.createServer(async(req,res)=>{try{let body='';for await(const 
  else if(url.pathname==='/api/gpo/inventory')data={gpos:[gpo],scopes,domain:'test.local',domainController:'dc.test.local',executionUser:'TEST\\operator'};
  else if(url.pathname==='/api/gpo/readiness')data={ready:true,checks:[]};
  else if(url.pathname==='/api/gpo/history')data=runs;
- else if(url.pathname.endsWith('/rollback-preview'))data={canRestore:true,reason:'READY',message:'Live snapshot matches',manifestPhase:'PUBLISHED',checkedAt:'2026-11-05T06:00:00Z'};
+ else if(url.pathname.endsWith('/rollback-preview'))data={canRestore:true,reason:'READY',message:'Live snapshot matches',manifestPhase:'PUBLISHED',checkedAt:'2026-11-05T06:00:00Z',batchMember:true};
+ else if(url.pathname.endsWith('/batch-result')){
+  const operationId=url.pathname.split('/').at(-2);
+  const source=jobs.find(job=>job.action==='apply'&&job.batchId&&job.completedIds.includes(operationId));
+  assert(source,'Direct batch result must resolve the original Apply receipt');
+  const job=jobs.findLast(job=>job.action==='rollback'&&job.sourceWorkflowId===source.id)||source;
+  data={source,job,plans:batches.get(source.batchId).plans};
+ }
  else if(url.pathname==='/api/gpo/target-access')data={authorized:true};
  else if(url.pathname==='/api/setup/config')data={exists:true,domain:'test.local',domainController:'dc.test.local',approvedGpoIds:['*'],authorizedOus:['*'],endpointTargeting:'SelectedOu'};
- else if(url.pathname==='/api/workflows'&&req.method==='GET')data=jobs.map(update);
+ else if(url.pathname==='/api/workflows'&&req.method==='GET')data=omitBulkHistory?[]:jobs.map(update);
  else if(url.pathname==='/api/batches')data=[...batches.values()].map(x=>x.batch);
  else if(url.pathname.startsWith('/api/batches/'))data=batches.get(url.pathname.split('/').pop());
  else if(url.pathname.startsWith('/api/workflows/')&&req.method==='POST'){
@@ -66,6 +73,7 @@ const server=http.createServer(async(req,res)=>{try{let body='';for await(const 
  await pollWarning.waitFor({state:'hidden'});
  assert.equal(requests.filter(r=>r.path==='/api/workflows/apply').length,1,'Recovering polling must only read the recorded workflow');
  await page.locator('.bulk-dialog>header [data-bulk-close]').click();await page.goto(base+'/#/operations');await page.reload();await page.locator('[data-bulk-job]').first().click();assert.equal(requests.filter(r=>r.path==='/api/workflows/apply').length,1,'Reloading must not resubmit approved writes');applyDone=true;await page.getByRole('heading',{name:'GPO settings saved',exact:true}).waitFor();assert.match(await page.locator('.bulk-table').textContent(),/1 unavailable/);await page.locator('.bulk-dialog').screenshot({path:path.join(shots,'bulk-result.png')});
+ omitBulkHistory=true;
  await page.getByRole('button',{name:'Review rollback',exact:true}).click();await page.locator('.ds-recovery [data-rollback-inspect]').click();await page.getByRole('button',{name:'Rollback this control',exact:true}).waitFor();assert.equal(requests.filter(r=>r.path==='/api/workflows/rollback').length,0);await page.locator('.ds-recovery [data-bulk-from-operation]').click();
  await page.locator('[data-bulk-recover]').click();await page.fill('#bulk-confirmation','ROLLBACK');await page.locator('[data-bulk-recovery] button[type=submit]').click();await page.getByRole('heading',{name:'Batch snapshot restored',exact:true}).waitFor();assert.equal(requests.filter(r=>r.path==='/api/workflows/rollback').length,1);assert.match(await page.locator('.bulk-table').textContent(),/Snapshot restored/);await page.locator('[data-bulk-inspect]').nth(1).click();await page.locator('.ds-recovery [data-bulk-from-operation]').waitFor();assert.equal(await page.locator('.ds-recovery [data-verify]').count(),0,'Restored child must use the full batch recovery receipt');await page.locator('.ds-recovery [data-bulk-from-operation]').click();await page.getByRole('heading',{name:'Batch snapshot restored',exact:true}).waitFor();await page.getByRole('button',{name:'Re-verify restored snapshot'}).click();await page.getByText('Read-only checks complete.',{exact:true}).waitFor();
  const verify=requests.filter(r=>r.path==='/api/workflows/verify');assert.equal(verify.length,1);assert.deepEqual(verify[0].payload.planIds,jobs.find(j=>j.action==='rollback').completedIds,'Re-verify must read the authoritative restore receipt only');

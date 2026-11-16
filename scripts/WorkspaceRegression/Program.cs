@@ -281,12 +281,81 @@ store.Put("gpo_runs",reportSource,reportRun with{Result=reportRun.Result with{St
 using(var req=new HttpRequestMessage(HttpMethod.Get,"/api/workflows/"+jobId+"/report")){req.Headers.Add("Test-Identity","TEST\\Admin");using var response=await http.SendAsync(req);var html=await response.Content.ReadAsStringAsync();Check(html.Contains("Restore saved link: Absent")&&html.Contains("Observed: Absent (verified)")&&!html.Contains("Intent: enable;"),"Rollback report reused forward link intent");}
 store.Put("gpo_runs",reportSource,reportRun);
 using(var req=new HttpRequestMessage(HttpMethod.Get,"/api/workflows/"+jobId+"/report?format=json")){req.Headers.Add("Test-Identity","TEST\\Admin");using var response=await http.SendAsync(req);var report=await response.Content.ReadFromJsonAsync<JsonElement>();Check(report.GetProperty("integrityHash").GetString()==PolicyValues.Hash(report.GetProperty("payload")),"Report payload integrity hash does not match exported JSON");}
+var legacyPrint=reportRun with
+{
+    Plan=reportRun.Plan with{Selection=reportRun.Plan.Selection with{Setting="18.7.3"}},
+    Result=reportRun.Result with{EffectiveStatus="VERIFIED_ON_SAMPLE",EndpointChecks=[new("ws.example.test","VERIFIED","Legacy configuration check")]}
+};
+store.Put("gpo_runs",reportSource,legacyPrint,legacyPrint.Result.State);
+using(var req=new HttpRequestMessage(HttpMethod.Get,"/api/workflows/"+jobId+"/report?format=json"))
+{
+    req.Headers.Add("Test-Identity","TEST\\Admin");
+    using var response=await http.SendAsync(req);
+    var report=await response.Content.ReadFromJsonAsync<JsonElement>();
+    var result=report.GetProperty("payload").GetProperty("runs")[0].GetProperty("result");
+    Check(result.GetProperty("endpointChecks")[0].GetProperty("state").GetString()=="OBSERVED" &&
+        result.GetProperty("effectiveStatus").GetString()=="ENDPOINT_VERIFICATION_PENDING",
+        "An exported legacy Print Spooler configuration result claimed runtime verification");
+}
+store.Put("gpo_runs",reportSource,reportRun,reportRun.Result.State);
+for(var i=0;i<200;i++)
+{
+    var newer=bulk with{Id=$"newer-{i}",BatchId=$"newer-batch-{i}",CompletedIds=[]};
+    store.Put("workflow_jobs",newer.Id,newer,newer.State);
+    store.Put("batch_plans",newer.BatchId!,batch with{Id=newer.BatchId!},"READY");
+}
+Check(!jobs.Batches(bulk.Actor).Any(item=>item.Id==batch.Id) && !jobs.List(bulk.Actor).Any(item=>item.Id==bulk.Id),
+    "Fixture must move the original batch outside the recent limits");
+foreach(var route in new[]{"/api/batches/"+batch.Id,"/api/gpo/"+bulk.CompletedIds[1]+"/batch-result"})
+{
+    using var ownerRequest=new HttpRequestMessage(HttpMethod.Get,route);
+    ownerRequest.Headers.Add("Test-Identity","TEST\\Admin");
+    using var ownerResponse=await http.SendAsync(ownerRequest);
+    Check(ownerResponse.IsSuccessStatusCode,"Archived bulk receipt was unavailable by ID");
+    if(route.EndsWith("/batch-result"))
+    {
+        var attached=await ownerResponse.Content.ReadFromJsonAsync<JsonElement>();
+        Check(attached.GetProperty("source").GetProperty("id").GetString()==bulk.Id &&
+            attached.GetProperty("job").GetProperty("action").GetString()=="rollback","Archived bulk receipt lost its recovery workflow");
+    }
+    using var otherRequest=new HttpRequestMessage(HttpMethod.Get,route);
+    otherRequest.Headers.Add("Test-Identity","TEST\\Viewer");
+    using var otherResponse=await http.SendAsync(otherRequest);
+    Check(otherResponse.StatusCode==HttpStatusCode.NotFound,"Archived bulk receipt crossed operator boundaries");
+}
 await app.StopAsync();await jobs.StopAsync(CancellationToken.None);
 // Simulate service death: stored queued writes must become review records, not replay.
-var interrupted=finished with{Id="interrupted",State="RUNNING"};store.Put("workflow_jobs",interrupted.Id,interrupted,"RUNNING");
+var interrupted=bulk with{Id="interrupted",State="RUNNING",CompletedIds=[bulk.CompletedIds[0]],CurrentOperationId=bulk.CompletedIds[1]};
+var lastRun=store.Require<GpoWorkflowRun>("gpo_runs",bulk.CompletedIds[1]) with{ApplyWorkflowId=interrupted.Id};
+store.Put("gpo_runs",lastRun.Id,lastRun,lastRun.Result.State);
+store.Put("workflow_jobs",interrupted.Id,interrupted,"RUNNING");
+var unrelated=interrupted with{Id="unrelated",CompletedIds=[]};
+store.Put("workflow_jobs",unrelated.Id,unrelated,"RUNNING");
+var restoreTarget="restore-target";
+var restoreChild="restore-child";
+var restoreSource=bulk with{Id="restore-source",CompletedIds=[restoreTarget,restoreChild]};
+var interruptedRestore=recovery with{Id="interrupted-restore",State="RUNNING",SourceWorkflowId=restoreSource.Id,PlanIds=[restoreTarget],CompletedIds=[],CurrentOperationId=restoreTarget};
+var restoredParent=store.Require<GpoWorkflowRun>("gpo_runs",bulk.CompletedIds[0]) with
+    {Id=restoreTarget,BatchRestoreWorkflowId=interruptedRestore.Id};
+var staleChild=lastRun with{Id=restoreChild,Result=pilotRun.Result with{EndpointCoverage=new(2,2,true),RefreshCoverage=new(2,2,true)}};
+store.Put("gpo_runs",restoreTarget,restoredParent,restoredParent.Result.State);
+store.Put("gpo_runs",restoreChild,staleChild,staleChild.Result.State);
+store.Put("workflow_jobs",restoreSource.Id,restoreSource,restoreSource.State);
+store.Put("workflow_jobs",interruptedRestore.Id,interruptedRestore,interruptedRestore.State);
+var actionsBeforeRestart=fake.Actions.Count;
 using(var restarted=new WorkspaceWorkflows(store,fake,gate,NullLogger<WorkspaceWorkflows>.Instance,TimeProvider.System)){
  await restarted.StartAsync(CancellationToken.None);for(var i=0;i<100&&restarted.Get(interrupted.Id,"TEST\\Admin").State=="RUNNING";i++)await Task.Delay(10);
- Check(restarted.Get(interrupted.Id,"TEST\\Admin").State=="NEEDS_REVIEW","Restart replayed or lost an interrupted write");await restarted.StopAsync(CancellationToken.None);
+ var recovered=restarted.Get(interrupted.Id,"TEST\\Admin");
+ Check(recovered.State=="NEEDS_REVIEW" && recovered.CurrentOperationId is null &&
+    recovered.CompletedIds.SequenceEqual(bulk.CompletedIds) && fake.Actions.Count==actionsBeforeRestart,
+    "Restart replayed or lost the recorded batch step");
+ Check(restarted.Get(unrelated.Id,"TEST\\Admin").CompletedIds.Length==0,"Restart attached a run from another workflow");
+ var recoveredRestore=restarted.Get(interruptedRestore.Id,"TEST\\Admin");
+ var recoveredChild=store.Require<GpoWorkflowRun>("gpo_runs",restoreChild).Result;
+ Check(recoveredRestore.State=="NEEDS_REVIEW" && recoveredRestore.CompletedIds.SequenceEqual([restoreTarget]) &&
+    recoveredChild.State=="BATCH_ROLLED_BACK" && recoveredChild.EndpointCoverage is null && recoveredChild.RefreshCoverage is null &&
+    fake.Actions.Count==actionsBeforeRestart,"Restart lost a recorded restore or retained stale forward evidence");
+ await restarted.StopAsync(CancellationToken.None);
 }
 Console.WriteLine("PASS workspace: production async HTTP/identity isolation/idempotency, server refresh chain, serialized batch/rebase/first-snapshot rollback, scheduled checks, read-only scan, pilot boundaries, report escaping, streaming limits and restart recovery.");
 

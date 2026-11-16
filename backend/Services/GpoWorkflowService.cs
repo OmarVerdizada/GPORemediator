@@ -225,7 +225,7 @@ public sealed class GpoWorkflowService(IConfiguration config,Store store,Operati
         store.Put("gpo_plans",plan.Id,plan);store.Audit("GPO_PLAN_PREPARED",actor,details:plan);
         return plan;
     }
-    private static GpoWorkflowRun HistoryContext(GpoWorkflowRun run){
+    internal static GpoWorkflowRun HistoryContext(GpoWorkflowRun run){
         if(run.Plan.Preview.CustomValues is null)
             run=run with{Plan=run.Plan with{Preview=run.Plan.Preview with{CustomValues=ProductionGpoMappings.IsCustomSelection(run.Plan.Selection)}}};
         if(run.Result.State is "ROLLED_BACK" or "BATCH_ROLLED_BACK"||run.BatchStepRestored)return run;
@@ -355,7 +355,9 @@ public sealed class GpoWorkflowService(IConfiguration config,Store store,Operati
             var correlationId=previous?.CorrelationId??Guid.NewGuid().ToString("N");
             var startedAt=previous?.StartedAt??PolicyValues.Now();
             var run=new GpoWorkflowRun(id,plan,result with{State=operation.ToUpperInvariant()+"ING"},PolicyValues.Now(),operation=="apply"?consent:previous?.Approval,correlationId,startedAt,
-                BatchStepRestored:previous?.BatchStepRestored==true);
+                BatchStepRestored:previous?.BatchStepRestored==true,
+                ApplyWorkflowId:operation=="apply"?workflowId:previous?.ApplyWorkflowId,
+                BatchRestoreWorkflowId:previous?.BatchRestoreWorkflowId);
             try{
                 store.Put("gpo_runs",id,run,run.Result.State);store.Audit("GPO_"+operation.ToUpperInvariant()+"_STARTED",actor,jobId:id,controlId:plan.Selection.Setting,gpoId:plan.Selection.GpoId,details:new{id,correlationId,plan.ExecutionUser});
                 var stages=(previous?.Stages??[]).ToList();
@@ -417,6 +419,8 @@ public sealed class GpoWorkflowService(IConfiguration config,Store store,Operati
                     result=result with{RefreshResults=previous.Result.RefreshResults,RefreshCoverage=previous.Result.RefreshCoverage};
                 run=run with{Result=result,UpdatedAt=PolicyValues.Now(),BatchStepRestored=run.BatchStepRestored||
                     operation=="rollback"&&result.State=="ROLLED_BACK"&&rollbackAnchor is {BatchPlans:null}};
+                if(operation=="rollback" && result.State=="ROLLED_BACK" && rollbackAnchor?.BatchPlans is not null)
+                    run=run with{BatchRestoreWorkflowId=workflowId};
             }catch(Exception ex){
                 // A transport/timeout failure can occur after a remote write began.
                 // Never label an unknown outcome as a safe failure.
@@ -438,11 +442,14 @@ public sealed class GpoWorkflowService(IConfiguration config,Store store,Operati
         var run=store.Require<GpoWorkflowRun>("gpo_runs",id);
         AssertContext(run.Plan,c,actor);
         GpoRollbackAnchor? anchor=null;
-        if(BatchRecovery.Source(store,actor,id) is {} source){
+        var source=BatchRecovery.Source(store,actor,id);
+        if(source is not null){
             try{anchor=BatchRecovery.Resolve(store,source,id).Anchor;}
-            catch(PolicyException error){return new{canRestore=false,reason=error.Code,message=error.Message,checkedAt=PolicyValues.Now()};}
+            catch(PolicyException error){return new{canRestore=false,reason=error.Code,message=error.Message,checkedAt=PolicyValues.Now(),batchMember=true};}
         }
-        return await Run<object>("gpoRollbackInspect",c,new{plan=run.Plan,mapping=ProductionGpoMappings.Effective(run.Plan.Selection,historical:true),rollbackAnchor=NativeAnchor(anchor)},ct);
+        var inspection=await Run<System.Text.Json.Nodes.JsonObject>("gpoRollbackInspect",c,new{plan=run.Plan,mapping=ProductionGpoMappings.Effective(run.Plan.Selection,historical:true),rollbackAnchor=NativeAnchor(anchor)},ct);
+        inspection["batchMember"]=source is not null;
+        return inspection;
     }
     private static object? NativeAnchor(GpoRollbackAnchor? anchor)=>anchor is null?null:new{anchor.Plan,anchor.PostFingerprint,anchor.RestoredFromFingerprint,
         BatchPlans=anchor.BatchPlans?.Select(p=>new{p.Id,p.Domain,p.DomainController,Selection=new{p.Selection.GpoId,p.Selection.ScopeDn,p.Selection.Setting}}).ToArray()};
@@ -450,6 +457,7 @@ public sealed class GpoWorkflowService(IConfiguration config,Store store,Operati
     {
         var run=store.Require<GpoWorkflowRun>("gpo_runs",id);
         if(!string.Equals(run.Plan.Actor,actor,StringComparison.OrdinalIgnoreCase)) throw new PolicyException("NOT_FOUND","Operation not found.");
+        run=HistoryContext(run);
         // Each export represents the latest recorded run; preserve earlier snapshots by hash.
         var evidence=new GpoEvidence("1.2","GPO Remediator","CIS v4.0.0",run.Id,run.UpdatedAt,run.Plan.Actor,
             run.Plan.ExecutionUser,run.Plan.Domain,run.Plan.DomainController,ProductionGpoMappings.Require(run.Plan.Selection.Setting).ControlId,run.Plan.Selection.Setting,

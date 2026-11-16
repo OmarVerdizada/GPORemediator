@@ -21,11 +21,18 @@ function Include-Function([string]$Name){
  }
 }
 foreach($name in @('Write-Mapping','Mapping-Display','Validate-Selection','Fingerprint','Selected-Link','Assert-VersionSync','Run-Directory','Save-Manifest')){Include-Function $name}
-$text=(@($selected.Keys|Sort-Object|ForEach-Object{$selected[$_].Extent.Text.Replace("`r`n","`n")}) -join "`n`n")
+[string[]]$functionNames=@($selected.Keys)
+# Windows PowerShell and PowerShell 7 sort hyphens differently under culture rules.
+[Array]::Sort($functionNames,[StringComparer]::Ordinal)
+$text=(@($functionNames|ForEach-Object{$selected[$_].Extent.Text.Replace("`r`n","`n")}) -join "`n`n")
 $template=[IO.File]::ReadAllText((Join-Path $repo 'backend/PowerShell/ManualGpo.Template.ps1')).Replace("`r`n","`n")
 $mappings=Get-Content -LiteralPath (Join-Path $repo 'backend/data/gpo-production-mappings.json') -Raw|ConvertFrom-Json
-$payload=[ordered]@{functions=$text;template=$template;functionNames=@($selected.Keys|Sort-Object);mappings=@($mappings.mappings);userRightProbe=$functions['UserRight-ProbeSource'].Extent.Text}
-$output="/* Generated from the production PowerShell worker. Run scripts/Build-ManualEngine.ps1; do not edit. */`nwindow.GpoManualEngine=Object.freeze("+($payload|ConvertTo-Json -Depth 5 -Compress)+");`n"
+$probe=$functions['UserRight-ProbeSource'].Extent.Text.Replace("`r`n","`n")
+$payload=[ordered]@{functions=$text;template=$template;functionNames=$functionNames;mappings=@($mappings.mappings);userRightProbe=$probe}
+# Windows PowerShell already escapes these JSON string characters. Apply the
+# same escapes when PowerShell 7 emits the characters literally.
+$json=($payload|ConvertTo-Json -Depth 5 -Compress).Replace("'","\u0027").Replace('<','\u003c').Replace('>','\u003e').Replace('&','\u0026')
+$output="/* Generated from the production PowerShell worker. Run scripts/Build-ManualEngine.ps1; do not edit. */`nwindow.GpoManualEngine=Object.freeze("+$json+");`n"
 $path=Join-Path $repo 'frontend/source/manual-engine.js'
 if($Check){if(!(Test-Path -LiteralPath $path) -or [IO.File]::ReadAllText($path).Replace("`r`n","`n") -cne $output){throw 'Manual PowerShell engine is stale. Run scripts/Build-ManualEngine.ps1.'}}
 else{[IO.File]::WriteAllText($path,$output,(New-Object Text.UTF8Encoding($false)))}

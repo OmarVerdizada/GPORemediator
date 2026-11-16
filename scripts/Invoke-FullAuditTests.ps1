@@ -39,6 +39,7 @@ try{
  Run-Check 'Test-AuditFrontend' $node @('scripts/Test-AuditFrontend.cjs')
  Run-Check 'Test-AuditUi' $node @('scripts/Test-AuditUi.cjs') 'real Chromium, mocked API; no AD writes'
  Run-Check 'Test-FrontendPolish' $node @('scripts/Test-FrontendPolish.cjs')
+ Run-Check 'Test-VisualWorkspace' $node @('scripts/Test-VisualWorkspace.cjs') 'real Chromium with mocked HTTP, all workspace sections and both themes'
  Run-Check 'stylesheet-build' $node @('scripts/Build-Styles.cjs','--check')
  foreach($test in @('Test-Responsiveness','Test-FrontendSystem','Test-RemediationEvidence','Test-CatalogState','Test-GuidedRemediation','Test-GpoScopePicker','Test-ControlTargeting','Test-UX-Contract','Test-EnterpriseCenter','Test-ManualVerification','Test-ValueEditor','Test-ManualRemediation','Test-RecoveryUi','Test-EndpointTargetingUi','Test-EnglishThemes','Test-UserRefreshUi','Test-EndpointResultUi','Test-ResultContext','Test-ResultOfflineUi','Test-DomainAccountUi','Test-LivePolicyUi','Test-StreamlinedUi','Test-ReviewedTargetUi')){Run-Check $test $node @('scripts/'+$test+'.cjs')}
  Run-Check 'mapping-generation' $python @('scripts/Build-ProductionMappings.py','--check')

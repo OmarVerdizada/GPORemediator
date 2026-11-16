@@ -17,6 +17,13 @@ public sealed class WorkspaceWorkflows(Store store,IWorkflowOperations service,O
     private CancellationToken stopping;
     public WorkflowJob[] List(string actor)=>store.List<WorkflowJob>("workflow_jobs").Where(x=>x.Actor.Equals(actor,StringComparison.OrdinalIgnoreCase)).Take(200).ToArray();
     public BatchPlan[] Batches(string actor)=>store.List<BatchPlan>("batch_plans").Where(x=>x.Actor.Equals(actor,StringComparison.OrdinalIgnoreCase)).Take(100).ToArray();
+    public BatchPlan GetBatch(string id,string actor)
+    {
+        var batch=store.Require<BatchPlan>("batch_plans",id);
+        if(!batch.Actor.Equals(actor,StringComparison.OrdinalIgnoreCase))
+            throw new PolicyException("NOT_FOUND","Batch not found.");
+        return batch;
+    }
     public WorkflowJob Get(string id,string actor){var job=store.Require<WorkflowJob>("workflow_jobs",id);if(!job.Actor.Equals(actor,StringComparison.OrdinalIgnoreCase))throw new PolicyException("NOT_FOUND","Workflow not found.");return job;}
     private GpoWorkflowPlan Plan(string id,string actor){var plan=store.Require<GpoWorkflowPlan>("gpo_plans",id);if(!plan.Actor.Equals(actor,StringComparison.OrdinalIgnoreCase))throw new PolicyException("NOT_FOUND","Plan not found.");return plan;}
     private void Save(WorkflowJob job)=>store.Put("workflow_jobs",job.Id,job,job.State);
@@ -47,7 +54,8 @@ public sealed class WorkspaceWorkflows(Store store,IWorkflowOperations service,O
         if(selections.Any(x=>!Guid.TryParse(x.GpoId,out _)||!x.GpoId.Equals(selections[0].GpoId,StringComparison.OrdinalIgnoreCase)||!x.ScopeDn.Equals(selections[0].ScopeDn,StringComparison.OrdinalIgnoreCase)))throw new PolicyException("INVALID_REQUEST","A batch uses one GPO and one scope.");
         if(request.PilotSourceId is not null){
             var pilot=Get(request.PilotSourceId,actor);var source=store.Require<BatchPlan>("batch_plans",pilot.BatchId??"");
-            var runs=pilot.CompletedIds.Select(id=>store.Require<GpoWorkflowRun>("gpo_runs",id)).ToArray();
+            var runs=pilot.CompletedIds.Select(id=>store.Require<GpoWorkflowRun>("gpo_runs",id))
+                .Select(GpoWorkflowService.HistoryContext).ToArray();
             if(!source.Pilot||pilot.Action!="apply"||pilot.State!="COMPLETED"||runs.Length==0||runs.Any(run=>!WorkspaceRules.Published(run)||!GpoAssurance.EffectiveVerified(run.Result)||run.Result.EffectiveStatus is not ("VERIFIED_ON_SAMPLE" or "VERIFIED_ON_ALL_TARGETS")||
                 !DateTimeOffset.TryParse(run.Result.Verification?.CheckedAt,out var checkedAt)||DateTimeOffset.UtcNow-checkedAt>TimeSpan.FromMinutes(30)))
                 throw new PolicyException("PILOT_NOT_VERIFIED","Promotion requires a completed pilot with replication convergence and effective sample verification for every applied control.");
@@ -107,9 +115,61 @@ public sealed class WorkspaceWorkflows(Store store,IWorkflowOperations service,O
     }
     public override Task StartAsync(CancellationToken cancellationToken){
         foreach(var job in store.List<WorkflowJob>("workflow_jobs").Where(x=>WorkspaceRules.Active(x.State)||x.State=="VERIFY_SCHEDULED")){
-            Save(job with{State=job.Action is "scan" or "preview"||job.State=="VERIFY_SCHEDULED"?"WAITING_CONNECTION":"NEEDS_REVIEW",NextCheckAt=null,UpdatedAt=PolicyValues.Now(),Message="Service restarted. No write was replayed. Reconnect and verify recorded results before starting a new approved workflow."});
+            Save(RecoverInterrupted(job) with{State=job.Action is "scan" or "preview"||job.State=="VERIFY_SCHEDULED"?"WAITING_CONNECTION":"NEEDS_REVIEW",NextCheckAt=null,CurrentOperationId=null,UpdatedAt=PolicyValues.Now(),Message="Service restarted. No write was replayed. Reconnect and verify recorded results before starting a new approved workflow."});
         }
         return base.StartAsync(cancellationToken);
+    }
+    private WorkflowJob RecoverInterrupted(WorkflowJob job)
+    {
+        if(job.Action=="rollback" && job.SourceWorkflowId is not null && job.PlanIds is [var target])
+        {
+            var restored=store.Get<GpoWorkflowRun>("gpo_runs",target);
+            if(restored is {Result.State:"ROLLED_BACK"} && restored.BatchRestoreWorkflowId==job.Id
+                && restored.Plan.Actor.Equals(job.Actor,StringComparison.OrdinalIgnoreCase))
+            {
+                RecordBatchRestore(job,target);
+                return job with{CompletedIds=[target]};
+            }
+            return job;
+        }
+
+        // ExecuteAsync persists the operation before the job advances. Preserve its ID
+        // across an interruption so batch recovery includes the actual backup chain.
+        if(job.Action != "apply" || job.CurrentOperationId is not { } id || job.CompletedIds.Contains(id))
+            return job;
+
+        var run=store.Get<GpoWorkflowRun>("gpo_runs",id);
+        if(run is null || !run.Plan.Actor.Equals(job.Actor,StringComparison.OrdinalIgnoreCase))
+            return job;
+
+        if(run.ApplyWorkflowId == job.Id)
+            return job with{CompletedIds=[..job.CompletedIds,id]};
+
+        // Earlier releases did not record the parent ID on the run.
+        if(run.ApplyWorkflowId is null && DateTimeOffset.TryParse(run.StartedAt,out var started)
+            && DateTimeOffset.TryParse(job.StartedAt,out var workflowStarted) && started>=workflowStarted)
+            return job with{CompletedIds=[..job.CompletedIds,id]};
+
+        return job;
+    }
+    private void RecordBatchRestore(WorkflowJob job,string target)
+    {
+        var source=Get(job.SourceWorkflowId!,job.Actor);
+        foreach(var id in source.CompletedIds.Where(id=>id!=target))
+        {
+            var run=store.Require<GpoWorkflowRun>("gpo_runs",id);
+            if(run.BatchStepRestored || run.Result.State is "ROLLED_BACK" or "BATCH_ROLLED_BACK") continue;
+            var result=run.Result with
+            {
+                State="BATCH_ROLLED_BACK",
+                Message="Restored through the batch's first full-GPO snapshot. Inspect recovery workflow "+job.Id,
+                EffectiveStatus="ROLLBACK_ENDPOINT_PENDING",
+                GpoPublished=false,LinkVerified=false,CurrentValue=null,CurrentValueSource=null,CurrentLink=null,
+                DomainPolicy=null,Verification=null,EndpointChecks=[],RefreshResults=[],RestoreChecks=null,
+                EndpointCoverage=null,RefreshCoverage=null
+            };
+            store.Put("gpo_runs",id,run with{UpdatedAt=PolicyValues.Now(),Result=result},result.State);
+        }
     }
     protected override async Task ExecuteAsync(CancellationToken stoppingToken){
         stopping=stoppingToken;
@@ -158,15 +218,7 @@ public sealed class WorkspaceWorkflows(Store store,IWorkflowOperations service,O
                 if(job.Action=="apply")foreach(var field in plan.Preview.Fields??[])publishedFields[field.Address]=field;
                 expected=result.Result.PostFingerprint??plan.Preview.Fingerprint;
             }
-            if(job.SourceWorkflowId is not null){
-                var source=Get(job.SourceWorkflowId,job.Actor);
-                foreach(var op in source.CompletedIds.Where(id=>id!=job.CompletedIds[0])){
-                    var run=store.Require<GpoWorkflowRun>("gpo_runs",op);
-                    if(run.BatchStepRestored||run.Result.State is "ROLLED_BACK" or "BATCH_ROLLED_BACK")continue;
-                    store.Put("gpo_runs",op,run with{UpdatedAt=PolicyValues.Now(),Result=run.Result with{State="BATCH_ROLLED_BACK",Message="Restored through the batch's first full-GPO snapshot. Inspect recovery workflow "+job.Id,EffectiveStatus="ROLLBACK_ENDPOINT_PENDING",
-                        GpoPublished=false,LinkVerified=false,CurrentValue=null,CurrentValueSource=null,CurrentLink=null,DomainPolicy=null,Verification=null,EndpointChecks=[],RefreshResults=[],RestoreChecks=null}},"BATCH_ROLLED_BACK");
-                }
-            }
+            if(job.SourceWorkflowId is not null)RecordBatchRestore(job,job.CompletedIds[0]);
             // Refresh follows only the explicit approval and a verified successful mutation.
             if(job.Refresh!="None"&&job.Action is "apply" or "rollback"){
                 var candidates=job.Action=="rollback"&&anchor?.BatchPlans is {} saved?saved:job.CompletedIds.Select(op=>Plan(op,job.Actor)).ToArray();
@@ -313,6 +365,6 @@ public sealed class WorkspaceWorkflows(Store store,IWorkflowOperations service,O
             throw new PolicyException("ENDPOINT_POLICY_MISMATCH",$"Endpoint values differ from the request for controls {string.Join(", ",controls)}. Open each control's verification details for measured values and processing evidence.");
     }
     private void Finish(string id,string state,string message){var job=Update(id,j=>j with{State=state,Message=message,NextCheckAt=null,CurrentOperationId=null,FinishedAt=PolicyValues.Now()});store.Audit("WORKFLOW_"+state,job.Actor,jobId:id,details:new{job.Action,job.CompletedIds,job.Message});}
-    private void FailJob(string id,Exception error){logger.LogWarning("Workflow {WorkflowId} failed with {Type}",id,error.GetType().Name);Finish(id,error is PolicyException {Code:"GPO_LOGIN_REQUIRED"}?"WAITING_CONNECTION":"NEEDS_REVIEW",error is PolicyException policy?policy.Code+": "+policy.Message:"Workflow interrupted. Inspect recorded results before retrying any write.");}
+    private void FailJob(string id,Exception error){logger.LogWarning("Workflow {WorkflowId} failed with {Type}",id,error.GetType().Name);Update(id,RecoverInterrupted);Finish(id,error is PolicyException {Code:"GPO_LOGIN_REQUIRED"}?"WAITING_CONNECTION":"NEEDS_REVIEW",error is PolicyException policy?policy.Code+": "+policy.Message:"Workflow interrupted. Inspect recorded results before retrying any write.");}
     public override async Task StopAsync(CancellationToken cancellationToken){await base.StopAsync(cancellationToken);try{await Task.WhenAll(schedules.Values).WaitAsync(cancellationToken);}catch(OperationCanceledException){}}
 }

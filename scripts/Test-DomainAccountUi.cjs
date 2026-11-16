@@ -38,7 +38,7 @@ const server=http.createServer(async(req,res)=>{try{
  }
  const file=path.resolve(root,'.'+decodeURIComponent(url.pathname==='/'?'/index.html':url.pathname));
  if(!file.startsWith(root+path.sep)||!fs.existsSync(file)){res.statusCode=404;res.end();return;}
- res.setHeader('Content-Type',({'.html':'text/html','.js':'text/javascript','.css':'text/css','.json':'application/json','.woff2':'font/woff2'})[path.extname(file)]||'application/octet-stream');res.end(fs.readFileSync(file));
+ res.setHeader('Content-Type',({'.html':'text/html','.js':'text/javascript','.css':'text/css','.json':'application/json','.svg':'image/svg+xml','.woff2':'font/woff2'})[path.extname(file)]||'application/octet-stream');res.end(fs.readFileSync(file));
 }catch(error){res.statusCode=500;res.end(error.message);}});
 (async()=>{let browser;try{
  await new Promise(r=>server.listen(0,'127.0.0.1',r));browser=await chromium.launch({headless:true});
@@ -96,7 +96,9 @@ const server=http.createServer(async(req,res)=>{try{
  await page.locator('.service-right [data-refresh]').click();await page.locator('.busy-layer').waitFor({state:'detached'});assert.equal(await page.locator('.effective-value strong').textContent(),'15');assert.match(await page.locator('.measured-values').textContent(),/restore target\s*30/i);assert.equal(await page.locator('.result-actions [data-replan]').count(),0,'Failed rollback must not offer to reapply the original forward value');await page.getByRole('button',{name:'Review rollback',exact:true}).click();await page.locator('[data-rollback-inspect="publication-recovery"]').waitFor();assert.deepEqual(errors,[]);
  console.log('PASS failed rollback UI: actual AD 15 versus restore target 30, explicit recovery review and no forward-value repair');
  requireSignIn=true;const login=await browser.newPage({viewport:{width:1440,height:1000}});await login.goto(base+'/#/dashboard');await login.locator('.operator-sign-in').waitFor();
- assert.equal(await login.locator('.operator-sign-in-emblem svg').count(),1,'Sign-in uses a different brand mark');
+ const brand=login.locator('.operator-sign-in-emblem img');
+ assert.equal(await brand.getAttribute('src'),await page.locator('.brand-emblem img').getAttribute('src'),'Sign-in uses a different brand asset');
+ await login.waitForFunction(()=>document.querySelector('.operator-sign-in-emblem img')?.naturalWidth>0);
  assert.equal(await login.locator('.operator-sign-in button').evaluate(e=>getComputedStyle(e).backgroundImage),'none');
  await login.screenshot({path:path.join(shots,'sign-in-desktop.png'),fullPage:true});
  await login.setViewportSize({width:390,height:844});assert(await login.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));await login.screenshot({path:path.join(shots,'sign-in-mobile.png'),fullPage:true});

@@ -145,7 +145,7 @@ function create({state,api,run,render,matchesRule}){
  function history(){const rows=(state.workflowJobs||[]).filter(j=>j.action==='apply'&&j.batchId);return rows.length?`<section class="bulk-history"><h2>Bulk operations</h2>${rows.slice(0,20).map(j=>`<div><strong>${j.planIds?.length||0} controls · ${esc(j.state.replaceAll('_',' '))}</strong><small>${esc(j.updatedAt)}</small><button type="button" class="ds-button ds-secondary ds-sm" data-bulk-job="${esc(j.id)}">View bulk result</button></div>`).join('')}</section>`:'';}
  async function submit(path,payload){if(pending)return;pending=true;error='';pollError='';render();try{job=await api(path,payload);phase='working';}catch(e){error=e.message+' Check Operations for an accepted workflow before retrying; no write is automatically replayed.';}finally{pending=false;render();}}
  async function poll(){
-  if(!job||polling||pending||offline()||document.hidden)return;
+  if(!open||!job||polling||pending||offline()||document.hidden)return;
   polling=true;
   const id=job.id,current=revision;
   const stillCurrent=()=>current===revision&&job?.id===id&&!pending;
@@ -200,7 +200,15 @@ function create({state,api,run,render,matchesRule}){
   if(t.closest('[data-bulk-cancel-recovery]')){phase='working';render();return true;}
   if(t.closest('[data-bulk-verify]')){const planIds=verificationIds(recordedRuns());if(planIds.length&&!active(job)&&!offline())run(()=>submit('/workflows/verify',{requestId:crypto.randomUUID(),planIds,consent:{confirmation:''},refresh:'None',verificationDelays:[]}));return true;}
   const inspect=t.closest('[data-bulk-inspect]');if(inspect){open=false;state.inspectedOperation=inspect.dataset.bulkInspect;render();return true;}
-  const member=t.closest('[data-bulk-from-operation]');if(member){run(async()=>{const all=await api('/workflows'),saved=all.find(j=>j.action==='apply'&&j.batchId&&j.completedIds.includes(member.dataset.bulkFromOperation));if(!saved)throw Error('The batch receipt is not available. Open Operations.');const batch=await api('/batches/'+saved.batchId);source=saved;job=[...all].filter(j=>j.action==='rollback'&&j.sourceWorkflowId===saved.id).sort((a,b)=>String(b.updatedAt).localeCompare(String(a.updatedAt)))[0]||saved;plans=batch.plans;state.inspectedOperation=null;open=true;phase='working';render();});return true;}
+  const member=t.closest('[data-bulk-from-operation]');
+  if(member){
+   run(async()=>{
+    const saved=await api('/gpo/'+encodeURIComponent(member.dataset.bulkFromOperation)+'/batch-result');
+    ({source,job,plans}=saved);
+    state.inspectedOperation=null;open=true;phase='working';render();
+   });
+   return true;
+  }
   const record=t.closest('[data-bulk-job]');if(record){run(async()=>{const saved=await api('/workflows/'+record.dataset.bulkJob),batch=await api('/batches/'+saved.batchId);source=saved;job=(state.workflowJobs||[]).filter(j=>j.action==='rollback'&&j.sourceWorkflowId===saved.id).sort((a,b)=>String(b.updatedAt).localeCompare(String(a.updatedAt)))[0]||saved;plans=batch.plans;open=true;phase='working';render();});return true;}
   if(t.closest('.bulk-dialog')){const reset=t.closest('[data-recommended-values]'),row=t.closest('[data-bulk-control]');if(reset&&row){values.delete(row.dataset.bulkControl);render();}return true;}
   return false;

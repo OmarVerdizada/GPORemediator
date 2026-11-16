@@ -14,8 +14,16 @@ public static class WorkspaceEndpoints
         app.MapGet("/api/workflows/{id}",(string id,HttpContext ctx,WorkspaceWorkflows jobs)=>jobs.Get(id,Actor(ctx)));
         app.MapGet("/api/batches",(HttpContext ctx,WorkspaceWorkflows jobs)=>jobs.Batches(Actor(ctx)));
         app.MapGet("/api/batches/{id}",(string id,HttpContext ctx,WorkspaceWorkflows jobs,Store store)=>{
-            var batch=jobs.Batches(Actor(ctx)).SingleOrDefault(x=>x.Id==id)??throw new PolicyException("NOT_FOUND","Batch not found.");
+            var batch=jobs.GetBatch(id,Actor(ctx));
             return new{batch,plans=batch.PlanIds.Select(op=>store.Require<GpoWorkflowPlan>("gpo_plans",op))};
+        });
+        app.MapGet("/api/gpo/{id}/batch-result",(string id,HttpContext ctx,WorkspaceWorkflows jobs,Store store)=>{
+            var actor=Actor(ctx);
+            var source=BatchRecovery.Source(store,actor,id)??throw new PolicyException("NOT_FOUND","Batch operation not found.");
+            var batch=jobs.GetBatch(source.BatchId!,actor);
+            var recovery=store.List<WorkflowJob>("workflow_jobs")
+                .FirstOrDefault(job=>job.Action=="rollback"&&job.SourceWorkflowId==source.Id&&job.Actor.Equals(actor,StringComparison.OrdinalIgnoreCase));
+            return new{source,job=recovery??source,plans=batch.PlanIds.Select(op=>store.Require<GpoWorkflowPlan>("gpo_plans",op))};
         });
         app.MapPost("/api/workflows/preview",(PreviewSubmission request,HttpContext ctx,WorkspaceWorkflows jobs)=>{
             var job=jobs.Preview(request.RequestId,request.Batch,Token(ctx),Actor(ctx));return Results.Accepted("/api/workflows/"+job.Id,job);
@@ -32,7 +40,8 @@ public static class WorkspaceEndpoints
         app.MapGet("/api/workflows/{id}/report",(string id,HttpContext ctx,WorkspaceWorkflows jobs,Store store)=>{
             var job=jobs.Get(id,Actor(ctx));
             var ids=job.CompletedIds.Concat(job.PlanIds).Concat(job.CurrentOperationId is {} current?[current]:Array.Empty<string>()).Distinct().ToArray();
-            var runs=ids.Select(op=>store.Get<GpoWorkflowRun>("gpo_runs",op)).OfType<GpoWorkflowRun>().ToArray();
+            var runs=ids.Select(op=>store.Get<GpoWorkflowRun>("gpo_runs",op)).OfType<GpoWorkflowRun>()
+                .Select(GpoWorkflowService.HistoryContext).ToArray();
             var plans=ids.Select(op=>store.Get<GpoWorkflowPlan>("gpo_plans",op)).OfType<GpoWorkflowPlan>().ToArray();
             var payload=new{schemaVersion="2.0",product="GPO Remediator",generatedAt=job.UpdatedAt,job,runs,plans};
             if(ctx.Request.Query["format"]=="json")return Results.Json(new{payload,integrityHash=PolicyValues.Hash(payload)});

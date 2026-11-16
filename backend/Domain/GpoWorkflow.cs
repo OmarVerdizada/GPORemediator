@@ -80,7 +80,9 @@ public record GpoWorkflowResult(string State, string Message, string? BackupId, 
 }
 public record GpoWorkflowRun(string Id, GpoWorkflowPlan Plan, GpoWorkflowResult Result, string UpdatedAt, GpoConsent? Approval = null,
     string? CorrelationId = null, string? StartedAt = null, GpoStage[]? Stages = null, GpoLiveCheck[]? LiveChecks = null,
-    [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingDefault)] bool BatchStepRestored = false);
+    [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingDefault)] bool BatchStepRestored = false,
+    [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] string? ApplyWorkflowId = null,
+    [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] string? BatchRestoreWorkflowId = null);
 public record GpoStage(string Phase, string StartedAt, string? FinishedAt = null);
 public record GpoRollbackAnchor(GpoWorkflowPlan Plan, string PostFingerprint,
     GpoWorkflowPlan[]? BatchPlans = null, GpoWorkflowPlan? RefreshPlan = null, string? RestoredFromFingerprint = null);
