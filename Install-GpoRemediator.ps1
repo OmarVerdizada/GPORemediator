@@ -1,15 +1,19 @@
 param(
     [string]$PackagePath,
     [string]$ExpectedSha256,
-    [string]$Destination=(Join-Path $env:LOCALAPPDATA 'Programs\GpoRemediator'),
+    [string]$Destination,
     [switch]$Rollback,
     [switch]$StopRunning,
     [switch]$Start,
-    [switch]$DesktopShortcut
+    [switch]$DesktopShortcut,
+    [switch]$MachineService
 )
 $ErrorActionPreference='Stop'
 Import-Module (Join-Path $PSScriptRoot 'scripts/ReleasePackage.psm1') -Force
 . (Join-Path $PSScriptRoot 'scripts/ServiceControl.ps1')
+if([string]::IsNullOrWhiteSpace($Destination)){
+    $Destination=if($MachineService){Join-Path $env:ProgramFiles 'GpoRemediator'}else{Join-Path $env:LOCALAPPDATA 'Programs\GpoRemediator'}
+}
 $root=Assert-PackagePath $Destination
 $forbidden=@([IO.Path]::GetPathRoot($root),$env:SystemRoot,$env:USERPROFILE,$env:ProgramFiles,$env:ProgramData,$env:LOCALAPPDATA)|Where-Object{$_}
 if($forbidden|Where-Object{[IO.Path]::GetFullPath($_).TrimEnd('\') -ieq $root.TrimEnd('\')}){throw 'Choose a dedicated application install directory.'}
@@ -55,15 +59,18 @@ try{
     $scripts=Join-Path $root 'scripts';$null=[IO.Directory]::CreateDirectory($scripts)
     Copy-Item -LiteralPath (Join-Path $target 'scripts/ReleasePackage.psm1') -Destination $scripts -Force
     Copy-Item -LiteralPath (Join-Path $target 'scripts/Start-Installed.ps1') -Destination $scripts -Force
+    Copy-Item -LiteralPath (Join-Path $target 'scripts/Install-MachineService.ps1') -Destination $scripts -Force
     $launcher='@echo off'+"`r`n"+'powershell.exe -NoProfile -ExecutionPolicy RemoteSigned -File "%~dp0scripts\Start-Installed.ps1" -InstallRoot "%~dp0"'+"`r`n"
     [IO.File]::WriteAllText((Join-Path $root 'GpoRemediator.cmd'),$launcher,[Text.ASCIIEncoding]::new())
     $previous=if($old -and [string]$old.current -ine $relative){[string]$old.current}elseif($old){[string]$old.previous}else{''}
     $previousHash=if($old -and [string]$old.current -ine $relative){[string]$old.manifestSha256}elseif($old){[string]$old.previousManifestSha256}else{''}
     Write-InstallState $pointerPath @{product='GPO Remediator';current=$relative;previous=$previous;previousManifestSha256=$previousHash;version=$manifest.version;stateSchema=$manifest.stateSchema;manifestSha256=(Get-PackageHash (Join-Path $target 'release/package-files.json') $false);activatedAt=[DateTimeOffset]::UtcNow.ToString('O')}
     if($DesktopShortcut){try{
-        $shell=New-Object -ComObject WScript.Shell;$link=$shell.CreateShortcut((Join-Path ([Environment]::GetFolderPath('Desktop')) 'GPO Remediator.lnk'))
+        $desktop=if($MachineService){[Environment]::GetFolderPath('CommonDesktopDirectory')}else{[Environment]::GetFolderPath('Desktop')}
+        $shell=New-Object -ComObject WScript.Shell;$link=$shell.CreateShortcut((Join-Path $desktop 'GPO Remediator.lnk'))
         $link.TargetPath=Join-Path $root 'GpoRemediator.cmd';$link.WorkingDirectory=$root;$link.Save()
     }catch{Write-Warning ('Release activated; desktop shortcut could not be created: '+$_.Exception.Message)}}
     Write-Output ('Activated GPO Remediator '+$manifest.version+' at '+$target+'. ProgramData configuration, databases and backups were preserved.')
 }finally{$lock.Dispose()}
-if($Start){Start-Process -FilePath (Join-Path $root 'GpoRemediator.cmd') -WindowStyle Hidden}
+if($MachineService){& (Join-Path $root 'scripts\Install-MachineService.ps1') -ProjectRoot $root}
+elseif($Start){Start-Process -FilePath (Join-Path $root 'GpoRemediator.cmd') -WindowStyle Hidden}

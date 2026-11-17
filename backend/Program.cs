@@ -57,7 +57,10 @@ if(!ownsLock) throw new InvalidOperationException("Another GPO Remediator proces
 builder.WebHost.ConfigureKestrel(o=>{o.AddServerHeader=false;o.Limits.MaxRequestBodySize=32*1024;o.Limits.RequestHeadersTimeout=TimeSpan.FromSeconds(15);});
 builder.Services.ConfigureHttpJsonOptions(o=>o.SerializerOptions.Converters.Add(new System.Text.Json.Serialization.JsonStringEnumConverter()));
 builder.Services.AddAntiforgery(o=> { o.HeaderName="X-CSRF-Token"; o.Cookie.Name="GpoRemediator.Csrf"; o.Cookie.HttpOnly=true; o.Cookie.SameSite=SameSiteMode.Strict; o.Cookie.SecurePolicy=CookieSecurePolicy.SameAsRequest; });
-builder.Services.AddDataProtection().PersistKeysToFileSystem(new DirectoryInfo(Path.Combine(dataRoot,"Keys"))).SetApplicationName("GpoRemediator").ProtectKeysWithDpapi();
+// The backend is computer-scoped and runs under LocalSystem. Browser callers are
+// still authenticated independently with Negotiate; machine-scope DPAPI only
+// protects the server's durable keys from becoming tied to an interactive logon.
+builder.Services.AddDataProtection().PersistKeysToFileSystem(new DirectoryInfo(Path.Combine(dataRoot,"Keys"))).SetApplicationName("GpoRemediator").ProtectKeysWithDpapi(true);
 builder.Services.AddAuthentication(NegotiateDefaults.AuthenticationScheme).AddNegotiate();
 builder.Services.AddAuthorization();
 builder.Services.AddRateLimiter(OperatorSecurity.ConfigureLoginRateLimit);

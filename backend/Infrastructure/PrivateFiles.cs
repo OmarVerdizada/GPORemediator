@@ -18,7 +18,7 @@ public static class PrivateFiles
                 if(!xml.Descendants().Any(element=>element.Name.LocalName=="masterKey"))continue;
                 // Old releases never persisted encrypted application records; retiring
                 // these keys intentionally invalidates old browser antiforgery tokens.
-                File.WriteAllBytes(Path.Combine(recovery,Path.GetFileName(file)+".dpapi"),ProtectedData.Protect(bytes,null,DataProtectionScope.CurrentUser));
+                File.WriteAllBytes(Path.Combine(recovery,Path.GetFileName(file)+".dpapi"),ProtectedData.Protect(bytes,null,DataProtectionScope.LocalMachine));
                 File.Delete(file);
             }finally{CryptographicOperations.ZeroMemory(bytes);}
         }

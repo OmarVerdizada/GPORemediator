@@ -1,6 +1,6 @@
 /* Real optional batch UI, mocked durable HTTP jobs. Never contacts AD. */
 const fs=require('node:fs'),path=require('node:path'),http=require('node:http'),assert=require('node:assert/strict'),{chromium}=require('playwright');
-const root=path.resolve(__dirname,'../frontend/source'),shots=path.resolve(__dirname,'../work/screens/3.18.10');fs.mkdirSync(shots,{recursive:true});
+const root=path.resolve(__dirname,'../frontend/source'),shots=path.resolve(__dirname,'../work/screens/3.18.11');fs.mkdirSync(shots,{recursive:true});
 const mappings=JSON.parse(fs.readFileSync(path.resolve(root,'../../backend/data/gpo-production-mappings.json'),'utf8')).mappings;
 const gpo={id:'11111111-1111-1111-1111-111111111111',name:'Bulk test policy',protected:false,selectable:true},scope='OU=Mixed,DC=test,DC=local',endpoint='OU=Sessions,DC=test,DC=local';
 const scopes=[{dn:'DC=test,DC=local',name:'test.local',kind:'Domain'},{dn:scope,name:'Mixed users and computers',kind:'OU'},{dn:endpoint,name:'Session computers',kind:'OU'},...Array.from({length:5000},(_,i)=>({dn:`OU=Unit${i},DC=test,DC=local`,name:`Unit${i}`,kind:'OU'}))];

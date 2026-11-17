@@ -24,7 +24,7 @@ public sealed class Store : IDisposable
             var sealedKey=File.ReadAllBytes(keyPath);
             try
             {
-                var key=ProtectedData.Unprotect(sealedKey,MacEntropy,DataProtectionScope.CurrentUser);
+                var key=ProtectedData.Unprotect(sealedKey,MacEntropy,DataProtectionScope.LocalMachine);
                 if(key.Length!=32){CryptographicOperations.ZeroMemory(key);throw new InvalidOperationException("Invalid audit MAC key length.");}
                 return key;
             }
@@ -34,7 +34,7 @@ public sealed class Store : IDisposable
             if(Convert.ToInt64(c.ExecuteScalar())!=0)
                 throw new InvalidOperationException("Audit MAC key is missing but authenticated records exist. Restore the original protected key; do not regenerate it.");
         var created=RandomNumberGenerator.GetBytes(32);
-        var sealedNew=ProtectedData.Protect(created,MacEntropy,DataProtectionScope.CurrentUser);
+        var sealedNew=ProtectedData.Protect(created,MacEntropy,DataProtectionScope.LocalMachine);
         try
         {
             // Fail closed if another process won the creation race. Never overwrite a key.

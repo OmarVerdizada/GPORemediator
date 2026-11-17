@@ -1,6 +1,6 @@
-# GPO Remediator 3.18.10
+# GPO Remediator 3.18.11
 
-3.18.10 reopens historical bulk results directly, preserves recorded bulk steps across service restarts and fixes keyboard focus in closed Settings. See [release notes](docs/RELEASE-3.18.10.md).
+3.18.11 adds a computer-wide management host so one protected backend can serve multiple authenticated Windows sessions without sharing ProgramData access or creating port/state conflicts. See [release notes](docs/RELEASE-3.18.11.md).
 
 3.18.9 adds a structured Bulk Apply workspace and keeps the Operations drawer up to date during re-verification. See [release notes](docs/RELEASE-3.18.9.md).
 

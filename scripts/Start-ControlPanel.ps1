@@ -6,6 +6,16 @@ $ErrorActionPreference='Stop'
 $projectRoot=Split-Path $PSScriptRoot -Parent
 $workRoot=Join-Path $env:ProgramData 'GpoRemediator\State'
 try {
+    $url=('http://127.0.0.1:{0}' -f $Port)
+    try {
+        $health=Invoke-WebRequest -UseBasicParsing -Uri ($url+'/api/v1/health/live') -TimeoutSec 2
+        $payload=$health.Content|ConvertFrom-Json
+        if($health.StatusCode -eq 200 -and [string]$payload.status -ceq 'live' -and [string]$payload.apiVersion -ceq '1.0' -and [string]$payload.productVersion -match '^3\.'){
+            Start-Process $url | Out-Null;exit 0
+        }
+    } catch { }
+    $task=Get-ScheduledTask -TaskName 'GPO Remediator Policy Operations' -ErrorAction SilentlyContinue
+    if($task){throw 'MACHINE_SERVICE_OFFLINE: The computer-wide GPO Remediator service is installed but is not ready. Ask a local administrator to start or repair the scheduled service. Operator sessions must not create a second backend.'}
     New-Item -ItemType Directory -Path $workRoot -Force | Out-Null
     $panel=Join-Path $projectRoot 'Control-Panel.ps1'
     if (!(Test-Path -LiteralPath $panel)) { throw 'Control-Panel.ps1 is missing. Extract the complete project archive before starting.' }
