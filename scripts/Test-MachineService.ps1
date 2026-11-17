@@ -13,6 +13,8 @@ Check ($installer -match '/api/v1/health/live') 'installation waits for actual b
 Check ($installer -match "payload\.status -ceq 'live'" -and $installer -match "payload\.apiVersion -ceq '1\.0'") 'health probe validates the GPO Remediator API contract'
 Check ($installer -match 'DataProtectionScope\]::CurrentUser' -and $installer -match 'DataProtectionScope\]::LocalMachine') 'legacy audit key migration is explicit and preserves the database'
 Check ($installer -match '\[Array\]::Clear' -and $installer -notmatch 'CryptographicOperations') 'sensitive byte cleanup is compatible with Windows PowerShell 5.1'
+Check ($installer -match 'PRESERVE_AND_INITIALIZE' -and $installer -match 'GpoRemediator\.LegacyState-' -and $installer -match 'Move-Item -LiteralPath \$stateRoot') 'foreign DPAPI recovery requires explicit confirmation and preserves the exact state root'
+Check ($installer -notmatch 'Remove-Item -LiteralPath \$stateRoot') 'foreign DPAPI recovery never deletes the legacy state root'
 Check ($program -match 'ProtectKeysWithDpapi\(true\)') 'ASP.NET server keys use machine DPAPI'
 Check ($store -notmatch 'DataProtectionScope\.CurrentUser' -and $store -match 'DataProtectionScope\.LocalMachine') 'audit integrity key is no longer tied to an interactive session'
 $probe=$starter.IndexOf('/api/v1/health/live',[StringComparison]::Ordinal)

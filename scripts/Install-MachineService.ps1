@@ -1,7 +1,9 @@
 param(
     [ValidateRange(1024,65535)][int]$Port=5080,
     [ValidateSet('Install','Status','Remove')][string]$Action='Install',
-    [string]$ProjectRoot=(Split-Path $PSScriptRoot -Parent)
+    [string]$ProjectRoot=(Split-Path $PSScriptRoot -Parent),
+    [switch]$InitializeFreshMachineState,
+    [string]$ConfirmFreshState
 )
 $ErrorActionPreference='Stop'
 $taskName='GPO Remediator Policy Operations'
@@ -35,7 +37,7 @@ function Convert-AuditKeyToMachineScope {
         } catch {
             if($plain){Clear-SensitiveBytes $plain;$plain=$null}
             try {$plain=[Security.Cryptography.ProtectedData]::Unprotect($sealed,$entropy,[Security.Cryptography.DataProtectionScope]::CurrentUser)}
-            catch {throw 'MACHINE_SERVICE_KEY_MIGRATION: The existing audit key belongs to another Windows account. Run this one-time installer as the account that previously launched GPO Remediator.'}
+            catch {throw 'MACHINE_SERVICE_KEY_MIGRATION: The existing audit key belongs to another Windows DPAPI profile or computer. Run as its original identity, or explicitly preserve the incompatible state and initialize a fresh machine state.'}
             if($plain.Length -ne 32){throw 'MACHINE_SERVICE_KEY_LENGTH: Existing audit key is invalid.'}
             $replacement=[Security.Cryptography.ProtectedData]::Protect($plain,$entropy,[Security.Cryptography.DataProtectionScope]::LocalMachine)
             $temp=$keyPath+'.machine-'+[guid]::NewGuid().ToString('N')+'.tmp'
@@ -62,6 +64,22 @@ function Reset-BrowserProtectionKeys {
     return ('Browser session keys rotated for the machine service; prior local cookies were invalidated. Previous encrypted key files were preserved at '+$recovery+'.')
 }
 
+function Preserve-IncompatibleState {
+    if(!$InitializeFreshMachineState -or $ConfirmFreshState -cne 'PRESERVE_AND_INITIALIZE'){
+        throw 'MACHINE_SERVICE_FRESH_STATE_CONFIRMATION: Re-run with -InitializeFreshMachineState -ConfirmFreshState PRESERVE_AND_INITIALIZE only if the old DPAPI profile is unavailable. Existing state will be preserved, not deleted, and the active audit history will start fresh.'
+    }
+    $stateRoot=[IO.Path]::GetFullPath((Join-Path $env:ProgramData 'GpoRemediator')).TrimEnd('\')
+    $expected=[IO.Path]::GetFullPath((Join-Path $env:ProgramData 'GpoRemediator')).TrimEnd('\')
+    if($stateRoot -cne $expected -or !(Test-Path -LiteralPath $stateRoot -PathType Container)){throw 'MACHINE_SERVICE_STATE_PATH: The exact legacy state root was not found.'}
+    $item=Get-Item -LiteralPath $stateRoot -Force
+    if(($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0){throw 'MACHINE_SERVICE_STATE_LINK: Legacy state cannot be a junction or symbolic link.'}
+    $suffix=(Get-Date -Format 'yyyyMMdd-HHmmss')+'-'+[guid]::NewGuid().ToString('N').Substring(0,8)
+    $preserved=Join-Path $env:ProgramData ('GpoRemediator.LegacyState-'+$suffix)
+    if(Test-Path -LiteralPath $preserved){throw 'MACHINE_SERVICE_STATE_COLLISION: The preservation target already exists.'}
+    Move-Item -LiteralPath $stateRoot -Destination $preserved -ErrorAction Stop
+    return [IO.Path]::GetFullPath($preserved)
+}
+
 if($Action -eq 'Status'){
     $task=Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
     if(!$task){[pscustomobject]@{Installed=$false;Task=$taskName;State='NotInstalled'};exit 0}
@@ -80,7 +98,13 @@ if((Get-Item -LiteralPath $root -Force).Attributes -band [IO.FileAttributes]::Re
 . (Join-Path $root 'scripts\ServiceControl.ps1')
 $running=Get-RemediatorService
 if($running){$null=Invoke-RemediatorServiceAction stop}
-$migration=Convert-AuditKeyToMachineScope
+$preservedState=''
+try {$migration=Convert-AuditKeyToMachineScope}
+catch {
+    if($_.Exception.Message -notmatch '^MACHINE_SERVICE_KEY_MIGRATION:'){throw}
+    $preservedState=Preserve-IncompatibleState
+    $migration=('The incompatible user-bound state was preserved unchanged at '+$preservedState+'. A fresh machine-scoped audit history will be initialized.')
+}
 $rotation=Reset-BrowserProtectionKeys
 
 $powershell=Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
@@ -105,4 +129,5 @@ do {
 if(!$ready){throw 'MACHINE_SERVICE_NOT_READY: The startup task was registered, but the backend did not become healthy. Review the protected startup diagnostics and Task Scheduler history.'}
 Write-Output $migration
 Write-Output $rotation
+if($preservedState){Write-Output ('Preserved legacy state: '+$preservedState)}
 Write-Output ('Machine service installed and healthy. Any Windows session may now open http://127.0.0.1:'+ $Port +'; each caller is authenticated and audited as that Windows identity.')
