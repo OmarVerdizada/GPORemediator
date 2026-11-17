@@ -865,7 +865,7 @@
                   },
                   {
                       "path":  "scripts/Install-MachineService.ps1",
-                      "sha256":  "6DD3F4284964FAF4CC8F2576579DB9F7E06D5C1729F365882B5C609FFBFAE9D9",
+                      "sha256":  "57D67E96BD5FAEA7B3355A50C1081261C886E633C70873614A8C482CB1CB5733",
                       "mode":  "text-lf"
                   },
                   {
@@ -1075,7 +1075,7 @@
                   },
                   {
                       "path":  "scripts/Test-MachineService.ps1",
-                      "sha256":  "9A38717E58B9A03D3B7C0954DD1FCEBF77859D5EEFDD67AFDC86C574B9FB8F5B",
+                      "sha256":  "FFA9B4AFDEB37B40A6A3831A9EC878B40A179DAAA0A13B4930B85CA5E757D65E",
                       "mode":  "text-lf"
                   },
                   {

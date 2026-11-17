@@ -15,6 +15,11 @@ function Assert-Administrator {
     if(!$principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)){throw 'MACHINE_SERVICE_ADMIN_REQUIRED: Run this script once from an elevated Windows PowerShell window.'}
 }
 
+function Clear-SensitiveBytes {
+    param([byte[]]$Bytes)
+    if($null -ne $Bytes -and $Bytes.Length -gt 0){[Array]::Clear($Bytes,0,$Bytes.Length)}
+}
+
 function Convert-AuditKeyToMachineScope {
     $keyPath=Join-Path $env:ProgramData 'GpoRemediator\Data\audit-hmac-key.dpapi'
     if(!(Test-Path -LiteralPath $keyPath -PathType Leaf)){return 'No existing audit key required migration.'}
@@ -28,7 +33,7 @@ function Convert-AuditKeyToMachineScope {
             if($plain.Length -ne 32){throw 'Invalid machine audit key length.'}
             return 'Audit key already uses computer-scoped DPAPI.'
         } catch {
-            if($plain){[Security.Cryptography.CryptographicOperations]::ZeroMemory($plain);$plain=$null}
+            if($plain){Clear-SensitiveBytes $plain;$plain=$null}
             try {$plain=[Security.Cryptography.ProtectedData]::Unprotect($sealed,$entropy,[Security.Cryptography.DataProtectionScope]::CurrentUser)}
             catch {throw 'MACHINE_SERVICE_KEY_MIGRATION: The existing audit key belongs to another Windows account. Run this one-time installer as the account that previously launched GPO Remediator.'}
             if($plain.Length -ne 32){throw 'MACHINE_SERVICE_KEY_LENGTH: Existing audit key is invalid.'}
@@ -39,10 +44,10 @@ function Convert-AuditKeyToMachineScope {
             return 'Audit key migrated to computer-scoped DPAPI; the audit database was preserved.'
         }
     } finally {
-        if($plain){[Security.Cryptography.CryptographicOperations]::ZeroMemory($plain)}
-        if($replacement){[Security.Cryptography.CryptographicOperations]::ZeroMemory($replacement)}
-        [Security.Cryptography.CryptographicOperations]::ZeroMemory($sealed)
-        [Security.Cryptography.CryptographicOperations]::ZeroMemory($entropy)
+        if($plain){Clear-SensitiveBytes $plain}
+        if($replacement){Clear-SensitiveBytes $replacement}
+        Clear-SensitiveBytes $sealed
+        Clear-SensitiveBytes $entropy
     }
 }
 

@@ -7,6 +7,7 @@
 - Browser callers continue to authenticate with Windows Negotiate and remain independently attributed in sessions and audit events.
 - Server-side data-protection and audit-integrity keys now use machine-scope DPAPI. The one-time elevated installer migrates the existing audit HMAC key without replacing the audit database and rotates only browser-session protection keys.
 - Release installation supports `-MachineService`; its default destination is Program Files and a requested desktop shortcut is placed on the Public Desktop.
+- The machine-service migration script uses Windows PowerShell 5.1-compatible sensitive-buffer cleanup on Windows 10 and Windows Server 2019.
 
 ## Installation
 
