@@ -185,6 +185,12 @@ function Set-ServiceDot([string]$hex) { Set-Dot $ui.StatusDot $hex }
 
 function Get-RuntimeState {
     if ($script:runtimeStateCache -and [DateTime]::UtcNow -lt $script:runtimeStateChecked.AddSeconds(3)) { return $script:runtimeStateCache }
+    if($MachineClient){
+        $task=Get-ScheduledTask -TaskName $machineTaskName -ErrorAction SilentlyContinue
+        $state=if($task){@{state='Machine task ready';detail='Protected SYSTEM backend starts only when requested';color='#16A34A';ready=$true}}else{@{state='Task missing';detail='A local administrator must install the managed machine service';color='#DC2626';ready=$false}}
+        $script:runtimeStateCache=$state; $script:runtimeStateChecked=[DateTime]::UtcNow
+        return $state
+    }
     $manifest = Join-Path $projectRoot 'runtime\runtime-install.json'
     $installed = (Test-Path -LiteralPath $runtimeExe) -and (Test-Path -LiteralPath $runtimeMarker) -and (Test-Path -LiteralPath $manifest)
     if ($installed -and $script:releaseReady) {
@@ -219,7 +225,6 @@ function Start-Launcher([string]$Mode = 'Auto', [switch]$RepairPackage) {
     if ($script:launcher -and !$script:launcher.HasExited) { return }
     $machineTask=Get-ScheduledTask -TaskName $machineTaskName -ErrorAction SilentlyContinue
     if($machineTask){
-        if($MachineClient){throw 'Starting a stopped machine backend requires administrator maintenance. Normal operator sessions can Open, Restart or Stop a running backend.'}
         if($RepairPackage){throw 'Machine-service runtime repair must be performed by installing a verified complete release; the Control Center will not replace task-owned binaries.'}
         Start-ScheduledTask -TaskName $machineTaskName -ErrorAction Stop
         $script:pendingUntil=[DateTime]::UtcNow.AddSeconds(5)
@@ -298,13 +303,13 @@ function Refresh-Panel {
     $ui.RuntimeState.Text = [string]$runtime.state; $ui.RuntimeDetail.Text=[string]$runtime.detail; Set-Dot $ui.RuntimeDot ([string]$runtime.color)
     $ui.ConfigState.Text = [string]$config.state; $ui.ConfigDetail.Text=[string]$config.detail; Set-Dot $ui.ConfigDot ([string]$config.color)
 
-    $ui.Start.IsEnabled = !$MachineClient -and !$service -and !$launching -and !$pending -and ([bool]$runtime.ready -or $script:releaseReady)
+    $machineTask=Get-ScheduledTask -TaskName $machineTaskName -ErrorAction SilentlyContinue
+    $ui.Start.IsEnabled = !$service -and !$launching -and !$pending -and $(if($MachineClient){[bool]$machineTask -and [bool]$runtime.ready}else{[bool]$runtime.ready -or $script:releaseReady})
     $ui.Open.IsEnabled = [bool]$service -and $service.ready -ne $false
     $ui.Stop.IsEnabled = [bool]$service -and !$pending
     $configReady = $MachineClient -or ([bool]$config.exists -and $null -ne $config.cfg -and [string]$config.state -notin @('Incomplete','Invalid config','First setup'))
     $ui.Restart.IsEnabled = $ui.Stop.IsEnabled -and (!$service -or [string]$service.mode -ne 'Setup' -or $configReady)
     $ui.Preflight.IsEnabled = !$MachineClient -and [bool]$config.exists -and !$pending
-    $machineTask=Get-ScheduledTask -TaskName $machineTaskName -ErrorAction SilentlyContinue
     $ui.Repair.IsEnabled = !$MachineClient -and !$machineTask -and !$service -and !$launching -and !$pending -and $script:releaseReady
 
     if ($service) {
@@ -332,7 +337,7 @@ function Refresh-Panel {
     } else {
         $ui.Restart.Content='Restart service'
         $ui.Status.Text = if ($config.exists) { 'Service stopped' } else { 'Initial setup required' }
-        $ui.Address.Text = if ($config.exists) { 'Use Start workspace to continue.' } else { 'Start opens the safe configuration service.' }
+        $ui.Address.Text = if ($MachineClient -and $machineTask) { 'Use Start workspace when you need the backend.' } elseif ($config.exists) { 'Use Start workspace to continue.' } else { 'Start opens the safe configuration service.' }
         $ui.Environment.Text='Automatic'; $ui.ModeState.Text='AUTO'; $ui.ModeDetail.Text='Service is not running'; $ui.TopMode.Text='READY'; Set-ServiceDot '#94A3B8'; Set-Dot $ui.ModeDot '#94A3B8'
     }
 
@@ -364,7 +369,7 @@ function Refresh-Panel {
     } else { $script:rawLog=''; $ui.Log.Text="$selectedLog has no entries yet." }
 }
 
-$ui.Start.Add_Click({ try { $script:autoOpen=$true; $script:openedForLaunch=$false; Start-Launcher -Mode 'Auto'; $ui.Message.Text='Starting the verified local package. The browser opens automatically when readiness passes.'; Refresh-Panel } catch { $ui.Message.Text=$_.Exception.Message } })
+$ui.Start.Add_Click({ try { $script:autoOpen=$true; $script:openedForLaunch=$false; Start-Launcher -Mode 'Auto'; $ui.Message.Text='Starting the protected machine backend. The browser opens automatically when readiness passes.'; Refresh-Panel } catch { $ui.Message.Text=$_.Exception.Message } })
 $ui.Open.Add_Click({ Open-Product })
 $window.FindName('CopyStatus').Add_Click({
     try {

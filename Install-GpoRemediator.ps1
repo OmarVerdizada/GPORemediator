@@ -6,7 +6,9 @@ param(
     [switch]$StopRunning,
     [switch]$Start,
     [switch]$DesktopShortcut,
-    [switch]$MachineService
+    [switch]$MachineService,
+    [string]$MachineOperatorPrincipal='S-1-5-11',
+    [switch]$StartMachineServiceAtBoot
 )
 $ErrorActionPreference='Stop'
 Import-Module (Join-Path $PSScriptRoot 'scripts/ReleasePackage.psm1') -Force
@@ -73,5 +75,5 @@ try{
     }catch{Write-Warning ('Release activated; desktop shortcut could not be created: '+$_.Exception.Message)}}
     Write-Output ('Activated GPO Remediator '+$manifest.version+' at '+$target+'. ProgramData configuration, databases and backups were preserved.')
 }finally{$lock.Dispose()}
-if($MachineService){& (Join-Path $root 'scripts\Install-MachineService.ps1') -ProjectRoot $root}
+if($MachineService){& (Join-Path $root 'scripts\Install-MachineService.ps1') -ProjectRoot $root -OperatorPrincipal $MachineOperatorPrincipal -StartAtBoot:$StartMachineServiceAtBoot}
 elseif($Start){Start-Process -FilePath (Join-Path $root 'GpoRemediator.cmd') -WindowStyle Hidden}

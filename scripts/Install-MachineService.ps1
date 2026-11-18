@@ -5,7 +5,9 @@ param(
     [switch]$InitializeFreshMachineState,
     [string]$ConfirmFreshState,
     [switch]$AllowDevelopmentProjectRoot,
-    [string]$ConfirmDevelopmentProjectRoot
+    [string]$ConfirmDevelopmentProjectRoot,
+    [string]$OperatorPrincipal='S-1-5-11',
+    [switch]$StartAtBoot
 )
 $ErrorActionPreference='Stop'
 $taskName='GPO Remediator Policy Operations'
@@ -24,6 +26,28 @@ function Assert-Administrator {
 function Clear-SensitiveBytes {
     param([byte[]]$Bytes)
     if($null -ne $Bytes -and $Bytes.Length -gt 0){[Array]::Clear($Bytes,0,$Bytes.Length)}
+}
+
+function Resolve-OperatorSid {
+    param([Parameter(Mandatory=$true)][string]$Principal)
+    $value=$Principal.Trim()
+    if([string]::IsNullOrWhiteSpace($value)){throw 'MACHINE_SERVICE_OPERATOR_REQUIRED: OperatorPrincipal cannot be empty.'}
+    try {
+        if($value -match '^S-1-'){return [Security.Principal.SecurityIdentifier]::new($value).Value}
+        return ([Security.Principal.NTAccount]::new($value)).Translate([Security.Principal.SecurityIdentifier]).Value
+    } catch {throw ('MACHINE_SERVICE_OPERATOR_INVALID: Could not resolve OperatorPrincipal "'+$value+'" to a Windows SID.')}
+}
+
+function Set-TaskOperatorAccess {
+    param([Parameter(Mandatory=$true)][string]$Name,[Parameter(Mandatory=$true)][string]$OperatorSid)
+    $scheduler=New-Object -ComObject 'Schedule.Service'
+    $scheduler.Connect()
+    $registered=$scheduler.GetFolder('\').GetTask($Name)
+    # SYSTEM and local Administrators retain full control. The selected operator
+    # trustee receives generic read/execute only: it can inspect and run this
+    # one protected task, but cannot modify its action, principal, ACL or delete it.
+    $sddl='O:BAG:SYD:P(A;;FA;;;SY)(A;;FA;;;BA)(A;;GRGX;;;'+$OperatorSid+')'
+    $registered.SetSecurityDescriptor($sddl,0)
 }
 
 function Convert-AuditKeyToMachineScope {
@@ -116,14 +140,18 @@ catch {
     $migration=('The incompatible user-bound state was preserved unchanged at '+$preservedState+'. A fresh machine-scoped audit history will be initialized.')
 }
 $rotation=Reset-BrowserProtectionKeys
+$operatorSid=Resolve-OperatorSid -Principal $OperatorPrincipal
 
 $powershell=Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
 $arguments=if($installed){'-NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -WindowStyle Hidden -File "{0}" -InstallRoot "{1}" -NoBrowser' -f $launcher,$root}else{'-NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -WindowStyle Hidden -File "{0}" -Port {1} -NoBrowser' -f $launcher,$Port}
 $taskAction=New-ScheduledTaskAction -Execute $powershell -Argument $arguments -WorkingDirectory $root
-$trigger=New-ScheduledTaskTrigger -AtStartup
 $principal=New-ScheduledTaskPrincipal -UserId 'SYSTEM' -LogonType ServiceAccount -RunLevel Highest
 $settings=New-ScheduledTaskSettingsSet -StartWhenAvailable -RestartCount 5 -RestartInterval (New-TimeSpan -Minutes 1) -MultipleInstances IgnoreNew -ExecutionTimeLimit ([TimeSpan]::Zero)
-$null=Register-ScheduledTask -TaskName $taskName -Action $taskAction -Trigger $trigger -Principal $principal -Settings $settings -Description 'Computer-wide GPO Remediator backend. Interactive Windows sessions connect through localhost and are audited separately.' -Force
+$definitionParams=@{Action=$taskAction;Principal=$principal;Settings=$settings;Description='On-demand computer-wide GPO Remediator backend. Interactive Windows sessions connect through localhost and are audited separately.'}
+if($StartAtBoot){$definitionParams.Trigger=New-ScheduledTaskTrigger -AtStartup}
+$definition=New-ScheduledTask @definitionParams
+$null=Register-ScheduledTask -TaskName $taskName -InputObject $definition -Force
+Set-TaskOperatorAccess -Name $taskName -OperatorSid $operatorSid
 Start-ScheduledTask -TaskName $taskName
 
 $deadline=[DateTimeOffset]::UtcNow.AddSeconds(45);$ready=$false
@@ -140,4 +168,4 @@ if(!$ready){throw 'MACHINE_SERVICE_NOT_READY: The startup task was registered, b
 Write-Output $migration
 Write-Output $rotation
 if($preservedState){Write-Output ('Preserved legacy state: '+$preservedState)}
-Write-Output ('Machine service installed and healthy. Any Windows session may now open http://127.0.0.1:'+ $Port +'; each caller is authenticated and audited as that Windows identity.')
+Write-Output ('Machine service installed and healthy in '+$(if($StartAtBoot){'start-at-boot'}else{'on-demand'})+' mode. Authorized Windows sessions may start the protected task and open http://127.0.0.1:'+ $Port +'; each caller is authenticated and audited as that Windows identity.')

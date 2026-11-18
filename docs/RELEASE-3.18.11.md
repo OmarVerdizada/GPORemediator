@@ -2,8 +2,8 @@
 
 ## Computer-wide management host
 
-- Adds an optional computer-wide startup service running under LocalSystem. One backend owns the protected ProgramData state and port; every interactive Windows session connects to that same loopback service.
-- The launcher now probes the shared service first and opens the UI without reading or rewriting ProgramData. If the installed service is offline, it reports a repairable service error instead of starting a competing backend.
+- Adds an optional computer-wide on-demand task running under LocalSystem. One backend owns the protected ProgramData state and port; every interactive Windows session connects to that same loopback service.
+- The launcher probes the shared service first and opens the UI without reading or rewriting ProgramData. If the registered service is offline, it opens the on-demand Control Center so an authorized operator can start the protected task instead of creating a competing backend.
 - Browser callers continue to authenticate with Windows Negotiate and remain independently attributed in sessions and audit events.
 - Server-side data-protection and audit-integrity keys now use machine-scope DPAPI. The one-time elevated installer migrates the existing audit HMAC key without replacing the audit database and rotates only browser-session protection keys.
 - Release installation supports `-MachineService`; its default destination is Program Files and a requested desktop shortcut is placed on the Public Desktop.
@@ -15,10 +15,11 @@
 - Removes the duplicate top-level Control Center CMD. Administrator-only maintenance remains an internal script instead of a competing daily launcher.
 - Production machine-service registration now rejects mutable checkout and user-profile roots by default. The LocalSystem task must run from a verified managed installation (normally under Program Files), preventing a standard user from replacing code that executes as SYSTEM. A conspicuous, explicit confirmation remains available only for isolated development environments.
 - Managed installation now copies the machine-service lifecycle dependency into the stable install root before task registration, so `-MachineService` does not depend on files outside the verified release.
+- Machine service is now on-demand by default: it remains registered but does not start at Windows boot. The selected operator trustee receives read/run access to that single protected task, while SYSTEM and Administrators retain task management rights. Control Center can therefore Start and gracefully Stop the backend without elevation. Boot startup remains an explicit `-StartMachineServiceAtBoot` option.
 
 ## Installation
 
-From an elevated Windows PowerShell window, install a verified release with `Install-GpoRemediator.ps1 ... -MachineService -DesktopShortcut`. Its default destination is the protected `Program Files\GpoRemediator` managed-install root.
+From an elevated Windows PowerShell window, install a verified release with `Install-GpoRemediator.ps1 ... -MachineService -MachineOperatorPrincipal 'DOMAIN\GPO-Operators' -DesktopShortcut`. Its default destination is the protected `Program Files\GpoRemediator` managed-install root. Omit `-StartMachineServiceAtBoot` to retain the default operator-controlled Start/Stop behavior.
 
 Registering a checkout directly as LocalSystem is not a production installation. In an isolated developer VM only, the risk must be accepted explicitly:
 

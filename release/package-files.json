@@ -225,7 +225,7 @@
                   },
                   {
                       "path":  "Control-Panel.ps1",
-                      "sha256":  "5C1667F99B3FA5C23E3EA9B3505762E90A4F49A40EDD596CB24772EF62B05AB1",
+                      "sha256":  "71DD08C5CAE24E528F5CF2CFE0C73FD567FD4E4C9D516EB10A7D6F4592991D0A",
                       "mode":  "text-lf"
                   },
                   {
@@ -785,12 +785,12 @@
                   },
                   {
                       "path":  "Install-GpoRemediator.ps1",
-                      "sha256":  "0C9107F4E4316F465B99120FCC0C715B4EBF2643ADB3E9931C628D9536126C25",
+                      "sha256":  "9C791046DB96962B89BBDAC9CFE34BA545AB02B26A572F746C80CEAD5748421B",
                       "mode":  "text-lf"
                   },
                   {
                       "path":  "README.md",
-                      "sha256":  "CDC91383B71DF55047B8B23B62FD00EC8340DF02B1DDBFBC775D57278D72CF38",
+                      "sha256":  "0C8C4D26A1C7EE064D6B6DE0967667DBE87D7EA86A068313CA60D03CE70C38FA",
                       "mode":  "text-lf"
                   },
                   {
@@ -865,7 +865,7 @@
                   },
                   {
                       "path":  "scripts/Install-MachineService.ps1",
-                      "sha256":  "B8B9C39B13000493CD981C1008114BA4792894B5C50EC60077D2318003677D95",
+                      "sha256":  "3A7537828481C47E47E19508C62E9CC22B33A9E9207D7EFD019BE9653A1329BE",
                       "mode":  "text-lf"
                   },
                   {
@@ -910,7 +910,7 @@
                   },
                   {
                       "path":  "scripts/Start-ControlPanel.ps1",
-                      "sha256":  "1B5BC0C2A6D1D33CF1A39E6B9486D7495308EC3F50044FDCE684A990659522B7",
+                      "sha256":  "99D25F847F5CB84C7AC6910626FF38BBDB1504FA49D930334DE4E11B2DBAB254",
                       "mode":  "text-lf"
                   },
                   {
@@ -1085,7 +1085,7 @@
                   },
                   {
                       "path":  "scripts/Test-MachineService.ps1",
-                      "sha256":  "59875492573595DBEE634D43DDAC854F7B3C3441D3E915792F549E89234B2814",
+                      "sha256":  "A79B3310CCB19B949BCF0F95FF71C9113F08FA111D4940C032271410D92B8911",
                       "mode":  "text-lf"
                   },
                   {

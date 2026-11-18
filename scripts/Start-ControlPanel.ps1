@@ -16,7 +16,12 @@ try {
         exit 0
     }
     $task=Get-ScheduledTask -TaskName 'GPO Remediator Policy Operations' -ErrorAction SilentlyContinue
-    if($task){throw 'MACHINE_SERVICE_OFFLINE: The computer-wide GPO Remediator service is installed but is not ready. Ask a local administrator to start or repair the scheduled service. Operator sessions must not create a second backend.'}
+    if($task){
+        $panel=Join-Path $projectRoot 'Control-Panel.ps1'
+        if (!(Test-Path -LiteralPath $panel)) { throw 'Control-Panel.ps1 is missing. Extract the complete project archive before starting.' }
+        & $panel -Port $Port -MachineClient -SmokeTest:$SmokeTest
+        exit 0
+    }
     $identity=[Security.Principal.WindowsIdentity]::GetCurrent()
     $principal=[Security.Principal.WindowsPrincipal]::new($identity)
     if(!$principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)){

@@ -64,7 +64,7 @@ The integrated release combines the six-wave Studio UI with the cumulative targe
 
 Start with `GpoRemediator.cmd`. The included `release/GpoRemediator-runtime-win-x64.zip` is rebuilt from this source; operators need no SDK or Node.js. Developers use `Build-Portable.ps1`, then `scripts/Validate-Source.ps1 -IncludeBrowser` (.NET 10, Python, Node.js and Playwright required).
 
-For a computer-wide backend, use the verified release installer with `-MachineService`; it installs to the protected `Program Files\GpoRemediator` root by default. Do not register a user-writable Desktop checkout as a LocalSystem task. Direct checkout registration is blocked unless an explicit development-only risk confirmation is supplied.
+For a computer-wide backend, use the verified release installer with `-MachineService`; it installs to the protected `Program Files\GpoRemediator` root by default. The task is on-demand unless `-StartMachineServiceAtBoot` is explicitly supplied, so an authorized operator can Start and Stop it from Control Center without elevation. Do not register a user-writable Desktop checkout as a LocalSystem task. Direct checkout registration is blocked unless an explicit development-only risk confirmation is supplied.
 
 Canonical folders: `backend/` for server and trusted PowerShell, `frontend/source/` for editable UI, generated `frontend/dist/`, `scripts/` for tooling and regressions, `security/` for signing and security checks, `docs/` for operational documentation, and `release/` for the self-contained runtime. Patch installers and backup trees are excluded.
 
