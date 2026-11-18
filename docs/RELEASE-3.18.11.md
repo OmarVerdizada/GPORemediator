@@ -16,6 +16,7 @@
 - Production machine-service registration now rejects mutable checkout and user-profile roots by default. The LocalSystem task must run from a verified managed installation (normally under Program Files), preventing a standard user from replacing code that executes as SYSTEM. A conspicuous, explicit confirmation remains available only for isolated development environments.
 - Managed installation now copies the machine-service lifecycle dependency into the stable install root before task registration, so `-MachineService` does not depend on files outside the verified release.
 - Machine service is now on-demand by default: it remains registered but does not start at Windows boot. The selected operator trustee receives read/run access to that single protected task, while SYSTEM and Administrators retain task management rights. Control Center can therefore Start and gracefully Stop the backend without elevation. Boot startup remains an explicit `-StartMachineServiceAtBoot` option.
+- Control Center caches healthy loopback state, scheduled-task metadata and unchanged diagnostics instead of re-reading each source every second on the WPF dispatcher. Shorter local health timeouts and a 1.5-second refresh cadence keep the window responsive while preserving real service state.
 
 ## Installation
 
