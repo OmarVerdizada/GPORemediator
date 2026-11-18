@@ -4,7 +4,9 @@ param(
     [switch]$SmokeTest
 )
 $ErrorActionPreference='Stop'
-$root=[IO.Path]::GetFullPath($ProjectRoot).TrimEnd('\')
+$rootInput=([string]$ProjectRoot).Trim().Trim('"').TrimEnd('\')
+if([string]::IsNullOrWhiteSpace($rootInput)){throw 'MACHINE_CONTROL_CENTER_PATH: Project root is empty.'}
+$root=[IO.Path]::GetFullPath($rootInput).TrimEnd('\')
 $self=[IO.Path]::GetFullPath($PSCommandPath)
 $identity=[Security.Principal.WindowsIdentity]::GetCurrent()
 $principal=[Security.Principal.WindowsPrincipal]::new($identity)

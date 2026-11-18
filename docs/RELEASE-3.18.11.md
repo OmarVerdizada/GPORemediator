@@ -11,6 +11,7 @@
 - If a legacy audit key belongs to an unavailable DPAPI profile or another computer, an explicit `-InitializeFreshMachineState -ConfirmFreshState PRESERVE_AND_INITIALIZE` recovery keeps the complete former ProgramData state unchanged beside the new state. It never silently discards audit history or keys.
 - Backup readiness now states explicitly that the repository lives on the selected domain controller and requires a one-time delegated filesystem ACL there; upgrading the client-side launcher cannot repair remote DC permissions.
 - Adds `GpoRemediator-ControlCenter.cmd`, a visible UAC-elevated lifecycle console for the machine-wide backend. Its Start action launches the registered SYSTEM task, while Stop and Restart use the existing safe operation-gated API; it never starts a replacement backend under the interactive administrator.
+- The Control Center launcher normalizes quoted project paths and no longer passes CMD's trailing `%~dp0\` separator as a quoted PowerShell argument.
 
 ## Installation
 

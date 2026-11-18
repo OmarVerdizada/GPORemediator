@@ -780,7 +780,7 @@
                   },
                   {
                       "path":  "GpoRemediator-ControlCenter.cmd",
-                      "sha256":  "CD4C8F2558F99680CC0CEBE9B2003DD4A7BD5F814921613CF1AEAB81F7A22875",
+                      "sha256":  "9404E2E06153FC54E53DB4D6911DCE1EA3C5946C838B36127F05C931A17B4BBD",
                       "mode":  "binary"
                   },
                   {
@@ -920,7 +920,7 @@
                   },
                   {
                       "path":  "scripts/Start-MachineControlCenter.ps1",
-                      "sha256":  "744FFA865BF12384A58FF98D189DE6898E88EC49F9F444B34C1D2B1366CACA50",
+                      "sha256":  "921A533002D0DFA064FFF51A6B2665FFF589B099C550559D84CC231A3BFE1052",
                       "mode":  "text-lf"
                   },
                   {
@@ -1085,7 +1085,7 @@
                   },
                   {
                       "path":  "scripts/Test-MachineService.ps1",
-                      "sha256":  "2856694E636FBCE88CDA50F9596E99E8C24E26518E5C9DED8BABFDCDC9EECF83",
+                      "sha256":  "935D84C9D7E4853CF3F8DCF002A42636368017A266D23FF2268FFC3DE59916A9",
                       "mode":  "text-lf"
                   },
                   {
