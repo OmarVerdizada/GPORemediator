@@ -11,6 +11,7 @@
 - If a legacy audit key belongs to an unavailable DPAPI profile or another computer, an explicit `-InitializeFreshMachineState -ConfirmFreshState PRESERVE_AND_INITIALIZE` recovery keeps the complete former ProgramData state unchanged beside the new state. It never silently discards audit history or keys.
 - Backup readiness now states explicitly that the repository lives on the selected domain controller and requires a one-time delegated filesystem ACL there; upgrading the client-side launcher cannot repair remote DC permissions.
 - Restores the original visual PowerShell/WPF Local Control Center as the single `GpoRemediator.cmd` entry point. In standard-user machine mode it reads service state and performs Open, Restart and Stop through authenticated loopback APIs without opening protected ProgramData; closing the panel leaves the SYSTEM backend running.
+- Native launcher discovery uses bootstrap-safe live/ready health endpoints rather than the browser-confirmed service-details route. A standard operator can no longer fall through to the legacy ProgramData-owned startup path when lifecycle-detail cookies are absent.
 - Removes the duplicate top-level Control Center CMD. Administrator-only maintenance remains an internal script instead of a competing daily launcher.
 
 ## Installation

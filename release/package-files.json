@@ -880,7 +880,7 @@
                   },
                   {
                       "path":  "scripts/LoopbackLifecycle.ps1",
-                      "sha256":  "92C96B2FB125A9873E4CCB9D0A8A6B70C18339EF4B2FB1140CE5CC6E8E60F10B",
+                      "sha256":  "78E70814CE1F39030D6C2528E8BE6F807DB3E882139C8229C13930389928D61A",
                       "mode":  "text-lf"
                   },
                   {
@@ -910,7 +910,7 @@
                   },
                   {
                       "path":  "scripts/Start-ControlPanel.ps1",
-                      "sha256":  "6EF0FC2E56ED366DE4559DF30130A2E56C5A4351B51C8F9B11FC00A334C67F06",
+                      "sha256":  "D8823A02714F46B5D46062ACBC00A695B076B2336DAD16CE01E07541682DF412",
                       "mode":  "text-lf"
                   },
                   {
@@ -1085,7 +1085,7 @@
                   },
                   {
                       "path":  "scripts/Test-MachineService.ps1",
-                      "sha256":  "03ABFAD0F4A3F521EAF52B543D45BADC648103B8510E2098CB978D8DE5A33852",
+                      "sha256":  "F032FF785D26BC820BAABFAC4FDA6FA4206525317930B8DD438D869AE5840A4C",
                       "mode":  "text-lf"
                   },
                   {

@@ -17,6 +17,11 @@ try {
     }
     $task=Get-ScheduledTask -TaskName 'GPO Remediator Policy Operations' -ErrorAction SilentlyContinue
     if($task){throw 'MACHINE_SERVICE_OFFLINE: The computer-wide GPO Remediator service is installed but is not ready. Ask a local administrator to start or repair the scheduled service. Operator sessions must not create a second backend.'}
+    $identity=[Security.Principal.WindowsIdentity]::GetCurrent()
+    $principal=[Security.Principal.WindowsPrincipal]::new($identity)
+    if(!$principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)){
+        throw 'MACHINE_SERVICE_REQUIRED: No healthy computer-wide backend was detected. A standard operator session will not access ProgramData or start a user-owned backend. Ask a local administrator to start or repair the GPO Remediator machine task.'
+    }
     New-Item -ItemType Directory -Path $workRoot -Force | Out-Null
     $panel=Join-Path $projectRoot 'Control-Panel.ps1'
     if (!(Test-Path -LiteralPath $panel)) { throw 'Control-Panel.ps1 is missing. Extract the complete project archive before starting.' }
