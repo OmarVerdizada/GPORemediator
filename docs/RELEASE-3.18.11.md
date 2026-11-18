@@ -10,7 +10,7 @@
 - The machine-service migration script uses Windows PowerShell 5.1-compatible sensitive-buffer cleanup on Windows 10 and Windows Server 2019.
 - If a legacy audit key belongs to an unavailable DPAPI profile or another computer, an explicit `-InitializeFreshMachineState -ConfirmFreshState PRESERVE_AND_INITIALIZE` recovery keeps the complete former ProgramData state unchanged beside the new state. It never silently discards audit history or keys.
 - Backup readiness now states explicitly that the repository lives on the selected domain controller and requires a one-time delegated filesystem ACL there; upgrading the client-side launcher cannot repair remote DC permissions.
-- Restores one clear entry point: `GpoRemediator.cmd` opens the web workspace and keeps its visible PowerShell launcher available with Open, Restart, Stop and Close actions. Restart and Stop use the authenticated loopback lifecycle API and operation gate; closing the launcher leaves the SYSTEM backend running.
+- Restores the original visual PowerShell/WPF Local Control Center as the single `GpoRemediator.cmd` entry point. In standard-user machine mode it reads service state and performs Open, Restart and Stop through authenticated loopback APIs without opening protected ProgramData; closing the panel leaves the SYSTEM backend running.
 - Removes the duplicate top-level Control Center CMD. Administrator-only maintenance remains an internal script instead of a competing daily launcher.
 
 ## Installation

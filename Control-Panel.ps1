@@ -1,13 +1,15 @@
-﻿param([ValidateRange(1024,65535)][int]$Port = 5080, [switch]$SmokeTest)
+param([ValidateRange(1024,65535)][int]$Port = 5080, [switch]$SmokeTest, [switch]$MachineClient)
 $ErrorActionPreference = 'Stop'
 $windowsModules = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\Modules'
 $env:PSModulePath = "$windowsModules;" + (($env:PSModulePath -split ';' | Where-Object { $_ -ine $windowsModules }) -join ';')
 Add-Type -AssemblyName PresentationFramework,PresentationCore,WindowsBase
 . (Join-Path $PSScriptRoot 'scripts\ServiceControl.ps1')
+. (Join-Path $PSScriptRoot 'scripts\LoopbackLifecycle.ps1')
 
 $projectRoot = $PSScriptRoot
 $stateRoot = Join-Path $env:ProgramData 'GpoRemediator'
-$work = Join-Path $stateRoot 'State'
+$baseUrl = 'http://127.0.0.1:' + $Port
+$work = if($MachineClient){Join-Path $env:LOCALAPPDATA 'GpoRemediator\Diagnostics'}else{Join-Path $stateRoot 'State'}
 $localConfig = Join-Path $stateRoot 'Config\appsettings.Local.json'
 $runtimeExe = Join-Path $projectRoot 'runtime\GpoRemediator.exe'
 $runtimeMarker = Join-Path $projectRoot 'runtime\production-backend-v4.ready'
@@ -15,7 +17,13 @@ $releaseArchive = Join-Path $projectRoot 'release\GpoRemediator-runtime-win-x64.
 $releaseHash = $releaseArchive + '.sha256'
 $machineTaskName = 'GPO Remediator Policy Operations'
 . (Join-Path $PSScriptRoot 'scripts\Secure-Files.ps1')
-Initialize-RemediatorState -Root $stateRoot
+if($MachineClient){$null=New-Item -ItemType Directory -Path $work -Force}
+else{Initialize-RemediatorState -Root $stateRoot}
+
+function Get-ControlService {
+    if($MachineClient){return Get-RemediatorLoopbackService -BaseUrl $baseUrl}
+    return Get-RemediatorService
+}
 
 function Test-VerifiedReleaseArchive {
     try {
@@ -192,6 +200,7 @@ function Get-RuntimeState {
     return $state
 }
 function Read-ConfigSummary {
+    if($MachineClient){return @{exists=$true;state='Machine managed';detail='Domain configuration and protected state are owned by the SYSTEM backend';color='#16A34A';cfg=$null}}
     if (!(Test-Path -LiteralPath $localConfig)) { return @{exists=$false;state='First setup';detail='Domain and writable DC have not been saved';color='#D97706'} }
     try {
         $cfg=Get-Content -LiteralPath $localConfig -Raw -Encoding UTF8 | ConvertFrom-Json
@@ -201,7 +210,7 @@ function Read-ConfigSummary {
     } catch { return @{exists=$true;state='Invalid config';detail='appsettings.Local.json could not be parsed';color='#DC2626'} }
 }
 function Open-Product {
-    $service = Get-RemediatorService
+    $service = Get-ControlService
     if (!$service -or $service.ready -eq $false) { return }
     $path = if ($service.openPath) { [string]$service.openPath } else { '/#/dashboard' }
     Start-Process (([string]$service.url).TrimEnd('/') + $path) | Out-Null
@@ -210,6 +219,7 @@ function Start-Launcher([string]$Mode = 'Auto', [switch]$RepairPackage) {
     if ($script:launcher -and !$script:launcher.HasExited) { return }
     $machineTask=Get-ScheduledTask -TaskName $machineTaskName -ErrorAction SilentlyContinue
     if($machineTask){
+        if($MachineClient){throw 'Starting a stopped machine backend requires administrator maintenance. Normal operator sessions can Open, Restart or Stop a running backend.'}
         if($RepairPackage){throw 'Machine-service runtime repair must be performed by installing a verified complete release; the Control Center will not replace task-owned binaries.'}
         Start-ScheduledTask -TaskName $machineTaskName -ErrorAction Stop
         $script:pendingUntil=[DateTime]::UtcNow.AddSeconds(5)
@@ -267,15 +277,19 @@ function Start-AdPreflight {
 function Request-ServiceAction([string]$action) {
     if ($script:actionJob) { return }
     $ui.Message.Text = 'Service request is being processed. Active GPO work remains protected by the operation gate.'
-    $script:actionJob = Start-Job -ArgumentList $projectRoot,$action -ScriptBlock {
-        param($root,$requested)
-        try { . (Join-Path $root 'scripts\ServiceControl.ps1'); Invoke-RemediatorServiceAction $requested | Out-Null; @{ok=$true} }
+    $script:actionJob = Start-Job -ArgumentList $projectRoot,$action,$MachineClient,$baseUrl -ScriptBlock {
+        param($root,$requested,$machineClient,$url)
+        try {
+            if($machineClient){. (Join-Path $root 'scripts\LoopbackLifecycle.ps1');Invoke-RemediatorLoopbackAction -Action $requested -BaseUrl $url|Out-Null}
+            else{. (Join-Path $root 'scripts\ServiceControl.ps1');Invoke-RemediatorServiceAction $requested|Out-Null}
+            @{ok=$true}
+        }
         catch { @{ok=$false;error=$_.Exception.Message} }
     }
     Refresh-Panel
 }
 function Refresh-Panel {
-    $service = Get-RemediatorService
+    $service = Get-ControlService
     $launching = $script:launcher -and !$script:launcher.HasExited
     $pending = $script:actionJob -or $script:preflightJob -or [DateTime]::UtcNow -lt $script:pendingUntil
     $runtime = Get-RuntimeState
@@ -284,14 +298,14 @@ function Refresh-Panel {
     $ui.RuntimeState.Text = [string]$runtime.state; $ui.RuntimeDetail.Text=[string]$runtime.detail; Set-Dot $ui.RuntimeDot ([string]$runtime.color)
     $ui.ConfigState.Text = [string]$config.state; $ui.ConfigDetail.Text=[string]$config.detail; Set-Dot $ui.ConfigDot ([string]$config.color)
 
-    $ui.Start.IsEnabled = !$service -and !$launching -and !$pending -and ([bool]$runtime.ready -or $script:releaseReady)
+    $ui.Start.IsEnabled = !$MachineClient -and !$service -and !$launching -and !$pending -and ([bool]$runtime.ready -or $script:releaseReady)
     $ui.Open.IsEnabled = [bool]$service -and $service.ready -ne $false
     $ui.Stop.IsEnabled = [bool]$service -and !$pending
-    $configReady = [bool]$config.exists -and $null -ne $config.cfg -and [string]$config.state -notin @('Incomplete','Invalid config','First setup')
+    $configReady = $MachineClient -or ([bool]$config.exists -and $null -ne $config.cfg -and [string]$config.state -notin @('Incomplete','Invalid config','First setup'))
     $ui.Restart.IsEnabled = $ui.Stop.IsEnabled -and (!$service -or [string]$service.mode -ne 'Setup' -or $configReady)
-    $ui.Preflight.IsEnabled = [bool]$config.exists -and !$pending
+    $ui.Preflight.IsEnabled = !$MachineClient -and [bool]$config.exists -and !$pending
     $machineTask=Get-ScheduledTask -TaskName $machineTaskName -ErrorAction SilentlyContinue
-    $ui.Repair.IsEnabled = !$machineTask -and !$service -and !$launching -and !$pending -and $script:releaseReady
+    $ui.Repair.IsEnabled = !$MachineClient -and !$machineTask -and !$service -and !$launching -and !$pending -and $script:releaseReady
 
     if ($service) {
         $mode = [string]$service.mode
@@ -354,7 +368,7 @@ $ui.Start.Add_Click({ try { $script:autoOpen=$true; $script:openedForLaunch=$fal
 $ui.Open.Add_Click({ Open-Product })
 $window.FindName('CopyStatus').Add_Click({
     try {
-        $service=Get-RemediatorService
+        $service=Get-ControlService
         $summary=[ordered]@{product='GPO Remediator';capturedAt=[DateTimeOffset]::Now.ToString('o');running=[bool]$service;mode=if($service){[string]$service.mode}else{'Stopped'};url=if($service){[string]$service.url}else{"http://127.0.0.1:$Port"};releaseArchiveVerified=[bool]$script:releaseReady;configurationPresent=(Test-Path -LiteralPath $localConfig);processId=if($service){[int]$service.processId}else{$null}}
         [Windows.Clipboard]::SetText(($summary | ConvertTo-Json))
         $ui.Message.Text='Service summary copied. This summary contains no credentials or configuration contents.'

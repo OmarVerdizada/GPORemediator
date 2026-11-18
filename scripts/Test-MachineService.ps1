@@ -19,12 +19,13 @@ Check ($installer -match 'PRESERVE_AND_INITIALIZE' -and $installer -match 'GpoRe
 Check ($installer -notmatch 'Remove-Item -LiteralPath \$stateRoot') 'foreign DPAPI recovery never deletes the legacy state root'
 Check ($program -match 'ProtectKeysWithDpapi\(true\)') 'ASP.NET server keys use machine DPAPI'
 Check ($store -notmatch 'DataProtectionScope\.CurrentUser' -and $store -match 'DataProtectionScope\.LocalMachine') 'audit integrity key is no longer tied to an interactive session'
-$probe=$starter.IndexOf('/api/v1/health/live',[StringComparison]::Ordinal)
+$probe=$starter.IndexOf('Get-RemediatorLoopbackService',[StringComparison]::Ordinal)
 $stateWrite=$starter.IndexOf('New-Item -ItemType Directory -Path $workRoot',[StringComparison]::Ordinal)
 Check ($probe -ge 0 -and $stateWrite -gt $probe) 'interactive launcher opens a healthy shared service before touching ProgramData'
 Check ($starter -match 'MACHINE_SERVICE_OFFLINE' -and $starter -match 'must not create a second backend') 'offline shared service fails safely instead of launching a competing session backend'
 Check ($control -match 'WindowsBuiltInRole\]::Administrator' -and $control -match '-Verb RunAs' -and $control -match 'Control-Panel\.ps1') 'visible machine Control Center elevates explicitly and reuses the lifecycle UI'
 Check ($panel -match 'Start-ScheduledTask -TaskName \$machineTaskName' -and $panel -match 'Machine-service runtime repair') 'machine Control Center starts the SYSTEM task and never falls back to a user-owned backend'
-Check ($starter -match 'Show-OperatorLauncher' -and $starter -match '\[O\] Open web' -and $starter -match 'Invoke-LocalLifecycleAction') 'primary launcher remains visible with web, restart and safe stop actions'
+Check ($starter -match 'Control-Panel\.ps1' -and $starter -match '-MachineClient') 'primary launcher restores the original visual Control Center for a healthy machine backend'
+Check ($panel -match 'Get-RemediatorLoopbackService' -and $panel -match 'Invoke-RemediatorLoopbackAction' -and $panel -match 'if\(\$MachineClient\)') 'standard-user Control Center reads lifecycle state through authenticated loopback APIs without ProgramData access'
 Check (!(Test-Path -LiteralPath (Join-Path $repo 'GpoRemediator-ControlCenter.cmd'))) 'duplicate top-level Control Center launcher is retired'
 Write-Output 'PASS machine-service contract: one backend, many authenticated Windows sessions.'

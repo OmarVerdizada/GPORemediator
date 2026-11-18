@@ -225,7 +225,7 @@
                   },
                   {
                       "path":  "Control-Panel.ps1",
-                      "sha256":  "F6955DD53F63ED6A9207FF7E4E9C9F9949142C03BF0178E590D8193D90E0163C",
+                      "sha256":  "5C1667F99B3FA5C23E3EA9B3505762E90A4F49A40EDD596CB24772EF62B05AB1",
                       "mode":  "text-lf"
                   },
                   {
@@ -879,8 +879,13 @@
                       "mode":  "text-lf"
                   },
                   {
+                      "path":  "scripts/LoopbackLifecycle.ps1",
+                      "sha256":  "92C96B2FB125A9873E4CCB9D0A8A6B70C18339EF4B2FB1140CE5CC6E8E60F10B",
+                      "mode":  "text-lf"
+                  },
+                  {
                       "path":  "scripts/ReleasePackage.psm1",
-                      "sha256":  "D2156E55ABAF467A1929EAF6DDE218AB740A26C0D88BE379D8FFE7C05442B7F9",
+                      "sha256":  "833AD724817DE1B3C98E6F99F4629F366FFD0AAABED8EB67B6AF27108C049CDB",
                       "mode":  "text-lf"
                   },
                   {
@@ -905,7 +910,7 @@
                   },
                   {
                       "path":  "scripts/Start-ControlPanel.ps1",
-                      "sha256":  "AD51D238FE779DD3769B7533186E8810B56B585D6B12AF71F1BD1400514464F3",
+                      "sha256":  "6EF0FC2E56ED366DE4559DF30130A2E56C5A4351B51C8F9B11FC00A334C67F06",
                       "mode":  "text-lf"
                   },
                   {
@@ -1080,7 +1085,7 @@
                   },
                   {
                       "path":  "scripts/Test-MachineService.ps1",
-                      "sha256":  "1CC0E3995C2ADB709A2520F045FAD4481CFCC497F131AAC18504542A29416CDB",
+                      "sha256":  "03ABFAD0F4A3F521EAF52B543D45BADC648103B8510E2098CB978D8DE5A33852",
                       "mode":  "text-lf"
                   },
                   {
@@ -1130,7 +1135,7 @@
                   },
                   {
                       "path":  "scripts/Test-ReleaseInstaller.ps1",
-                      "sha256":  "E8E2385146BA6E8DCB687B01552914061BCF2D841E5B1A7FA02F238E02120641",
+                      "sha256":  "2B4BC5F6BBAE0EBD28E155BFC4081CE5DB3F8DF4AD51A4CDD128898921139FB9",
                       "mode":  "text-lf"
                   },
                   {
