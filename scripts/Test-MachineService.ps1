@@ -10,6 +10,7 @@ $panel=Get-Content -LiteralPath (Join-Path $repo 'Control-Panel.ps1') -Raw
 
 Check ($installer -match "New-ScheduledTaskPrincipal\s+-UserId 'SYSTEM'\s+-LogonType ServiceAccount\s+-RunLevel Highest") 'machine backend uses the stable LocalSystem service identity'
 Check ($installer -match 'New-ScheduledTaskTrigger\s+-AtStartup') 'machine backend starts with Windows'
+Check ($installer -match 'MACHINE_SERVICE_MANAGED_INSTALL_REQUIRED' -and $installer -match 'I_ACCEPT_SYSTEM_EXECUTION_FROM_THIS_PATH' -and $installer -match 'protectedManagedRoot' -and $installer -match 'StartsWith\(\$programFilesRoot') 'production machine service requires a managed Program Files root and rejects spoofed checkout wrappers'
 Check ($installer -match 'MultipleInstances IgnoreNew') 'a second backend instance is rejected'
 Check ($installer -match '/api/v1/health/live') 'installation waits for actual backend health'
 Check ($installer -match "payload\.status -ceq 'live'" -and $installer -match "payload\.apiVersion -ceq '1\.0'") 'health probe validates the GPO Remediator API contract'

@@ -3,13 +3,17 @@ param(
     [ValidateSet('Install','Status','Remove')][string]$Action='Install',
     [string]$ProjectRoot=(Split-Path $PSScriptRoot -Parent),
     [switch]$InitializeFreshMachineState,
-    [string]$ConfirmFreshState
+    [string]$ConfirmFreshState,
+    [switch]$AllowDevelopmentProjectRoot,
+    [string]$ConfirmDevelopmentProjectRoot
 )
 $ErrorActionPreference='Stop'
 $taskName='GPO Remediator Policy Operations'
 $root=[IO.Path]::GetFullPath($ProjectRoot).TrimEnd('\')
 $installedWrapper=Join-Path $root 'scripts\Start-Installed.ps1'
 $installed=(Test-Path -LiteralPath (Join-Path $root 'current.json') -PathType Leaf) -and (Test-Path -LiteralPath $installedWrapper -PathType Leaf)
+$programFilesRoot=if($env:ProgramFiles){[IO.Path]::GetFullPath($env:ProgramFiles).TrimEnd('\')}else{''}
+$protectedManagedRoot=$installed -and $programFilesRoot -and ($root.StartsWith($programFilesRoot+'\',[StringComparison]::OrdinalIgnoreCase))
 $launcher=if($installed){$installedWrapper}else{Join-Path $root 'GpoRemediator.ps1'}
 
 function Assert-Administrator {
@@ -94,6 +98,12 @@ if($Action -eq 'Remove'){
 }
 if(!(Test-Path -LiteralPath $launcher -PathType Leaf)){throw 'MACHINE_SERVICE_LAUNCHER_MISSING: GpoRemediator.ps1 was not found in the selected project root.'}
 if((Get-Item -LiteralPath $root -Force).Attributes -band [IO.FileAttributes]::ReparsePoint){throw 'MACHINE_SERVICE_PROJECT_LINK: Project root cannot be a symbolic link or junction.'}
+if(!$protectedManagedRoot){
+    if(!$AllowDevelopmentProjectRoot -or $ConfirmDevelopmentProjectRoot -cne 'I_ACCEPT_SYSTEM_EXECUTION_FROM_THIS_PATH'){
+        throw 'MACHINE_SERVICE_MANAGED_INSTALL_REQUIRED: A LocalSystem task must execute a managed installation below Program Files, not a mutable checkout, user-profile copy or spoofed wrapper. Install the verified release with Install-GpoRemediator.ps1 -MachineService (default: Program Files). Development-only registration requires both -AllowDevelopmentProjectRoot and -ConfirmDevelopmentProjectRoot I_ACCEPT_SYSTEM_EXECUTION_FROM_THIS_PATH.'
+    }
+    Write-Warning 'Development override accepted. LocalSystem will execute files from this project root. Do not grant write access to untrusted accounts, and never use this override for production.'
+}
 
 . (Join-Path $root 'scripts\ServiceControl.ps1')
 $running=Get-RemediatorService

@@ -17,7 +17,7 @@ function Reject($Block,$Name){try{& $Block|Out-Null;throw ('Accepted: '+$Name)}c
 function Package([string]$Version,[string]$Schema='3.1.2'){
  $dir=Join-Path $temp ('source-'+$Version+'-'+$Schema);$null=New-Item -ItemType Directory -Path (Join-Path $dir 'release'),(Join-Path $dir 'scripts') -Force
  foreach($name in @('GpoRemediator.cmd','GpoRemediator.ps1','Control-Panel.ps1','release/GpoRemediator-runtime-win-x64.zip','release/GpoRemediator-runtime-win-x64.zip.sha256')){[IO.File]::WriteAllText((Join-Path $dir $name),'fixture '+$Version,[Text.UTF8Encoding]::new($false))}
- Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'ReleasePackage.psm1'),(Join-Path $PSScriptRoot 'Start-Installed.ps1'),(Join-Path $PSScriptRoot 'LoopbackLifecycle.ps1'),(Join-Path $PSScriptRoot 'Start-MachineControlCenter.ps1'),(Join-Path $PSScriptRoot 'Install-MachineService.ps1') -Destination (Join-Path $dir 'scripts')
+ Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'ReleasePackage.psm1'),(Join-Path $PSScriptRoot 'Start-Installed.ps1'),(Join-Path $PSScriptRoot 'LoopbackLifecycle.ps1'),(Join-Path $PSScriptRoot 'Start-MachineControlCenter.ps1'),(Join-Path $PSScriptRoot 'Install-MachineService.ps1'),(Join-Path $PSScriptRoot 'ServiceControl.ps1') -Destination (Join-Path $dir 'scripts')
  $files=@(Get-ChildItem -LiteralPath $dir -Recurse -File|ForEach-Object{@{path=$_.FullName.Substring($dir.Length+1).Replace('\','/');mode='binary';sha256=(Get-PackageHash $_.FullName $false)}})
  Write-InstallState (Join-Path $dir 'release/package-files.json') @{product='GPO Remediator';format=1;version=$Version;stateSchema=$Schema;files=$files}
  $zip=Join-Path $temp ($Version+'-'+$Schema+'.zip');$archive=[IO.Compression.ZipFile]::Open($zip,'Create')
@@ -31,6 +31,7 @@ try{
  Reject {& $installer -PackagePath $a.zip -ExpectedSha256 ('0'*64) -Destination $destination} 'wrong full-package hash rejected'
  & $installer -PackagePath $a.zip -ExpectedSha256 $a.hash -Destination $destination|Out-Null
  Check ((Pointer).version -eq '3.16.0') 'failed first install can resume safely and activate complete release'
+ Check (Test-Path -LiteralPath (Join-Path $destination 'scripts/ServiceControl.ps1') -PathType Leaf) 'managed install includes machine-service lifecycle dependency'
  $sentinel=Join-Path $destination 'preserved-state.json';[IO.File]::WriteAllText($sentinel,'configuration/database/backup fixture');$before=Get-PackageHash $sentinel $false
  $env:GPOR_FIXTURE_BUSY='1'
  Reject {& $installer -PackagePath $b.zip -ExpectedSha256 $b.hash -Destination $destination -StopRunning} 'active operation stop rejection retains active version'

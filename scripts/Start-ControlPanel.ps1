@@ -20,7 +20,7 @@ try {
     $identity=[Security.Principal.WindowsIdentity]::GetCurrent()
     $principal=[Security.Principal.WindowsPrincipal]::new($identity)
     if(!$principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)){
-        throw 'MACHINE_SERVICE_REQUIRED: No healthy computer-wide backend was detected. A standard operator session will not access ProgramData or start a user-owned backend. Ask a local administrator to start or repair the GPO Remediator machine task.'
+        throw 'MACHINE_SERVICE_REQUIRED: No healthy computer-wide backend was detected. A standard operator session will not access ProgramData or start a user-owned backend. Ask a local administrator to install the verified release with -MachineService, or start/repair the existing GPO Remediator machine task.'
     }
     New-Item -ItemType Directory -Path $workRoot -Force | Out-Null
     $panel=Join-Path $projectRoot 'Control-Panel.ps1'
