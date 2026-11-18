@@ -5,13 +5,49 @@ $env:PSModulePath = $windowsModules + ';' + $env:PSModulePath
 $ErrorActionPreference='Stop'
 $projectRoot=Split-Path $PSScriptRoot -Parent
 $workRoot=Join-Path $env:ProgramData 'GpoRemediator\State'
+function Invoke-LocalLifecycleAction {
+    param([ValidateSet('stop','restart')][string]$Action,[string]$BaseUrl)
+    $session=Invoke-WebRequest -UseBasicParsing -UseDefaultCredentials -Uri ($BaseUrl+'/api/session') -SessionVariable lifecycle -TimeoutSec 8
+    $token=($session.Content|ConvertFrom-Json).csrfToken
+    if([string]::IsNullOrWhiteSpace([string]$token)){throw 'LIFECYCLE_SESSION_INVALID: The backend did not issue a CSRF token.'}
+    $headers=@{'X-CSRF-Token'=[string]$token;'Origin'=$BaseUrl}
+    $result=Invoke-WebRequest -UseBasicParsing -UseDefaultCredentials -Uri ($BaseUrl+'/api/service/'+$Action) -WebSession $lifecycle -Headers $headers -Method Post -ContentType 'application/json' -Body '{}' -TimeoutSec 8
+    if($result.StatusCode -ne 202){throw ('LIFECYCLE_REQUEST_REJECTED: HTTP '+$result.StatusCode)}
+}
+function Show-OperatorLauncher {
+    param([string]$BaseUrl)
+    Start-Process $BaseUrl | Out-Null
+    Write-Host ''
+    Write-Host '  MACHINE BACKEND: RUNNING' -ForegroundColor Green
+    Write-Host ('  Workspace: '+$BaseUrl)
+    Write-Host '  This launcher may be closed without stopping the backend.' -ForegroundColor DarkGray
+    while($true){
+        Write-Host ''
+        $choice=(Read-Host '[O] Open web  [R] Restart backend  [S] Stop backend  [Q] Close launcher').Trim().ToUpperInvariant()
+        switch($choice){
+            'O' {Start-Process $BaseUrl|Out-Null}
+            'R' {
+                try{Invoke-LocalLifecycleAction -Action restart -BaseUrl $BaseUrl;Write-Host 'Restart accepted. Active operations remain protected by the operation gate.' -ForegroundColor Yellow}
+                catch{Write-Host $_.Exception.Message -ForegroundColor Red}
+            }
+            'S' {
+                if((Read-Host 'Type STOP to stop the computer-wide backend') -cne 'STOP'){Write-Host 'Stop cancelled.' -ForegroundColor DarkGray;continue}
+                try{Invoke-LocalLifecycleAction -Action stop -BaseUrl $BaseUrl;Write-Host 'Stop accepted. A local administrator is required to start the machine task again.' -ForegroundColor Yellow;return}
+                catch{Write-Host $_.Exception.Message -ForegroundColor Red}
+            }
+            'Q' {return}
+            default {Write-Host 'Choose O, R, S or Q.' -ForegroundColor DarkGray}
+        }
+    }
+}
 try {
     $url=('http://127.0.0.1:{0}' -f $Port)
     try {
         $health=Invoke-WebRequest -UseBasicParsing -Uri ($url+'/api/v1/health/live') -TimeoutSec 2
         $payload=$health.Content|ConvertFrom-Json
         if($health.StatusCode -eq 200 -and [string]$payload.status -ceq 'live' -and [string]$payload.apiVersion -ceq '1.0' -and [string]$payload.productVersion -match '^3\.'){
-            Start-Process $url | Out-Null;exit 0
+            if(!$SmokeTest){Show-OperatorLauncher -BaseUrl $url}
+            exit 0
         }
     } catch { }
     $task=Get-ScheduledTask -TaskName 'GPO Remediator Policy Operations' -ErrorAction SilentlyContinue

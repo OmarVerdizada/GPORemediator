@@ -62,8 +62,6 @@ try{
     Copy-Item -LiteralPath (Join-Path $target 'scripts/Install-MachineService.ps1') -Destination $scripts -Force
     $launcher='@echo off'+"`r`n"+'powershell.exe -NoProfile -ExecutionPolicy RemoteSigned -File "%~dp0scripts\Start-Installed.ps1" -InstallRoot "%~dp0"'+"`r`n"
     [IO.File]::WriteAllText((Join-Path $root 'GpoRemediator.cmd'),$launcher,[Text.ASCIIEncoding]::new())
-    $controlLauncher='@echo off'+"`r`n"+'powershell.exe -NoProfile -ExecutionPolicy RemoteSigned -File "%~dp0scripts\Start-Installed.ps1" -InstallRoot "%~dp0" -ControlCenter'+"`r`n"
-    [IO.File]::WriteAllText((Join-Path $root 'GpoRemediator-ControlCenter.cmd'),$controlLauncher,[Text.ASCIIEncoding]::new())
     $previous=if($old -and [string]$old.current -ine $relative){[string]$old.current}elseif($old){[string]$old.previous}else{''}
     $previousHash=if($old -and [string]$old.current -ine $relative){[string]$old.manifestSha256}elseif($old){[string]$old.previousManifestSha256}else{''}
     Write-InstallState $pointerPath @{product='GPO Remediator';current=$relative;previous=$previous;previousManifestSha256=$previousHash;version=$manifest.version;stateSchema=$manifest.stateSchema;manifestSha256=(Get-PackageHash (Join-Path $target 'release/package-files.json') $false);activatedAt=[DateTimeOffset]::UtcNow.ToString('O')}
@@ -71,10 +69,6 @@ try{
         $desktop=if($MachineService){[Environment]::GetFolderPath('CommonDesktopDirectory')}else{[Environment]::GetFolderPath('Desktop')}
         $shell=New-Object -ComObject WScript.Shell;$link=$shell.CreateShortcut((Join-Path $desktop 'GPO Remediator.lnk'))
         $link.TargetPath=Join-Path $root 'GpoRemediator.cmd';$link.WorkingDirectory=$root;$link.Save()
-        if($MachineService){
-            $controlLink=$shell.CreateShortcut((Join-Path $desktop 'GPO Remediator Control Center.lnk'))
-            $controlLink.TargetPath=Join-Path $root 'GpoRemediator-ControlCenter.cmd';$controlLink.WorkingDirectory=$root;$controlLink.Save()
-        }
     }catch{Write-Warning ('Release activated; desktop shortcut could not be created: '+$_.Exception.Message)}}
     Write-Output ('Activated GPO Remediator '+$manifest.version+' at '+$target+'. ProgramData configuration, databases and backups were preserved.')
 }finally{$lock.Dispose()}

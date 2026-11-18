@@ -779,18 +779,13 @@
                       "mode":  "text-lf"
                   },
                   {
-                      "path":  "GpoRemediator-ControlCenter.cmd",
-                      "sha256":  "9404E2E06153FC54E53DB4D6911DCE1EA3C5946C838B36127F05C931A17B4BBD",
-                      "mode":  "binary"
-                  },
-                  {
                       "path":  "Install-GpoRemediator.cmd",
                       "sha256":  "B80696021CB0F3A7901AD9987F18B2CD72474B631486012969FE43C8ED87494E",
                       "mode":  "binary"
                   },
                   {
                       "path":  "Install-GpoRemediator.ps1",
-                      "sha256":  "DEFECDDF26FDCDC80D7391EDDD7EA8803F39C4B2D31BAEEFD500976C24522B96",
+                      "sha256":  "81B903FD358F20A92EF054F31AD9D7D834D08E6775F5513EEC55C048F281330F",
                       "mode":  "text-lf"
                   },
                   {
@@ -885,7 +880,7 @@
                   },
                   {
                       "path":  "scripts/ReleasePackage.psm1",
-                      "sha256":  "51968619A0C1012940659BE1F722C202D6744AE903833CEEC0DB262DC15BA538",
+                      "sha256":  "D2156E55ABAF467A1929EAF6DDE218AB740A26C0D88BE379D8FFE7C05442B7F9",
                       "mode":  "text-lf"
                   },
                   {
@@ -910,12 +905,12 @@
                   },
                   {
                       "path":  "scripts/Start-ControlPanel.ps1",
-                      "sha256":  "C8D2B8A7D9C381A0217DD1548376F0A3611CDB8E86F998267F0AED20C53A3848",
+                      "sha256":  "AD51D238FE779DD3769B7533186E8810B56B585D6B12AF71F1BD1400514464F3",
                       "mode":  "text-lf"
                   },
                   {
                       "path":  "scripts/Start-Installed.ps1",
-                      "sha256":  "C6E6E3466F18BCC4FED904F2892E152EEC7DCCE82CE4CE0E72DC2B358C593CFD",
+                      "sha256":  "18340656A4AC5E9669A0F03F3F9840537EA89EB8EC4E831EDF2A37A8F2E35B42",
                       "mode":  "text-lf"
                   },
                   {
@@ -1085,7 +1080,7 @@
                   },
                   {
                       "path":  "scripts/Test-MachineService.ps1",
-                      "sha256":  "935D84C9D7E4853CF3F8DCF002A42636368017A266D23FF2268FFC3DE59916A9",
+                      "sha256":  "1CC0E3995C2ADB709A2520F045FAD4481CFCC497F131AAC18504542A29416CDB",
                       "mode":  "text-lf"
                   },
                   {
@@ -1135,7 +1130,7 @@
                   },
                   {
                       "path":  "scripts/Test-ReleaseInstaller.ps1",
-                      "sha256":  "6F7DA3824624A167C562AD10531ABD5B5FA9D2B04A67C80998BB44A48EB342FD",
+                      "sha256":  "E8E2385146BA6E8DCB687B01552914061BCF2D841E5B1A7FA02F238E02120641",
                       "mode":  "text-lf"
                   },
                   {
