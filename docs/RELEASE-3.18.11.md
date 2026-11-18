@@ -9,6 +9,7 @@
 - Release installation supports `-MachineService`; its default destination is Program Files and a requested desktop shortcut is placed on the Public Desktop.
 - The machine-service migration script uses Windows PowerShell 5.1-compatible sensitive-buffer cleanup on Windows 10 and Windows Server 2019.
 - If a legacy audit key belongs to an unavailable DPAPI profile or another computer, an explicit `-InitializeFreshMachineState -ConfirmFreshState PRESERVE_AND_INITIALIZE` recovery keeps the complete former ProgramData state unchanged beside the new state. It never silently discards audit history or keys.
+- Backup readiness now states explicitly that the repository lives on the selected domain controller and requires a one-time delegated filesystem ACL there; upgrading the client-side launcher cannot repair remote DC permissions.
 
 ## Installation
 

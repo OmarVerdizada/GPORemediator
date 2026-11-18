@@ -160,7 +160,7 @@
                   },
                   {
                       "path":  "backend/PowerShell/GpoWorkflow.Worker.ps1",
-                      "sha256":  "96AE1F3F30A279593CCDE1F2E51CF5949FCF6DF5A196E3C9A1C91B81BD130EFD",
+                      "sha256":  "07C1F82D74528DA29FDC41ADE62731AF4408B66A82A1D9E7CB3CDA50D7E2046B",
                       "mode":  "text-lf"
                   },
                   {
@@ -795,12 +795,12 @@
                   },
                   {
                       "path":  "release/GpoRemediator-runtime-win-x64.zip",
-                      "sha256":  "083D720C3A3A01F54CFFD8E14FA18D75BB97B2E019A948944B1DC16DD780294C",
+                      "sha256":  "B6F7B5CD81A1CA3C53A2B43BFD8BA7A484534F182B246B59B0B2DB70315E0213",
                       "mode":  "binary"
                   },
                   {
                       "path":  "release/GpoRemediator-runtime-win-x64.zip.sha256",
-                      "sha256":  "68BEDBB99C0240A7EB48149DF50A6C76CE2438817EDA86A7AB622D5338304142",
+                      "sha256":  "F537E3B956CFFE36B9CD5B3662DE9AA98BE3354B31AF80854902E9DAD1F50C16",
                       "mode":  "text-lf"
                   },
                   {
