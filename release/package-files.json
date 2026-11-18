@@ -225,7 +225,7 @@
                   },
                   {
                       "path":  "Control-Panel.ps1",
-                      "sha256":  "034501CD2E122C966C06986C8D1CDFE9744B731F6F92B8E7601A3F14CF3F2225",
+                      "sha256":  "F6955DD53F63ED6A9207FF7E4E9C9F9949142C03BF0178E590D8193D90E0163C",
                       "mode":  "text-lf"
                   },
                   {
@@ -779,13 +779,18 @@
                       "mode":  "text-lf"
                   },
                   {
+                      "path":  "GpoRemediator-ControlCenter.cmd",
+                      "sha256":  "CD4C8F2558F99680CC0CEBE9B2003DD4A7BD5F814921613CF1AEAB81F7A22875",
+                      "mode":  "binary"
+                  },
+                  {
                       "path":  "Install-GpoRemediator.cmd",
                       "sha256":  "B80696021CB0F3A7901AD9987F18B2CD72474B631486012969FE43C8ED87494E",
                       "mode":  "binary"
                   },
                   {
                       "path":  "Install-GpoRemediator.ps1",
-                      "sha256":  "81B903FD358F20A92EF054F31AD9D7D834D08E6775F5513EEC55C048F281330F",
+                      "sha256":  "DEFECDDF26FDCDC80D7391EDDD7EA8803F39C4B2D31BAEEFD500976C24522B96",
                       "mode":  "text-lf"
                   },
                   {
@@ -880,7 +885,7 @@
                   },
                   {
                       "path":  "scripts/ReleasePackage.psm1",
-                      "sha256":  "2CF8934633A0F9F92459774F5283A61B7397A3358B97F0DBF8489FE739CD4354",
+                      "sha256":  "51968619A0C1012940659BE1F722C202D6744AE903833CEEC0DB262DC15BA538",
                       "mode":  "text-lf"
                   },
                   {
@@ -910,7 +915,12 @@
                   },
                   {
                       "path":  "scripts/Start-Installed.ps1",
-                      "sha256":  "D0C076913E285E6143CA37BDFD0360A2A563D7F2C0411B9B5C476B95108ADC7C",
+                      "sha256":  "C6E6E3466F18BCC4FED904F2892E152EEC7DCCE82CE4CE0E72DC2B358C593CFD",
+                      "mode":  "text-lf"
+                  },
+                  {
+                      "path":  "scripts/Start-MachineControlCenter.ps1",
+                      "sha256":  "744FFA865BF12384A58FF98D189DE6898E88EC49F9F444B34C1D2B1366CACA50",
                       "mode":  "text-lf"
                   },
                   {
@@ -1075,7 +1085,7 @@
                   },
                   {
                       "path":  "scripts/Test-MachineService.ps1",
-                      "sha256":  "E74E6E772C982AF911F8CE792D82EDAB502EEF33CA14CE5A6313A6FDB5563544",
+                      "sha256":  "2856694E636FBCE88CDA50F9596E99E8C24E26518E5C9DED8BABFDCDC9EECF83",
                       "mode":  "text-lf"
                   },
                   {
@@ -1125,7 +1135,7 @@
                   },
                   {
                       "path":  "scripts/Test-ReleaseInstaller.ps1",
-                      "sha256":  "56C85095E9D0A8AA6A67F9B7D2885F2CAF0BFFCA6B1557B394BFDA447FF5BD24",
+                      "sha256":  "6F7DA3824624A167C562AD10531ABD5B5FA9D2B04A67C80998BB44A48EB342FD",
                       "mode":  "text-lf"
                   },
                   {

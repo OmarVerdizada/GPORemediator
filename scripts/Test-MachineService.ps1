@@ -5,6 +5,8 @@ $installer=Get-Content -LiteralPath (Join-Path $PSScriptRoot 'Install-MachineSer
 $starter=Get-Content -LiteralPath (Join-Path $PSScriptRoot 'Start-ControlPanel.ps1') -Raw
 $program=Get-Content -LiteralPath (Join-Path $repo 'backend\Program.cs') -Raw
 $store=Get-Content -LiteralPath (Join-Path $repo 'backend\Infrastructure\Store.cs') -Raw
+$control=Get-Content -LiteralPath (Join-Path $PSScriptRoot 'Start-MachineControlCenter.ps1') -Raw
+$panel=Get-Content -LiteralPath (Join-Path $repo 'Control-Panel.ps1') -Raw
 
 Check ($installer -match "New-ScheduledTaskPrincipal\s+-UserId 'SYSTEM'\s+-LogonType ServiceAccount\s+-RunLevel Highest") 'machine backend uses the stable LocalSystem service identity'
 Check ($installer -match 'New-ScheduledTaskTrigger\s+-AtStartup') 'machine backend starts with Windows'
@@ -21,4 +23,6 @@ $probe=$starter.IndexOf('/api/v1/health/live',[StringComparison]::Ordinal)
 $stateWrite=$starter.IndexOf('New-Item -ItemType Directory -Path $workRoot',[StringComparison]::Ordinal)
 Check ($probe -ge 0 -and $stateWrite -gt $probe) 'interactive launcher opens a healthy shared service before touching ProgramData'
 Check ($starter -match 'MACHINE_SERVICE_OFFLINE' -and $starter -match 'must not create a second backend') 'offline shared service fails safely instead of launching a competing session backend'
+Check ($control -match 'WindowsBuiltInRole\]::Administrator' -and $control -match '-Verb RunAs' -and $control -match 'Control-Panel\.ps1') 'visible machine Control Center elevates explicitly and reuses the lifecycle UI'
+Check ($panel -match 'Start-ScheduledTask -TaskName \$machineTaskName' -and $panel -match 'Machine-service runtime repair') 'machine Control Center starts the SYSTEM task and never falls back to a user-owned backend'
 Write-Output 'PASS machine-service contract: one backend, many authenticated Windows sessions.'

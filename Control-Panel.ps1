@@ -13,6 +13,7 @@ $runtimeExe = Join-Path $projectRoot 'runtime\GpoRemediator.exe'
 $runtimeMarker = Join-Path $projectRoot 'runtime\production-backend-v4.ready'
 $releaseArchive = Join-Path $projectRoot 'release\GpoRemediator-runtime-win-x64.zip'
 $releaseHash = $releaseArchive + '.sha256'
+$machineTaskName = 'GPO Remediator Policy Operations'
 . (Join-Path $PSScriptRoot 'scripts\Secure-Files.ps1')
 Initialize-RemediatorState -Root $stateRoot
 
@@ -207,6 +208,13 @@ function Open-Product {
 }
 function Start-Launcher([string]$Mode = 'Auto', [switch]$RepairPackage) {
     if ($script:launcher -and !$script:launcher.HasExited) { return }
+    $machineTask=Get-ScheduledTask -TaskName $machineTaskName -ErrorAction SilentlyContinue
+    if($machineTask){
+        if($RepairPackage){throw 'Machine-service runtime repair must be performed by installing a verified complete release; the Control Center will not replace task-owned binaries.'}
+        Start-ScheduledTask -TaskName $machineTaskName -ErrorAction Stop
+        $script:pendingUntil=[DateTime]::UtcNow.AddSeconds(5)
+        return
+    }
     $script:runtimeStateCache=$null; $script:runtimeStateChecked=[DateTime]::MinValue
     $extra = if ($RepairPackage) { ' -Repair' } else { '' }
     $arguments = '-NoLogo -NoProfile -ExecutionPolicy Bypass -File "{0}" -Mode {1} -Port {2} -NoBrowser{3}' -f (Join-Path $projectRoot 'GpoRemediator.ps1'),$Mode,$Port,$extra
@@ -282,7 +290,8 @@ function Refresh-Panel {
     $configReady = [bool]$config.exists -and $null -ne $config.cfg -and [string]$config.state -notin @('Incomplete','Invalid config','First setup')
     $ui.Restart.IsEnabled = $ui.Stop.IsEnabled -and (!$service -or [string]$service.mode -ne 'Setup' -or $configReady)
     $ui.Preflight.IsEnabled = [bool]$config.exists -and !$pending
-    $ui.Repair.IsEnabled = !$service -and !$launching -and !$pending -and $script:releaseReady
+    $machineTask=Get-ScheduledTask -TaskName $machineTaskName -ErrorAction SilentlyContinue
+    $ui.Repair.IsEnabled = !$machineTask -and !$service -and !$launching -and !$pending -and $script:releaseReady
 
     if ($service) {
         $mode = [string]$service.mode

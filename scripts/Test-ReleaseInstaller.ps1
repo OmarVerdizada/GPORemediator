@@ -16,8 +16,8 @@ function Check($Ok,$Name){if(!$Ok){throw $Name};Write-Output ('PASS '+$Name)}
 function Reject($Block,$Name){try{& $Block|Out-Null;throw ('Accepted: '+$Name)}catch{if($_.Exception.Message -like 'Accepted:*'){throw}};Write-Output ('PASS '+$Name)}
 function Package([string]$Version,[string]$Schema='3.1.2'){
  $dir=Join-Path $temp ('source-'+$Version+'-'+$Schema);$null=New-Item -ItemType Directory -Path (Join-Path $dir 'release'),(Join-Path $dir 'scripts') -Force
- foreach($name in @('GpoRemediator.cmd','GpoRemediator.ps1','Control-Panel.ps1','release/GpoRemediator-runtime-win-x64.zip','release/GpoRemediator-runtime-win-x64.zip.sha256')){[IO.File]::WriteAllText((Join-Path $dir $name),'fixture '+$Version,[Text.UTF8Encoding]::new($false))}
- Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'ReleasePackage.psm1'),(Join-Path $PSScriptRoot 'Start-Installed.ps1'),(Join-Path $PSScriptRoot 'Install-MachineService.ps1') -Destination (Join-Path $dir 'scripts')
+ foreach($name in @('GpoRemediator.cmd','GpoRemediator-ControlCenter.cmd','GpoRemediator.ps1','Control-Panel.ps1','release/GpoRemediator-runtime-win-x64.zip','release/GpoRemediator-runtime-win-x64.zip.sha256')){[IO.File]::WriteAllText((Join-Path $dir $name),'fixture '+$Version,[Text.UTF8Encoding]::new($false))}
+ Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'ReleasePackage.psm1'),(Join-Path $PSScriptRoot 'Start-Installed.ps1'),(Join-Path $PSScriptRoot 'Start-MachineControlCenter.ps1'),(Join-Path $PSScriptRoot 'Install-MachineService.ps1') -Destination (Join-Path $dir 'scripts')
  $files=@(Get-ChildItem -LiteralPath $dir -Recurse -File|ForEach-Object{@{path=$_.FullName.Substring($dir.Length+1).Replace('\','/');mode='binary';sha256=(Get-PackageHash $_.FullName $false)}})
  Write-InstallState (Join-Path $dir 'release/package-files.json') @{product='GPO Remediator';format=1;version=$Version;stateSchema=$Schema;files=$files}
  $zip=Join-Path $temp ($Version+'-'+$Schema+'.zip');$archive=[IO.Compression.ZipFile]::Open($zip,'Create')
