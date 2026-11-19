@@ -11,6 +11,13 @@ window.GpoOperationMonitor={create({state,api,render}){
  function updateElapsed(){
   if(document.hidden)return;
   const now=Date.now();
+  for(const label of document.querySelectorAll('[data-worker-expiry]')){
+   const deadline=Date.parse(label.dataset.workerExpiry);
+   if(!Number.isFinite(deadline))continue;
+   const seconds=Math.max(0,Math.ceil((deadline-now)/1000));
+   const duration=seconds<60?`${seconds}s`:`${Math.floor(seconds/60)}m ${seconds%60}s`;
+   label.textContent=seconds?`Request expires in ${duration}`:'Expiry reached · Re-verify to read worker status';
+  }
   for(const label of document.querySelectorAll('[data-refresh-countdown]')){
    const deadline=Date.parse(label.dataset.refreshCountdown);
    if(!Number.isFinite(deadline))continue;

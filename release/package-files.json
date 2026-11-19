@@ -75,7 +75,7 @@
                   },
                   {
                       "path":  "backend/Domain/GpoWorkflow.cs",
-                      "sha256":  "7F519766B06536195B3D0125693A928D9BFE0932CDF4C05578BC1923F0B40F14",
+                      "sha256":  "9221C7CB8FDE5DEDAD881719D8BFF439AA836BD3E429287E73F8C4E093AE6E83",
                       "mode":  "text-lf"
                   },
                   {
@@ -111,6 +111,11 @@
                   {
                       "path":  "backend/Infrastructure/BundledAssets.cs",
                       "sha256":  "A190B4B963059E48246F342C3B65B4BE67CB923674D7944FB3ECBB926FE15CDB",
+                      "mode":  "text-lf"
+                  },
+                  {
+                      "path":  "backend/Infrastructure/EndpointRefreshQueue.cs",
+                      "sha256":  "B6F93829D64C0FE4AED26839780A795CECBEA25FC6A0353ACE19D15C28396547",
                       "mode":  "text-lf"
                   },
                   {
@@ -160,7 +165,7 @@
                   },
                   {
                       "path":  "backend/PowerShell/GpoWorkflow.Worker.ps1",
-                      "sha256":  "F4529F4ACF6A689345E42C189F71B9871811EC43745A7AAC414F29544735D2ED",
+                      "sha256":  "B6E82FBAED894074B72B8C1712BEE2DE46C10E7020D63532F7CBB517EC69E0DC",
                       "mode":  "text-lf"
                   },
                   {
@@ -200,7 +205,7 @@
                   },
                   {
                       "path":  "backend/Services/GpoWorkflowService.cs",
-                      "sha256":  "3EE26C81C554D8DB13148F772403E31B2C085494F386E1544DC3D301438A41B1",
+                      "sha256":  "D2D5F8DA72CA23F638C239096478E8F64363F942AE970F419CDD4177864BF93F",
                       "mode":  "text-lf"
                   },
                   {
@@ -215,7 +220,7 @@
                   },
                   {
                       "path":  "backend/Services/WorkspaceWorkflows.cs",
-                      "sha256":  "D6C7860439FD4BF3DE61B0FA9C2E9E4C6162A8BAF4B5AABF02C3147B7ED63C19",
+                      "sha256":  "74FDE13461B9D24698C8F853F4B79252C11088D98FE32E4B9E3FC0D234244D50",
                       "mode":  "text-lf"
                   },
                   {
@@ -270,7 +275,7 @@
                   },
                   {
                       "path":  "frontend/dist/components.js",
-                      "sha256":  "4BF77379F261C7059ECF3A9DD03FADE350FDA1E74E086A2106264F884AE61386",
+                      "sha256":  "33298ACEC7E5DC985D982E335785FF68C267F37A1112E2A2E2CCFEED897116ED",
                       "mode":  "text-lf"
                   },
                   {
@@ -350,7 +355,7 @@
                   },
                   {
                       "path":  "frontend/dist/operation-monitor.js",
-                      "sha256":  "309AE3F068FE5BC793BFB4293274853A6384A93CB5D4F408D11BD145374A5FA7",
+                      "sha256":  "89506AD11760C471B54458DEC151E2BF7824C8F5126B28255611DC2CAB71E6F6",
                       "mode":  "text-lf"
                   },
                   {
@@ -390,7 +395,7 @@
                   },
                   {
                       "path":  "frontend/dist/source.sha256",
-                      "sha256":  "7C1236AA368515C2A43974BC5834C9820405F874CD87B5D000B4AD842EE1F9CE",
+                      "sha256":  "05BB03C55ABEEB5B82F771C01B4E818DC5DC00A108747AC3DB34EB1616ACBF9A",
                       "mode":  "text-lf"
                   },
                   {
@@ -545,7 +550,7 @@
                   },
                   {
                       "path":  "frontend/source/components.js",
-                      "sha256":  "4BF77379F261C7059ECF3A9DD03FADE350FDA1E74E086A2106264F884AE61386",
+                      "sha256":  "33298ACEC7E5DC985D982E335785FF68C267F37A1112E2A2E2CCFEED897116ED",
                       "mode":  "text-lf"
                   },
                   {
@@ -625,7 +630,7 @@
                   },
                   {
                       "path":  "frontend/source/operation-monitor.js",
-                      "sha256":  "309AE3F068FE5BC793BFB4293274853A6384A93CB5D4F408D11BD145374A5FA7",
+                      "sha256":  "89506AD11760C471B54458DEC151E2BF7824C8F5126B28255611DC2CAB71E6F6",
                       "mode":  "text-lf"
                   },
                   {
@@ -795,12 +800,12 @@
                   },
                   {
                       "path":  "release/GpoRemediator-runtime-win-x64.zip",
-                      "sha256":  "97C83B1D983120B59F6CD331CCA6D39596CCD69FD2761DD35A2BD4454D748E8F",
+                      "sha256":  "6305225F43F5B3BEB7A24494F4FEC6CA6B2820A79E3FA46CD813EC350C043E02",
                       "mode":  "binary"
                   },
                   {
                       "path":  "release/GpoRemediator-runtime-win-x64.zip.sha256",
-                      "sha256":  "37EF36FC8B10C807B933FA868FD394E63463B62FD9EFC905B4EC6A96FF919828",
+                      "sha256":  "236EC0E0CCBDB59D9A493F2EC7D514DF5E7755DF2C0DF328EB3833204884316D",
                       "mode":  "text-lf"
                   },
                   {
@@ -871,6 +876,11 @@
                   {
                       "path":  "scripts/Install-MachineService.ps1",
                       "sha256":  "46C0C1FEDB29FA04FD71E314635033D03AD47EC3D26260C905B8936C8BBAC1E5",
+                      "mode":  "text-lf"
+                  },
+                  {
+                      "path":  "scripts/Invoke-EndpointRefreshWorker.ps1",
+                      "sha256":  "2A6A0B46D476E621B23FE2A9CE2F830497B0BF82C91CC6478AD634D5B222B0CA",
                       "mode":  "text-lf"
                   },
                   {
@@ -1000,7 +1010,7 @@
                   },
                   {
                       "path":  "scripts/Test-EndpointBatching.ps1",
-                      "sha256":  "2D743022B134E3E442DCAAF12A1D06488D43FD62BFB733767F3DFC2FA8E65D7D",
+                      "sha256":  "8A9D88AD7EBB69EE17B6EF0FBA77252574211B29EFAD0BE84BD4476BDE3475FE",
                       "mode":  "text-lf"
                   },
                   {

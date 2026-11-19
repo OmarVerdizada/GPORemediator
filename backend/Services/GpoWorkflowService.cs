@@ -19,6 +19,7 @@ public sealed class GpoWorkflowService(IConfiguration config,Store store,Operati
     private readonly SemaphoreSlim loginSlots=new(4,4);
     private readonly ConcurrentDictionary<string,Connection> connections=new();
     private readonly IDataProtector protector=protection.CreateProtector("GpoWorkflow.EphemeralLogin.v1");
+    private readonly EndpointRefreshQueue endpointQueue=new(config["Windows:EndpointQueueRoot"],config["Windows:EndpointQueueCertificateThumbprint"]);
     private bool Real=>!config.GetValue<bool>("LocalSetup")&&string.Equals(config["Mode"],"Windows",StringComparison.OrdinalIgnoreCase);
     private string Mode=>"WINDOWS";
     private void RequireReal(){if(!Real)throw new PolicyException("WINDOWS_MODE_REQUIRED","GPO discovery and remediation require Windows / AD mode. Setup mode is configuration-only.");}
@@ -375,7 +376,7 @@ public sealed class GpoWorkflowService(IConfiguration config,Store store,Operati
                 }
                 Progress(operation.ToUpperInvariant()+"_STARTED");
                 var nativeAnchor=NativeAnchor(rollbackAnchor);
-                result=await Run<GpoWorkflowResult>("gpo"+char.ToUpperInvariant(operation[0])+operation[1..],c,new{plan,mapping,previous=previous?.Result,refresh=operation=="refresh"?consent.Refresh:null,consent=operation=="apply"?consent:previous?.Approval,rollbackAnchor=nativeAnchor,batchRefreshPlan,batchRefreshMapping=batchRefreshPlan is null?null:refreshMapping},CancellationToken.None,Progress,CheckProgress);
+                result=await Run<GpoWorkflowResult>("gpo"+char.ToUpperInvariant(operation[0])+operation[1..],c,new{plan,mapping,previous=previous?.Result,refresh=operation=="refresh"?consent.Refresh:null,consent=operation=="apply"?consent:previous?.Approval,rollbackAnchor=nativeAnchor,batchRefreshPlan,batchRefreshMapping=batchRefreshPlan is null?null:refreshMapping,endpointWorker=operation=="refresh"&&endpointQueue.Enabled},CancellationToken.None,Progress,CheckProgress);
                 if(operation=="verify" && result.EndpointCoverage is not null)
                 {
                     var checks=(result.EndpointChecks??[]).ToList();
@@ -398,14 +399,16 @@ public sealed class GpoWorkflowService(IConfiguration config,Store store,Operati
                 }
                 if(operation=="refresh" && result.RefreshCoverage is not null)
                 {
-                    var refreshResults=result.RefreshResults.ToList();
+                    GpoRefreshResult Publish(GpoRefreshResult target)=>
+                        target.State=="WORKER_ELIGIBLE"&&endpointQueue.Enabled ? endpointQueue.Enqueue(target) : target;
+                    var refreshResults=result.RefreshResults.Select(Publish).ToList();
                     while(result.RefreshCoverage is {Complete:false} coverage && (result.GpoPublished&&result.LinkVerified||result.State=="ROLLED_BACK"))
                     {
                         var offset=coverage.Checked;result=result with{RefreshResults=refreshResults.ToArray()};
                         run=run with{Result=result with{State="REFRESHING"},UpdatedAt=PolicyValues.Now()};store.Put("gpo_runs",id,run,"REFRESHING");
                         Progress("REFRESH_PAGE");
-                        result=await Run<GpoWorkflowResult>("gpoRefresh",c,new{plan,mapping,previous=previous?.Result,refresh=consent.Refresh,refreshOffset=offset,batchRefreshPlan,batchRefreshMapping=batchRefreshPlan is null?null:refreshMapping},CancellationToken.None,Progress,CheckProgress);
-                        refreshResults.AddRange(result.RefreshResults);
+                        result=await Run<GpoWorkflowResult>("gpoRefresh",c,new{plan,mapping,previous=previous?.Result,refresh=consent.Refresh,refreshOffset=offset,batchRefreshPlan,batchRefreshMapping=batchRefreshPlan is null?null:refreshMapping,endpointWorker=endpointQueue.Enabled},CancellationToken.None,Progress,CheckProgress);
+                        refreshResults.AddRange(result.RefreshResults.Select(Publish));
                         if(result.RefreshCoverage is null || result.RefreshCoverage.Checked<=offset)throw new PolicyException("ENDPOINT_REFRESH_STALLED","Refresh did not advance. Partial evidence was retained.");
                     }
                     var unique=refreshResults.GroupBy(x=>x.Computer,StringComparer.OrdinalIgnoreCase).Select(g=>g.Last()).ToArray();
@@ -416,7 +419,7 @@ public sealed class GpoWorkflowService(IConfiguration config,Store store,Operati
                 }
                 if(stages.Count>0){stages[^1]=stages[^1] with{FinishedAt=PolicyValues.Now()};run=run with{Stages=stages.ToArray()};}
                 if(operation=="verify" && previous is not null && result.RefreshResults.Length==0 && previous.Result.RefreshResults.Length>0)
-                    result=result with{RefreshResults=previous.Result.RefreshResults,RefreshCoverage=previous.Result.RefreshCoverage};
+                    result=result with{RefreshResults=previous.Result.RefreshResults.Select(endpointQueue.Read).ToArray(),RefreshCoverage=previous.Result.RefreshCoverage};
                 run=run with{Result=result,UpdatedAt=PolicyValues.Now(),BatchStepRestored=run.BatchStepRestored||
                     operation=="rollback"&&result.State=="ROLLED_BACK"&&rollbackAnchor is {BatchPlans:null}};
                 if(operation=="rollback" && result.State=="ROLLED_BACK" && rollbackAnchor?.BatchPlans is not null)

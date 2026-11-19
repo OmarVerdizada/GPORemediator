@@ -7,11 +7,12 @@ $switch=$ast.FindAll({param($n)$n -is [Management.Automation.Language.SwitchStat
 $block=$switch.Clauses|Where-Object{$_.Item1.Extent.Text -eq "'gpoRefresh'"}|ForEach-Object{$_.Item2}
 $dispatch=[scriptblock]::Create($block.Extent.Text.TrimStart('{').TrimEnd('}'))
 $temp=Join-Path ([IO.Path]::GetTempPath()) ('gpr-refresh-'+[guid]::NewGuid().ToString('N'));$null=New-Item -ItemType Directory -Path $temp
-$cfg=@{emitProgress=$false};$script:targets=@(1..201|ForEach-Object{'ws'+$_+'.example.test'});$script:missing=$null;$script:remoteCalls=0
+$cfg=@{emitProgress=$false;domainController='dc.example.test'};$script:targets=@(1..201|ForEach-Object{'ws'+$_+'.example.test'});$script:missing=$null;$script:remoteCalls=0
 function Start-Sleep {param($Seconds) if($Seconds -ne 10){throw 'Unexpected refresh dispatch delay'} }
 function Check($ok,$name){if(!$ok){throw $name};Write-Output ('PASS '+$name)}
 function Run-Directory($Plan){$temp}
 function Refresh-Targets {param($Strategy,$ScopeDn,$EndpointScopeDn,$PolicyScope) $script:targets|Where-Object{$_ -ne $script:missing}}
+function Get-ADDomainController {param($Filter,$Server,$ErrorAction) [pscustomobject]@{HostName=$script:targets[1]} }
 function Verify-Published {param($Plan,$Map,$CheckEndpoints) @{published=$true;linked=$true;effective='ENDPOINT_VERIFICATION_PENDING'}}
 $script:delegated=$true
 function Endpoint-CredentialOptions {if($script:delegated){@{Credential='fixture-credential-not-a-secret'}}else{@{}}}
@@ -42,6 +43,14 @@ try{
  $Data.refreshOffset=-1
  try{$null=& $dispatch;throw 'negative refresh offset accepted'}catch{if($_.Exception.Message -notlike 'INVALID_REQUEST*'){throw}}
  $script:missing=$null
+ $Data.refreshOffset=0
+ $Data.endpointWorker=$true
+ $beforeWorker=$script:remoteCalls
+ $workerResult=& $dispatch
+ Check ($script:remoteCalls -eq $beforeWorker -and $workerResult.refreshCoverage.checked -eq 64) 'worker preflight does not use endpoint remoting and retains bounded coverage'
+ Check (@($workerResult.refreshResults|Where-Object state -eq 'WORKER_ELIGIBLE').Count -eq 63 -and
+    @($workerResult.refreshResults|Where-Object{$_.computer -eq $script:targets[1] -and $_.message -like '*manual refresh*'}).Count -eq 1) 'worker preflight excludes DCs and authorizes only pinned member targets'
+ $Data.Remove('endpointWorker')
  $Data.refresh='Pdc';$callsBefore=$script:remoteCalls
  try{$null=& $dispatch;throw 'OU plan accepted PDC refresh'}catch{if($_.Exception.Message -notlike 'PDC_REFRESH_SCOPE_INVALID*'){throw}}
  Check ($script:remoteCalls -eq $callsBefore) 'invalid PDC refresh is rejected before any endpoint command'

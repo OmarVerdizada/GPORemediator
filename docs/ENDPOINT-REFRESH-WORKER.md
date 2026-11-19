@@ -1,0 +1,15 @@
+# Computer refresh worker pilot
+
+The worker runs only the fixed local computer `gpupdate /force` command. It can pick up an approved request after the workstation or member server comes online. Requests expire after 24 hours. The management UI shows the time until request expiry and updates the saved worker receipt on Re-verify. Computer policy processing, endpoint-effective values and winning GPO attribution remain separate evidence.
+
+## Provision the pilot
+
+1. Choose a dedicated member-server SMB share with Kerberos access and SMB signing. Use a server DNS name in the UNC path. Under the share, provision `<endpoint-fqdn>\requests` and `<endpoint-fqdn>\results` for every enrolled member endpoint. Configure both share permissions and NTFS ACLs. The management backend's identity needs write access to the request folders and read access to the results. Give each endpoint computer account read access to only its own request folder and modify access to only its own result folder. Protect the parent directories and inheritance. Keep task, code and folder-administration rights separate from GPO operators.
+2. Provision a dedicated RSA certificate in the management host's Local Computer Personal store. The backend identity needs access to its private key. Copy only the public certificate and the verified `scripts/Invoke-EndpointRefreshWorker.ps1` to an administrator-protected local directory on each pilot computer.
+3. On pilot member computers, register a task under LocalSystem to run the worker at startup and periodically. A one-minute period is suitable for a small pilot. Use the full local script and certificate paths. Set the task to ignore a new instance while one is active. Restrict task and file modification to authorized administrators. Use the organization's PowerShell signing policy. Pass the share path to `-QueueRoot` and the pinned public certificate path to `-PublisherCertificatePath`.
+4. Set `Windows__EndpointQueueRoot` and `Windows__EndpointQueueCertificateThumbprint` in the management backend's approved service environment and restart it. Keep the feature disabled by leaving the queue root unset until the share ACLs, certificate access and endpoint task have been reviewed. Never place the private key, credentials or the worker script in an operator-writable directory.
+5. Approve a refresh for one pilot member computer. Test one request with the endpoint online and one with it offline. On boot, the worker will pick up unexpired requests. Re-verify to retrieve the receipt. A completed receipt reports the exit of `gpupdate`. Confirm effective values independently.
+
+Keep each receipt at least until its corresponding request expires. The receipt is also the claim that prevents repeated execution. If a worker was interrupted after claiming a request, inspect the endpoint before issuing a new approved request.
+
+Domain controllers use manual refresh in worker mode. User GPOs use normal Windows processing or manual refresh in the signed-in user context. The worker does not collect live LSA, HKCU, RSoP or registry evidence.

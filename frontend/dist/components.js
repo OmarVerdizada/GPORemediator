@@ -167,6 +167,12 @@
     if(!results.length)return '';
     const description=x=>{
       const duration=Number.isFinite(x.computerRefreshDurationMs)?`Computer gpupdate: ${formatDuration(x.computerRefreshDurationMs)}`:'';
+      if(x.workerRequestId){
+        if(x.state==='SCHEDULED')return 'Waiting for worker check-in · start time unknown' +
+          (x.workerExpiresAt?` · <span data-worker-expiry="${esc(x.workerExpiresAt)}"></span>`:'');
+        if(x.state==='STARTED')return 'Worker acknowledged · completion pending';
+        return duration||esc(x.message||'Worker result unavailable');
+      }
       const scheduled=x.state==='SCHEDULED'||x.computerState==='SCHEDULED'||x.userState==='SCHEDULED';
       const pending=scheduled?(x.scheduledAt?`<span data-verification-elapsed="${esc(x.scheduledAt)}" data-elapsed-label="since scheduling"></span> · `:'')+'Start time unavailable':'';
       const failed=x.state==='FAILED'&&!duration&&!scheduled?'No confirmed run or ETA':'';

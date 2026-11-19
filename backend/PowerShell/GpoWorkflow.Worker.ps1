@@ -1875,6 +1875,22 @@ switch($Operation){
         $computers=@($computers|Select-Object -Skip $offset -First 64)
         $refreshCoverage=@{total=$total;checked=[math]::Min($offset+64,$total);complete=($offset+64 -ge $total)}
         $runTargets=@($computers|Where-Object{$_ -in $liveComputers})
+        $useEndpointWorker=[bool](Read-Field $Data 'endpointWorker' $false)
+        $dispatchNotBefore=$null
+        if($useEndpointWorker){
+            $controllers=@(Get-ADDomainController -Filter * -Server $cfg.domainController -ErrorAction Stop | ForEach-Object { [string]$_.HostName })
+            if(!$controllers.Count){Fail 'ENDPOINT_REFRESH_ROLE_UNKNOWN' 'Domain controller membership could not be determined. No endpoint work was queued.'}
+            foreach($computer in $computers){
+                $message=if($computer -notin $runTargets){'The pinned endpoint is no longer in the authorized scope.'}
+                    elseif($computer -in $controllers){'Domain controllers use manual refresh. No endpoint worker request was sent.'}
+                    elseif($target -eq 'User'){'Use normal user policy processing or refresh as the signed-in user. No user refresh was queued.'}
+                $refresh+=@{computer=$computer;state=$(if($message){'FAILED'}else{'WORKER_ELIGIBLE'});message=$(if($message){$message}else{'Endpoint scope and role were checked.'})}
+            }
+            $output=Result 'WORKER_TARGETS_CHECKED' 'Endpoint worker targets checked.' $manifest $before $refresh
+            if($rollback){$output.state='ROLLED_BACK'}
+            $output.refreshCoverage=$refreshCoverage
+            return $output
+        }
         $dispatchNotBefore=Wait-RefreshDispatch $runTargets
         # Complete computer processing using delegated WinRM even after restore.
         # A signed-in user's policy requires a separate task in the user context;

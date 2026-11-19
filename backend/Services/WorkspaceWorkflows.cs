@@ -237,7 +237,9 @@ public sealed class WorkspaceWorkflows(Store store,IWorkflowOperations service,O
                             Half(g.Select(r=>r.ComputerState)),Half(g.Select(r=>r.UserState)),
                             g.LastOrDefault(r=>r.ComputerRefreshDurationMs.HasValue)?.ComputerRefreshDurationMs,
                             g.LastOrDefault(r=>r.ScheduledAt is not null)?.ScheduledAt,
-                            g.LastOrDefault(r=>r.DispatchNotBefore.HasValue)?.DispatchNotBefore)).ToArray();
+                            g.LastOrDefault(r=>r.DispatchNotBefore.HasValue)?.DispatchNotBefore,
+                            g.LastOrDefault(r=>r.WorkerRequestId is not null)?.WorkerRequestId,
+                            g.LastOrDefault(r=>r.WorkerExpiresAt.HasValue)?.WorkerExpiresAt)).ToArray();
                         store.Put("gpo_runs",refreshId,refreshed with{Result=refreshed.Result with{RefreshResults=merged,RefreshCoverage=new(merged.Length,merged.Length,target.Id==groups[^1].Id)}},refreshed.Result.State);
                     }
                     refreshIncomplete|=InspectRefresh(refreshed.Result);
