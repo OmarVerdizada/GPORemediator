@@ -1789,21 +1789,22 @@ switch($Operation){
     'gpoVerify'{
         Emit-Stage 'REPLICATION_ENDPOINT_CHECK'
         $plan=$Data.plan;$map=$Data.mapping;$directory=Run-Directory $plan
+        $checkEndpoints=![bool](Read-Field $Data 'skipEndpointProbes' $false)
         if(!(Test-Path -LiteralPath (Join-Path $directory 'manifest.json'))){
-            $v=Verify-Published $plan $map $true
+            $v=Verify-Published $plan $map $checkEndpoints
             $state=if($v.published -and $v.linked){'NO_CHANGE'}else{'DRIFT_DETECTED'}
             $message=if($state -eq 'DRIFT_DETECTED'){'Current GPO content or link no longer matches the requested state. The previous success state has been invalidated; generate a fresh plan before remediation.'}else{'Read-only verification completed; the current GPO/link still matches the requested state.'}
             return Result $state $message $null $v @()
         }
         $manifest=Get-Content -LiteralPath (Join-Path $directory 'manifest.json') -Raw|ConvertFrom-Json
         if([string]$manifest.phase -in @('PUBLISHED','VERIFY_MISMATCH') -and (Read-Field $manifest 'rollbackFailure' $null)){
-            $restoration=Verify-Rollback $plan $map $manifest $true
+            $restoration=Verify-Rollback $plan $map $manifest $checkEndpoints
             if($restoration.restored){Record-VerifiedRestore $plan $manifest $directory;return Result 'ROLLED_BACK' 'The saved GPO, link and AD restoration target were verified live.' $manifest $restoration @()}
             $failure=$manifest.rollbackFailure
             return Result 'ROLLBACK_REVIEW_REQUIRED' ('The recorded rollback did not restore the saved snapshot. Read-only verification does not retry it. Resolve '+[string]$failure.code+' at '+[string]$failure.stage+' and review rollback availability before confirming another restore.') $manifest $restoration @()
         }
         if([string]$manifest.phase -in @('ROLLING_BACK','ROLLED_BACK','ROLLBACK_REVIEW_REQUIRED','ROLLBACK_DRIFT_DETECTED')){
-            $v=Verify-Rollback $plan $map $manifest $true;$rolledBack=[bool]$v.restored
+            $v=Verify-Rollback $plan $map $manifest $checkEndpoints;$rolledBack=[bool]$v.restored
             if($rolledBack){
                 Record-VerifiedRestore $plan $manifest $directory
                 return Result 'ROLLED_BACK' 'Rollback was re-verified against the pre-change GPO content, extensions and link state. Endpoint policy convergence may still be pending.' $manifest $v @()
@@ -1816,7 +1817,7 @@ switch($Operation){
             return Result $state ('Restore read-back is not confirmed for: '+$areas+'. '+$(if($verifiedRestore){'A previously verified restore no longer matches.'}elseif($hadVerifiedRestore){'The previously verified snapshot could not be rechecked. Missing evidence is not proof of an external change.'}else{'No completed restore was established; this is not evidence of a later external change.'})) $manifest $v @()
         }
         if([string]$manifest.phase -in @('BACKUP_STARTED','BACKED_UP','FAILED_SAFE','WRITING','PUBLICATION_PENDING','REVIEW_REQUIRED')){
-            $v=Verify-Published $plan $map $true
+            $v=Verify-Published $plan $map $checkEndpoints
             if(Reconcile-Publication $plan $map $manifest $directory $v){return Result 'PUBLISHED' 'Read-only verification confirmed the complete post-write state. The original publication-check failure is retained in the recovery receipt; Apply was not repeated.' $manifest $v @()}
             if((Publication-Review $manifest) -and $v.published -and $v.linked){return Result 'PUBLISHED' 'The current requested GPO and link were verified live. The interrupted Apply and its backup remain retained; a full-GPO rollback still requires a matching saved post-state. No Apply was repeated.' $manifest $v @()}
             # Verification must not erase the failure that caused the interruption.
@@ -1826,7 +1827,7 @@ switch($Operation){
             $message='Re-verify is read-only and does not retry Apply. This execution did not record a completed publication. Review the original failure and retained backup, then create and approve a fresh repair plan.'+$original
             return Result 'REVIEW_REQUIRED' $message $manifest $v @()
         }
-        $v=Verify-Published $plan $map $true
+        $v=Verify-Published $plan $map $checkEndpoints
         $state=if($v.published -and $v.linked){'PUBLISHED'}else{'DRIFT_DETECTED'}
         $message=if($state -eq 'DRIFT_DETECTED'){'Drift detected: the live GPO content or selected link changed after Apply. This operation is no longer compliant until it is remediated again.'}else{'Read-only verification completed against the live GPO, link, replication metadata and available endpoint evidence.'}
         return Result $state $message $manifest $v @()

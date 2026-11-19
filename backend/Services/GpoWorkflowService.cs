@@ -343,7 +343,7 @@ public sealed class GpoWorkflowService(IConfiguration config,Store store,Operati
             {
                 // Do not trust the previous stored status before a disruptive endpoint refresh.
                 // Re-read the live GPO/link state first; this catches external GPMC edits between Verify and Refresh.
-                var live=await Run<GpoWorkflowResult>("gpoVerify",c,new{plan,mapping,previous=previous.Result,consent=previous.Approval},CancellationToken.None);
+                var live=await Run<GpoWorkflowResult>("gpoVerify",c,new{plan,mapping,previous=previous.Result,consent=previous.Approval,skipEndpointProbes=true},CancellationToken.None);
                 if(live.RefreshResults.Length==0 && previous.Result.RefreshResults.Length>0)
                     live=live with{RefreshResults=previous.Result.RefreshResults,RefreshCoverage=previous.Result.RefreshCoverage};
                 previous=previous with{Result=live,UpdatedAt=PolicyValues.Now()};

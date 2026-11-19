@@ -7,7 +7,7 @@ param(
     [switch]$Start,
     [switch]$DesktopShortcut,
     [switch]$MachineService,
-    [string]$MachineOperatorPrincipal='S-1-5-11',
+    [string]$MachineOperatorPrincipal,
     [switch]$StartMachineServiceAtBoot
 )
 $ErrorActionPreference='Stop'
@@ -63,7 +63,7 @@ try{
     Copy-Item -LiteralPath (Join-Path $target 'scripts/Start-Installed.ps1') -Destination $scripts -Force
     Copy-Item -LiteralPath (Join-Path $target 'scripts/Install-MachineService.ps1') -Destination $scripts -Force
     Copy-Item -LiteralPath (Join-Path $target 'scripts/ServiceControl.ps1') -Destination $scripts -Force
-    $launcher='@echo off'+"`r`n"+'powershell.exe -NoProfile -ExecutionPolicy RemoteSigned -File "%~dp0scripts\Start-Installed.ps1" -InstallRoot "%~dp0"'+"`r`n"
+    $launcher='@echo off'+"`r`n"+'powershell.exe -NoProfile -ExecutionPolicy RemoteSigned -File "%~dp0scripts\Start-Installed.ps1" %*'+"`r`n"
     [IO.File]::WriteAllText((Join-Path $root 'GpoRemediator.cmd'),$launcher,[Text.ASCIIEncoding]::new())
     $previous=if($old -and [string]$old.current -ine $relative){[string]$old.current}elseif($old){[string]$old.previous}else{''}
     $previousHash=if($old -and [string]$old.current -ine $relative){[string]$old.manifestSha256}elseif($old){[string]$old.previousManifestSha256}else{''}

@@ -6,7 +6,7 @@ param(
     [string]$ConfirmFreshState,
     [switch]$AllowDevelopmentProjectRoot,
     [string]$ConfirmDevelopmentProjectRoot,
-    [string]$OperatorPrincipal='S-1-5-11',
+    [string]$OperatorPrincipal,
     [switch]$StartAtBoot
 )
 $ErrorActionPreference='Stop'
@@ -39,14 +39,15 @@ function Resolve-OperatorSid {
 }
 
 function Set-TaskOperatorAccess {
-    param([Parameter(Mandatory=$true)][string]$Name,[Parameter(Mandatory=$true)][string]$OperatorSid)
+    param([Parameter(Mandatory=$true)][string]$Name,[string]$OperatorSid)
     $scheduler=New-Object -ComObject 'Schedule.Service'
     $scheduler.Connect()
     $registered=$scheduler.GetFolder('\').GetTask($Name)
     # SYSTEM and local Administrators retain full control. The selected operator
     # trustee receives generic read/execute only: it can inspect and run this
     # one protected task, but cannot modify its action, principal, ACL or delete it.
-    $sddl='O:BAG:SYD:P(A;;FA;;;SY)(A;;FA;;;BA)(A;;GRGX;;;'+$OperatorSid+')'
+    $sddl='O:BAG:SYD:P(A;;FA;;;SY)(A;;FA;;;BA)'
+    if($OperatorSid){$sddl+='(A;;GRGX;;;'+$OperatorSid+')'}
     $registered.SetSecurityDescriptor($sddl,0)
 }
 
@@ -129,6 +130,8 @@ if(!$protectedManagedRoot){
     Write-Warning 'Development override accepted. LocalSystem will execute files from this project root. Do not grant write access to untrusted accounts, and never use this override for production.'
 }
 
+$operatorSid=if(![string]::IsNullOrWhiteSpace($OperatorPrincipal)){Resolve-OperatorSid -Principal $OperatorPrincipal}
+if($operatorSid -in @('S-1-1-0','S-1-5-11','S-1-5-32-545')){throw 'MACHINE_SERVICE_OPERATOR_INVALID: Select a dedicated operator group or account.'}
 . (Join-Path $root 'scripts\ServiceControl.ps1')
 $running=Get-RemediatorService
 if($running){$null=Invoke-RemediatorServiceAction stop}
@@ -140,7 +143,6 @@ catch {
     $migration=('The incompatible user-bound state was preserved unchanged at '+$preservedState+'. A fresh machine-scoped audit history will be initialized.')
 }
 $rotation=Reset-BrowserProtectionKeys
-$operatorSid=Resolve-OperatorSid -Principal $OperatorPrincipal
 
 $powershell=Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
 $arguments=if($installed){'-NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -WindowStyle Hidden -File "{0}" -InstallRoot "{1}" -NoBrowser' -f $launcher,$root}else{'-NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -WindowStyle Hidden -File "{0}" -Port {1} -NoBrowser' -f $launcher,$Port}

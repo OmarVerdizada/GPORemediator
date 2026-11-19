@@ -33,7 +33,7 @@ function Test-ReleasePackage([string]$Root){
         $path=Resolve-PackageChild $rootFull ([string]$file.path);$null=Assert-PackagePath $path
         if(!(Test-Path -LiteralPath $path -PathType Leaf) -or (Get-PackageHash $path ($file.mode -eq 'text-lf')) -ine [string]$file.sha256){throw ('Incomplete/mixed release: '+$file.path)}
     }
-    foreach($required in @('GpoRemediator.cmd','GpoRemediator.ps1','Control-Panel.ps1','scripts/ReleasePackage.psm1','scripts/Start-Installed.ps1','scripts/LoopbackLifecycle.ps1','scripts/Start-MachineControlCenter.ps1','scripts/Install-MachineService.ps1','release/GpoRemediator-runtime-win-x64.zip','release/GpoRemediator-runtime-win-x64.zip.sha256')){
+    foreach($required in @('GpoRemediator.cmd','GpoRemediator.ps1','Control-Panel.ps1','scripts/ReleasePackage.psm1','scripts/Start-Installed.ps1','scripts/LoopbackLifecycle.ps1','scripts/Start-MachineControlCenter.ps1','scripts/Install-MachineService.ps1','scripts/ServiceControl.ps1','release/GpoRemediator-runtime-win-x64.zip','release/GpoRemediator-runtime-win-x64.zip.sha256')){
         if(!$seen.Contains($required)){throw ('Required component absent from release manifest: '+$required)}
     }
     foreach($item in Get-ChildItem -LiteralPath $rootFull -File){if($item.Extension -in @('.ps1','.cmd','.exe','.dll') -and !$seen.Contains($item.Name)){throw ('Unexpected root executable/source: '+$item.Name)}}

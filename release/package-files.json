@@ -160,7 +160,7 @@
                   },
                   {
                       "path":  "backend/PowerShell/GpoWorkflow.Worker.ps1",
-                      "sha256":  "07C1F82D74528DA29FDC41ADE62731AF4408B66A82A1D9E7CB3CDA50D7E2046B",
+                      "sha256":  "242B4245F56F278033CF081DBEA3C4AAFB54F5935FB554E39CC8B0D818D00F7F",
                       "mode":  "text-lf"
                   },
                   {
@@ -200,7 +200,7 @@
                   },
                   {
                       "path":  "backend/Services/GpoWorkflowService.cs",
-                      "sha256":  "AEA0B5F669AC1508071E2C83C2CD6C23A715D6998FBCCCA50FAE4C09197C9369",
+                      "sha256":  "3EE26C81C554D8DB13148F772403E31B2C085494F386E1544DC3D301438A41B1",
                       "mode":  "text-lf"
                   },
                   {
@@ -225,7 +225,7 @@
                   },
                   {
                       "path":  "Control-Panel.ps1",
-                      "sha256":  "0DFE18EA5077A978A9D7169B85E8101F953F1C535EA6DA497B970427010A02FA",
+                      "sha256":  "F4432DF396D8C31AAC02FB35A3A57DA8219CCE091805F3C0BFA9C67552BC49E5",
                       "mode":  "text-lf"
                   },
                   {
@@ -275,7 +275,7 @@
                   },
                   {
                       "path":  "frontend/dist/control-view.js",
-                      "sha256":  "E840BCD4A3E2A030403B4F656E280B609892BAB427BD74CEDC0C22E6791BB51C",
+                      "sha256":  "BBFB49C8647ED05DDD91814C6AF40DD7B2983F16A5453734DB7F51C95E00B002",
                       "mode":  "text-lf"
                   },
                   {
@@ -350,7 +350,7 @@
                   },
                   {
                       "path":  "frontend/dist/operation-monitor.js",
-                      "sha256":  "6870F355877D5A8E2554BF2686E4CF3B5C5D184BE756B9A7A0B005EA9DBB0BD8",
+                      "sha256":  "96DDDD9CD9970394BD183F18D254619EEF328D7BFDAE5CFF0684D0A2B697583C",
                       "mode":  "text-lf"
                   },
                   {
@@ -390,7 +390,7 @@
                   },
                   {
                       "path":  "frontend/dist/source.sha256",
-                      "sha256":  "1B8A35FBAEE016A9D066F417337989A90144CD00BB1094F7E209D7E785B23D2B",
+                      "sha256":  "6058432AFC981338C5D6A905D1AC0BCA8EDA4B4BEC5FEF9CD7435535DBB79AD4",
                       "mode":  "text-lf"
                   },
                   {
@@ -550,7 +550,7 @@
                   },
                   {
                       "path":  "frontend/source/control-view.js",
-                      "sha256":  "E840BCD4A3E2A030403B4F656E280B609892BAB427BD74CEDC0C22E6791BB51C",
+                      "sha256":  "BBFB49C8647ED05DDD91814C6AF40DD7B2983F16A5453734DB7F51C95E00B002",
                       "mode":  "text-lf"
                   },
                   {
@@ -625,7 +625,7 @@
                   },
                   {
                       "path":  "frontend/source/operation-monitor.js",
-                      "sha256":  "6870F355877D5A8E2554BF2686E4CF3B5C5D184BE756B9A7A0B005EA9DBB0BD8",
+                      "sha256":  "96DDDD9CD9970394BD183F18D254619EEF328D7BFDAE5CFF0684D0A2B697583C",
                       "mode":  "text-lf"
                   },
                   {
@@ -785,7 +785,7 @@
                   },
                   {
                       "path":  "Install-GpoRemediator.ps1",
-                      "sha256":  "9C791046DB96962B89BBDAC9CFE34BA545AB02B26A572F746C80CEAD5748421B",
+                      "sha256":  "75C1BABCA6B11693628192E0ED6B1FCD133BA76A700706B41631C34B1039667D",
                       "mode":  "text-lf"
                   },
                   {
@@ -795,12 +795,12 @@
                   },
                   {
                       "path":  "release/GpoRemediator-runtime-win-x64.zip",
-                      "sha256":  "B6F7B5CD81A1CA3C53A2B43BFD8BA7A484534F182B246B59B0B2DB70315E0213",
+                      "sha256":  "87CD6991EE673D82ED5D83040BADE4AADF7FA6550D82C1798DFC484611E0D832",
                       "mode":  "binary"
                   },
                   {
                       "path":  "release/GpoRemediator-runtime-win-x64.zip.sha256",
-                      "sha256":  "F537E3B956CFFE36B9CD5B3662DE9AA98BE3354B31AF80854902E9DAD1F50C16",
+                      "sha256":  "FA0B3ED7726C31308876A9CB89E01490A66C45F6D18DDA56A77CA7B5C5F37DCB",
                       "mode":  "text-lf"
                   },
                   {
@@ -849,6 +849,11 @@
                       "mode":  "text-lf"
                   },
                   {
+                      "path":  "scripts/Export-ReleasePackage.ps1",
+                      "sha256":  "6D3E09416A640113ACA851B6C52173A08D803781C990DED6D0544EB39D947ECF",
+                      "mode":  "text-lf"
+                  },
+                  {
                       "path":  "scripts/fixtures/Mock-LsaUserRights.ps1",
                       "sha256":  "6E59624C6D34C8039C6545B036D38A3ACC0756669032BA2EC76B112052A478F5",
                       "mode":  "text-lf"
@@ -865,7 +870,7 @@
                   },
                   {
                       "path":  "scripts/Install-MachineService.ps1",
-                      "sha256":  "3A7537828481C47E47E19508C62E9CC22B33A9E9207D7EFD019BE9653A1329BE",
+                      "sha256":  "46C0C1FEDB29FA04FD71E314635033D03AD47EC3D26260C905B8936C8BBAC1E5",
                       "mode":  "text-lf"
                   },
                   {
@@ -885,7 +890,7 @@
                   },
                   {
                       "path":  "scripts/ReleasePackage.psm1",
-                      "sha256":  "833AD724817DE1B3C98E6F99F4629F366FFD0AAABED8EB67B6AF27108C049CDB",
+                      "sha256":  "F2EDB48D275ADEC602476DCC7CE4973D7E3774785251898C4AB7AC5E95B95834",
                       "mode":  "text-lf"
                   },
                   {

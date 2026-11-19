@@ -249,6 +249,7 @@ function Start-Launcher([string]$Mode = 'Auto', [switch]$RepairPackage) {
         $script:pendingUntil=[DateTime]::UtcNow.AddSeconds(5)
         return
     }
+    if($MachineClient){throw 'The managed machine task is unavailable. Reopen Control Center after a local administrator checks the task.'}
     $script:runtimeStateCache=$null; $script:runtimeStateChecked=[DateTime]::MinValue
     $extra = if ($RepairPackage) { ' -Repair' } else { '' }
     $arguments = '-NoLogo -NoProfile -ExecutionPolicy Bypass -File "{0}" -Mode {1} -Port {2} -NoBrowser{3}' -f (Join-Path $projectRoot 'GpoRemediator.ps1'),$Mode,$Port,$extra

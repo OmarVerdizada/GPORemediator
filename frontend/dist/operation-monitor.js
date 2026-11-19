@@ -8,7 +8,19 @@ window.GpoOperationMonitor={create({state,api,render}){
   const id=state.inspectedOperation;
   return id?JSON.stringify([id,state.history.find(h=>h.id===id),window.GpoComponents.activeOperation(state,id),state.operationMonitorError]):null;
  };
- function noteRendered(){renderedDrawer=drawerState();}
+ function updateElapsed(){
+  if(document.hidden)return;
+  const now=Date.now();
+  for(const label of document.querySelectorAll('[data-verification-elapsed]')){
+   const started=Date.parse(label.dataset.verificationElapsed);
+   if(!Number.isFinite(started))continue;
+   const seconds=Math.max(0,Math.floor((now-started)/1000));
+   const elapsed=seconds<60?`${seconds}s elapsed`:`${Math.floor(seconds/60)}m ${seconds%60}s elapsed`;
+   if(label.textContent!==elapsed)label.textContent=elapsed;
+  }
+ }
+ function noteRendered(){renderedDrawer=drawerState();updateElapsed();}
+ window.setInterval(updateElapsed,1000);
  async function reload(){
   const [jobs,history]=await Promise.all([api('/workflows'),api('/gpo/history')]);
   const next=Array.isArray(jobs)?jobs:[];

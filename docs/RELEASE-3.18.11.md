@@ -22,6 +22,8 @@
 
 From an elevated Windows PowerShell window, install a verified release with `Install-GpoRemediator.ps1 ... -MachineService -MachineOperatorPrincipal 'DOMAIN\GPO-Operators' -DesktopShortcut`. Its default destination is the protected `Program Files\GpoRemediator` managed-install root. Omit `-StartMachineServiceAtBoot` to retain the default operator-controlled Start/Stop behavior.
 
+Repeat the same operator group when upgrading the machine installation. If omitted, the installer leaves scheduled-task access restricted to SYSTEM and local administrators. Use a dedicated operator group. The Authenticated Users, Everyone and built-in Users groups are rejected.
+
 Registering a checkout directly as LocalSystem is not a production installation. In an isolated developer VM only, the risk must be accepted explicitly:
 
 ```powershell
