@@ -164,7 +164,7 @@
     return seconds<60?`${seconds}s`:`${Math.floor(seconds/60)}m ${seconds%60}s`;
   }
   function refreshTiming(results){
-    if(!results.length)return '';
+    if(!results.length)return '<p>Next gpupdate /force: No refresh request is recorded for this operation.</p>';
     const description=x=>{
       const duration=Number.isFinite(x.computerRefreshDurationMs)?`Computer gpupdate: ${formatDuration(x.computerRefreshDurationMs)}`:'';
       if(x.workerRequestId){
@@ -175,12 +175,21 @@
       }
       const scheduled=x.state==='SCHEDULED'||x.computerState==='SCHEDULED'||x.userState==='SCHEDULED';
       const pending=scheduled?(x.scheduledAt?`<span data-verification-elapsed="${esc(x.scheduledAt)}" data-elapsed-label="since scheduling"></span> · `:'')+'Start time unavailable':'';
-      const failed=x.state==='FAILED'&&!duration&&!scheduled?'No confirmed run or ETA':'';
       const planned=Date.parse(x.dispatchNotBefore);
-      const dispatch=Number.isFinite(planned)?`Dispatch window: ${esc(new Date(planned).toLocaleString())}`:'';
-      return [duration,pending,failed,dispatch].filter(Boolean).join(' · ')||'Duration unavailable for this record';
+      const dispatch=Number.isFinite(planned)?`Previous attempt eligible for dispatch at ${esc(new Date(planned).toLocaleString())}`:'';
+      return [duration,pending,dispatch].filter(Boolean).join(' · ');
     };
-    return `<details class="endpoint-refresh-timing"><summary>gpupdate timing by endpoint</summary><ul>${results.map(x=>`<li><strong>${esc(x.computer)}</strong> · ${esc(x.state)} · ${description(x)}</li>`).join('')}</ul></details>`;
+    const next=x=>{
+      if(x.state==='STARTED')return 'Worker accepted the request. Completion is pending.';
+      if([x.state,x.computerState,x.userState].includes('SCHEDULED'))
+        return x.workerRequestId?'At the next worker check-in. Exact start time depends on when the endpoint is online.':'Windows accepted scheduling. The start time was not reported.';
+      if(x.state==='FAILED')return 'No retry scheduled by this operation.';
+      return 'No further run scheduled by this operation.';
+    };
+    return `<details open class="endpoint-refresh-timing"><summary>Next gpupdate /force by endpoint</summary><ul>${results.map(x=>{
+      const detail=description(x);
+      return `<li><strong>${esc(x.computer)}</strong> · ${esc(x.state)}<p>${next(x)}${detail?` · ${detail}`:''}</p></li>`;
+    }).join('')}</ul></details>`;
   }
   function endpointSummary(s,h){
     const r=h.result||{},o=window.GpoUiDomain.outcome(h),e=o.endpoints,offline=s.serviceOffline||s.serviceTransition;

@@ -275,7 +275,7 @@
                   },
                   {
                       "path":  "frontend/dist/components.js",
-                      "sha256":  "CFAF1CAA62C0563B11738AA5F90CC6463C2B4C9C53073AC144EE6DFBF3DA91EC",
+                      "sha256":  "4D5B8D64431B0EE2838E6F8B61E1F3AFC063D37664EB0EE94AF5A660A876AD7C",
                       "mode":  "text-lf"
                   },
                   {
@@ -395,7 +395,7 @@
                   },
                   {
                       "path":  "frontend/dist/source.sha256",
-                      "sha256":  "67972E1496B2BF9BB1B8A50AC0462FB5ED514C76D5847C2DB73F57CE638625FA",
+                      "sha256":  "A5F2AF00BD11B7824874E6457D2B9A0BFE9E23F19BFC1C7C9B87A097E7BB7E97",
                       "mode":  "text-lf"
                   },
                   {
@@ -550,7 +550,7 @@
                   },
                   {
                       "path":  "frontend/source/components.js",
-                      "sha256":  "CFAF1CAA62C0563B11738AA5F90CC6463C2B4C9C53073AC144EE6DFBF3DA91EC",
+                      "sha256":  "4D5B8D64431B0EE2838E6F8B61E1F3AFC063D37664EB0EE94AF5A660A876AD7C",
                       "mode":  "text-lf"
                   },
                   {
@@ -800,12 +800,12 @@
                   },
                   {
                       "path":  "release/GpoRemediator-runtime-win-x64.zip",
-                      "sha256":  "B2991520E57A77BACB35EEAA80ED516D702AE575514A0390398EF5ABD229DFDB",
+                      "sha256":  "0A39B7190EF6E912182A5747D5C107859BC1F4C9CA39127728BC6C14773858B2",
                       "mode":  "binary"
                   },
                   {
                       "path":  "release/GpoRemediator-runtime-win-x64.zip.sha256",
-                      "sha256":  "74AEA658587A7F06D50F6A783CA5DAB0008B407E82AF939EA8EC3E8325072DC0",
+                      "sha256":  "9FC2237733F6CF732E7AB54161CD89DD77B0FA7487CC7AAB3F6F1E04EFEA5B35",
                       "mode":  "text-lf"
                   },
                   {
