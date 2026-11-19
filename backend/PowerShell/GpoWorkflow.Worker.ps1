@@ -938,13 +938,24 @@ function Snapshot-ExtensionsMatch($Manifest,[string]$Id,$Selection){
     return [string]$ad.gPCUserExtensionNames -ceq [string]$userBefore
 }
 function Remote-GpoFolder([string]$Server,[string]$Id){return ('\\'+$Server+'\SYSVOL\'+$domain.DNSRoot+'\Policies\'+([guid]$Id).ToString('B').ToUpperInvariant())}
-function Send-CheckProgress([string]$Phase,[string]$State,[string]$Subject,[string]$Message,[AllowNull()][string]$ActualValue=$null){
+function Send-CheckProgress([string]$Phase,[string]$State,[string]$Subject,[string]$Message,[AllowNull()][string]$ActualValue=$null,$DispatchNotBefore=$null){
     if([bool](Read-Field $cfg 'emitProgress' $false)){
         # Information bypasses nested function return values. The transport alone
         # redirects this stream, so progress never contaminates policy evidence.
         $event=[pscustomobject]@{gpoCheck=[ordered]@{phase=$Phase;state=$State;subject=$Subject;message=$Message;actualValue=$ActualValue;checkedAt=[DateTimeOffset]::UtcNow.ToString('O')}}
+        if($DispatchNotBefore){$event.gpoCheck.dispatchNotBefore=$DispatchNotBefore}
         Write-Information -MessageData $event -InformationAction Continue
     }
+}
+function Wait-RefreshDispatch([string[]]$Computers){
+    if(!$Computers.Count){return}
+    $delaySeconds=10
+    $notBefore=[DateTimeOffset]::UtcNow.AddSeconds($delaySeconds).ToString('O')
+    foreach($name in $Computers){
+        Send-CheckProgress 'REFRESH' 'CHECKING' $name 'Waiting to send gpupdate /force to this endpoint.' -DispatchNotBefore $notBefore
+    }
+    Start-Sleep -Seconds $delaySeconds
+    return $notBefore
 }
 function Gpo-VersionNumber($Value){
     $number=0L
@@ -1035,7 +1046,7 @@ function Endpoint-FailureMessage($Record){
 }
 function Refresh-ComputerPolicy([string[]]$Computer){
     $credential=Endpoint-CredentialOptions
-    foreach($name in $Computer){Send-CheckProgress 'REFRESH' 'CHECKING' $name 'Opening the endpoint session for explicit gpupdate. Completion and policy value will be checked separately.'}
+    foreach($name in $Computer){Send-CheckProgress 'REFRESH' 'CHECKING' $name 'Waiting for the endpoint session and gpupdate. The command has a 2-minute limit once it starts. Connection and queue time vary.'}
     # Run on the endpoint with an explicit delegated credential: no Kerberos
     # second-hop dependency. /wait:-1 plus the process deadline distinguish
     # actual process completion from mere RPC task scheduling.
@@ -1045,12 +1056,13 @@ function Refresh-ComputerPolicy([string[]]$Computer){
         $process.StartInfo=[Diagnostics.ProcessStartInfo]::new((Join-Path $env:SystemRoot 'System32\gpupdate.exe'),'/target:computer /force /wait:-1')
         $process.StartInfo.UseShellExecute=$false;$process.StartInfo.CreateNoWindow=$true
         $process.StartInfo.RedirectStandardOutput=$true;$process.StartInfo.RedirectStandardError=$true
+        $elapsed=[Diagnostics.Stopwatch]::StartNew()
         try{
             $null=$process.Start()
             $stdout=$process.StandardOutput.ReadToEndAsync();$stderr=$process.StandardError.ReadToEndAsync()
-            if(!$process.WaitForExit(120000)){try{$process.Kill()}catch{};return @{state='FAILED';message='gpupdate did not complete before the 120-second deadline; client processing may still be running.'}}
-            if($process.ExitCode -ne 0){return @{state='FAILED';message=('gpupdate exited with code '+$process.ExitCode+'. Review GroupPolicy Operational events.')}}
-            return @{state='COMPLETED';message='gpupdate /target:computer /force /wait:-1 exited successfully. Verify values and winning GPO separately.'}
+            if(!$process.WaitForExit(120000)){try{$process.Kill()}catch{};return @{state='FAILED';computerRefreshDurationMs=$elapsed.ElapsedMilliseconds;message='gpupdate did not complete before the 120-second deadline; client processing may still be running.'}}
+            if($process.ExitCode -ne 0){return @{state='FAILED';computerRefreshDurationMs=$elapsed.ElapsedMilliseconds;message=('gpupdate exited with code '+$process.ExitCode+'. Review GroupPolicy Operational events.')}}
+            return @{state='COMPLETED';computerRefreshDurationMs=$elapsed.ElapsedMilliseconds;message='gpupdate /target:computer /force /wait:-1 exited successfully. Verify values and winning GPO separately.'}
         }finally{$process.Dispose()}
     } -ErrorAction SilentlyContinue -ErrorVariable remoteErrors)
     foreach($computerName in $Computer){
@@ -1857,53 +1869,59 @@ switch($Operation){
         Emit-Stage 'GPUPDATE'
         $refresh=@()
         $target=if($rollback -and !$batchRefresh){'Both'}elseif([string]$refreshMap.scope -eq 'User'){'User'}else{'Computer'}
-        $refreshCoverage=$null
+        $offset=[int](Read-Field $Data 'refreshOffset' 0)
+        if($offset -lt 0){Fail 'INVALID_REQUEST' 'Invalid refresh offset.'}
+        $total=$computers.Count
+        $computers=@($computers|Select-Object -Skip $offset -First 64)
+        $refreshCoverage=@{total=$total;checked=[math]::Min($offset+64,$total);complete=($offset+64 -ge $total)}
+        $runTargets=@($computers|Where-Object{$_ -in $liveComputers})
+        $dispatchNotBefore=Wait-RefreshDispatch $runTargets
         # Complete computer processing using delegated WinRM even after restore.
         # A signed-in user's policy requires a separate task in the user context;
         # neither its scheduling nor its failure changes computer completion.
         if($target -ne 'User' -and (Endpoint-CredentialOptions).Count){
-            $offset=[int](Read-Field $Data 'refreshOffset' 0);if($offset -lt 0){Fail 'INVALID_REQUEST' 'Invalid refresh offset.'}
-            $total=$computers.Count;$computers=@($computers|Select-Object -Skip $offset -First 64)
-            $runTargets=@($computers|Where-Object{$_ -in $liveComputers})
             $done=@();if($runTargets.Count){$done=@(Refresh-ComputerPolicy $runTargets)}
             foreach($computer in $computers){
                 if($computer -notin $liveComputers){$refresh+=@{computer=$computer;state='FAILED';message='The pinned endpoint is no longer in the enabled authorized scope. No refresh was attempted.'};continue}
                 $entry=@($done|Where-Object{[string]$_.PSComputerName -ieq $computer}|Select-Object -Last 1)
                 $computerState=if($entry.Count){[string]$entry[0].state}else{'FAILED'}
                 $message=if($entry.Count){[string]$entry[0].message}else{'No completion result. Check endpoint WinRM/Kerberos and execution permissions.'}
+                $duration=if($entry.Count){Read-Field $entry[0] 'computerRefreshDurationMs' $null}
                 if($target -eq 'Computer'){
-                    $entryResult=@{computer=$computer;state=$computerState;message=$message}
+                    $entryResult=@{computer=$computer;state=$computerState;message=$message;computerRefreshDurationMs=$duration}
                     if($batchRefresh){$entryResult.computerState=$computerState}
                     $refresh+=$entryResult
                     continue
                 }
-                $userState='SCHEDULED';$userMessage='Signed-in user policy refresh scheduled; completion is not yet confirmed.'
-                try{Invoke-GPUpdate -Computer $computer -Target User -Force -RandomDelayInMinutes 0 -ErrorAction Stop|Out-Null}catch{$userState='FAILED';$userMessage='Signed-in user refresh could not be scheduled. Check RPC/task-scheduler permissions and firewall. '+(Endpoint-FailureMessage $_)}
-                $refresh+=@{computer=$computer;state=$(if($computerState -eq 'FAILED' -or $userState -eq 'FAILED'){'FAILED'}else{'SCHEDULED'});computerState=$computerState;userState=$userState;message=('Computer: '+$message+' User: '+$userMessage)}
+                $userState='SCHEDULED';$scheduledAt=$null;$userMessage='Signed-in user policy refresh scheduled; completion is not yet confirmed.'
+                try{Invoke-GPUpdate -Computer $computer -Target User -Force -RandomDelayInMinutes 0 -ErrorAction Stop|Out-Null;$scheduledAt=[DateTimeOffset]::UtcNow.ToString('O')}catch{$userState='FAILED';$userMessage='Signed-in user refresh could not be scheduled. Check RPC/task-scheduler permissions and firewall. '+(Endpoint-FailureMessage $_)}
+                $refresh+=@{computer=$computer;state=$(if($computerState -eq 'FAILED' -or $userState -eq 'FAILED'){'FAILED'}else{'SCHEDULED'});computerState=$computerState;userState=$userState;message=('Computer: '+$message+' User: '+$userMessage);computerRefreshDurationMs=$duration;scheduledAt=$scheduledAt}
             }
-            $refreshCoverage=@{total=$total;checked=[math]::Min($offset+64,$total);complete=($offset+64 -ge $total)}
         }else{
-            $offset=[int](Read-Field $Data 'refreshOffset' 0);if($offset -lt 0){Fail 'INVALID_REQUEST' 'Invalid refresh offset.'}
-            $total=$computers.Count;$computers=@($computers|Select-Object -Skip $offset -First 64)
-            $refreshCoverage=@{total=$total;checked=[math]::Min($offset+64,$total);complete=($offset+64 -ge $total)}
             foreach($computer in $computers){
                 $entryResult=@{computer=$computer;state='FAILED'}
                 if($computer -notin $liveComputers){
                     $entryResult.message='The pinned endpoint is no longer in the enabled authorized endpoint scope. No refresh was scheduled.'
                 }else{
+                    Send-CheckProgress 'REFRESH' 'CHECKING' $computer 'Sending a refresh request to Windows Task Scheduler.'
                     try{
                         $options=@{Computer=$computer;Force=$true;RandomDelayInMinutes=0;ErrorAction='Stop'}
                         if($target -ne 'Both'){$options.Target=$target}
                         Invoke-GPUpdate @options|Out-Null
                         $entryResult.state='SCHEDULED'
+                        $entryResult.scheduledAt=[DateTimeOffset]::UtcNow.ToString('O')
                         $entryResult.message=if($target -eq 'Both'){'gpupdate /force scheduled for computer and signed-in user policies after rollback.'}else{'gpupdate /target:'+$target.ToLowerInvariant()+' /force scheduled.'}
                     }catch{$entryResult.message='Remote gpupdate could not be scheduled. Check RPC/task-scheduler firewall and permissions.'}
                 }
                 if($batchRefresh){
                     if($target -eq 'User'){$entryResult.userState=$entryResult.state}else{$entryResult.computerState=$entryResult.state}
                 }
+                Send-CheckProgress 'REFRESH' $(if($entryResult.state -eq 'SCHEDULED'){'PENDING'}else{'UNAVAILABLE'}) $computer $entryResult.message
                 $refresh+=$entryResult
             }
+        }
+        foreach($hostResult in $refresh){
+            if($dispatchNotBefore -and $hostResult.computer -in $runTargets){$hostResult.dispatchNotBefore=$dispatchNotBefore}
         }
         # Invoke-GPUpdate schedules a task; it does not wait for policy processing.
         $v=if($rollback){Verify-Rollback $plan $map $manifest}else{Verify-Published $plan $map $false};$failed=@($refresh|Where-Object{$_.state -eq 'FAILED'}).Count

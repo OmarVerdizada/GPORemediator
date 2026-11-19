@@ -8,6 +8,7 @@ $block=$switch.Clauses|Where-Object{$_.Item1.Extent.Text -eq "'gpoRefresh'"}|For
 $dispatch=[scriptblock]::Create($block.Extent.Text.TrimStart('{').TrimEnd('}'))
 $temp=Join-Path ([IO.Path]::GetTempPath()) ('gpr-refresh-'+[guid]::NewGuid().ToString('N'));$null=New-Item -ItemType Directory -Path $temp
 $cfg=@{emitProgress=$false};$script:targets=@(1..201|ForEach-Object{'ws'+$_+'.example.test'});$script:missing=$null;$script:remoteCalls=0
+function Start-Sleep {param($Seconds) if($Seconds -ne 10){throw 'Unexpected refresh dispatch delay'} }
 function Check($ok,$name){if(!$ok){throw $name};Write-Output ('PASS '+$name)}
 function Run-Directory($Plan){$temp}
 function Refresh-Targets {param($Strategy,$ScopeDn,$EndpointScopeDn,$PolicyScope) $script:targets|Where-Object{$_ -ne $script:missing}}
@@ -21,7 +22,7 @@ function Invoke-Command {
  Check ($Credential -eq 'fixture-credential-not-a-secret' -and $Authentication -eq 'Kerberos') 'computer refresh uses explicit delegated credential across the second hop'|Out-Null
  Check ($ThrottleLimit -eq 16 -and @($ComputerName).Count -le 64) 'bounded refresh concurrency and batch size'|Out-Null
  $script:remoteCalls++
- foreach($name in $ComputerName){[pscustomobject]@{PSComputerName=$name;state='COMPLETED';message='fixture process completed'}}
+ foreach($name in $ComputerName){[pscustomobject]@{PSComputerName=$name;state='COMPLETED';message='fixture process completed';computerRefreshDurationMs=1240}}
 }
 try{
  $plan=@{preview=@{verificationComputers=$script:targets};selection=@{scopeDn='OU=Pilot,DC=example,DC=test';refresh='Scope'}}
@@ -30,6 +31,8 @@ try{
   $Data=@{plan=$plan;mapping=@{scope='Computer'};previous=@{state='NO_CHANGE'};refresh='Scope';refreshOffset=$offset}
   $result=& $dispatch
   Check ($result.state -eq 'REFRESH_COMPLETED') 'process completion is separate from task scheduling'
+  Check (@($result.refreshResults|Where-Object{$_.computerRefreshDurationMs -ne 1240}).Count -eq 0) 'recorded refresh preserves the endpoint-measured duration'
+  Check (@($result.refreshResults|Where-Object{!$_.dispatchNotBefore}).Count -eq 0) 'recorded refresh preserves the planned dispatch window'
   Check ($result.refreshCoverage.checked -eq [math]::Min($offset+64,201)) 'refresh coverage advances across bounded pages'
   $all+=@($result.refreshResults)
  }
@@ -91,6 +94,7 @@ try{
  $Data=@{plan=$plan;mapping=@{scope='User'};previous=@{state='PUBLISHED'};refresh='Scope'}
  $callsBefore=$script:remoteCalls;$result=& $dispatch
  Check ($result.state -eq 'REFRESH_SCHEDULED' -and $result.refreshResults.Count -eq 2 -and @($script:userSchedules|Where-Object{$_.target -ne 'User' -or !$_.force}).Count -eq 0) 'user refresh schedules Target User on each pinned session endpoint'
+ Check (@($result.refreshResults|Where-Object{!$_.scheduledAt -or $_.ContainsKey('computerRefreshDurationMs')}).Count -eq 0) 'scheduled user refresh has a scheduling timestamp and no measured duration'
  Check ($script:remoteCalls -eq $callsBefore -and @($result.refreshResults|Where-Object state -eq 'COMPLETED').Count -eq 0) 'user task scheduling never becomes computer refresh or completed user processing'
  $script:missing=$script:targets[0];$script:userSchedules=@();$result=& $dispatch
  Check ($script:userSchedules.Count -eq 1 -and $script:userSchedules[0].computer -eq $script:targets[1] -and $result.state -eq 'REFRESH_PARTIAL') 'removed user session endpoints are not scheduled and remain visible as failures'

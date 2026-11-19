@@ -39,7 +39,8 @@ public record GpoEndpointCheck(string Hostname, string State, string Message, st
     [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] string? BeforeActualValue = null,
     [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] string? RecoveryCommand = null);
 public record GpoRestoreCheck(string Area,string State,string? Expected,string? Actual,string Message);
-public record GpoLiveCheck(string Phase, string State, string Subject, string? ActualValue, string Message, string CheckedAt);
+public record GpoLiveCheck(string Phase, string State, string Subject, string? ActualValue, string Message, string CheckedAt,
+    [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] DateTimeOffset? DispatchNotBefore = null);
 public record GpoVerificationDetails(string AdVersion, string GptVersion, bool VersionsMatch,
     string[] DomainControllers, string[] ReplicationWarnings, string CheckedAt,
     bool ReplicationConverged = false, GpoDcVersionStatus[]? DcVersions = null,
@@ -64,7 +65,10 @@ public record GpoExplainRequest(string Hostname);
 public record GpoConsent(string Confirmation, bool AcknowledgeImpact = false, bool AcknowledgeProtected = false, string? ChangeReference = null, string? ApprovedBy = null, string? Refresh = null);
 public record GpoRefreshResult(string Computer, string State, string Message,
     [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] string? ComputerState = null,
-    [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] string? UserState = null);
+    [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] string? UserState = null,
+    [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] long? ComputerRefreshDurationMs = null,
+    [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] string? ScheduledAt = null,
+    [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] DateTimeOffset? DispatchNotBefore = null);
 public record EndpointCoverage(int Total,int Checked,bool Complete);
 public record GpoWorkflowResult(string State, string Message, string? BackupId, string? BackupDirectory, string? PostFingerprint,
     bool GpoPublished, bool LinkVerified, GpoRefreshResult[] RefreshResults, string EffectiveStatus,

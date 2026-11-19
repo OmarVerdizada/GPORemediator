@@ -159,6 +159,23 @@
     const label='Endpoint values verified';
     return {tone:'success',label,html:`<span class="operation-outcome-badge"><span class="ds-badge ds-success">${icon('check')}${label}</span>${o.refreshFailed?`<small>Refresh: ${o.refreshFailed} failed</small>`:''}</span>`};
   }
+  function formatDuration(ms){
+    const seconds=Math.max(0,Math.round(ms/1000));
+    return seconds<60?`${seconds}s`:`${Math.floor(seconds/60)}m ${seconds%60}s`;
+  }
+  function refreshTiming(results){
+    if(!results.length)return '';
+    const description=x=>{
+      const duration=Number.isFinite(x.computerRefreshDurationMs)?`Computer gpupdate: ${formatDuration(x.computerRefreshDurationMs)}`:'';
+      const scheduled=x.state==='SCHEDULED'||x.computerState==='SCHEDULED'||x.userState==='SCHEDULED';
+      const pending=scheduled?(x.scheduledAt?`<span data-verification-elapsed="${esc(x.scheduledAt)}" data-elapsed-label="since scheduling"></span> · `:'')+'Start time unavailable':'';
+      const failed=x.state==='FAILED'&&!duration&&!scheduled?'No confirmed run or ETA':'';
+      const planned=Date.parse(x.dispatchNotBefore);
+      const dispatch=Number.isFinite(planned)?`Dispatch window: ${esc(new Date(planned).toLocaleString())}`:'';
+      return [duration,pending,failed,dispatch].filter(Boolean).join(' · ')||'Duration unavailable for this record';
+    };
+    return `<details class="endpoint-refresh-timing"><summary>gpupdate timing by endpoint</summary><ul>${results.map(x=>`<li><strong>${esc(x.computer)}</strong> · ${esc(x.state)} · ${description(x)}</li>`).join('')}</ul></details>`;
+  }
   function endpointSummary(s,h){
     const r=h.result||{},o=window.GpoUiDomain.outcome(h),e=o.endpoints,offline=s.serviceOffline||s.serviceTransition;
     const checks=r.endpointChecks||[],unavailable=checks.filter(x=>['UNAVAILABLE','OUTSIDE_SCOPE'].includes(x.state));
@@ -169,7 +186,14 @@
       :`Endpoint rollback unverified${e.observed?` · ${e.observed} observed`:''}${e.unavailable?` · ${e.unavailable} unavailable`:''}`;
     const value=r.domainPolicy?(o.restored?`AD snapshot value: ${r.restoreChecks?.some(x=>x.area==='DOMAIN_POLICY'&&x.state==='MATCH')?'restored and verified':'see recorded restore checks'}`:`AD value: ${window.GpoUiDomain.domainMismatch(r)?'does not match the request':o.verified?'verified on the selected DC':'read requires review'}`):o.restored?endpointRestore:e.total?`Endpoint values: ${e.verified} of ${e.total} verified${e.mismatch?` · ${e.mismatch} mismatch`:''}${e.unavailable?` · ${e.unavailable} unavailable`:''}${e.remaining?` · ${e.remaining} not checked`:''}`:'Endpoint values: no reading collected';
     const refresh=r.refreshResults||[],half=refresh.some(x=>x.computerState||x.userState),counts=key=>['COMPLETED','SCHEDULED','FAILED'].map(state=>`${refresh.filter(x=>(key?x[key]:x.state)===state).length} ${state.toLowerCase()}`).join(' · ');
-    return `<section class="endpoint-summary ${o.mismatch?'bad':e.unavailable||o.refreshFailed?'partial':'neutral'}" aria-label="Endpoint results"><strong>${offline?'Recorded · ':''}${esc(value)}</strong>${unavailable.length?`<p>${unavailable.map(x=>`${esc(x.hostname)} · value unavailable`).join('<br>')}</p>`:''}${refresh.length?`<p>${half?'Computer refresh: '+counts('computerState')+'<br>Signed-in user refresh: '+counts('userState'):'Endpoint refresh: '+counts('')}</p>`:''}<small>${o.restored?'GPO snapshot restoration is confirmed separately from endpoint undo.':r.domainPolicy?'AD value was checked on the selected controller.':r.endpointCoverage?'Coverage: pinned endpoints for this control.':'Coverage: inspected endpoints only; whole-scope verification is not established.'}</small></section>`;
+    const stages=h.stages||[];
+    const verifyIndex=stages.findLastIndex(x=>x.phase==='VERIFY_STARTED');
+    const nextOperation=stages.findIndex((x,i)=>i>verifyIndex&&/^(VERIFY|REFRESH|APPLY|ROLLBACK)_STARTED$/.test(x.phase));
+    const verifyStages=verifyIndex>=0?stages.slice(verifyIndex,nextOperation<0?undefined:nextOperation):[];
+    const verifyFinished=verifyStages.every(x=>x.finishedAt)?verifyStages.at(-1)?.finishedAt:null;
+    const verifyMs=verifyFinished?Date.parse(verifyFinished)-Date.parse(stages[verifyIndex].startedAt):NaN;
+    const verifiedTiming=Number.isFinite(verifyMs)&&verifyMs>=0?`<p>Last Re-verify: ${formatDuration(verifyMs)} · ${esc(new Date(verifyFinished).toLocaleString())}</p>`:'';
+    return `<section class="endpoint-summary ${o.mismatch?'bad':e.unavailable||o.refreshFailed?'partial':'neutral'}" aria-label="Endpoint results"><strong>${offline?'Recorded · ':''}${esc(value)}</strong>${unavailable.length?`<p>${unavailable.map(x=>`${esc(x.hostname)} · value unavailable`).join('<br>')}</p>`:''}${refresh.length?`<p>${half?'Computer refresh: '+counts('computerState')+'<br>Signed-in user refresh: '+counts('userState'):'Endpoint refresh: '+counts('')}</p>`:''}${refreshTiming(refresh)}${verifiedTiming}<small>${o.restored?'GPO snapshot restoration is confirmed separately from endpoint undo.':r.domainPolicy?'AD value was checked on the selected controller.':r.endpointCoverage?'Coverage: pinned endpoints for this control.':'Coverage: inspected endpoints only; whole-scope verification is not established.'}</small></section>`;
   }
   function assuranceStages(s,stages,result={}){
     const names={GPO_CONFIGURATION:['GPO configuration','GPO configuration'],GPO_APPLICABILITY:['Target applicability','Target applicability'],AD_SYSVOL_REPLICATION:['Controller replication','Controller replication'],CLIENT_PROCESSING:['Endpoint refresh','Endpoint refresh'],ENDPOINT_CONFIGURATION:['Actual endpoint value','Actual endpoint value']};

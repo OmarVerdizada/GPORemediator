@@ -232,7 +232,12 @@ public sealed class WorkspaceWorkflows(Store store,IWorkflowOperations service,O
                     if(job.Action=="rollback"&&groups.Length>1){
                         static string State(IEnumerable<string> states)=>states.Contains("FAILED")?"FAILED":states.All(s=>s=="COMPLETED")?"COMPLETED":"SCHEDULED";
                         static string? Half(IEnumerable<string?> states){var known=states.OfType<string>().ToArray();return known.Length==0?null:State(known);}
-                        var merged=combined.GroupBy(r=>r.Computer,StringComparer.OrdinalIgnoreCase).Select(g=>new GpoRefreshResult(g.Key,State(g.Select(r=>r.State)),string.Join(" | ",g.Select(r=>r.Message)),Half(g.Select(r=>r.ComputerState)),Half(g.Select(r=>r.UserState)))).ToArray();
+                        var merged=combined.GroupBy(r=>r.Computer,StringComparer.OrdinalIgnoreCase).Select(g=>new GpoRefreshResult(
+                            g.Key,State(g.Select(r=>r.State)),string.Join(" | ",g.Select(r=>r.Message)),
+                            Half(g.Select(r=>r.ComputerState)),Half(g.Select(r=>r.UserState)),
+                            g.LastOrDefault(r=>r.ComputerRefreshDurationMs.HasValue)?.ComputerRefreshDurationMs,
+                            g.LastOrDefault(r=>r.ScheduledAt is not null)?.ScheduledAt,
+                            g.LastOrDefault(r=>r.DispatchNotBefore.HasValue)?.DispatchNotBefore)).ToArray();
                         store.Put("gpo_runs",refreshId,refreshed with{Result=refreshed.Result with{RefreshResults=merged,RefreshCoverage=new(merged.Length,merged.Length,target.Id==groups[^1].Id)}},refreshed.Result.State);
                     }
                     refreshIncomplete|=InspectRefresh(refreshed.Result);

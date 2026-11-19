@@ -11,11 +11,20 @@ window.GpoOperationMonitor={create({state,api,render}){
  function updateElapsed(){
   if(document.hidden)return;
   const now=Date.now();
+  for(const label of document.querySelectorAll('[data-refresh-countdown]')){
+   const deadline=Date.parse(label.dataset.refreshCountdown);
+   if(!Number.isFinite(deadline))continue;
+   const seconds=Math.max(0,Math.ceil((deadline-now)/1000));
+   const duration=seconds<60?`${seconds}s`:`${Math.floor(seconds/60)}m ${seconds%60}s`;
+   const countdown=seconds>0?`Dispatch in ${duration}`:'Dispatch window open · awaiting endpoint';
+   if(label.textContent!==countdown)label.textContent=countdown;
+  }
   for(const label of document.querySelectorAll('[data-verification-elapsed]')){
    const started=Date.parse(label.dataset.verificationElapsed);
    if(!Number.isFinite(started))continue;
    const seconds=Math.max(0,Math.floor((now-started)/1000));
-   const elapsed=seconds<60?`${seconds}s elapsed`:`${Math.floor(seconds/60)}m ${seconds%60}s elapsed`;
+   const duration=seconds<60?`${seconds}s`:`${Math.floor(seconds/60)}m ${seconds%60}s`;
+   const elapsed=`${duration} ${label.dataset.elapsedLabel||'elapsed'}`;
    if(label.textContent!==elapsed)label.textContent=elapsed;
   }
  }
