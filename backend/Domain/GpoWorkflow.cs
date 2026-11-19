@@ -37,7 +37,13 @@ public record GpoImpactDetails(string Inheritance, bool BlockInheritance, GpoCon
 public record GpoDcVersionStatus(string DomainController, string? AdVersion, string? GptVersion, bool Reachable, bool VersionsMatch, string Message);
 public record GpoEndpointCheck(string Hostname, string State, string Message, string? ActualValue = null,
     [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] string? BeforeActualValue = null,
-    [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] string? RecoveryCommand = null);
+    [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] string? RecoveryCommand = null,
+    [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] EndpointProbeTarget? WorkerProbe = null,
+    [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] string? WorkerRequestId = null,
+    [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] DateTimeOffset? WorkerExpiresAt = null,
+    [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] DateTimeOffset? WorkerReadAt = null);
+public record EndpointProbeTarget(string ControlId, string Scope, string Handler, string? UserSid, string Comparator, EndpointProbeItem[] Items);
+public record EndpointProbeItem(string Section, string Key, string Name, string Type, string Guid, string Expected, string Comparator);
 public record GpoRestoreCheck(string Area,string State,string? Expected,string? Actual,string Message);
 public record GpoLiveCheck(string Phase, string State, string Subject, string? ActualValue, string Message, string CheckedAt,
     [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] DateTimeOffset? DispatchNotBefore = null);

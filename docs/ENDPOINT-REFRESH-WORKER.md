@@ -12,4 +12,11 @@ The worker runs only the fixed local computer `gpupdate /force` command. It can 
 
 Keep each receipt at least until its corresponding request expires. The receipt is also the claim that prevents repeated execution. If a worker was interrupted after claiming a request, inspect the endpoint before issuing a new approved request.
 
-Domain controllers use manual refresh in worker mode. User GPOs use normal Windows processing or manual refresh in the signed-in user context. The worker does not collect live LSA, HKCU, RSoP or registry evidence.
+## Enable signed endpoint value evidence
+
+1. Deploy the same release of the worker, `backend/PowerShell/GpoWorkflow.Worker.ps1`, and `backend/data/gpo-production-mappings.json` beneath one administrator-protected tree, preserving the relative folders. The installed catalog fixes the authorized policy fields.
+2. Give each enrolled computer its own RSA evidence-signing certificate in the Local Computer Personal store and grant the task identity access to its private key. Pass its thumbprint as `-ReceiptCertificateThumbprint`. Import the public certificate on the management host in Local Computer Trusted People.
+3. Add the endpoint FQDN and its certificate thumbprint to the backend's `Windows:EndpointQueueReceiptThumbprints` configuration map. Restart the backend after enrollment. Verification mode requires both the queue root and at least one pinned endpoint certificate. Unenrolled endpoints are reported as unavailable in this mode.
+4. Select **Re-verify**. The backend checks the GPO, link and pinned scope, then queues a read-only check. The first result may be pending. Select **Re-verify** after the worker check-in to collect the signed evidence. Check requests expire after five minutes. For a User GPO, set an endpoint OU and an enabled verification user in the plan. The selected user's profile hive must be loaded for HKCU evidence.
+
+The evidence worker supports the installed computer registry, LSA/security-policy, firewall and advanced-audit probes and the selected user's HKCU probe. Measurements apply to the endpoint sample. RSoP and winning GPO attribution remain separate. Domain controllers use manual refresh and manual endpoint evidence in worker mode. User refresh uses normal Windows policy processing or manual execution in the signed-in user context. Worker evidence is not used to claim restoration of a pre-change endpoint snapshot.

@@ -33,6 +33,15 @@ function secedit.exe {
 $checks=@(Verify-EffectiveSamples $plan $map)
 Assert-Test ($checks.Count -eq 1 -and $checks[0].state -eq 'VERIFIED') 'SID ordering/asterisks produced false mismatch'
 Assert-Test (($script:hosts -join ',') -eq 'ws.example.local') 'PDC outside scope or unauthorized host was probed'
+function Get-ADDomainController {param($Filter,$Server,$ErrorAction) [pscustomobject]@{HostName='dc.example.local'} }
+$plan.selection.setting='2.2.16'
+$Data=@{endpointVerificationWorker=$true}
+$script:hosts=@()
+$queued=@(Verify-EffectiveSamples $plan $map)
+Assert-Test ($queued.Count -eq 1 -and $queued[0].state -eq 'PENDING' -and $queued[0].workerProbe.controlId -eq '2.2.16' -and !$script:hosts.Count) 'worker verification must generate a bounded sample request without endpoint WinRM'
+$controller=@(Worker-VerificationTargets $plan $map @('dc.example.local') '')
+Assert-Test ($controller.Count -eq 1 -and $controller[0].state -eq 'UNAVAILABLE' -and !$controller[0].ContainsKey('workerProbe')) 'worker verification must not queue a domain controller'
+Remove-Variable Data
 $script:lsaOverride=@('S-1-5-32-544')
 $lsacheck=@(Verify-EffectiveSamples $plan $map)[0]
 Assert-Test ($lsacheck.state -eq 'MISMATCH' -and $lsacheck.message -match 'local LSA') 'Matching security export cannot conceal a different live LSA assignment'

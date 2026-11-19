@@ -1115,8 +1115,31 @@ function Read-RollbackSamples($Plan,$Map){
     if(!$sample.Count){return @()}
     return @(Verify-EffectiveSamples @{selection=$Plan.selection;preview=@{verificationComputers=$sample;impact=$null;refreshComputers=@()}} $Map $registry $true)
 }
+function Worker-VerificationTargets($Plan,$Map,[string[]]$Hosts,[string]$UserSid){
+    try{
+        $controllers=@(Get-ADDomainController -Filter * -Server $cfg.domainController -ErrorAction Stop | ForEach-Object { [string]$_.HostName })
+        if(!$controllers.Count){throw 'Controller roles could not be determined'}
+    }catch{
+        foreach($name in $Hosts){@{hostname=$name;state='UNAVAILABLE';message='Controller roles could not be established. No worker probe was queued.'}}
+        return
+    }
+    $selection=$Plan.selection
+    $probe=@{
+        controlId=[string]$selection.setting;scope=[string]$Map.scope;handler=[string]$Map.handler
+        userSid=$UserSid;comparator=[string]$Map.comparator;items=@(Endpoint-Expected $Map $selection)
+    }
+    foreach($name in $Hosts){
+        if($name -in $controllers){
+            @{hostname=$name;state='UNAVAILABLE';message='Controller endpoint evidence requires a manual check in worker mode.'}
+        }else{
+            @{hostname=$name;state='PENDING';message='Endpoint scope checked. Preparing a read-only worker request.';workerProbe=$probe}
+        }
+    }
+}
 function Verify-EffectiveSamples($Plan,$Map,[bool]$RollbackRegistry=$false,[bool]$RollbackProbe=$false){
     $s=$Plan.selection;$checks=@();$remoteCredential=Endpoint-CredentialOptions
+    $requestData=Get-Variable -Name Data -ValueOnly -ErrorAction SilentlyContinue
+    $useWorker=!$RollbackProbe -and [bool](Read-Field $requestData 'endpointVerificationWorker' $false)
     $probeOptions=@{}
     if($RollbackProbe){$probeOptions.SessionOption=New-PSSessionOption -OpenTimeout 4000 -OperationTimeout 15000}
     if([bool]$Map.domainPolicySensitive){return @()}
@@ -1127,6 +1150,7 @@ function Verify-EffectiveSamples($Plan,$Map,[bool]$RollbackRegistry=$false,[bool
       try{$user=Verification-User $identity;if(!$user.Enabled -or !([string]$user.DistinguishedName).EndsWith(','+[string]$s.scopeDn,[StringComparison]::OrdinalIgnoreCase)){throw 'User is outside the current enabled target scope'};$sid=[string]$user.SID.Value}catch{return @(@{hostname='<user-session>';state='UNAVAILABLE';message='The verification user could not be resolved.';actualValue=$null})}
       $currentHosts=@(Refresh-Targets 'Scope' $s.scopeDn ([string](Read-Field $s 'endpointScopeDn' '')) 'User');foreach($removed in @($hosts|Where-Object{$_ -notin $currentHosts})){$checks+=@{hostname=$removed;state='OUTSIDE_SCOPE';message='The pinned endpoint is no longer in the enabled authorized scope.';actualValue=$null}};$hosts=@($hosts|Where-Object{$_ -in $currentHosts})
       if(!$hosts.Count){return @($checks)}
+      if($useWorker){return @($checks)+@(Worker-VerificationTargets $Plan $Map $hosts $sid)}
       $expected=@(Endpoint-Expected $Map $s)
       foreach($hostName in $hosts){
         Send-CheckProgress 'ENDPOINT' 'CHECKING' $hostName 'Reading effective policy on the endpoint.'
@@ -1159,6 +1183,7 @@ function Verify-EffectiveSamples($Plan,$Map,[bool]$RollbackRegistry=$false,[bool
     if(!$hosts.Count){return @(@{hostname='<scope>';state='PENDING';message='No concrete endpoint is available for effective-policy verification in the selected scope.';actualValue=$null})}
     try{$liveHosts=@(Get-ADComputer -SearchBase $s.scopeDn -SearchScope Subtree -Filter {Enabled -eq $true} -Server $cfg.domainController -Properties DNSHostName -ResultSetSize 5001 -ErrorAction Stop|ForEach-Object{[string]$_.DNSHostName});foreach($removed in @($hosts|Where-Object{$_ -notin $liveHosts})){$checks+=@{hostname=$removed;state='OUTSIDE_SCOPE';message='The pinned endpoint is no longer in the enabled target scope.';actualValue=$null}};$hosts=@($hosts|Where-Object{$_ -in $liveHosts})}catch{return @(@{hostname='<scope>';state='UNAVAILABLE';message='Current endpoint scope membership could not be established.';actualValue=$null})}
     if(!$hosts.Count){return @($checks)}
+    if($useWorker){return @($checks)+@(Worker-VerificationTargets $Plan $Map $hosts '')}
     $expected=@(Endpoint-Expected $Map $s);$handler=[string]$Map.handler
     foreach($hostName in $hosts){
         Send-CheckProgress 'ENDPOINT' 'CHECKING' $hostName 'Reading effective policy on the endpoint.'
@@ -1802,6 +1827,7 @@ switch($Operation){
         Emit-Stage 'REPLICATION_ENDPOINT_CHECK'
         $plan=$Data.plan;$map=$Data.mapping;$directory=Run-Directory $plan
         $checkEndpoints=![bool](Read-Field $Data 'skipEndpointProbes' $false)
+        $checkRollbackEndpoints=$checkEndpoints -and ![bool](Read-Field $Data 'endpointVerificationWorker' $false)
         if(!(Test-Path -LiteralPath (Join-Path $directory 'manifest.json'))){
             $v=Verify-Published $plan $map $checkEndpoints
             $state=if($v.published -and $v.linked){'NO_CHANGE'}else{'DRIFT_DETECTED'}
@@ -1810,13 +1836,13 @@ switch($Operation){
         }
         $manifest=Get-Content -LiteralPath (Join-Path $directory 'manifest.json') -Raw|ConvertFrom-Json
         if([string]$manifest.phase -in @('PUBLISHED','VERIFY_MISMATCH') -and (Read-Field $manifest 'rollbackFailure' $null)){
-            $restoration=Verify-Rollback $plan $map $manifest $checkEndpoints
+            $restoration=Verify-Rollback $plan $map $manifest $checkRollbackEndpoints
             if($restoration.restored){Record-VerifiedRestore $plan $manifest $directory;return Result 'ROLLED_BACK' 'The saved GPO, link and AD restoration target were verified live.' $manifest $restoration @()}
             $failure=$manifest.rollbackFailure
             return Result 'ROLLBACK_REVIEW_REQUIRED' ('The recorded rollback did not restore the saved snapshot. Read-only verification does not retry it. Resolve '+[string]$failure.code+' at '+[string]$failure.stage+' and review rollback availability before confirming another restore.') $manifest $restoration @()
         }
         if([string]$manifest.phase -in @('ROLLING_BACK','ROLLED_BACK','ROLLBACK_REVIEW_REQUIRED','ROLLBACK_DRIFT_DETECTED')){
-            $v=Verify-Rollback $plan $map $manifest $checkEndpoints;$rolledBack=[bool]$v.restored
+            $v=Verify-Rollback $plan $map $manifest $checkRollbackEndpoints;$rolledBack=[bool]$v.restored
             if($rolledBack){
                 Record-VerifiedRestore $plan $manifest $directory
                 return Result 'ROLLED_BACK' 'Rollback was re-verified against the pre-change GPO content, extensions and link state. Endpoint policy convergence may still be pending.' $manifest $v @()
