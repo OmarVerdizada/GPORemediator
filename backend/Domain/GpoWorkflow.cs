@@ -46,7 +46,8 @@ public record EndpointProbeTarget(string ControlId, string Scope, string Handler
 public record EndpointProbeItem(string Section, string Key, string Name, string Type, string Guid, string Expected, string Comparator);
 public record GpoRestoreCheck(string Area,string State,string? Expected,string? Actual,string Message);
 public record GpoLiveCheck(string Phase, string State, string Subject, string? ActualValue, string Message, string CheckedAt,
-    [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] DateTimeOffset? DispatchNotBefore = null);
+    [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] DateTimeOffset? DispatchNotBefore = null,
+    [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] DateTimeOffset? EstimatedRefreshAt = null);
 public record GpoVerificationDetails(string AdVersion, string GptVersion, bool VersionsMatch,
     string[] DomainControllers, string[] ReplicationWarnings, string CheckedAt,
     bool ReplicationConverged = false, GpoDcVersionStatus[]? DcVersions = null,
@@ -76,7 +77,8 @@ public record GpoRefreshResult(string Computer, string State, string Message,
     [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] string? ScheduledAt = null,
     [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] DateTimeOffset? DispatchNotBefore = null,
     [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] string? WorkerRequestId = null,
-    [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] DateTimeOffset? WorkerExpiresAt = null);
+    [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] DateTimeOffset? WorkerExpiresAt = null,
+    [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] DateTimeOffset? EstimatedRefreshAt = null);
 public record EndpointCoverage(int Total,int Checked,bool Complete);
 public record GpoWorkflowResult(string State, string Message, string? BackupId, string? BackupDirectory, string? PostFingerprint,
     bool GpoPublished, bool LinkVerified, GpoRefreshResult[] RefreshResults, string EffectiveStatus,

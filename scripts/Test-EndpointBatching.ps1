@@ -33,7 +33,7 @@ try{
   $result=& $dispatch
   Check ($result.state -eq 'REFRESH_COMPLETED') 'process completion is separate from task scheduling'
   Check (@($result.refreshResults|Where-Object{$_.computerRefreshDurationMs -ne 1240}).Count -eq 0) 'recorded refresh preserves the endpoint-measured duration'
-  Check (@($result.refreshResults|Where-Object{!$_.dispatchNotBefore}).Count -eq 0) 'recorded refresh preserves the planned dispatch window'
+  Check (@($result.refreshResults|Where-Object{!$_.estimatedRefreshAt}).Count -eq 0) 'direct refresh preserves the planned endpoint start'
   Check ($result.refreshCoverage.checked -eq [math]::Min($offset+64,201)) 'refresh coverage advances across bounded pages'
   $all+=@($result.refreshResults)
  }
@@ -110,6 +110,11 @@ try{
  $script:missing=$null
  $script:userScheduleDenied=$true;$result=& $dispatch
  Check ($result.state -eq 'REFRESH_PARTIAL' -and @($result.refreshResults|Where-Object state -eq 'FAILED').Count -eq 2) 'user RPC scheduling failures remain per-host failures'
+ $Data.endpointWorker=$true
+ $beforeSchedules=$script:userSchedules.Count
+ $result=& $dispatch
+ Check ($result.refreshResults[0].state -eq 'WORKER_ELIGIBLE' -and $result.refreshResults[0].userState -eq 'PENDING' -and $result.refreshResults[1].state -eq 'FAILED') 'queued user refresh selects the user action for a member and excludes the DC'
+ Check ($script:userSchedules.Count -eq $beforeSchedules -and $script:remoteCalls -eq $callsBefore) 'worker user refresh never dispatches through operator RPC or WinRM'
 
 }finally{
  $resolved=[IO.Path]::GetFullPath($temp)

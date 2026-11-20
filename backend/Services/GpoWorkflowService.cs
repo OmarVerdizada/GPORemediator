@@ -388,7 +388,7 @@ public sealed class GpoWorkflowService(IConfiguration config,Store store,Operati
                         if(check.WorkerProbe is null) { yield return check; continue; }
                         var measured=!page.GpoPublished||!page.LinkVerified
                             ? check with {WorkerProbe=null,Message="Check the recorded GPO and target link before requesting worker evidence."}
-                            : priorRefresh?.Any(r=>r.WorkerRequestId is not null && (r.State is "SCHEDULED" or "STARTED") &&
+                            : priorRefresh?.Any(r=>r.WorkerRequestId is not null && r.UserState != "SCHEDULED" && (r.State is "SCHEDULED" or "STARTED") &&
                                 string.Equals(r.Computer,check.Hostname,StringComparison.OrdinalIgnoreCase))==true
                                 ? check with {WorkerProbe=null,Message="Worker refresh is pending. Re-verify after the endpoint reports completion."}
                                 : endpointQueue.Verify(check,priorChecks.GetValueOrDefault(check.Hostname));

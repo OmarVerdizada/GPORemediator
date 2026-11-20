@@ -35,5 +35,16 @@ const server=http.createServer(async(req,res)=>{try{const url=new URL(req.url,'h
  workflowJobs[0].state='CHECKS_INCOMPLETE';workflowJobs[0].message='User profile evidence pending.';
  record.result.endpointChecks=[{hostname:'client1.example.local',state:'PENDING',message:'User profile evidence pending.',actualValue:null}];
  await page.locator('.service-right [data-refresh]').click();if(!await page.locator('.verification-details').evaluate(el=>el.open))await page.locator('.verification-details summary').first().click();await page.locator('.manual-check-details summary').click();await page.locator('.manual-check-command').waitFor();assert.match(await page.locator('.manual-check-head').textContent(),/affected signed-in user/);assert(!/Administrator/.test(await page.locator('.manual-check-head').textContent()));assert.match(await page.locator('.manual-check-command').textContent(),/HKEY_CURRENT_USER/);assert(!/<user-session>/.test(await page.locator('.manual-check-command').textContent()));assert.deepEqual(errors,[]);
- console.log('PASS real user result: missing session OU disabled, no placeholder command, Scope-only user dialog, cancel/no-write, recorded operation request, user-context manual check and mobile fit');
+ const worker={computer:'client1.example.local',state:'SCHEDULED',userState:'PENDING',workerRequestId:'fixture',estimatedRefreshAt:new Date(Date.now()+90000).toISOString()};
+ record.result.refreshResults=[worker];
+ await page.locator('.service-right [data-refresh]').click();
+ const eta=page.locator('[data-refresh-eta]');
+ await page.waitForFunction(()=>document.querySelector('[data-refresh-eta]')?.textContent.includes('Estimated gpupdate in'));
+ const first=await eta.textContent();
+ await page.waitForFunction(previous=>document.querySelector('[data-refresh-eta]')?.textContent!==previous,first);
+ worker.userState='SCHEDULED';worker.message='Windows accepted the user task.';worker.estimatedRefreshAt=null;
+ await page.locator('.service-right [data-refresh]').click();
+ await page.getByText(/User refresh handed to Windows/).waitFor();
+ assert.equal(await eta.count(),0);
+ console.log('PASS user refresh workflow, desktop/mobile, live worker countdown and handoff to Windows');
 }finally{await browser?.close();server.close();}})().catch(e=>{console.error(e);process.exitCode=1;});

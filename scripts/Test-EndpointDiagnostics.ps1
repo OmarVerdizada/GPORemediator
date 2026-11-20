@@ -12,7 +12,7 @@ $EndpointCredential=[Management.Automation.PSCredential]::new('EXAMPLE\fixture',
 $cfg=@{emitProgress=$false}
 function Invoke-Command {
  [CmdletBinding()]
- param($ComputerName,$Authentication,$Credential,$ThrottleLimit,$ScriptBlock)
+ param($ComputerName,$Authentication,$Credential,$ThrottleLimit,$ScriptBlock,$ArgumentList)
  if($Authentication -ne 'Kerberos' -or $Credential.UserName -ne 'EXAMPLE\fixture' -or $ThrottleLimit -ne 16){throw 'Wrong transport options'}
  foreach($name in $ComputerName){
   if($name -eq 'ok.example.test'){[pscustomobject]@{PSComputerName=$name;state='COMPLETED';message='Completed fixture'};continue}

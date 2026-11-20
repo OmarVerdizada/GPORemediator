@@ -1,7 +1,9 @@
 param(
     [Parameter(Mandatory=$true)][string]$QueueRoot,
     [Parameter(Mandatory=$true)][string]$PublisherCertificatePath,
-    [string]$ReceiptCertificateThumbprint
+    [string]$ReceiptCertificateThumbprint,
+    [string]$TaskName,
+    [string]$TaskPath = '\'
 )
 $ErrorActionPreference = 'Stop'
 $computer = Get-CimInstance -ClassName Win32_ComputerSystem
@@ -45,6 +47,36 @@ function Write-Receipt([string]$Path,[string]$Id,[string]$State,[Nullable[long]]
     } finally {
         if ([IO.File]::Exists($temp)) { [IO.File]::Delete($temp) }
     }
+}
+
+function Publish-CheckIn {
+    $path = Join-Path $results 'check-in.json'
+    $now = [DateTimeOffset]::UtcNow
+    $temp = $path + '.' + [guid]::NewGuid().ToString('N') + '.tmp'
+    try {
+        $next = $null
+        if ($TaskName) {
+            $info = Get-ScheduledTaskInfo -TaskName $TaskName -TaskPath $TaskPath -ErrorAction SilentlyContinue
+            if ($info -and $info.NextRunTime -gt (Get-Date)) {
+                $next = ([DateTimeOffset]$info.NextRunTime).ToUniversalTime()
+            }
+        }
+        if (!$next -and [IO.File]::Exists($path) -and (Get-Item -LiteralPath $path).Length -le 2048) {
+            $previous = [IO.File]::ReadAllText($path) | ConvertFrom-Json
+            $interval = $now - [DateTimeOffset]::Parse($previous.seenAt)
+            if ($interval.TotalSeconds -ge 15 -and $interval.TotalMinutes -le 15) { $next = $now + $interval }
+        }
+        $schedule = @{
+            computer = $hostName
+            seenAt = $now.ToString('O')
+            userRefresh = [IO.File]::Exists((Join-Path $env:SystemRoot 'System32\quser.exe')) -and [bool](Get-Module -ListAvailable -Name GroupPolicy | Select-Object -First 1)
+        }
+        if ($next) { $schedule.nextCheckAt = $next.ToString('O') }
+        [IO.File]::WriteAllText($temp,($schedule | ConvertTo-Json -Compress))
+        if ([IO.File]::Exists($path)) { [IO.File]::Replace($temp,$path,[Management.Automation.Language.NullString]::Value) }
+        else { [IO.File]::Move($temp,$path) }
+    } catch { Write-Warning 'Could not publish the worker check-in estimate.' }
+    finally { if ([IO.File]::Exists($temp)) { [IO.File]::Delete($temp) } }
 }
 
 function Initialize-EndpointEvidence {
@@ -110,13 +142,17 @@ try {
     if (!(Test-Path -LiteralPath $requests -PathType Container) -or !(Test-Path -LiteralPath $results -PathType Container)) {
         throw 'This computer has no enrolled request and result folders.'
     }
+    Publish-CheckIn
     $pending = Get-ChildItem -LiteralPath $requests -File -Filter '*.json' |
         Where-Object { $_.BaseName -cmatch '^[0-9a-f]{32}$' -and $_.Length -le 32768 -and
             $_.LastWriteTimeUtc -ge [DateTime]::UtcNow.AddDays(-1) -and
             !($_.Attributes -band [IO.FileAttributes]::ReparsePoint) -and
             ![IO.File]::Exists((Join-Path $results $_.Name)) } |
-        Sort-Object LastWriteTimeUtc | Select-Object -First 8
+        Sort-Object LastWriteTimeUtc
+    $processed = 0
+    $sessionAvailable = $null
     foreach ($file in $pending) {
+        if ($processed -ge 8) { break }
         try {
             $envelope = [IO.File]::ReadAllText($file.FullName) | ConvertFrom-Json
             $payload = [Convert]::FromBase64String($envelope.payload)
@@ -125,10 +161,20 @@ try {
             $request = [Text.Encoding]::UTF8.GetString($payload) | ConvertFrom-Json
             $expires = [DateTimeOffset]::ParseExact($request.expiresAt,'O',[Globalization.CultureInfo]::InvariantCulture)
             if ($request.id -cne $file.BaseName -or $request.computer -cne $hostName -or
-                $request.action -cnotin @('RefreshComputerPolicy','VerifyPolicySnapshot') -or $expires -le [DateTimeOffset]::UtcNow -or
+                $request.action -cnotin @('RefreshComputerPolicy','RefreshUserPolicy','VerifyPolicySnapshot') -or $expires -le [DateTimeOffset]::UtcNow -or
                 $expires -gt [DateTimeOffset]::UtcNow.AddDays(1).AddMinutes(5)) { continue }
             $receipt = Join-Path $results $file.Name
             $verify = $request.action -ceq 'VerifyPolicySnapshot'
+            $userRefresh = $request.action -ceq 'RefreshUserPolicy'
+            if ($userRefresh) {
+                # Leave the request unclaimed until a user session is available.
+                if ($null -eq $sessionAvailable) {
+                    $sessionAvailable = $false
+                    & (Join-Path $env:SystemRoot 'System32\quser.exe') 2>$null | Out-Null
+                    $sessionAvailable = $LASTEXITCODE -eq 0
+                }
+                if (!$sessionAvailable) { continue }
+            }
             if ($verify) {
                 if ($ReceiptCertificateThumbprint -notmatch '^[a-fA-F0-9]{40}$' -or $expires -gt [DateTimeOffset]::UtcNow.AddMinutes(6)) { continue }
                 Initialize-EndpointEvidence
@@ -136,6 +182,7 @@ try {
             } else { Write-Receipt $receipt $request.id 'STARTED' $null }
         } catch { continue }
 
+        $processed++
         if ($verify) {
             try {
                 $probeResult = Read-EndpointEvidence $request.probe
@@ -150,6 +197,14 @@ try {
                 $state='UNAVAILABLE';$actual='';$message='The worker could not run this installed read-only policy probe.'
             }
             Write-Receipt $receipt $request.id $state $null @{actual=$actual;message=$message}
+            continue
+        }
+        if ($userRefresh) {
+            try {
+                GroupPolicy\Invoke-GPUpdate -Target User -Force -RandomDelayInMinutes 0 -ErrorAction Stop | Out-Null
+                $state = 'USER_SCHEDULED'
+            } catch { $state = 'FAILED' }
+            Write-Receipt $receipt $request.id $state $null
             continue
         }
         $elapsed = [Diagnostics.Stopwatch]::StartNew()

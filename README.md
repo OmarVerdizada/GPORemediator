@@ -1,5 +1,7 @@
 # GPO Remediator 3.18.11
 
+For automatic computer refresh after reboot, deploy the member-computer startup task once. For refresh directly after Apply, select the scope refresh option in the plan. [Endpoint refresh setup and verification](docs/ENDPOINT-REFRESH-WORKER.md)
+
 3.18.11 adds a computer-wide management host so one protected backend can serve multiple authenticated Windows sessions without sharing ProgramData access or creating port/state conflicts. See [release notes](docs/RELEASE-3.18.11.md).
 
 3.18.9 adds a structured Bulk Apply workspace and keeps the Operations drawer up to date during re-verification. See [release notes](docs/RELEASE-3.18.9.md).

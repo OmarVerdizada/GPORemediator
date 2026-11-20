@@ -11,6 +11,14 @@ window.GpoOperationMonitor={create({state,api,render}){
  function updateElapsed(){
   if(document.hidden)return;
   const now=Date.now();
+  for(const label of document.querySelectorAll('[data-refresh-eta]')){
+   const deadline=Date.parse(label.dataset.refreshEta);
+   if(!Number.isFinite(deadline))continue;
+   const seconds=Math.max(0,Math.ceil((deadline-now)/1000));
+   const duration=seconds<60?`${seconds}s`:`${Math.floor(seconds/60)}m ${seconds%60}s`;
+   const eta=seconds?`Estimated gpupdate in ${duration}`:'Estimated time reached · awaiting endpoint confirmation';
+   if(label.textContent!==eta)label.textContent=eta;
+  }
   for(const label of document.querySelectorAll('[data-worker-expiry]')){
    const deadline=Date.parse(label.dataset.workerExpiry);
    if(!Number.isFinite(deadline))continue;

@@ -938,12 +938,13 @@ function Snapshot-ExtensionsMatch($Manifest,[string]$Id,$Selection){
     return [string]$ad.gPCUserExtensionNames -ceq [string]$userBefore
 }
 function Remote-GpoFolder([string]$Server,[string]$Id){return ('\\'+$Server+'\SYSVOL\'+$domain.DNSRoot+'\Policies\'+([guid]$Id).ToString('B').ToUpperInvariant())}
-function Send-CheckProgress([string]$Phase,[string]$State,[string]$Subject,[string]$Message,[AllowNull()][string]$ActualValue=$null,$DispatchNotBefore=$null){
+function Send-CheckProgress([string]$Phase,[string]$State,[string]$Subject,[string]$Message,[AllowNull()][string]$ActualValue=$null,$DispatchNotBefore=$null,$EstimatedRefreshAt=$null){
     if([bool](Read-Field $cfg 'emitProgress' $false)){
         # Information bypasses nested function return values. The transport alone
         # redirects this stream, so progress never contaminates policy evidence.
         $event=[pscustomobject]@{gpoCheck=[ordered]@{phase=$Phase;state=$State;subject=$Subject;message=$Message;actualValue=$ActualValue;checkedAt=[DateTimeOffset]::UtcNow.ToString('O')}}
         if($DispatchNotBefore){$event.gpoCheck.dispatchNotBefore=$DispatchNotBefore}
+        if($EstimatedRefreshAt){$event.gpoCheck.estimatedRefreshAt=$EstimatedRefreshAt}
         Write-Information -MessageData $event -InformationAction Continue
     }
 }
@@ -1044,14 +1045,19 @@ function Endpoint-FailureMessage($Record){
     $safeId=if($safeIds.Count){$safeIds -join ','}else{$Record.Exception.GetType().Name+'/'+$category}
     return ($reason+' Error ID: '+$safeId+'.')
 }
-function Refresh-ComputerPolicy([string[]]$Computer){
+function Refresh-ComputerPolicy([string[]]$Computer,[string]$PlannedStart){
     $credential=Endpoint-CredentialOptions
-    foreach($name in $Computer){Send-CheckProgress 'REFRESH' 'CHECKING' $name 'Waiting for the endpoint session and gpupdate. The command has a 2-minute limit once it starts. Connection and queue time vary.'}
+    foreach($name in $Computer){Send-CheckProgress 'REFRESH' 'CHECKING' $name 'Connecting for the planned computer refresh. The endpoint starts gpupdate once the planned time and connection are ready.' -EstimatedRefreshAt $PlannedStart}
     # Run on the endpoint with an explicit delegated credential: no Kerberos
     # second-hop dependency. /wait:-1 plus the process deadline distinguish
     # actual process completion from mere RPC task scheduling.
     $remoteErrors=@()
-    $results=@(Invoke-Command -ComputerName $Computer -Authentication Kerberos @credential -ThrottleLimit 16 -ScriptBlock {
+    $results=@(Invoke-Command -ComputerName $Computer -Authentication Kerberos @credential -ThrottleLimit 16 -ArgumentList $PlannedStart -ScriptBlock {
+        param($PlannedStart)
+        if($PlannedStart){
+            $wait=([DateTimeOffset]::Parse($PlannedStart)-[DateTimeOffset]::UtcNow).TotalMilliseconds
+            if($wait -gt 0){Start-Sleep -Milliseconds ([int][Math]::Min(10000,$wait))}
+        }
         $process=[Diagnostics.Process]::new()
         $process.StartInfo=[Diagnostics.ProcessStartInfo]::new((Join-Path $env:SystemRoot 'System32\gpupdate.exe'),'/target:computer /force /wait:-1')
         $process.StartInfo.UseShellExecute=$false;$process.StartInfo.CreateNoWindow=$true
@@ -1909,20 +1915,24 @@ switch($Operation){
             foreach($computer in $computers){
                 $message=if($computer -notin $runTargets){'The pinned endpoint is no longer in the authorized scope.'}
                     elseif($computer -in $controllers){'Domain controllers use manual refresh. No endpoint worker request was sent.'}
-                    elseif($target -eq 'User'){'Use normal user policy processing or refresh as the signed-in user. No user refresh was queued.'}
-                $refresh+=@{computer=$computer;state=$(if($message){'FAILED'}else{'WORKER_ELIGIBLE'});message=$(if($message){$message}else{'Endpoint scope and role were checked.'})}
+                $entry=@{computer=$computer;state=$(if($message){'FAILED'}else{'WORKER_ELIGIBLE'});message=$(if($message){$message}else{'Endpoint scope and role were checked.'})}
+                if($target -eq 'User'){$entry.userState=if($message){'FAILED'}else{'PENDING'}}
+                $refresh+=$entry
             }
             $output=Result 'WORKER_TARGETS_CHECKED' 'Endpoint worker targets checked.' $manifest $before $refresh
             if($rollback){$output.state='ROLLED_BACK'}
             $output.refreshCoverage=$refreshCoverage
             return $output
         }
-        $dispatchNotBefore=Wait-RefreshDispatch $runTargets
+        $directComputer=$target -ne 'User' -and (Endpoint-CredentialOptions).Count
+        $plannedStart=$null
+        if($directComputer){$plannedStart=[DateTimeOffset]::UtcNow.AddSeconds(10).ToString('O')}
+        else{$dispatchNotBefore=Wait-RefreshDispatch $runTargets}
         # Complete computer processing using delegated WinRM even after restore.
         # A signed-in user's policy requires a separate task in the user context;
         # neither its scheduling nor its failure changes computer completion.
-        if($target -ne 'User' -and (Endpoint-CredentialOptions).Count){
-            $done=@();if($runTargets.Count){$done=@(Refresh-ComputerPolicy $runTargets)}
+        if($directComputer){
+            $done=@();if($runTargets.Count){$done=@(Refresh-ComputerPolicy $runTargets $plannedStart)}
             foreach($computer in $computers){
                 if($computer -notin $liveComputers){$refresh+=@{computer=$computer;state='FAILED';message='The pinned endpoint is no longer in the enabled authorized scope. No refresh was attempted.'};continue}
                 $entry=@($done|Where-Object{[string]$_.PSComputerName -ieq $computer}|Select-Object -Last 1)
@@ -1963,6 +1973,7 @@ switch($Operation){
             }
         }
         foreach($hostResult in $refresh){
+            if($plannedStart -and $hostResult.computer -in $runTargets){$hostResult.estimatedRefreshAt=$plannedStart}
             if($dispatchNotBefore -and $hostResult.computer -in $runTargets){$hostResult.dispatchNotBefore=$dispatchNotBefore}
         }
         # Invoke-GPUpdate schedules a task; it does not wait for policy processing.

@@ -25,7 +25,11 @@ $rsa=[Security.Cryptography.RSA]::Create(2048)
 $certificateRequest=[Security.Cryptography.X509Certificates.CertificateRequest]::new('CN=gpor fixture',$rsa,
     [Security.Cryptography.HashAlgorithmName]::SHA256,[Security.Cryptography.RSASignaturePadding]::Pkcs1)
 $certificate=$certificateRequest.CreateSelfSigned([DateTimeOffset]::UtcNow.AddHours(-1),[DateTimeOffset]::UtcNow.AddHours(1))
-function Get-Item {param($LiteralPath) if($LiteralPath -ne ('Cert:\LocalMachine\My\'+$ReceiptCertificateThumbprint)){throw 'Unexpected certificate path'}; $certificate}
+function Get-Item {
+    param($LiteralPath)
+    if ($LiteralPath -eq ('Cert:\LocalMachine\My\'+$ReceiptCertificateThumbprint)) { return $certificate }
+    Microsoft.PowerShell.Management\Get-Item -LiteralPath $LiteralPath
+}
 try {
     Initialize-EndpointEvidence
     Check ($script:evidenceReady -and $script:lsaSource -match 'LsaEnumerateAccountsWithUserRight') 'installed native probes and catalog can load without running the domain worker'
@@ -54,6 +58,25 @@ try {
     Check ($receipt.id -ceq $id -and $receipt.computer -ceq $hostName -and $receipt.actual -ceq 'value=2' -and $receipt.readAt) 'signed result binds request, host, time and observed value'
     $payload[0]=$payload[0] -bxor 1
     Check (!$rsa.VerifyData($payload,$signature,[Security.Cryptography.HashAlgorithmName]::SHA256,[Security.Cryptography.RSASignaturePadding]::Pkcs1)) 'changed evidence invalidates the signature'
+    $results = [IO.Directory]::CreateDirectory($temp+'.results').FullName
+    $checkIn = Join-Path $results 'check-in.json'
+    try {
+        $TaskName = 'Fixture worker'
+        $TaskPath = '\'
+        function Get-ScheduledTaskInfo { ( [pscustomobject]@{ NextRunTime=(Get-Date).AddSeconds(55) } ) }
+        Publish-CheckIn
+        $entry = [IO.File]::ReadAllText($checkIn) | ConvertFrom-Json
+        Check ($entry.computer -eq $hostName -and [DateTimeOffset]::Parse($entry.nextCheckAt) -gt [DateTimeOffset]::UtcNow) 'worker publishes a future Task Scheduler check-in'
+        $TaskName = ''
+        $entry.seenAt = [DateTimeOffset]::UtcNow.AddMinutes(-60).ToString('O')
+        [IO.File]::WriteAllText($checkIn,($entry|ConvertTo-Json))
+        Publish-CheckIn
+        $entry = [IO.File]::ReadAllText($checkIn) | ConvertFrom-Json
+        Check (!$entry.nextCheckAt) 'a long offline gap does not produce a fictitious refresh countdown'
+    } finally {
+        if ([IO.File]::Exists($checkIn)) { [IO.File]::Delete($checkIn) }
+        [IO.Directory]::Delete($results)
+    }
 } finally {
     if ($script:receiptKey) { $script:receiptKey.Dispose() }
     $certificate.Dispose()

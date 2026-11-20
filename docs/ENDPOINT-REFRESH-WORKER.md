@@ -1,6 +1,16 @@
-# Computer refresh worker pilot
+# Endpoint policy refresh
 
-The worker runs only the fixed local computer `gpupdate /force` command. It can pick up an approved request after the workstation or member server comes online. Requests expire after 24 hours. The management UI shows the time until request expiry and updates the saved worker receipt on Re-verify. Computer policy processing, endpoint-effective values and winning GPO attribution remain separate evidence.
+## Computer refresh at startup without a queue
+
+For computers that should process all applicable Computer GPOs at each startup, deploy `scripts/Install-ComputerStartupRefresh.ps1` once on each intended domain member using local administrator rights or your endpoint management system. The operator can then choose **Wait for normal cycle** during remediation. This deployment works without a queue share, a worker certificate or an inbound endpoint connection.
+
+The installer registers **GPO Remediator - Computer policy at startup** with one boot trigger. Windows launches its own `gpupdate.exe /target:computer /force /wait:-1` under SYSTEM one minute after boot. Task Scheduler can delay execution if the machine is busy. A failed task can retry three times at five-minute intervals. The policy source must be reachable for new settings to arrive. Scope this deployment to member workstations or member servers. Repeated installer runs check the existing task.
+
+After reboot, use `Get-ScheduledTaskInfo -TaskName 'GPO Remediator - Computer policy at startup' | Select-Object LastRunTime,LastTaskResult` on the endpoint. A new run time and exit code 0 record successful command execution. Use Re-verify to inspect the effective policy. The management UI cannot predict a future boot time.
+
+## Refresh after an approved Apply
+
+Select **Refresh scope computers** for a Computer GPO or **Refresh user policy on scope endpoints** for a User GPO. The workflow starts refresh after successful publication. The optional worker picks up a queued request when its domain member is online. Requests expire after 24 hours. The verification screen shows an estimated time for the next pickup when the worker has reported one. Re-verify updates the estimate and reads the receipt.
 
 ## Provision the pilot
 
@@ -19,4 +29,8 @@ Keep each receipt at least until its corresponding request expires. The receipt 
 3. Add the endpoint FQDN and its certificate thumbprint to the backend's `Windows:EndpointQueueReceiptThumbprints` configuration map. Restart the backend after enrollment. Verification mode requires both the queue root and at least one pinned endpoint certificate. Unenrolled endpoints are reported as unavailable in this mode.
 4. Select **Re-verify**. The backend checks the GPO, link and pinned scope, then queues a read-only check. The first result may be pending. Select **Re-verify** after the worker check-in to collect the signed evidence. Check requests expire after five minutes. For a User GPO, set an endpoint OU and an enabled verification user in the plan. The selected user's profile hive must be loaded for HKCU evidence.
 
-The evidence worker supports the installed computer registry, LSA/security-policy, firewall and advanced-audit probes and the selected user's HKCU probe. Measurements apply to the endpoint sample. RSoP and winning GPO attribution remain separate. Domain controllers use manual refresh and manual endpoint evidence in worker mode. User refresh uses normal Windows policy processing or manual execution in the signed-in user context. Worker evidence is not used to claim restoration of a pre-change endpoint snapshot.
+To report the upcoming Task Scheduler run, pass the registered worker task's name using `-TaskName` and its folder using `-TaskPath` (default root). Otherwise the worker estimates pickup from the interval between recent check-ins. An offline member can collect an unexpired request on boot. An overdue estimate remains pending until the endpoint acknowledges it.
+
+For queued user refresh, install the Windows GroupPolicy module on the enrolled endpoint and select the OU containing the affected session computers. The worker waits for a signed-in session, then calls the local `Invoke-GPUpdate -Target User -Force -RandomDelayInMinutes 0`. The receipt records Windows accepting the user task. No restart or sign-out is requested.
+
+The evidence worker supports the installed computer registry, LSA/security-policy, firewall and advanced-audit probes and the selected user's HKCU probe. Measurements apply to the endpoint sample. RSoP and winning GPO attribution remain separate. Domain controllers use manual refresh and manual endpoint evidence in worker mode.

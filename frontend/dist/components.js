@@ -168,7 +168,8 @@
     const description=x=>{
       const duration=Number.isFinite(x.computerRefreshDurationMs)?`Computer gpupdate: ${formatDuration(x.computerRefreshDurationMs)}`:'';
       if(x.workerRequestId){
-        if(x.state==='SCHEDULED')return 'Waiting for worker check-in · start time unknown' +
+        if(x.userState==='SCHEDULED')return esc(x.message);
+        if(x.state==='SCHEDULED')return (x.estimatedRefreshAt?`<strong data-refresh-eta="${esc(x.estimatedRefreshAt)}">Estimated pickup at ${esc(new Date(x.estimatedRefreshAt).toLocaleTimeString())}</strong>`:'Waiting for the next online worker check-in') +
           (x.workerExpiresAt?` · <span data-worker-expiry="${esc(x.workerExpiresAt)}"></span>`:'');
         if(x.state==='STARTED')return 'Worker acknowledged · completion pending';
         return duration||esc(x.message||'Worker result unavailable');
@@ -181,6 +182,8 @@
     };
     const next=x=>{
       if(x.state==='STARTED')return 'Worker accepted the request. Completion is pending.';
+      if(x.workerRequestId && x.userState==='SCHEDULED')return 'User refresh handed to Windows.';
+      if(x.workerRequestId && x.state==='SCHEDULED')return x.userState==='PENDING'?'Runs at an online check-in with a signed-in user.':'Runs automatically at an online worker check-in.';
       if([x.state,x.computerState,x.userState].includes('SCHEDULED'))
         return x.workerRequestId?'At the next worker check-in. Exact start time depends on when the endpoint is online.':'Windows accepted scheduling. The start time was not reported.';
       if(x.state==='FAILED')return 'No retry scheduled by this operation.';
@@ -200,7 +203,7 @@
       ?`Endpoint rollback sample: ${restoreMatches} match · ${restoreMismatches} differ${e.unavailable?` · ${e.unavailable} unavailable`:''}`
       :`Endpoint rollback unverified${e.observed?` · ${e.observed} observed`:''}${e.unavailable?` · ${e.unavailable} unavailable`:''}`;
     const value=r.domainPolicy?(o.restored?`AD snapshot value: ${r.restoreChecks?.some(x=>x.area==='DOMAIN_POLICY'&&x.state==='MATCH')?'restored and verified':'see recorded restore checks'}`:`AD value: ${window.GpoUiDomain.domainMismatch(r)?'does not match the request':o.verified?'verified on the selected DC':'read requires review'}`):o.restored?endpointRestore:e.total?`Endpoint values: ${e.verified} of ${e.total} verified${e.mismatch?` · ${e.mismatch} mismatch`:''}${e.unavailable?` · ${e.unavailable} unavailable`:''}${e.remaining?` · ${e.remaining} not checked`:''}`:'Endpoint values: no reading collected';
-    const refresh=r.refreshResults||[],half=refresh.some(x=>x.computerState||x.userState),counts=key=>['COMPLETED','SCHEDULED','FAILED'].map(state=>`${refresh.filter(x=>(key?x[key]:x.state)===state).length} ${state.toLowerCase()}`).join(' · ');
+    const refresh=r.refreshResults||[],half=refresh.some(x=>x.computerState)&&refresh.some(x=>x.userState),counts=key=>['COMPLETED','SCHEDULED','FAILED'].map(state=>`${refresh.filter(x=>(key?x[key]:x.state)===state).length} ${state.toLowerCase()}`).join(' · ');
     const workerReads=checks.filter(x=>x.workerRequestId||x.workerReadAt);
     const workerEvidence=workerReads.length?`<details open><summary>Endpoint worker evidence · ${workerReads.length} endpoint(s)</summary><ul>${workerReads.map(x=>{
       const measured=Date.parse(x.workerReadAt);

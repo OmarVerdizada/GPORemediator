@@ -14,6 +14,7 @@ internal sealed class EndpointRefreshQueue(string? root, string? certificateThum
     private sealed record Request(string Id, string Computer, string Action, string ExpiresAt, EndpointProbeTarget? Probe = null);
     private sealed record Envelope(string Payload, string Signature);
     private sealed record Receipt(string Id, string Computer, string State, long? DurationMs);
+    private sealed record CheckIn(string Computer, DateTimeOffset SeenAt, DateTimeOffset? NextCheckAt, bool UserRefresh);
     private sealed record ProbeReceipt(string Id, string Computer, string State, DateTimeOffset ReadAt, string? Actual, string? Message);
 
     public bool Enabled => !string.IsNullOrWhiteSpace(root);
@@ -55,6 +56,26 @@ internal sealed class EndpointRefreshQueue(string? root, string? certificateThum
         File.Move(temporary, path);
     }
 
+    private CheckIn? LatestCheckIn(string computer)
+    {
+        try
+        {
+            using var stream = File.OpenRead(Path.Combine(DirectoryFor(computer,"results"), "check-in.json"));
+            if (stream.Length is 0 or > 2048) return null;
+            var entry = JsonSerializer.Deserialize<CheckIn>(stream,JsonDefaults.Options);
+            return entry is not null && string.Equals(entry.Computer,computer,StringComparison.OrdinalIgnoreCase)
+                && entry.SeenAt <= DateTimeOffset.UtcNow.AddSeconds(5) ? entry : null;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException) { return null; }
+    }
+
+    private static DateTimeOffset? EstimatedPickup(CheckIn? entry, DateTimeOffset expires)
+    {
+        var now = DateTimeOffset.UtcNow;
+        return entry?.NextCheckAt is {} next && entry.SeenAt >= now.AddMinutes(-15) &&
+            next > now && next > entry.SeenAt && next <= expires ? next : null;
+    }
+
     public GpoRefreshResult Enqueue(GpoRefreshResult target)
     {
         try
@@ -62,17 +83,22 @@ internal sealed class EndpointRefreshQueue(string? root, string? certificateThum
             var requests = DirectoryFor(target.Computer, "requests");
             var results = DirectoryFor(target.Computer, "results");
             if (!Directory.Exists(requests) || !Directory.Exists(results))
-                return target with { State = "FAILED", Message = "Endpoint worker is not enrolled. No request was queued." };
+                return RefreshFailure(target, "Endpoint worker is not enrolled. No request was queued.");
             var now = DateTimeOffset.UtcNow;
             var id = Guid.NewGuid().ToString("N");
             var expires = now.AddDays(1);
-            Publish(new Request(id,target.Computer.ToLowerInvariant(),"RefreshComputerPolicy",expires.ToString("O")),expires);
+            var checkIn = LatestCheckIn(target.Computer);
+            var user = target.UserState == "PENDING";
+            if (user && checkIn?.UserRefresh != true)
+                return RefreshFailure(target, "User refresh requires an enrolled worker reporting user-session support and the GroupPolicy module. No request was queued.");
+            Publish(new Request(id,target.Computer.ToLowerInvariant(),user?"RefreshUserPolicy":"RefreshComputerPolicy",expires.ToString("O")),expires);
             return target with { State = "SCHEDULED", ScheduledAt = now.ToString("O"), WorkerRequestId = id, WorkerExpiresAt = expires,
+                EstimatedRefreshAt = EstimatedPickup(checkIn,expires),
                 Message = "Queued for the endpoint worker. The request expires in 24 hours. Start time depends on the next endpoint check-in." };
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or CryptographicException or ArgumentException or InvalidOperationException)
         {
-            return target with { State = "FAILED", Message = "Endpoint queue publication could not be confirmed. Inspect the configured share and signing key before retrying." };
+            return RefreshFailure(target, "Endpoint queue publication could not be confirmed. Inspect the configured share and signing key before retrying.");
         }
     }
 
@@ -142,10 +168,13 @@ internal sealed class EndpointRefreshQueue(string? root, string? certificateThum
         return receipt;
     }
 
+    private static GpoRefreshResult RefreshFailure(GpoRefreshResult result, string message) =>
+        result with { State = "FAILED", UserState = result.UserState is null ? null : "FAILED", EstimatedRefreshAt = null, Message = message };
+
     public GpoRefreshResult Read(GpoRefreshResult result)
     {
-        if (result.WorkerRequestId is not { } id || !Guid.TryParseExact(id, "N", out _) || result.State is "COMPLETED" or "FAILED") return result;
-        if (!Enabled) return result with { Message = "Endpoint queue configuration is unavailable. Worker status could not be read." };
+        if (result.WorkerRequestId is not { } id || !Guid.TryParseExact(id, "N", out _) || result.State is "COMPLETED" or "FAILED" || result.UserState == "SCHEDULED") return result;
+        if (!Enabled) return result with { EstimatedRefreshAt = null, Message = "Endpoint queue configuration is unavailable. Worker status could not be read." };
         try
         {
             var path = Path.Combine(DirectoryFor(result.Computer, "results"), id + ".json");
@@ -157,12 +186,14 @@ internal sealed class EndpointRefreshQueue(string? root, string? certificateThum
                     var receipt = JsonSerializer.Deserialize<Receipt>(stream, JsonDefaults.Options);
                     if (receipt is not null && receipt.Id == id && string.Equals(receipt.Computer,result.Computer,StringComparison.OrdinalIgnoreCase))
                     {
-                        if (receipt.State == "COMPLETED" && receipt.DurationMs is >= 0 and <= 180000)
+                        if (receipt.State == "USER_SCHEDULED" && result.UserState == "PENDING")
+                            return result with { State = "SCHEDULED", UserState = "SCHEDULED", EstimatedRefreshAt = null, Message = "Windows accepted the signed-in user refresh with zero random delay. Check the user's effective policy on Re-verify." };
+                        if (receipt.State == "COMPLETED" && result.UserState != "PENDING" && receipt.DurationMs is >= 0 and <= 180000)
                             return result with { State = "COMPLETED", ComputerRefreshDurationMs = receipt.DurationMs, Message = "The endpoint worker confirmed gpupdate completion. Re-verify the effective policy separately." };
                         if (receipt.State == "FAILED")
-                            return result with { State = "FAILED", Message = "The endpoint worker reported a refresh failure or timeout." };
+                            return RefreshFailure(result, "The endpoint worker reported a refresh failure or timeout.");
                         if (receipt.State == "STARTED" && result.WorkerExpiresAt?.AddMinutes(3) <= DateTimeOffset.UtcNow)
-                            return result with { State = "FAILED", Message = "The worker accepted the request but did not report completion. Check the endpoint before retrying." };
+                            return RefreshFailure(result, "The worker accepted the request but did not report completion. Check the endpoint before retrying.");
                         if (receipt.State == "STARTED")
                             return result with { State = "STARTED", Message = "The worker accepted the request. Completion is pending." };
                     }
@@ -170,12 +201,12 @@ internal sealed class EndpointRefreshQueue(string? root, string? certificateThum
                 return result with { Message = "The endpoint receipt did not match the queued request." };
             }
             return result.WorkerExpiresAt <= DateTimeOffset.UtcNow
-                ? result with { State = "FAILED", Message = "The request expired before the endpoint worker acknowledged it." }
-                : result;
+                ? RefreshFailure(result, "The request expired before the endpoint worker acknowledged it.")
+                : result with { EstimatedRefreshAt = EstimatedPickup(LatestCheckIn(result.Computer),result.WorkerExpiresAt ?? DateTimeOffset.UtcNow) };
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException or ArgumentException or InvalidOperationException)
         {
-            return result with { Message = "Endpoint worker status could not be read. The saved request is retained." };
+            return result with { EstimatedRefreshAt = null, Message = "Endpoint worker status could not be read. The saved request is retained." };
         }
     }
 }
